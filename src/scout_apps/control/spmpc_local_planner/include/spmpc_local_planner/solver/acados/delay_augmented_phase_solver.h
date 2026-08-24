@@ -82,7 +82,7 @@ struct DelayAugmentedPhaseSolveDiagnostics {
     std::string status = "NOT_EVALUATED";
 };
 
-// Independent owner for the development nx=22, nu=3, N=10 DISCRETE capsule.
+// Independent owner for the development manifest-driven DISCRETE capsule.
 // The explicit opt-in online backend owns this class. create() validates the
 // complete generated contract and requested capability mask before allocating
 // an acados capsule.

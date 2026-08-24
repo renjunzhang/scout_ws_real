@@ -17,7 +17,8 @@ const char* solverBackendRole(const std::string& backend) {
         return "RouteB diagnostic/legacy continuous MPCC, not mainline";
     }
     if (backend == kSolverBackendDelayAugmentedPhaseAcados) {
-        return "explicit opt-in nx=22 dual-channel execution-augmented Phase-Rejoin";
+        return "explicit opt-in manifest-driven dual-channel "
+               "execution-augmented Phase-Rejoin";
     }
     if (backend == kSolverBackendPrimitive) {
         return "fallback/debug rollout sampling + cost ranking, not MPCC/mainline";

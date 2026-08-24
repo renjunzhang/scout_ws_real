@@ -15,7 +15,7 @@ constexpr const char kGlobalization[] = "FUNNEL_L1PEN_LINESEARCH";
 constexpr const char kHpipmMode[] = "BALANCE";
 constexpr int kGlobalizationFullStepDual = 1;
 constexpr int kGlobalizationUseSecondOrderCorrection = 0;
-constexpr const char kSolverConfigHash[] = "f8b3b0c1bb6c241f72e97ee05caeac08eab85212b504862f01037c614acbe2ce";
+constexpr const char kSolverConfigHash[] = "b290cd5d3b671d934f5af340e54196b07d6ed40f9f05561a074f8c6c8c1c9729";
 constexpr int kMaxSqpIterations = 20;
 constexpr double kQpStationarityTolerance = 1.0000000000000001e-09;
 constexpr double kQpEqualityTolerance = 1.0000000000000001e-09;
@@ -27,62 +27,62 @@ constexpr const char kRtiReferenceNlpSolverType[] = "SQP_RTI";
 constexpr const char kRtiReferenceHpipmMode[] = "SPEED_ABS";
 constexpr int kRtiReferenceGlobalizationFullStepDual = 0;
 constexpr int kRtiReferenceGlobalizationUseSecondOrderCorrection = 0;
-constexpr const char kRtiReferenceSolverConfigHash[] = "ddde1257b5d2db00751fec2a647de0d97aabf379558e53146a8962267bb8eec3";
+constexpr const char kRtiReferenceSolverConfigHash[] = "cacaeb6c24daa4e0270820c816d01aecd56ce19786910eb825111425892e536c";
 constexpr const char kIntegratorType[] = "DISCRETE";
 constexpr int kExecutionContractSchemaVersion = 1;
 constexpr const char kContractId[] = "delay_augmented_phase_codegen_candidate_v1";
-constexpr const char kContractHash[] = "e198d2a7e0b4d8b2b530e2bfafb33871f3f9f0cb1baab12e6739b6c35191783d";
-constexpr int kStateCount = 22;
+constexpr const char kContractHash[] = "b7bbc6e4b921b513e798e4faaf22a8b147b6aea526408e2ed6c13ef9f8e0344a";
+constexpr int kStateCount = 15;
 constexpr int kControlCount = 3;
 constexpr int kParameterSchemaVersion = 2;
 constexpr const char kParameterSchemaId[] = "delay_augmented_phase_parameter_image_v2";
-constexpr const char kParameterSchemaHash[] = "898563e1655c24f399e81d000f5d816a6a9ae4eba0304eb23e5b94bf3fd8e4f3";
+constexpr const char kParameterSchemaHash[] = "6e3d7a8a2c8e7decf763d084eb8f25d7ec0f6f8ec8441ecb39ae9dddfa8e4119";
 constexpr const char kCostContract[] = "nominal_relative_augmented_nls_v2";
 constexpr const char kTerminalGateContract[] = "phase_indexed_empirical_9d_ellipsoid_v1";
 constexpr const char kExecutionCompatibilityContract[] = "phase_indexed_execution_box_v1";
 constexpr const char kStageExecutionConstraintForm[] = "phase_indexed_full_execution_box_v1";
 constexpr const char kTerminalExecutionConstraintForm[] = "parameter_affine_two_sided_box_v1";
 constexpr const char kSolverYawCoordinate[] = "continuous_lifted_v1";
-constexpr int kParameterCount = 64;
+constexpr int kParameterCount = 50;
 constexpr int kNominalStateOffset = 0;
-constexpr int kNominalControlOffset = 22;
-constexpr int kNominalPublishOffset = 25;
-constexpr int kResidualBoundOffset = 27;
-constexpr int kWeightOffset = 29;
-constexpr int kGateRadiusOffset = 41;
-constexpr int kExecutionBoundOffset = 50;
+constexpr int kNominalControlOffset = 15;
+constexpr int kNominalPublishOffset = 18;
+constexpr int kResidualBoundOffset = 20;
+constexpr int kWeightOffset = 22;
+constexpr int kGateRadiusOffset = 34;
+constexpr int kExecutionBoundOffset = 43;
 constexpr int kWeightCount = 12;
 constexpr int kGateRadiusCount = 9;
-constexpr int kExecutionBoundCount = 14;
-constexpr int kHorizonSteps = 10;
-constexpr int kExecutionFrontSteps = 7;
+constexpr int kExecutionBoundCount = 7;
+constexpr int kHorizonSteps = 7;
+constexpr int kExecutionFrontSteps = 4;
 constexpr int kLiquidHorizonSteps = 3;
 constexpr int kLinearBufferOffset = 10;
-constexpr int kLinearBufferCount = 5;
-constexpr int kAngularBufferOffset = 15;
-constexpr int kAngularBufferCount = 7;
+constexpr int kLinearBufferCount = 4;
+constexpr int kAngularBufferOffset = 14;
+constexpr int kAngularBufferCount = 1;
 constexpr int kStateBoundCount = 0;
-constexpr int kInitialStateBoundCount = 22;
+constexpr int kInitialStateBoundCount = 15;
 constexpr int kTerminalStateBoundCount = kStateBoundCount;
 constexpr int kControlBoundCount = 3;
 constexpr int kPublishedCommandConstraintCount = 6;
-constexpr int kStageExecutionConstraintCount = 28;
+constexpr int kStageExecutionConstraintCount = 14;
 constexpr int kStageConstraintCount =
     kPublishedCommandConstraintCount + kStageExecutionConstraintCount;
 constexpr int kTerminalPublishedCommandConstraintCount = 0;
 constexpr int kTerminalEmpiricalConstraintCount = 1;
-constexpr int kTerminalExecutionConstraintCount = 28;
+constexpr int kTerminalExecutionConstraintCount = 14;
 constexpr int kTerminalRecoveryConstraintCount =
     kTerminalEmpiricalConstraintCount + kTerminalExecutionConstraintCount;
 constexpr double kDt = 0.033333333299999997;
-constexpr double kLinearDelaySec = 0.14999999999999999;
-constexpr double kAngularDelaySec = 0.22;
-constexpr int kLinearIntegerDelaySteps = 4;
-constexpr int kAngularIntegerDelaySteps = 6;
-constexpr double kLinearFractionalDelaySec = 0.016666666800000007;
-constexpr double kAngularFractionalDelaySec = 0.020000000200000007;
-constexpr double kLinearTimeConstantSec = 0;
-constexpr double kAngularTimeConstantSec = 0;
+constexpr double kLinearDelaySec = 0.10199999999999999;
+constexpr double kAngularDelaySec = 0.01;
+constexpr int kLinearIntegerDelaySteps = 3;
+constexpr int kAngularIntegerDelaySteps = 0;
+constexpr double kLinearFractionalDelaySec = 0.0020000000999999962;
+constexpr double kAngularFractionalDelaySec = 0.01;
+constexpr double kLinearTimeConstantSec = 0.090999999999999998;
+constexpr double kAngularTimeConstantSec = 0.34200000000000003;
 constexpr double kLinearPositiveGain = 1;
 constexpr double kLinearNegativeGain = 1;
 constexpr double kAngularPositiveGain = 1;
@@ -139,14 +139,7 @@ constexpr const char* kParameterNames[kParameterCount] = {
     "nom_linear_pending_1",
     "nom_linear_pending_2",
     "nom_linear_pending_3",
-    "nom_linear_pending_4",
     "nom_angular_pending_0",
-    "nom_angular_pending_1",
-    "nom_angular_pending_2",
-    "nom_angular_pending_3",
-    "nom_angular_pending_4",
-    "nom_angular_pending_5",
-    "nom_angular_pending_6",
     "nom_a",
     "nom_alpha",
     "nom_v_s",
@@ -181,14 +174,7 @@ constexpr const char* kParameterNames[kParameterCount] = {
     "exec_beta_linear_pending_1",
     "exec_beta_linear_pending_2",
     "exec_beta_linear_pending_3",
-    "exec_beta_linear_pending_4",
     "exec_beta_angular_pending_0",
-    "exec_beta_angular_pending_1",
-    "exec_beta_angular_pending_2",
-    "exec_beta_angular_pending_3",
-    "exec_beta_angular_pending_4",
-    "exec_beta_angular_pending_5",
-    "exec_beta_angular_pending_6",
 };
 
 constexpr std::uint32_t kDiscreteDynamics = 1u;

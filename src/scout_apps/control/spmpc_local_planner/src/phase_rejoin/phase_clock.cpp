@@ -21,6 +21,7 @@ void PhaseClock::reset() {
     runtime_origin_sec_ = 0.0;
     artifact_origin_sec_ = 0.0;
     last_runtime_sec_ = 0.0;
+    last_index_ = 0;
 }
 
 PhaseClockResult PhaseClock::update(
@@ -67,6 +68,7 @@ PhaseClockResult PhaseClock::update(
             std::distance(samples.begin(), upper - 1));
     }
     result.index = std::min(result.index, max_index);
+    last_index_ = result.index;
     result.valid = true;
     result.status = result.index == max_index &&
                             result.artifact_time_sec > samples[max_index].t

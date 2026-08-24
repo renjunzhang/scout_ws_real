@@ -148,6 +148,27 @@ ValidationReport validateAndNormalize(AppConfig& config) {
             "state_timing/require_common_epoch",
             "phase_rejoin/enforce requires common-epoch alignment");
     }
+    if (config.phase_rejoin.params.max_consecutive_phase_holds < 0) {
+        report.fatal(
+            "phase_rejoin/max_consecutive_phase_holds",
+            "maximum consecutive phase holds must be non-negative");
+    }
+    const bool any_tail_commit_extension =
+        config.phase_rejoin.params.progress_governor_enabled ||
+        config.phase_rejoin.params.successor_admission_enabled ||
+        config.phase_rejoin.params.tail_commit_enabled;
+    const bool complete_tail_commit_extension =
+        config.phase_rejoin.params.progress_governor_enabled &&
+        config.phase_rejoin.params.successor_admission_enabled &&
+        config.phase_rejoin.params.tail_commit_enabled;
+    if (any_tail_commit_extension &&
+        (!complete_tail_commit_extension ||
+         config.phase_rejoin.params.mode != PhaseRejoinMode::Enforce)) {
+        report.fatal(
+            "phase_rejoin/tail_commit_extension",
+            "progress governor, successor admission and tail commit must "
+            "be enabled together in enforce mode");
+    }
 
     auto& limits = config.shared_command_limits;
     limits.linear_accel_max = std::max(0.0, limits.linear_accel_max);

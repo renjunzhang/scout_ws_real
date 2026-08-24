@@ -39,12 +39,55 @@ TEST(AppConfig, PreservesHistoricalTypedDefaults) {
     EXPECT_EQ(config.control.horizon_steps, 60);
     EXPECT_FALSE(config.control.publish_latency.enabled);
     EXPECT_DOUBLE_EQ(config.control.publish_latency.estimated_dc_sec, 0.0);
+    EXPECT_DOUBLE_EQ(config.control.delay_phase.linear_delay_sec, 0.15);
+    EXPECT_DOUBLE_EQ(config.control.delay_phase.angular_delay_sec, 0.22);
+    EXPECT_DOUBLE_EQ(config.control.delay_phase.linear_time_constant_sec,
+                     0.0);
+    EXPECT_DOUBLE_EQ(config.control.delay_phase.angular_time_constant_sec,
+                     0.0);
     EXPECT_DOUBLE_EQ(config.solver.v_max, 0.8);
     EXPECT_DOUBLE_EQ(config.solver.omega_max, 1.2);
     EXPECT_DOUBLE_EQ(config.solver.slosh.dt, config.control.dt);
     EXPECT_DOUBLE_EQ(config.shared_command_limits.linear_accel_max,
                      config.solver.a_max);
     EXPECT_DOUBLE_EQ(config.safety.nominal_period_sec, config.control.dt);
+    EXPECT_FALSE(config.phase_rejoin.params.progress_governor_enabled);
+    EXPECT_FALSE(config.phase_rejoin.params.successor_admission_enabled);
+    EXPECT_FALSE(config.phase_rejoin.params.tail_commit_enabled);
+    EXPECT_EQ(config.phase_rejoin.params.max_consecutive_phase_holds, 3);
+}
+
+TEST(AppConfig, RejectsNegativePhaseHoldLimit) {
+    AppConfig config;
+    config.phase_rejoin.params.max_consecutive_phase_holds = -1;
+
+    const ValidationReport report = validateAndNormalize(config);
+
+    EXPECT_FALSE(report.ok());
+    EXPECT_TRUE(hasIssue(
+        report,
+        ValidationSeverity::Fatal,
+        "phase_rejoin/max_consecutive_phase_holds"));
+}
+
+TEST(AppConfig, TailCommitExtensionsAreAtomicAndEnforceOnly) {
+    AppConfig partial;
+    partial.phase_rejoin.params.progress_governor_enabled = true;
+    EXPECT_FALSE(validateAndNormalize(partial).ok());
+
+    AppConfig monitor;
+    monitor.phase_rejoin.params.mode = PhaseRejoinMode::Monitor;
+    monitor.phase_rejoin.params.progress_governor_enabled = true;
+    monitor.phase_rejoin.params.successor_admission_enabled = true;
+    monitor.phase_rejoin.params.tail_commit_enabled = true;
+    EXPECT_FALSE(validateAndNormalize(monitor).ok());
+
+    AppConfig enforce;
+    enforce.phase_rejoin.params.mode = PhaseRejoinMode::Enforce;
+    enforce.phase_rejoin.params.progress_governor_enabled = true;
+    enforce.phase_rejoin.params.successor_admission_enabled = true;
+    enforce.phase_rejoin.params.tail_commit_enabled = true;
+    EXPECT_TRUE(validateAndNormalize(enforce).ok());
 }
 
 TEST(AppConfig, NormalizesRuntimeGroupsAtOneTypedBoundary) {

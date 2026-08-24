@@ -42,8 +42,9 @@ struct BoundedTrackingRecoveryPolicyResult {
 // Rate-reachable recovery-command transaction shared by the offline rollout
 // sampler and the production coordinator.  The frozen v1 feedback above
 // produces a desired command; this transaction makes that command executable
-// under the same published-command rate contract used by the 22D solver.  It
-// does not model the production safety/arbitration/publication chain and has
+// under the same published-command rate contract used by the
+// manifest-driven solver.  It does not model the production
+// safety/arbitration/publication chain and has
 // no liquid-state input.
 struct BoundedTrackingRecoveryCommandTransaction {
     bool valid = false;

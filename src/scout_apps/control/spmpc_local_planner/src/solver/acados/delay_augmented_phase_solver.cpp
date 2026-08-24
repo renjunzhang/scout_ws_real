@@ -1098,25 +1098,29 @@ DelayAugmentedPhaseAcadosSolver::auditTrajectory(
 
     std::vector<DelayAugmentedPhaseControl> decoded_controls;
     decoded_controls.reserve(manifest::kHorizonSteps);
-    const int execution_indices[manifest::kExecutionBoundCount] = {
-        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
-    const char* execution_component_names[
-        manifest::kExecutionBoundCount] = {
-        "linear_output",
-        "angular_output",
-        "linear_pending_0",
-        "linear_pending_1",
-        "linear_pending_2",
-        "linear_pending_3",
-        "linear_pending_4",
-        "angular_pending_0",
-        "angular_pending_1",
-        "angular_pending_2",
-        "angular_pending_3",
-        "angular_pending_4",
-        "angular_pending_5",
-        "angular_pending_6",
-    };
+    std::vector<int> execution_indices;
+    execution_indices.reserve(manifest::kExecutionBoundCount);
+    execution_indices.push_back(3);
+    execution_indices.push_back(5);
+    for (int index = 0; index < manifest::kLinearBufferCount; ++index) {
+        execution_indices.push_back(manifest::kLinearBufferOffset + index);
+    }
+    for (int index = 0; index < manifest::kAngularBufferCount; ++index) {
+        execution_indices.push_back(manifest::kAngularBufferOffset + index);
+    }
+    const std::vector<std::string> execution_component_names = [] {
+        std::vector<std::string> names;
+        names.reserve(manifest::kExecutionBoundCount);
+        names.push_back("linear_output");
+        names.push_back("angular_output");
+        for (int index = 0; index < manifest::kLinearBufferCount; ++index) {
+            names.push_back("linear_pending_" + std::to_string(index));
+        }
+        for (int index = 0; index < manifest::kAngularBufferCount; ++index) {
+            names.push_back("angular_pending_" + std::to_string(index));
+        }
+        return names;
+    }();
     for (int stage = 0; stage < manifest::kHorizonSteps; ++stage) {
         const double* state = states.data() + static_cast<std::size_t>(
             stage * manifest::kStateCount);

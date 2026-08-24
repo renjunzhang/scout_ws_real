@@ -126,8 +126,18 @@ bool ExecutionModel::initializeHeld(
 
     state.robot = robot;
     state.slosh = slosh;
-    state.linear.actuator_output = robot.v;
-    state.angular.actuator_output = robot.omega;
+    // Odometry can report a tiny signed residual around zero even when the
+    // frozen execution channel is one-sided.  The augmented actuator state
+    // must start inside that channel's envelope; keep the robot measurement
+    // and actuator output exactly identical after projection.
+    state.robot.v = std::max(
+        contract_.linear.output_min,
+        std::min(contract_.linear.output_max, state.robot.v));
+    state.robot.omega = std::max(
+        contract_.angular.output_min,
+        std::min(contract_.angular.output_max, state.robot.omega));
+    state.linear.actuator_output = state.robot.v;
+    state.angular.actuator_output = state.robot.omega;
     state.linear.pending_commands.assign(
         static_cast<std::size_t>(
             contract_.linear.integer_delay_steps + 1),

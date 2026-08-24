@@ -1,0 +1,26 @@
+schema: spmpc_closed_loop_trial_condition_v1
+condition_id: C3
+implementation_id: phase_rejoin_15d_tail_commit_monitor_candidate_v1
+implementation_complete: true
+mode: residual_no_gate
+offline_nominal: true
+online_residual: true
+recovery_gate: false
+execution_compatibility_gate: true
+stored_recovery_action: true
+input_shaping: false
+# Development-only candidate. This mirrors the 15D C4 Tail-Commit candidate
+# while retaining C3's empirical gate monitor-only method. It intentionally
+# does not replace C3_residual_no_gate or enter the formal C3/C4 pair.
+pilot_only: true
+formal_c3_c4_causal_comparison_ready: false
+tail_commit_phase_rejoining: true
+max_consecutive_phase_holds: 3
+residual_feedback:
+  max_residual_v: 0.08
+  max_residual_omega: 0.20
+trial:
+  control_rate_hz: 30.0
+  max_motion_sec: 45.0
+  fixed_tail_sec: 4.0
+  publish_latency_sec: 0.01

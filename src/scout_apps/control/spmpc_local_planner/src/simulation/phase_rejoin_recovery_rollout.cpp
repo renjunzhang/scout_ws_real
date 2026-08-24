@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/simulation/phase_rejoin_recovery_rollout.h"
+#include "../../generated/acados/spmpc_delay_augmented_phase_solver_manifest.h"
 
 #include <yaml-cpp/yaml.h>
 
@@ -14,14 +15,20 @@ namespace spmpc_local_planner {
 namespace simulation {
 namespace {
 
+namespace manifest =
+    spmpc_local_planner::delay_augmented_phase_solver_manifest;
+
 constexpr const char* kSamplingSchema =
     "spmpc_phase_rejoin_recovery_rollout_sampling_v1";
 constexpr double kTimeEpsilonSec = 1.0e-10;
 constexpr double kValueEpsilon = 1.0e-12;
 constexpr std::size_t kStateErrorCount = 9;
-constexpr std::size_t kExecutionErrorCount = 14;
-constexpr std::size_t kLinearPendingCount = 5;
-constexpr std::size_t kAngularPendingCount = 7;
+constexpr std::size_t kLinearPendingCount =
+    static_cast<std::size_t>(manifest::kLinearBufferCount);
+constexpr std::size_t kAngularPendingCount =
+    static_cast<std::size_t>(manifest::kAngularBufferCount);
+constexpr std::size_t kExecutionErrorCount =
+    2 + kLinearPendingCount + kAngularPendingCount;
 
 bool finite(double value) {
     return std::isfinite(value);

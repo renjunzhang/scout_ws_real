@@ -332,7 +332,11 @@ NontrivialAugmentedFixture nontrivialAugmentedFixture() {
         RobotState{}, SloshState{}, VelocityCommand{}, state, error)) << error;
     double progress_s = 0.09;
     NontrivialAugmentedFixture fixture;
-    fixture.samples.resize(40);
+    // Keep enough zero-published-command rows for the identified angular
+    // actuator inertia to settle below the legacy V3 terminal tolerance.
+    // (The angular time constant is 0.342 s, so the former 24-row tail was
+    // only 0.8 s and still carried a measurable executed velocity.)
+    fixture.samples.resize(260);
     for (std::size_t index = 0; index < fixture.samples.size(); ++index) {
         const double linear_step = 0.5 * dt;
         const double angular_step = 1.0 * dt;
@@ -486,10 +490,17 @@ TEST(NominalSequenceArtifact,
 
 TEST(NominalSequenceArtifact,
      V3PublishZeroSettleTailRejectsPendingCommandAtFinalRow) {
+    // A terminal zero-published hold is at least five rows by contract.  This
+    // fixture's last nonzero angular command is row 14, so retaining it in
+    // the final queue row requires at least six generated queue slots.
+    if (augmented_manifest::kAngularBufferCount < 6) {
+        GTEST_SKIP() << "generated angular queue cannot retain a pending "
+                        "command through a five-row zero-published hold";
+    }
     NontrivialAugmentedFixture fixture = nontrivialAugmentedFixture();
-    fixture.samples.resize(22);
+    fixture.samples.resize(21);
     constexpr std::size_t hold_begin = 16;
-    ASSERT_EQ(fixture.samples.size() - hold_begin, 6u);
+    ASSERT_EQ(fixture.samples.size() - hold_begin, 5u);
     ASSERT_TRUE(std::any_of(
         fixture.samples.back().augmented_execution.angular.pending_commands.
             begin(),
@@ -787,9 +798,12 @@ TEST(NominalSequenceArtifact, LoadsDynamicsConsistentV3AugmentedSequence) {
 
     ASSERT_TRUE(result.success) << result.status << ": " << result.detail;
     EXPECT_TRUE(artifact.valid());
-    EXPECT_EQ(artifact.metadata().execution_state_width, 22);
-    EXPECT_EQ(artifact.metadata().linear_buffer_count, 5);
-    EXPECT_EQ(artifact.metadata().angular_buffer_count, 7);
+    EXPECT_EQ(artifact.metadata().execution_state_width,
+              augmented_manifest::kStateCount);
+    EXPECT_EQ(artifact.metadata().linear_buffer_count,
+              augmented_manifest::kLinearBufferCount);
+    EXPECT_EQ(artifact.metadata().angular_buffer_count,
+              augmented_manifest::kAngularBufferCount);
     EXPECT_EQ(artifact.metadata().recovery_contract,
               "bounded_tracking_recovery_policy_v1");
     EXPECT_DOUBLE_EQ(

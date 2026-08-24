@@ -298,7 +298,13 @@ NominalSequenceArtifact cycle10ExecutionArtifact() {
             control.acceleration = augmented_manifest::kAccelerationMax;
         } else if (index < 19) {
             control.acceleration = -augmented_manifest::kAccelerationMax;
-        } else if (index == 19) {
+        } else if (index >= 19) {
+            // The current linear channel has a first-order actuator state in
+            // addition to its four-slot delay queue.  Keep publishing an
+            // exact zero command throughout the V3 zero-command hold; using
+            // a single zeroing pulse (the old pure-delay fixture) leaves a
+            // nonzero command in the filtered tail and makes the artifact
+            // invalid at the terminal hold.
             constexpr double kPositiveZero = 1.0e-12;
             control.acceleration =
                 (kPositiveZero -
@@ -336,6 +342,18 @@ NominalSequenceArtifact cycle10ExecutionArtifact() {
     std::map<std::string, std::string> metadata = base.metadataEntries();
     metadata["source"] = "unit_test_cycle_10_execution_filter";
     metadata["path_length"] = "0.09";
+    // A nonzero actuator time constant makes the executed velocity decay
+    // after the published command reaches zero.  Use the V3 terminal
+    // contract, which checks the command hold and bounds the residual plant
+    // state instead of requiring an exact zero executed velocity at every
+    // hold sample.
+    metadata["terminal_contract"] = "publish_zero_settle_hold_v2";
+    metadata["terminal_v_abs_max"] = "1";
+    metadata["terminal_omega_abs_max"] = "1";
+    metadata["terminal_linear_actuator_output_abs_max"] = "1";
+    metadata["terminal_angular_actuator_output_abs_max"] = "1";
+    metadata["terminal_linear_pending_command_abs_max"] = "1e-12";
+    metadata["terminal_angular_pending_command_abs_max"] = "1e-12";
     metadata["recovery_artifact_hash"] =
         NominalSequenceArtifact::canonicalRecoveryArtifactHash(
             metadata, samples);
@@ -363,9 +381,12 @@ NominalSequenceArtifact tailExecutionTransitionArtifact(
         samples[index].radii.x = index == 14 ? 1.0 :
             (index == 13 ? 0.01 : 0.001);
         if (index >= narrow_start) {
-            samples[index].execution_bounds.angular_pending_commands.assign(
+            // The angular channel now has only one pending entry, so it has
+            // no multi-step immutable prefix.  Exercise the same horizon
+            // admission rule through the four-entry linear queue instead.
+            samples[index].execution_bounds.linear_pending_commands.assign(
                 static_cast<std::size_t>(
-                    augmented_manifest::kAngularBufferCount),
+                    augmented_manifest::kLinearBufferCount),
                 8.0e-4);
         }
     }
@@ -648,7 +669,7 @@ TEST(PhaseCandidateSelector,
     ExecutionAugmentedState actual =
         artifact.sample(10)->augmented_execution;
     actual.linear.pending_commands = {
-        0.09163756, 0.11148499, 0.12603239, 0.14602129, 0.16221329};
+        0.11148499, 0.12603239, 0.14602129, 0.16221329};
     const ExecutionCompatibilityGate gate;
     const ExecutionCompatibilityGateResult phase10_gate = gate.evaluate(
         artifact.sample(10)->augmented_execution,
@@ -715,16 +736,18 @@ TEST(PhaseCandidateSelector,
 }
 
 TEST(PhaseCandidateSelector,
-     FullHorizonRejectsTailPhaseWhoseImmutableQueueCannotEnterBexec) {
+     FullHorizonRejectsTailPhaseWhoseImmutableLinearQueueCannotEnterBexec) {
     const NominalSequenceArtifact artifact =
-        tailExecutionTransitionArtifact(20);
+        // With four linear pending entries, sample 17 is the first narrow
+        // bound that reaches an immutable queue coordinate for phase 14;
+        // phase 13 still has a compatible witness.
+        tailExecutionTransitionArtifact(17);
     ASSERT_TRUE(artifact.valid());
     ExecutionAugmentedState actual =
         artifact.sample(14)->augmented_execution;
     actual.robot.x = 0.001;
-    actual.angular.pending_commands.assign(
-        static_cast<std::size_t>(
-            augmented_manifest::kAngularBufferCount),
+    actual.linear.pending_commands.assign(
+        static_cast<std::size_t>(augmented_manifest::kLinearBufferCount),
         0.001);
     const ExecutionHorizonContext horizon = executionHorizonAt(actual);
     const ExecutionHorizonCompatibilityParams horizon_params =
@@ -737,7 +760,7 @@ TEST(PhaseCandidateSelector,
     EXPECT_FALSE(phase14.accepted);
     EXPECT_EQ(
         phase14.status,
-        "ANGULAR_IMMUTABLE_PENDING_QUEUE_OUTSIDE_B_EXEC");
+        "LINEAR_IMMUTABLE_PENDING_QUEUE_OUTSIDE_B_EXEC");
     const ExecutionHorizonCompatibilityResult phase13 = gate.evaluate(
         artifact, 13, horizon, horizon_params);
     ASSERT_TRUE(phase13.valid) << phase13.status;
@@ -763,14 +786,15 @@ TEST(PhaseCandidateSelector,
 }
 
 TEST(PhaseCandidateSelector,
-     AllHorizonIncompatibleCandidatesFailBeforeSolverSelection) {
+     AllHorizonIncompatibleLinearCandidatesFailBeforeSolverSelection) {
     const NominalSequenceArtifact artifact =
-        tailExecutionTransitionArtifact(18);
+        // Candidates 12--14 all encounter the narrow linear bound while the
+        // corresponding command is still immutable in the initial queue.
+        tailExecutionTransitionArtifact(15);
     ExecutionAugmentedState actual =
         artifact.sample(14)->augmented_execution;
-    actual.angular.pending_commands.assign(
-        static_cast<std::size_t>(
-            augmented_manifest::kAngularBufferCount),
+    actual.linear.pending_commands.assign(
+        static_cast<std::size_t>(augmented_manifest::kLinearBufferCount),
         0.001);
     const ExecutionHorizonContext horizon = executionHorizonAt(actual);
     const ExecutionHorizonCompatibilityParams horizon_params =

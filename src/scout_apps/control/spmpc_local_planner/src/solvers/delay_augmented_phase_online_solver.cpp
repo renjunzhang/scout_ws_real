@@ -198,7 +198,10 @@ SolverConfigureResult DelayAugmentedPhaseOnlineSolver::configure(
     configured_ = true;
     result.success = true;
     result.status = "OK";
-    result.detail = "nx=22 nu=3 N=10 parameter_hash=" +
+    result.detail = "nx=" + std::to_string(manifest::kStateCount) +
+        " nu=" + std::to_string(manifest::kControlCount) +
+        " N=" + std::to_string(manifest::kHorizonSteps) +
+        " parameter_hash=" +
         compiled.parameter_schema_hash;
     return result;
 }
@@ -315,8 +318,8 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     // guess that violates an inequality and repair it.  The warm-start audit
     // is evidence, not the final admission gate.  Causal inconsistency is
     // different: it means the supplied multiple-shooting trajectory does not
-    // represent the frozen 22D dynamics and must still fail closed before the
-    // optimizer is invoked.
+    // represent the manifest-defined dynamics and must still fail closed
+    // before the optimizer is invoked.
     if (warm_start_audit.max_causal_state_error >
             manifest::kMaxCausalStateError) {
         output.status =
@@ -471,6 +474,9 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
             // whole horizon ahead on every cycle.
             output.progress_abs_s = state.progress_s;
         }
+        if (stage == 1) {
+            output.successor_execution_state = state.execution;
+        }
         if (stage == manifest::kHorizonSteps) {
             output.terminal_execution_state = state.execution;
         }
@@ -486,6 +492,7 @@ bool DelayAugmentedPhaseOnlineSolver::solve(
     }
     output.delay_augmented_execution_solution =
         output.initial_execution_state.valid &&
+        output.successor_execution_state.valid &&
         output.terminal_execution_state.valid;
     output.progress_s = reference.length() > 1e-9
         ? output.progress_abs_s / reference.length()

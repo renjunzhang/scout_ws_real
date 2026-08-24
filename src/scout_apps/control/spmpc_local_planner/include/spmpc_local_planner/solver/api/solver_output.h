@@ -53,6 +53,7 @@ struct SolverOutput {
     ControlCycleTimingDebug cycle_timing;
     bool delay_augmented_execution_solution = false;
     ExecutionAugmentedState initial_execution_state;
+    ExecutionAugmentedState successor_execution_state;
     ExecutionAugmentedState terminal_execution_state;
 };
 

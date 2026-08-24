@@ -27,12 +27,14 @@ public:
                             std::size_t max_index);
 
     bool initialized() const { return initialized_; }
+    std::size_t index() const { return last_index_; }
 
 private:
     bool initialized_ = false;
     double runtime_origin_sec_ = 0.0;
     double artifact_origin_sec_ = 0.0;
     double last_runtime_sec_ = 0.0;
+    std::size_t last_index_ = 0;
 };
 
 }  // namespace spmpc_local_planner

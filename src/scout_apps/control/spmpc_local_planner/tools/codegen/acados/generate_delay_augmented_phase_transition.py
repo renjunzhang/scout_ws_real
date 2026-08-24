@@ -86,7 +86,7 @@ def load_contract():
     common = _load_yaml("config/planner/common.yaml")
     platform = _load_yaml("config/platforms/scout_mini.yaml")["robot"]
     slosh = _load_yaml("config/containers/tube_default.yaml")["slosh"]
-    delay = common["delay_phase"]
+    delay = common["delay_augmented_phase"]["execution_model"]
     dt = float(common["dt"])
     linear = _resolve_channel(
         float(delay["linear_delay_sec"]),

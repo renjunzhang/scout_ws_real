@@ -219,6 +219,7 @@ add_library(spmpc_costmap
 add_library(spmpc_controller
   src/controller/command/command_pipeline.cpp
   src/controller/command/publication_transaction.cpp
+  src/controller/command/tail_commit_state_machine.cpp
   src/controller/control_cycle_engine.cpp
   src/controller/control_cycle_gate.cpp
   src/controller/control_cycle_input_preparer.cpp
@@ -236,6 +237,8 @@ add_library(spmpc_phase_rejoin
   src/phase_rejoin/phase_candidate_selector.cpp
   src/phase_rejoin/empirical_recovery_gate.cpp
   src/phase_rejoin/execution_compatibility_gate.cpp
+  src/phase_rejoin/empirical_joint_successor_admission.cpp
+  src/phase_rejoin/phase_progress_governor.cpp
   src/phase_rejoin/execution_horizon_compatibility_gate.cpp
   src/phase_rejoin/phase_rejoin_coordinator.cpp
 )
@@ -876,6 +879,32 @@ if(CATKIN_ENABLE_TESTING)
       spmpc_phase_rejoin
     )
   endif()
+  catkin_add_gtest(test_empirical_joint_successor_admission
+    test/test_empirical_joint_successor_admission.cpp)
+  if(TARGET test_empirical_joint_successor_admission)
+    target_link_libraries(test_empirical_joint_successor_admission
+      spmpc_phase_rejoin
+    )
+  endif()
+  catkin_add_gtest(test_phase_progress_governor
+    test/test_phase_progress_governor.cpp)
+  if(TARGET test_phase_progress_governor)
+    target_link_libraries(test_phase_progress_governor
+      spmpc_phase_rejoin
+    )
+  endif()
+  catkin_add_gtest(test_phase_rejoin_tail_commit_integration
+    test/test_phase_rejoin_tail_commit_integration.cpp)
+  if(TARGET test_phase_rejoin_tail_commit_integration)
+    target_include_directories(test_phase_rejoin_tail_commit_integration PRIVATE
+      ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados
+    )
+    target_link_libraries(test_phase_rejoin_tail_commit_integration
+      spmpc_controller
+      spmpc_phase_rejoin
+      spmpc_safety
+    )
+  endif()
   catkin_add_gtest(test_horizon_liquid_replay
     test/test_horizon_liquid_replay.cpp)
   if(TARGET test_horizon_liquid_replay)
@@ -1103,6 +1132,13 @@ if(CATKIN_ENABLE_TESTING)
     test/test_publication_transaction.cpp)
   if(TARGET test_publication_transaction)
     target_link_libraries(test_publication_transaction
+      spmpc_controller
+    )
+  endif()
+  catkin_add_gtest(test_tail_commit_state_machine
+    test/test_tail_commit_state_machine.cpp)
+  if(TARGET test_tail_commit_state_machine)
+    target_link_libraries(test_tail_commit_state_machine
       spmpc_controller
     )
   endif()

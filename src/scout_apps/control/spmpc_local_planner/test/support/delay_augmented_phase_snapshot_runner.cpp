@@ -55,7 +55,8 @@ bool assignVector(const SnapshotJson& json, std::vector<double>& out,
     return true;
 }
 
-// Invert the codegen 22D layout back into the typed initial state.
+// Invert the manifest-defined codegen layout back into the typed initial
+// state.
 // Layout (serializeInitialState):
 //   [0]=x [1]=y [2]=yaw [3]=v [4]=s [5]=omega
 //   [6]=eta_x [7]=eta_x_dot [8]=eta_y [9]=eta_y_dot

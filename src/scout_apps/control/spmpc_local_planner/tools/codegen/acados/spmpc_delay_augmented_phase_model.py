@@ -40,17 +40,18 @@ GATE_RADIUS_NAMES = (
 
 def _mapped_target(command, channel):
     # The frozen Scout contract has zero deadzone and unit directional gains.
-    # Every pending/published command is already admitted inside the channel
-    # envelope, where the C++ mapping is exactly the identity.  Returning that
-    # equivalent smooth expression avoids the zero derivative introduced by
-    # fabs/sign/if_else at a stopped command, which otherwise makes the RTI
-    # linearization unable to predict the first acceleration from rest.
+    # Keep the smooth identity derivative in the interior while retaining the
+    # C++ mapping's hard output envelope for a control step that proposes a
+    # command just beyond a bound.
     if (
         channel["deadzone"] <= 1e-12
         and abs(channel["positive_gain"] - 1.0) <= 1e-12
         and abs(channel["negative_gain"] - 1.0) <= 1e-12
     ):
-        return command
+        return ca.fmin(
+            channel["output_max"],
+            ca.fmax(channel["output_min"], command),
+        )
     magnitude = ca.fabs(command)
     gain = ca.if_else(
         command >= 0.0,

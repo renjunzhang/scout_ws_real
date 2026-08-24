@@ -281,6 +281,18 @@ AppConfig RosConfigLoader::load(const ros::NodeHandle& private_node,
             "phase_rejoin/mode",
             "unknown value '" + phase_mode + "'; expected off|monitor|enforce");
     }
+    loadParam(private_node,
+              "phase_rejoin/progress_governor_enabled",
+              phase.params.progress_governor_enabled);
+    loadParam(private_node,
+              "phase_rejoin/successor_admission_enabled",
+              phase.params.successor_admission_enabled);
+    loadParam(private_node,
+              "phase_rejoin/tail_commit_enabled",
+              phase.params.tail_commit_enabled);
+    loadParam(private_node,
+              "phase_rejoin/max_consecutive_phase_holds",
+              phase.params.max_consecutive_phase_holds);
     loadParam(private_node, "phase_rejoin/publish_diagnostics",
               phase.publish_diagnostics);
     loadParam(private_node, "phase_rejoin/artifact_path", phase.artifact_path);

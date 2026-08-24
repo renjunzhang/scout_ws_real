@@ -25,6 +25,21 @@ assert SPEC.loader is not None
 sys.modules[SPEC.name] = FITTER
 SPEC.loader.exec_module(FITTER)
 
+TEST_EXECUTION_ERROR_COLUMNS = (
+    "linear_output",
+    "angular_output",
+) + tuple("linear_pending_{}".format(index) for index in range(4)) + tuple(
+    "angular_pending_{}".format(index) for index in range(1)
+)
+TEST_ERROR_COLUMNS = FITTER.STATE_ERROR_COLUMNS + TEST_EXECUTION_ERROR_COLUMNS
+TEST_INPUT_COLUMNS = (
+    "split",
+    "rollout_id",
+    "seed",
+    "phase_index",
+    "recovered",
+) + TEST_ERROR_COLUMNS
+
 
 class PhaseRejoinRecoveryFitTest(unittest.TestCase):
 
@@ -38,7 +53,7 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
             "recovered": "1" if recovered else "0",
         }
         record.update(
-            {name: format(error, ".17g") for name in FITTER.ERROR_COLUMNS}
+            {name: format(error, ".17g") for name in TEST_ERROR_COLUMNS}
         )
         return record
 
@@ -82,7 +97,7 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
     @staticmethod
     def write_rows(path, rows):
         with Path(path).open("w", encoding="utf-8", newline="") as stream:
-            writer = csv.DictWriter(stream, fieldnames=FITTER.INPUT_COLUMNS)
+            writer = csv.DictWriter(stream, fieldnames=TEST_INPUT_COLUMNS)
             writer.writeheader()
             writer.writerows(rows)
 
@@ -116,27 +131,13 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
 
     def test_schema_and_successful_fit_tune_held_out(self):
         self.assertEqual(len(FITTER.STATE_ERROR_COLUMNS), 9)
-        self.assertEqual(len(FITTER.EXECUTION_ERROR_COLUMNS), 14)
+        layout = FITTER._discover_layout(TEST_INPUT_COLUMNS)
+        self.assertEqual(len(layout.execution_error_columns), 7)
         self.assertEqual(FITTER.COMPILED_GATE_RADIUS_COUNT, 9)
-        self.assertEqual(FITTER.COMPILED_EXECUTION_BOUND_COUNT, 14)
+        self.assertEqual(layout.execution_bound_count, 7)
         self.assertEqual(
-            FITTER.EXECUTION_ERROR_COLUMNS,
-            (
-                "linear_output",
-                "angular_output",
-                "linear_pending_0",
-                "linear_pending_1",
-                "linear_pending_2",
-                "linear_pending_3",
-                "linear_pending_4",
-                "angular_pending_0",
-                "angular_pending_1",
-                "angular_pending_2",
-                "angular_pending_3",
-                "angular_pending_4",
-                "angular_pending_5",
-                "angular_pending_6",
-            ),
+            layout.execution_error_columns,
+            TEST_EXECUTION_ERROR_COLUMNS,
         )
 
         with tempfile.TemporaryDirectory() as directory:
@@ -201,13 +202,13 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
                 "r", encoding="utf-8", newline=""
             ) as stream:
                 scale_rows = list(csv.DictReader(stream))
-            self.assertEqual(tuple(scale_rows[0]), FITTER.OUTPUT_COLUMNS)
+            self.assertEqual(tuple(scale_rows[0]), layout.output_columns)
             self.assertEqual([row["phase_index"] for row in scale_rows], ["0", "1"])
             for row in scale_rows:
                 self.assertEqual(float(row["shrinkage"]), 0.5)
                 for name in FITTER.STATE_RADIUS_COLUMNS:
                     self.assertAlmostEqual(float(row[name]), 0.15)
-                for name in FITTER.EXECUTION_BOUND_COLUMNS:
+                for name in layout.execution_bound_columns:
                     self.assertAlmostEqual(float(row[name]), 0.05)
 
             verified = FITTER.verify_manifest(manifest_path)
@@ -355,7 +356,7 @@ class PhaseRejoinRecoveryFitTest(unittest.TestCase):
         rows = self.make_rows()
         for row in rows:
             if row["split"] == "held_out":
-                for name in FITTER.ERROR_COLUMNS:
+                for name in TEST_ERROR_COLUMNS:
                     row[name] = "1.0"
 
         with tempfile.TemporaryDirectory() as directory:

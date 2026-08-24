@@ -1,7 +1,7 @@
 // Copyright 2026. Offline slosh Phase-Rejoin development.
 //
 // §10 / §11.3 / §11.5 scaling-contract tests:
-//   * scale -> unscale round-trips are exact identities on both the 22D state
+//   * scale -> unscale round-trips are exact identities on both the 15D state
 //     and the 3D control vectors;
 //   * per-stage stationarity layout is [u, x] at interior stages and [x] at the
 //     terminal stage, matching the length nx+nu vs nx contract.
@@ -87,8 +87,9 @@ TEST(DelayAugmentedPhaseScaling, PerStageStationarityWidthMatchesLayoutContract)
     // frozen dimensions in the manifest.
     const int interior_width = manifest::kStateCount + manifest::kControlCount;
     const int terminal_width = manifest::kStateCount;
-    EXPECT_EQ(25, interior_width);
-    EXPECT_EQ(22, terminal_width);
+    EXPECT_EQ(manifest::kStateCount + manifest::kControlCount,
+              interior_width);
+    EXPECT_EQ(manifest::kStateCount, terminal_width);
     EXPECT_NE(interior_width, terminal_width);
 }
 

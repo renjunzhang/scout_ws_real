@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/controller/command/publication_transaction.h"
+#include "spmpc_local_planner/controller/command/tail_commit_state_machine.h"
 #include "spmpc_local_planner/controller/speed_reference_controller.h"
 #include "spmpc_local_planner/controller/control_cycle_telemetry.h"
 #include "spmpc_local_planner/solver/api/solver_input.h"
@@ -33,6 +34,8 @@ struct ControlCycleRequest {
     PublishEpochEstimate publish_epoch_estimate;
     bool publish_enabled = true;
     ICommandSink* command_sink = nullptr;
+    // Required when Tail-Commit is enabled because every accepted tail
+    // command must become the next cycle's execution-model history.
     CommandHistoryBuffer* command_history = nullptr;
 };
 
@@ -50,6 +53,8 @@ struct ControlCycleResult {
     CommandPublicationResult publication;
     VelocityCommand final_command;
     bool phase_committed = false;
+    bool tail_publication_observed = false;
+    TailCommitResult tail_commit;
 
     PhaseRejoinPreparation phase_preparation;
     PhaseRejoinDecision phase_decision;
@@ -105,10 +110,15 @@ public:
     const PhaseRejoinCoordinator& phaseRejoinCoordinator() const {
         return phase_rejoin_;
     }
+    TailCommitState tailCommitState() const {
+        return tail_commit_.state();
+    }
 
 private:
     PhaseRejoinPreparation preparePhase(
         const ControlCycleRequest& request);
+    PhaseRejoinPreparation prepareBackupTail(
+        const ControlCycleRequest& request) const;
     static VelocityCommand rawSolverCommand(const SolverOutput& output);
     static TrackingProjectionView projectionView(
         const ProjectorDebugSummary& projector);
@@ -125,6 +135,7 @@ private:
     SafetySupervisor safety_;
     CommandPipeline command_pipeline_;
     PublicationTransaction publication_transaction_;
+    TailCommitStateMachine tail_commit_;
     PublishLatencyModel publish_latency_model_;
     SpeedReferenceController speed_reference_;
     PhaseRejoinParams phase_params_;

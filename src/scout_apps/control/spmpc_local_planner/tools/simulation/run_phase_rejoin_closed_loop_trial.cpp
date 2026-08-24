@@ -93,6 +93,11 @@ struct ConditionConfig {
     bool pilot_tuned_and_frozen = false;
     bool pilot_only = false;
     bool formal_c3_c4_causal_comparison_ready = false;
+    // Development-only opt-in for the 15D Tail-Commit candidate.  It is
+    // deliberately false by default so the reviewed C3/C4 conditions retain
+    // their historical phase-rejoin behavior.
+    bool tail_commit_phase_rejoining = false;
+    int max_consecutive_phase_holds = 3;
     double terminal_slowdown_distance_m = 0.80;
     double terminal_slowdown_v_max_mps = 0.18;
     double terminal_capture_distance_m = 0.50;
@@ -123,6 +128,7 @@ struct CycleRecord {
     SloshState observer;
     double observer_height_m = 0.0;
     bool solver_success = false;
+    bool solve_attempted = false;
     std::string raw_solver_status = "NOT_RUN";
     std::string phase_status = "NOT_RUN";
     std::string final_status = "NOT_RUN";
@@ -145,6 +151,12 @@ struct CycleRecord {
     bool command_modified = false;
     bool zero_request = false;
     bool selected_phase_valid = false;
+    std::string successor_action = "DISABLED";
+    std::string tail_state = "DISABLED";
+    bool tail_commit = false;
+    bool tail_release = false;
+    bool tail_abort = false;
+    bool tail_command_used = false;
     std::size_t clock_index = 0;
     std::size_t candidate_window_begin_index = 0;
     std::size_t candidate_window_end_index = 0;
@@ -166,6 +178,10 @@ struct CycleRecord {
 
 struct TrialCounters {
     std::size_t solver_failures = 0;
+    std::size_t tail_command_count = 0;
+    std::size_t tail_commit_transitions = 0;
+    std::size_t tail_release_transitions = 0;
+    std::size_t tail_abort_transitions = 0;
     std::size_t gate_evaluations = 0;
     std::size_t current_gate_evaluations = 0;
     std::size_t current_gate_accepts = 0;
@@ -201,6 +217,8 @@ struct TrialCounters {
     std::map<std::string, std::size_t> raw_solver_status_counts;
     std::map<std::string, std::size_t> phase_status_counts;
     std::map<std::string, std::size_t> final_status_counts;
+    std::map<std::string, std::size_t> successor_action_counts;
+    std::map<std::string, std::size_t> tail_state_counts;
 };
 
 struct SolverFailureDiagnostic {
@@ -656,6 +674,19 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
         optionalScalar(root, "pilot_only", config.pilot_only);
         optionalScalar(root, "formal_c3_c4_causal_comparison_ready",
                        config.formal_c3_c4_causal_comparison_ready);
+        optionalScalar(root, "tail_commit_phase_rejoining",
+                       config.tail_commit_phase_rejoining);
+        optionalScalar(root, "max_consecutive_phase_holds",
+                       config.max_consecutive_phase_holds);
+        optionalScalar(root, "tail_commit_max_consecutive_phase_holds",
+                       config.max_consecutive_phase_holds);
+        // Accept a namespaced spelling for development condition authors while
+        // keeping the flat optional key used by the candidate YAML concise.
+        const YAML::Node phase_rejoin = root["phase_rejoin"];
+        if (phase_rejoin && phase_rejoin.IsMap()) {
+            optionalScalar(phase_rejoin, "max_consecutive_phase_holds",
+                           config.max_consecutive_phase_holds);
+        }
         const bool continuous_mode =
             config.mode == TrialMode::OrdinaryMpcc ||
             config.mode == TrialMode::SmoothMatchMpcc ||
@@ -838,7 +869,8 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
             config.max_residual_omega < 0.0 ||
             !finite(config.zvd_max_discrete_residual) ||
             config.zvd_max_discrete_residual < 0.0 ||
-            config.zvd_max_discrete_residual > 1.0) {
+            config.zvd_max_discrete_residual > 1.0 ||
+            config.max_consecutive_phase_holds < 0) {
             error = "condition numeric contract rejected";
             return false;
         }
@@ -864,10 +896,23 @@ bool loadCondition(const std::string& path, ConditionConfig& config,
                 return false;
             }
         }
-        if (config.mode == TrialMode::ResidualNoGate ||
-            config.mode == TrialMode::PhaseRejoinFull) {
-            if (config.pilot_only ||
-                !config.formal_c3_c4_causal_comparison_ready) {
+        const bool phase_rejoin_mode =
+            config.mode == TrialMode::ResidualNoGate ||
+            config.mode == TrialMode::PhaseRejoinFull;
+        if (config.tail_commit_phase_rejoining && !phase_rejoin_mode) {
+            error = "tail-commit phase rejoining is restricted to C3/C4";
+            return false;
+        }
+        if (phase_rejoin_mode) {
+            if (config.tail_commit_phase_rejoining) {
+                if (!config.pilot_only ||
+                    config.formal_c3_c4_causal_comparison_ready) {
+                    error = "tail-commit phase rejoining must remain a "
+                            "development-only pilot";
+                    return false;
+                }
+            } else if (config.pilot_only ||
+                       !config.formal_c3_c4_causal_comparison_ready) {
                 error = "C3/C4 strict causal comparison contract is not frozen";
                 return false;
             }
@@ -1626,8 +1671,9 @@ SolverFailureDiagnostic captureSolverFailureDiagnostic(
     diagnostic.initial_progress_s = horizon.initial_progress_s;
 
     // A pre-solver candidate failure has no phase parameter image or warm
-    // start.  Preserve the complete current 22D state and the per-candidate
-    // B_exec audit above, then stop before the solver-specific diagnostics.
+    // start.  Preserve the complete current execution state and the
+    // per-candidate B_exec audit above, then stop before the solver-specific
+    // diagnostics.
     if (!candidate.valid || !phase.active) {
         return diagnostic;
     }
@@ -1823,6 +1869,7 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "tracking_error_m,progress_s,true_height_m,measured_height_m,"
         << "observer_height_m,observer_eta_x,observer_eta_x_dot,"
         << "observer_eta_y,observer_eta_y_dot,solver_success,"
+        << "solve_attempted,"
         << "raw_solver_status,phase_status,final_status,"
         << "gate_evaluated,current_gate_valid,current_gate_accepted,"
         << "current_gate_metric,current_gate_margin,terminal_gate_valid,"
@@ -1831,6 +1878,8 @@ bool openCycleCsv(const std::string& path, std::ofstream& output,
         << "recovery_used,controlled_stop_used,phase_committed,"
         << "receipt_consistent,history_committed,command_modified,"
         << "zero_request,selected_phase_valid,"
+        << "successor_action,tail_state,tail_commit,tail_release,"
+        << "tail_abort,tail_command_used,"
         << "clock_index,candidate_window_begin_index,"
         << "candidate_window_end_index,selected_phase_index,phase_lead_steps,"
         << "execution_candidate_filter_applied,"
@@ -1861,6 +1910,7 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << record.observer.eta_x << ',' << record.observer.eta_x_dot << ','
         << record.observer.eta_y << ',' << record.observer.eta_y_dot << ','
         << (record.solver_success ? "true" : "false") << ','
+        << (record.solve_attempted ? "true" : "false") << ','
         << csvEscape(record.raw_solver_status) << ','
         << csvEscape(record.phase_status) << ','
         << csvEscape(record.final_status) << ','
@@ -1883,6 +1933,12 @@ bool writeCycle(std::ofstream& output, const CycleRecord& record) {
         << (record.command_modified ? "true" : "false") << ','
         << (record.zero_request ? "true" : "false") << ','
         << (record.selected_phase_valid ? "true" : "false") << ','
+        << csvEscape(record.successor_action) << ','
+        << csvEscape(record.tail_state) << ','
+        << (record.tail_commit ? "true" : "false") << ','
+        << (record.tail_release ? "true" : "false") << ','
+        << (record.tail_abort ? "true" : "false") << ','
+        << (record.tail_command_used ? "true" : "false") << ','
         << record.clock_index << ','
         << record.candidate_window_begin_index << ','
         << record.candidate_window_end_index << ','
@@ -1979,6 +2035,11 @@ bool writeSummary(
         << "  \"mode\": \"" << modeName(condition.mode) << "\",\n"
         << "  \"implementation_id\": \""
         << jsonEscape(condition.implementation_id) << "\",\n"
+        << "  \"tail_commit_phase_rejoining\": "
+        << (condition.tail_commit_phase_rejoining ? "true" : "false")
+        << ",\n"
+        << "  \"max_consecutive_phase_holds\": "
+        << condition.max_consecutive_phase_holds << ",\n"
         << "  \"seed\": " << args.seed << ",\n"
         << "  \"simulation_only\": true,\n"
         << "  \"formal_trials_started\": "
@@ -2156,6 +2217,14 @@ bool writeSummary(
         << "  },\n"
         << "  \"controller_audit\": {\n"
         << "    \"solver_failures\": " << counters.solver_failures << ",\n"
+        << "    \"tail_command_count\": "
+        << counters.tail_command_count << ",\n"
+        << "    \"tail_commit_transitions\": "
+        << counters.tail_commit_transitions << ",\n"
+        << "    \"tail_release_transitions\": "
+        << counters.tail_release_transitions << ",\n"
+        << "    \"tail_abort_transitions\": "
+        << counters.tail_abort_transitions << ",\n"
         << "    \"gate_evaluations\": " << counters.gate_evaluations << ",\n"
         << "    \"current_gate_evaluations\": "
         << counters.current_gate_evaluations << ",\n"
@@ -2197,6 +2266,10 @@ bool writeSummary(
     writeJsonStringCounts(output, counters.phase_status_counts);
     output << ",\n    \"final_status_counts\": ";
     writeJsonStringCounts(output, counters.final_status_counts);
+    output << ",\n    \"successor_action_counts\": ";
+    writeJsonStringCounts(output, counters.successor_action_counts);
+    output << ",\n    \"tail_state_counts\": ";
+    writeJsonStringCounts(output, counters.tail_state_counts);
     output << "\n"
         << "  },\n"
         << "  \"first_solver_failure_diagnostic\": ";
@@ -2606,6 +2679,11 @@ bool writeSummary(
         << "    \"formal_c3_c4_causal_comparison_ready\": "
         << (condition.formal_c3_c4_causal_comparison_ready
                 ? "true" : "false") << ",\n"
+        << "    \"tail_commit_phase_rejoining\": "
+        << (condition.tail_commit_phase_rejoining ? "true" : "false")
+        << ",\n"
+        << "    \"max_consecutive_phase_holds\": "
+        << condition.max_consecutive_phase_holds << ",\n"
         << "    \"c3_gate_disabled_by_separate_controller\": "
         << "false"
         << ",\n"
@@ -2677,6 +2755,13 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         !args.frozen_session_sha256.empty()) {
         std::cerr << "ERROR: BT is development-only and cannot start a "
                   << "formal trial\n";
+        cleanup_temporary();
+        return kConfigurationExit;
+    }
+    if (condition.tail_commit_phase_rejoining &&
+        !args.frozen_session_sha256.empty()) {
+        std::cerr << "ERROR: 15D Tail-Commit candidate is development-only "
+                  << "and cannot start a formal trial\n";
         cleanup_temporary();
         return kConfigurationExit;
     }
@@ -2828,8 +2913,9 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
     } else if (condition.mode == TrialMode::ResidualNoGate ||
                condition.mode == TrialMode::PhaseRejoinFull) {
         if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
-            std::cerr << "ERROR: C3/C4 require the explicitly enabled 22D "
-                      << "delay-augmented capsule\n";
+            std::cerr << "ERROR: C3/C4 require the explicitly enabled "
+                      << manifest::kStateCount
+                      << "D manifest-driven delay-augmented phase capsule\n";
             cleanup_temporary();
             return kConfigurationExit;
         }
@@ -2897,6 +2983,13 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         phase_params.required_contract_id = artifact.metadata().contract_id;
         phase_params.required_frame_id = artifact.metadata().frame_id;
         phase_params.allow_development_artifact_in_enforce = false;
+        if (condition.tail_commit_phase_rejoining) {
+            phase_params.progress_governor_enabled = true;
+            phase_params.successor_admission_enabled = true;
+            phase_params.tail_commit_enabled = true;
+            phase_params.max_consecutive_phase_holds =
+                condition.max_consecutive_phase_holds;
+        }
     }
     if (!engine.configurePhaseRejoin(phase_params, error)) {
         std::cerr << "ERROR: phase controller configuration failed: "
@@ -3127,7 +3220,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         request.command_sink = &sink;
         request.command_history = &command_history;
         const ControlCycleResult result = engine.step(request);
-        if (!result.solver_success && !first_solver_failure.valid) {
+        if (result.telemetry.solve_attempted && !result.solver_success &&
+            !first_solver_failure.valid) {
             first_solver_failure = captureSolverFailureDiagnostic(
                 result, artifact);
         }
@@ -3147,6 +3241,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.observer_height_m = observer_dynamics.height(
             observer, robot.omega);
         record.solver_success = result.solver_success;
+        record.solve_attempted = result.telemetry.solve_attempted;
         record.raw_solver_status = result.solver_output.status;
         record.phase_status = result.have_phase_decision
             ? result.phase_decision.status
@@ -3188,6 +3283,15 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.zero_request = !result.decision.accepted;
         record.selected_phase_valid =
             result.phase_preparation.candidate.valid;
+        record.successor_action = result.phase_debug.phase_progress_action;
+        record.tail_state = tailCommitStateName(engine.tailCommitState());
+        record.tail_commit = result.tail_commit.transitioned &&
+            result.tail_commit.state == TailCommitState::Committed;
+        record.tail_release = result.tail_commit.transitioned &&
+            result.tail_commit.state == TailCommitState::Released;
+        record.tail_abort = result.tail_commit.transitioned &&
+            result.tail_commit.state == TailCommitState::Aborted;
+        record.tail_command_used = result.phase_decision.tail_command_used;
         record.clock_index =
             result.phase_preparation.candidate.clock_index;
         record.candidate_window_begin_index =
@@ -3240,7 +3344,13 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             runtime_error = "cycle CSV write failed";
             break;
         }
-        if (!result.solver_success) ++counters.solver_failures;
+        if (record.solve_attempted && !result.solver_success) {
+            ++counters.solver_failures;
+        }
+        if (record.tail_command_used) ++counters.tail_command_count;
+        if (record.tail_commit) ++counters.tail_commit_transitions;
+        if (record.tail_release) ++counters.tail_release_transitions;
+        if (record.tail_abort) ++counters.tail_abort_transitions;
         if (record.backend_wall_time_ms > 0.0) {
             counters.solver_id = solver_snapshot.solver_id;
             counters.nlp_solver_type = solver_snapshot.nlp_solver_type;
@@ -3279,6 +3389,8 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         ++counters.raw_solver_status_counts[record.raw_solver_status];
         ++counters.phase_status_counts[record.phase_status];
         ++counters.final_status_counts[record.final_status];
+        ++counters.successor_action_counts[record.successor_action];
+        ++counters.tail_state_counts[record.tail_state];
         if (record.execution_candidate_filter_applied) {
             ++counters.execution_candidate_filter_cycles;
             counters.execution_rejected_candidates +=
@@ -3411,6 +3523,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
         record.raw_solver_status = "NOT_RUN_FIXED_TAIL";
         record.phase_status = "NOT_RUN_FIXED_TAIL";
         record.final_status = "FIXED_TAIL_ZERO";
+        record.tail_state = tailCommitStateName(engine.tailCommitState());
         record.final_command = publication.pipeline.final_command;
         record.command_source = publication.pipeline.decision.source;
         record.receipt_consistent = publication.receipt_consistent;
@@ -3425,6 +3538,7 @@ int runPhaseRejoinClosedLoopTrial(int argc, char** argv) {
             runtime_error = "tail CSV write failed";
             break;
         }
+        ++counters.tail_state_counts[record.tail_state];
         if (!record.receipt_consistent) {
             ++counters.receipt_inconsistent_cycles;
         }

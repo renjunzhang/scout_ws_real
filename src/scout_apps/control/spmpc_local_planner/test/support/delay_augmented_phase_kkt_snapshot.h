@@ -10,9 +10,9 @@
 // Consumed schema (see the closed-loop trial writer):
 //   summary.json
 //     .first_solver_failure_diagnostic
-//       .initial_state_22d                -> 22 doubles (physical, x0)
+//       .initial_state_22d                -> manifest-width physical x0
 //       .stage_parameters                 -> (N+1)*parameter_width flat doubles
-//       .parameter_width                  -> 64
+//       .parameter_width                  -> manifest parameter width
 //       .failed_raw_solution_states        -> 242 doubles (diagnostic only)
 //       .failed_raw_solution_controls      ->  30 doubles (diagnostic only)
 //       .solver_residuals.stationarity / .equality / ...

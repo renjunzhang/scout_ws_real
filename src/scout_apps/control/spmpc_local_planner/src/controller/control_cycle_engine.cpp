@@ -4,6 +4,18 @@
 #include <cmath>
 
 namespace spmpc_local_planner {
+namespace {
+
+bool backupTailEligiblePreparationStatus(const std::string& status) {
+    return status == "NO_EXECUTION_COMPATIBLE_CANDIDATE" ||
+        status == "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE" ||
+        status == "NOMINAL_HORIZON_INCOMPLETE" ||
+        status == "AUGMENTED_NOMINAL_HORIZON_INCOMPLETE" ||
+        status == "SOLVER_HORIZON_TOO_SHORT" ||
+        status == "DELAY_AUGMENTED_HORIZON_MISMATCH";
+}
+
+}  // namespace
 
 ControlCycleEngine::ControlCycleEngine(SolverSession& solver_session)
     : solver_session_(solver_session),
@@ -15,6 +27,7 @@ bool ControlCycleEngine::configurePhaseRejoin(
     if (!phase_rejoin_.configure(params, error)) {
         return false;
     }
+    tail_commit_.configure(params.tail_commit_enabled);
     phase_params_ = params;
     goal_reached_latched_ = false;
     return true;
@@ -22,7 +35,18 @@ bool ControlCycleEngine::configurePhaseRejoin(
 
 NominalArtifactLoadResult ControlCycleEngine::loadPhaseRejoinArtifact(
     const std::string& path) {
-    return phase_rejoin_.loadArtifact(path);
+    const NominalArtifactLoadResult result =
+        phase_rejoin_.loadArtifact(path);
+    if (result.success &&
+        !tail_commit_.setArtifactSize(
+            phase_rejoin_.artifact().size())) {
+        NominalArtifactLoadResult failed = result;
+        failed.success = false;
+        failed.status = "TAIL_COMMIT_ARTIFACT_SIZE_INVALID";
+        failed.detail = "loaded phase artifact is empty";
+        return failed;
+    }
+    return result;
 }
 
 bool ControlCycleEngine::validatePhaseRejoinRuntimeContract(
@@ -117,6 +141,7 @@ void ControlCycleEngine::resetSafety() {
 void ControlCycleEngine::resetForReference() {
     safety_.reset();
     phase_rejoin_.resetProgress();
+    tail_commit_.reset();
     speed_reference_.resetForReference();
     goal_reached_latched_ = false;
     have_previous_shifted_plan_ = false;
@@ -159,6 +184,29 @@ PhaseRejoinPreparation ControlCycleEngine::preparePhase(
     PhaseRejoinPreparation preparation;
     const bool execution_augmented =
         request.solver_input.execution_horizon.active;
+    if (tail_commit_.state() == TailCommitState::Released) {
+        preparation.ready = true;
+        preparation.tail_released = true;
+        preparation.status = "TAIL_RELEASED";
+        return preparation;
+    }
+    if (tail_commit_.state() == TailCommitState::Aborted) {
+        preparation.tail_aborted = true;
+        preparation.status = tail_commit_.reason();
+        return preparation;
+    }
+    if (tail_commit_.state() == TailCommitState::Committed) {
+        if (!execution_augmented ||
+            !request.solver_input.execution_horizon.initial_state.valid) {
+            preparation.tail_committed_mode = true;
+            preparation.tail_artifact_index = tail_commit_.cursor();
+            preparation.status = "TAIL_EXECUTION_STATE_UNAVAILABLE";
+            return preparation;
+        }
+        return phase_rejoin_.prepareCommittedTail(
+            tail_commit_.cursor(),
+            request.solver_input.execution_horizon.initial_state);
+    }
     if (phase_params_.mode == PhaseRejoinMode::Off) {
         preparation.status = "OFF";
     } else if (!execution_augmented && !request.prediction_valid) {
@@ -200,6 +248,38 @@ PhaseRejoinPreparation ControlCycleEngine::preparePhase(
                 ? &request.solver_input.execution_horizon
                 : nullptr);
     }
+    if (!preparation.ready &&
+        backupTailEligiblePreparationStatus(preparation.status)) {
+        const std::size_t phase_clock_index =
+            preparation.phase_clock_index;
+        PhaseRejoinPreparation backup = prepareBackupTail(request);
+        if (backup.ready) {
+            backup.phase_clock_index = phase_clock_index;
+            preparation = backup;
+        }
+    }
+    return preparation;
+}
+
+PhaseRejoinPreparation ControlCycleEngine::prepareBackupTail(
+    const ControlCycleRequest& request) const {
+    PhaseRejoinPreparation preparation;
+    if (!phase_rejoin_.haveAcceptedIndex()) {
+        preparation.status = "TAIL_BACKUP_UNAVAILABLE_NO_ACCEPTED_INDEX";
+        return preparation;
+    }
+    if (!request.solver_input.execution_horizon.active ||
+        !request.solver_input.execution_horizon.initial_state.valid) {
+        preparation.status = "TAIL_BACKUP_EXECUTION_STATE_UNAVAILABLE";
+        return preparation;
+    }
+    preparation = phase_rejoin_.prepareCommittedTail(
+        phase_rejoin_.acceptedIndex(),
+        request.solver_input.execution_horizon.initial_state);
+    if (preparation.ready) {
+        preparation.tail_backup_used = true;
+        preparation.status = "TAIL_BACKUP_READY";
+    }
     return preparation;
 }
 
@@ -230,7 +310,11 @@ ControlCycleResult ControlCycleEngine::step(
              result.solver_input.execution_horizon.initial_epoch_ns) ||
          result.solver_input.execution_horizon.initial_epoch_ns !=
              publish_epoch_estimate.expected_publish_stamp_ns);
-    bool solver_invocation_allowed = !execution_epoch_mismatch;
+    const bool tail_history_missing =
+        phase_params_.tail_commit_enabled &&
+        request.command_history == nullptr;
+    bool solver_invocation_allowed =
+        !execution_epoch_mismatch && !tail_history_missing;
     if (execution_epoch_mismatch) {
         // The augmented state is meaningful only at the publication epoch it
         // was aligned to.  Recomputing cycle timing must never silently reuse
@@ -240,6 +324,12 @@ ControlCycleResult ControlCycleEngine::step(
         result.solver_input.phase_rejoin = PhaseRejoinSolverContext{};
         result.solver_output.status =
             "EXECUTION_HORIZON_PUBLISH_EPOCH_MISMATCH";
+    } else if (tail_history_missing) {
+        result.phase_preparation.status =
+            "TAIL_COMMAND_HISTORY_REQUIRED";
+        result.solver_input.phase_rejoin = PhaseRejoinSolverContext{};
+        result.solver_output.status =
+            "TAIL_COMMAND_HISTORY_REQUIRED";
     } else {
         ControlCycleRequest normalized_request = request;
         normalized_request.publish_epoch_estimate =
@@ -248,19 +338,51 @@ ControlCycleResult ControlCycleEngine::step(
         result.phase_preparation = preparePhase(normalized_request);
         result.solver_input.phase_rejoin =
             result.phase_preparation.solver_context;
+        const bool tail_direct_command =
+            result.phase_preparation.tail_committed_mode ||
+            result.phase_preparation.tail_commit_armed;
         const bool no_execution_compatible_candidate =
             result.solver_input.execution_horizon.active &&
             (result.phase_preparation.status ==
                  "NO_EXECUTION_COMPATIBLE_CANDIDATE" ||
              result.phase_preparation.status ==
                  "NO_EXECUTION_HORIZON_COMPATIBLE_CANDIDATE");
-        if (no_execution_compatible_candidate) {
+        if (result.phase_preparation.tail_released) {
+            solver_invocation_allowed = false;
+            result.solver_output.success = true;
+            result.solver_output.status = "GOAL_REACHED";
+            result.solver_output.terminal_diagnostics.reached = true;
+        } else if (result.phase_preparation.tail_aborted) {
+            solver_invocation_allowed = false;
+            result.solver_output.status =
+                result.phase_preparation.status;
+        } else if (tail_direct_command) {
+            solver_invocation_allowed = false;
+            result.solver_output.status =
+                result.phase_preparation.tail_committed_mode
+                ? "NOT_RUN_TAIL_COMMITTED"
+                : "NOT_RUN_TAIL_ARMED";
+        } else if (no_execution_compatible_candidate) {
             solver_invocation_allowed = false;
             result.solver_output.status =
                 "NOT_RUN_" + result.phase_preparation.status;
         } else {
             result.solve_returned = solver_session_.solve(
                 result.solver_input, result.solver_output);
+            if (!result.solver_output.success &&
+                result.solver_output.failure_kind ==
+                    SolverFailureKind::Integrity &&
+                phase_rejoin_.haveAcceptedIndex()) {
+                PhaseRejoinPreparation backup =
+                    prepareBackupTail(normalized_request);
+                if (backup.ready) {
+                    backup.phase_clock_index =
+                        result.phase_preparation.phase_clock_index;
+                    result.phase_preparation = backup;
+                    result.solver_input.phase_rejoin =
+                        result.phase_preparation.solver_context;
+                }
+            }
         }
     }
     result.output = result.solver_output;
@@ -423,8 +545,39 @@ ControlCycleResult ControlCycleEngine::step(
         result.output.status = result.publication.pipeline.decision.reason;
     }
 
-    if (phase_commit_candidate && result.publication.published() &&
-        !result.publication.commandWasModified()) {
+    const bool tail_lifecycle_active =
+        phase_params_.tail_commit_enabled &&
+        (result.phase_preparation.tail_commit_armed ||
+         result.phase_preparation.tail_committed_mode ||
+         result.phase_decision.tail_commit_requested ||
+         result.phase_decision.tail_committed_mode ||
+         tail_commit_.state() == TailCommitState::Committed);
+    if (tail_lifecycle_active) {
+        TailPublicationEvidence evidence;
+        evidence.artifact_index = result.phase_decision.tail_command_used
+            ? result.phase_decision.tail_artifact_index
+            : tail_commit_.cursor();
+        evidence.tail_command = result.phase_decision.tail_command_used;
+        evidence.delivered = result.publication.published();
+        evidence.receipt_consistent =
+            result.publication.receipt_consistent;
+        evidence.command_unmodified =
+            !result.publication.commandWasModified() &&
+            result.decision.source == CommandSource::PhaseRejoin;
+        evidence.safety_override = result.safety.blocked;
+        evidence.contract_valid = !execution_epoch_mismatch &&
+            result.phase_decision.command_contract_consistent &&
+            !result.phase_decision.controlled_stop_used &&
+            result.publication.limiter_state_committed &&
+            result.publication.history_committed;
+        result.tail_commit = tail_commit_.onPublication(evidence);
+        result.tail_publication_observed = true;
+        if (result.tail_commit.state == TailCommitState::Released) {
+            phase_rejoin_.authorizeTailRelease();
+        }
+    } else if (phase_commit_candidate &&
+               result.publication.published() &&
+               !result.publication.commandWasModified()) {
         result.phase_committed = phase_rejoin_.commit(
             result.phase_preparation, result.phase_decision);
     }

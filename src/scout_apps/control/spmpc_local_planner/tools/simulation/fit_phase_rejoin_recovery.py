@@ -9,7 +9,7 @@ exactly once by each create-new invocation and never influence the fitted
 scales or selected factor.
 
 The resulting rule is a diagonal nine-dimensional ellipsoid conjoined with a
-fourteen-dimensional execution-state box.  It is empirical classification
+generated-contract execution-state box.  It is empirical classification
 evidence for one frozen dataset, not a safety certificate, invariant set, or
 authorization for physical use.
 """
@@ -45,47 +45,8 @@ STATE_ERROR_COLUMNS = (
     "eta_y",
     "eta_y_dot",
 )
-EXECUTION_ERROR_COLUMNS = (
-    "linear_output",
-    "angular_output",
-    "linear_pending_0",
-    "linear_pending_1",
-    "linear_pending_2",
-    "linear_pending_3",
-    "linear_pending_4",
-    "angular_pending_0",
-    "angular_pending_1",
-    "angular_pending_2",
-    "angular_pending_3",
-    "angular_pending_4",
-    "angular_pending_5",
-    "angular_pending_6",
-)
-ERROR_COLUMNS = STATE_ERROR_COLUMNS + EXECUTION_ERROR_COLUMNS
-INPUT_COLUMNS = (
-    "split",
-    "rollout_id",
-    "seed",
-    "phase_index",
-    "recovered",
-) + ERROR_COLUMNS
-
 STATE_RADIUS_COLUMNS = tuple("r_" + name for name in STATE_ERROR_COLUMNS)
-EXECUTION_BOUND_COLUMNS = tuple(
-    "beta_" + name for name in EXECUTION_ERROR_COLUMNS
-)
-OUTPUT_COLUMNS = (
-    "phase_index",
-    "phase_bin_start",
-    "phase_bin_end",
-    "shrinkage",
-) + STATE_RADIUS_COLUMNS + EXECUTION_BOUND_COLUMNS
-
-COMPILED_STATE_WIDTH = 22
-COMPILED_LINEAR_PENDING_COUNT = 5
-COMPILED_ANGULAR_PENDING_COUNT = 7
 COMPILED_GATE_RADIUS_COUNT = 9
-COMPILED_EXECUTION_BOUND_COUNT = 14
 COMPILED_MINIMUM_DENOMINATOR = 1.0e-9
 EXECUTION_COMPATIBILITY_CONTRACT = "phase_indexed_execution_box_v1"
 GATE_CONTRACT = "phase_indexed_empirical_9d_ellipsoid_v1"
@@ -124,6 +85,87 @@ class RecoveryFitError(RuntimeError):
 
 
 @dataclasses.dataclass(frozen=True)
+class RecoveryLayout:
+    """Column and contract layout discovered from one sampler CSV header."""
+
+    input_columns: Tuple[str, ...]
+    error_columns: Tuple[str, ...]
+    execution_error_columns: Tuple[str, ...]
+    execution_bound_columns: Tuple[str, ...]
+    output_columns: Tuple[str, ...]
+    linear_pending_count: int
+    angular_pending_count: int
+
+    @property
+    def execution_bound_count(self) -> int:
+        return len(self.execution_error_columns)
+
+    @property
+    def state_width(self) -> int:
+        return 10 + self.linear_pending_count + self.angular_pending_count
+
+
+_ACTIVE_LAYOUT: Optional[RecoveryLayout] = None
+
+
+def _layout() -> RecoveryLayout:
+    if _ACTIVE_LAYOUT is None:
+        raise RecoveryFitError("recovery CSV layout has not been loaded")
+    return _ACTIVE_LAYOUT
+
+
+def _discover_layout(header: Tuple[str, ...]) -> RecoveryLayout:
+    fixed = (
+        "split",
+        "rollout_id",
+        "seed",
+        "phase_index",
+        "recovered",
+    ) + STATE_ERROR_COLUMNS + ("linear_output", "angular_output")
+    if len(header) <= len(fixed) or header[: len(fixed)] != fixed:
+        raise RecoveryFitError("input header fixed prefix mismatch")
+    pending = header[len(fixed) :]
+    linear_count = 0
+    angular_count = 0
+    angular_started = False
+    for name in pending:
+        if not angular_started and name.startswith("linear_pending_"):
+            suffix = name[len("linear_pending_") :]
+            if suffix != str(linear_count):
+                raise RecoveryFitError("linear pending columns are not contiguous")
+            linear_count += 1
+            continue
+        if name.startswith("angular_pending_"):
+            angular_started = True
+            suffix = name[len("angular_pending_") :]
+            if suffix != str(angular_count):
+                raise RecoveryFitError("angular pending columns are not contiguous")
+            angular_count += 1
+            continue
+        raise RecoveryFitError("input pending columns are invalid")
+    if not linear_count or not angular_count:
+        raise RecoveryFitError("input pending queues must be non-empty")
+    execution = tuple(header[len(fixed) - 2 :])
+    errors = STATE_ERROR_COLUMNS + execution
+    return RecoveryLayout(
+        input_columns=header,
+        error_columns=errors,
+        execution_error_columns=execution,
+        execution_bound_columns=tuple("beta_" + name for name in execution),
+        output_columns=(
+            "phase_index",
+            "phase_bin_start",
+            "phase_bin_end",
+            "shrinkage",
+        )
+        + STATE_RADIUS_COLUMNS
+        + tuple("beta_" + name for name in execution),
+        linear_pending_count=linear_count,
+        angular_pending_count=angular_count,
+    )
+
+
+@dataclasses.dataclass(frozen=True)
 class RecoveryRow:
     split: str
     rollout_id: str
@@ -131,9 +173,10 @@ class RecoveryRow:
     phase_index: int
     recovered: bool
     errors: Tuple[float, ...]
+    layout: RecoveryLayout = dataclasses.field(repr=False, compare=False)
 
     def error(self, name: str) -> float:
-        return self.errors[ERROR_COLUMNS.index(name)]
+        return self.errors[self.layout.error_columns.index(name)]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -219,6 +262,7 @@ def _canonical_split_sha256(rows: Iterable[RecoveryRow]) -> str:
 
 def load_recovery_csv(path: Path) -> Tuple[RecoveryRow, ...]:
     """Load the exact input schema and reject split leakage or reweighting."""
+    global _ACTIVE_LAYOUT
     try:
         stream = path.open("r", encoding="utf-8", newline="")
     except OSError as error:
@@ -230,10 +274,9 @@ def load_recovery_csv(path: Path) -> Tuple[RecoveryRow, ...]:
     observations = set()
     with stream:
         reader = csv.DictReader(stream)
-        if tuple(reader.fieldnames or ()) != INPUT_COLUMNS:
-            raise RecoveryFitError(
-                "input header mismatch: expected {}".format(",".join(INPUT_COLUMNS))
-            )
+        header = tuple(reader.fieldnames or ())
+        _ACTIVE_LAYOUT = _discover_layout(header)
+        layout = _ACTIVE_LAYOUT
         for line_number, record in enumerate(reader, start=2):
             if None in record:
                 raise RecoveryFitError("line {} has extra columns".format(line_number))
@@ -258,7 +301,7 @@ def load_recovery_csv(path: Path) -> Tuple[RecoveryRow, ...]:
                 )
             errors = tuple(
                 _finite_float(record[name], "line {} {}".format(line_number, name))
-                for name in ERROR_COLUMNS
+                for name in layout.error_columns
             )
             yaw_error = errors[STATE_ERROR_COLUMNS.index("yaw")]
             if abs(yaw_error) > math.pi + ACCEPTANCE_EPSILON:
@@ -292,6 +335,7 @@ def load_recovery_csv(path: Path) -> Tuple[RecoveryRow, ...]:
                     phase_index=phase_index,
                     recovered=recovered_text == "1",
                     errors=errors,
+                    layout=layout,
                 )
             )
 
@@ -386,6 +430,7 @@ def fit_base_scales(
     )
     result: Dict[int, Mapping[str, float]] = {}
     state_multiplier = math.sqrt(float(len(STATE_ERROR_COLUMNS)))
+    execution_columns = _layout().execution_error_columns
     for bin_start in bins:
         selected = [
             row
@@ -407,7 +452,7 @@ def fit_base_scales(
                     )
                 )
             scales[name] = scale
-        for name in EXECUTION_ERROR_COLUMNS:
+        for name in execution_columns:
             maximum = max(abs(row.error(name)) for row in selected)
             scale = max(options.minimum_scale, maximum)
             if not math.isfinite(scale):
@@ -432,6 +477,7 @@ def gate_accepts(
     options: FittingOptions,
 ) -> Tuple[bool, bool, bool]:
     scales = base_scales[_phase_bin(row.phase_index, options.phase_bin_width)]
+    execution_columns = _layout().execution_error_columns
     state_metric = 0.0
     for name in STATE_ERROR_COLUMNS:
         radius = _scaled_value(scales[name], shrinkage, options.minimum_scale)
@@ -443,7 +489,7 @@ def gate_accepts(
         ):
             break
     execution_metric = 0.0
-    for name in EXECUTION_ERROR_COLUMNS:
+    for name in execution_columns:
         bound = _scaled_value(scales[name], shrinkage, options.minimum_scale)
         execution_metric = max(execution_metric, abs(row.error(name)) / bound)
     state_accepted = state_metric <= 1.0 + ACCEPTANCE_EPSILON
@@ -665,9 +711,10 @@ def _format_float(value: float) -> str:
 
 
 def render_scales_csv(result: PipelineResult, options: FittingOptions) -> bytes:
+    layout = _layout()
     stream = io.StringIO(newline="")
     writer = csv.writer(stream, lineterminator="\n")
-    writer.writerow(OUTPUT_COLUMNS)
+    writer.writerow(layout.output_columns)
     for phase in result.phases:
         bin_start = _phase_bin(phase, options.phase_bin_width)
         bin_end = bin_start + options.phase_bin_width - 1
@@ -692,7 +739,7 @@ def render_scales_csv(result: PipelineResult, options: FittingOptions) -> bytes:
                     base[name], result.selected_shrinkage, options.minimum_scale
                 )
             )
-            for name in EXECUTION_ERROR_COLUMNS
+            for name in layout.execution_error_columns
         )
         writer.writerow(values)
     return stream.getvalue().encode("utf-8")
@@ -721,6 +768,7 @@ def build_manifest(
     scales_sha256: str,
     report_sha256: str,
 ) -> Mapping[str, Any]:
+    layout = _layout()
     held_status = result.held_out_report["status"]
     return {
         "schema": MANIFEST_SCHEMA,
@@ -742,18 +790,18 @@ def build_manifest(
             "path": str(input_path.resolve()),
             "sha256": input_sha256,
             "schema": SCHEMA,
-            "columns": list(INPUT_COLUMNS),
+            "columns": list(layout.input_columns),
         },
         "compiled_contract": {
-            "state_width": COMPILED_STATE_WIDTH,
+            "state_width": layout.state_width,
             "gate_contract": GATE_CONTRACT,
             "gate_radius_count": COMPILED_GATE_RADIUS_COUNT,
             "state_error_columns": list(STATE_ERROR_COLUMNS),
             "execution_compatibility_contract": EXECUTION_COMPATIBILITY_CONTRACT,
-            "execution_bound_count": COMPILED_EXECUTION_BOUND_COUNT,
-            "linear_pending_count": COMPILED_LINEAR_PENDING_COUNT,
-            "angular_pending_count": COMPILED_ANGULAR_PENDING_COUNT,
-            "execution_error_columns": list(EXECUTION_ERROR_COLUMNS),
+            "execution_bound_count": layout.execution_bound_count,
+            "linear_pending_count": layout.linear_pending_count,
+            "angular_pending_count": layout.angular_pending_count,
+            "execution_error_columns": list(layout.execution_error_columns),
             "minimum_denominator": COMPILED_MINIMUM_DENOMINATOR,
         },
         "split_contract": {

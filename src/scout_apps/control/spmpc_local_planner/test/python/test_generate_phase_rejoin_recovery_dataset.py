@@ -24,6 +24,14 @@ GENERATOR = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(GENERATOR)
 
+DATASET_COLUMNS = (
+    GENERATOR.DATASET_ID_COLUMNS
+    + GENERATOR.DATASET_STATE_COLUMNS
+    + GENERATOR.DATASET_EXECUTION_FIXED_COLUMNS
+    + tuple("linear_pending_{}".format(index) for index in range(4))
+    + tuple("angular_pending_{}".format(index) for index in range(1))
+)
+
 
 class RecoveryDatasetGeneratorTest(unittest.TestCase):
 
@@ -110,10 +118,10 @@ class RecoveryDatasetGeneratorTest(unittest.TestCase):
             rollout_id = "fit-s7101-p0-nominal"
             with dataset.open("w", encoding="utf-8", newline="") as stream:
                 writer = csv.DictWriter(
-                    stream, fieldnames=GENERATOR.DATASET_COLUMNS
+                stream, fieldnames=DATASET_COLUMNS
                 )
                 writer.writeheader()
-                row = {name: "0" for name in GENERATOR.DATASET_COLUMNS}
+                row = {name: "0" for name in DATASET_COLUMNS}
                 row.update(
                     {
                         "split": "fit",
@@ -141,7 +149,7 @@ class RecoveryDatasetGeneratorTest(unittest.TestCase):
                         "external_liquid_truth_used_for_label": "1",
                     }
                 )
-            rows, _, audits = GENERATOR._validate_partial(
+            rows, _, _, audits = GENERATOR._validate_partial(
                 "fit", 7101, 0, 0, 1, dataset, audit
             )
             self.assertEqual(rows[0]["rollout_id"], audits[0]["rollout_id"])

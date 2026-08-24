@@ -23,7 +23,7 @@ TEST(SolverFactory, DefaultConfigStillConstructsOriginalMainlineBackend) {
     EXPECT_NE(makeSolver(kSolverBackendPrimitive), nullptr);
 }
 
-TEST(SolverFactory, ExplicitAugmentedBackendConstructsOnlyThe22DAdapter) {
+TEST(SolverFactory, ExplicitAugmentedBackendConstructsOnlyTheManifestAdapter) {
     std::unique_ptr<SpmpcSolver> solver =
         makeSolver(kSolverBackendDelayAugmentedPhaseAcados);
     EXPECT_NE(

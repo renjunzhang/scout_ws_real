@@ -566,17 +566,24 @@ std::string datasetCsv(
     out << std::setprecision(17);
     out << "split,rollout_id,seed,phase_index,recovered,"
            "x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,"
-           "linear_output,angular_output,"
-           "linear_pending_0,linear_pending_1,linear_pending_2,"
-           "linear_pending_3,linear_pending_4,"
-           "angular_pending_0,angular_pending_1,angular_pending_2,"
-           "angular_pending_3,angular_pending_4,angular_pending_5,"
-           "angular_pending_6\n";
+           "linear_output,angular_output";
+    for (int index = 0; index < manifest::kLinearBufferCount; ++index) {
+        out << ",linear_pending_" << index;
+    }
+    for (int index = 0; index < manifest::kAngularBufferCount; ++index) {
+        out << ",angular_pending_" << index;
+    }
+    out << '\n';
     for (const simulation::RecoveryDatasetRow& row : rows) {
         out << row.split << ',' << row.rollout_id << ',' << row.seed << ','
             << row.phase_index << ',' << (row.recovered ? 1 : 0);
         for (double value : row.state_errors) out << ',' << value;
-        for (double value : row.execution_errors) out << ',' << value;
+        const std::size_t execution_count =
+            2 + static_cast<std::size_t>(manifest::kLinearBufferCount) +
+            static_cast<std::size_t>(manifest::kAngularBufferCount);
+        for (std::size_t index = 0; index < execution_count; ++index) {
+            out << ',' << row.execution_errors[index];
+        }
         out << '\n';
     }
     return out.str();
@@ -645,7 +652,7 @@ int main(int argc, char** argv) {
             manifest::kAngularAccelerationMax) {
         return usage(
             "sampling publication-rate contract does not exact-match "
-            "the compiled 22D execution contract");
+            "the generated execution contract");
     }
     std::vector<spmpc::PhaseNominalSample> nominal_samples;
     double nominal_dt = 0.0;
@@ -681,7 +688,7 @@ int main(int argc, char** argv) {
     std::cout << "split=" << args.split << " seed=" << args.seed
               << " rows=" << sampled.rows.size()
               << " recovered=" << recovered_count
-              << " nominal_source=offline_plan_compiled_22d_transition"
+              << " nominal_source=offline_plan_compiled_generated_transition"
               << " external_truth_features=false"
               << " external_truth_label=true\n";
     return 0;

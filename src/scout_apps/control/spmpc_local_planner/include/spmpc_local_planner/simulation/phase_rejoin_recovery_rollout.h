@@ -118,7 +118,8 @@ bool validateRecoveryRolloutSamplingConfig(
 
 // Simulation-only generator for empirical recovery data.  The nominal input
 // is a gate-free projection reconstructed directly from the OfflineSloshOCP
-// published-command plan with the compiled 22D execution transition.  No
+// published-command plan with the compiled manifest-defined execution
+// transition.  No
 // provisional recovery radii/bounds are accepted as input, avoiding a
 // circular "gate generates its own labels" pipeline.
 class PhaseRejoinRecoveryRolloutSampler {

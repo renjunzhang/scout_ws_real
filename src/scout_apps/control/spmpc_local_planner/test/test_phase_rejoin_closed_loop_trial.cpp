@@ -297,6 +297,34 @@ protected:
             << "  publish_latency_sec: 0.01\n";
     }
 
+    void writeTailCommitC4Condition() {
+        std::ofstream output(condition_);
+        output
+            << "schema: spmpc_closed_loop_trial_condition_v1\n"
+            << "condition_id: C4\n"
+            << "implementation_id: phase_rejoin_15d_tail_commit_candidate_v1\n"
+            << "implementation_complete: true\n"
+            << "mode: phase_rejoin_full\n"
+            << "offline_nominal: true\n"
+            << "online_residual: true\n"
+            << "recovery_gate: true\n"
+            << "execution_compatibility_gate: true\n"
+            << "stored_recovery_action: true\n"
+            << "input_shaping: false\n"
+            << "pilot_only: true\n"
+            << "formal_c3_c4_causal_comparison_ready: false\n"
+            << "tail_commit_phase_rejoining: true\n"
+            << "max_consecutive_phase_holds: 3\n"
+            << "residual_feedback:\n"
+            << "  max_residual_v: 0.08\n"
+            << "  max_residual_omega: 0.20\n"
+            << "trial:\n"
+            << "  control_rate_hz: 30.0\n"
+            << "  max_motion_sec: 2.0\n"
+            << "  fixed_tail_sec: 4.0\n"
+            << "  publish_latency_sec: 0.01\n";
+    }
+
     void writeC3Condition() {
         std::ofstream output(condition_);
         output
@@ -538,7 +566,7 @@ TEST_F(TrialRunnerTest,
 }
 
 TEST_F(TrialRunnerTest,
-       C4InvokesCompiled22DGateAndFinalCommandTransaction) {
+       C4InvokesCompiled15DGateAndFinalCommandTransaction) {
     if (!spmpc_local_planner::DelayAugmentedPhaseAcadosSolver::compiled()) {
         GTEST_SKIP() << "delay-augmented development capsule is not enabled";
     }
@@ -607,6 +635,7 @@ TEST_F(TrialRunnerTest,
         column[header[index]] = index;
     }
     ASSERT_EQ(column.count("raw_solver_status"), 1u);
+    ASSERT_EQ(column.count("solve_attempted"), 1u);
     ASSERT_EQ(column.count("phase_status"), 1u);
     ASSERT_EQ(column.count("final_status"), 1u);
     ASSERT_EQ(column.count("clock_index"), 1u);
@@ -662,7 +691,8 @@ TEST_F(TrialRunnerTest,
         const auto isTrue = [&](const char* name) {
             return fields[column[name]] == "true";
         };
-        if (motion && !isTrue("solver_success")) {
+        if (motion && isTrue("solve_attempted") &&
+            !isTrue("solver_success")) {
             ++recomputed["solver_failures"];
         }
         if (motion && isTrue("gate_evaluated")) {
@@ -709,6 +739,55 @@ TEST_F(TrialRunnerTest,
     for (const auto& entry : recomputed) {
         EXPECT_EQ(summary["controller_audit"][entry.first].as<int>(),
                   entry.second) << entry.first;
+    }
+}
+
+TEST_F(TrialRunnerTest,
+       FifteenDTailCommitCandidateIsDevelopmentOnlyAndReportsLifecycle) {
+    if (!spmpc_local_planner::DelayAugmentedPhaseAcadosSolver::compiled()) {
+        GTEST_SKIP() << "delay-augmented development capsule is not enabled";
+    }
+    writeTailCommitC4Condition();
+    ASSERT_EQ(run(), 0);
+    const YAML::Node summary = YAML::LoadFile(summary_);
+    EXPECT_EQ(summary["condition_id"].as<std::string>(), "C4");
+    EXPECT_EQ(summary["implementation_id"].as<std::string>(),
+              "phase_rejoin_15d_tail_commit_candidate_v1");
+    EXPECT_TRUE(summary["tail_commit_phase_rejoining"].as<bool>());
+    EXPECT_TRUE(summary["development_pilot_only"].as<bool>());
+    EXPECT_TRUE(summary["baseline_contract"]
+                       ["tail_commit_phase_rejoining"].as<bool>());
+    EXPECT_EQ(summary["baseline_contract"]
+                  ["max_consecutive_phase_holds"].as<int>(), 3);
+    EXPECT_TRUE(summary["controller_audit"]
+                       ["successor_action_counts"].IsMap());
+    EXPECT_TRUE(summary["controller_audit"]
+                       ["tail_state_counts"].IsMap());
+    ASSERT_TRUE(summary["controller_audit"]["tail_command_count"]);
+    EXPECT_EQ(
+        summary["controller_audit"]["tail_commit_transitions"].as<int>(),
+        1);
+    EXPECT_EQ(
+        summary["controller_audit"]["tail_release_transitions"].as<int>(),
+        1);
+    EXPECT_EQ(
+        summary["controller_audit"]["tail_abort_transitions"].as<int>(),
+        0);
+
+    std::ifstream cycles(cycle_);
+    ASSERT_TRUE(cycles.is_open());
+    std::string header_line;
+    ASSERT_TRUE(static_cast<bool>(std::getline(cycles, header_line)));
+    const std::vector<std::string> header = splitCsv(header_line);
+    std::map<std::string, std::size_t> column;
+    for (std::size_t index = 0; index < header.size(); ++index) {
+        column[header[index]] = index;
+    }
+    for (const char* field : {
+             "solve_attempted", "successor_action", "tail_state",
+             "tail_commit", "tail_release", "tail_abort",
+             "tail_command_used"}) {
+        EXPECT_EQ(column.count(field), 1u) << field;
     }
 }
 
@@ -810,6 +889,62 @@ TEST(PhaseRejoinClosedLoopConditionAssets,
                          c1["continuous_controller"][penalty].as<double>())
             << penalty;
     }
+}
+
+TEST(PhaseRejoinClosedLoopConditionAssets,
+     FifteenDTailCommitAssetIsSeparateDevelopmentOnlyC4Candidate) {
+    const std::string root = SPMPC_SIMULATION_CONDITIONS_DIR;
+    const YAML::Node formal = YAML::LoadFile(
+        root + "/C4_phase_rejoin_full.yaml");
+    const YAML::Node candidate = YAML::LoadFile(
+        root + "/C4_phase_rejoin_15d_tail_commit_candidate.yaml");
+    EXPECT_EQ(formal["condition_id"].as<std::string>(), "C4");
+    EXPECT_EQ(candidate["condition_id"].as<std::string>(), "C4");
+    EXPECT_NE(formal["implementation_id"].as<std::string>(),
+              candidate["implementation_id"].as<std::string>());
+    EXPECT_TRUE(candidate["implementation_id"].as<std::string>().find(
+                    "15d_tail_commit_candidate") != std::string::npos);
+    EXPECT_TRUE(candidate["pilot_only"].as<bool>());
+    EXPECT_FALSE(candidate["formal_c3_c4_causal_comparison_ready"].as<bool>());
+    EXPECT_TRUE(candidate["tail_commit_phase_rejoining"].as<bool>());
+    EXPECT_EQ(candidate["max_consecutive_phase_holds"].as<int>(), 3);
+}
+
+TEST(PhaseRejoinClosedLoopConditionAssets,
+     FifteenDTailCommitMonitorAssetIsSeparateDevelopmentOnlyC3Candidate) {
+    const std::string root = SPMPC_SIMULATION_CONDITIONS_DIR;
+    const YAML::Node formal = YAML::LoadFile(
+        root + "/C3_residual_no_gate.yaml");
+    const YAML::Node candidate = YAML::LoadFile(
+        root + "/C3_phase_rejoin_15d_tail_commit_monitor_candidate.yaml");
+    const YAML::Node c4_candidate = YAML::LoadFile(
+        root + "/C4_phase_rejoin_15d_tail_commit_candidate.yaml");
+
+    EXPECT_EQ(formal["condition_id"].as<std::string>(), "C3");
+    EXPECT_EQ(candidate["condition_id"].as<std::string>(), "C3");
+    EXPECT_NE(formal["implementation_id"].as<std::string>(),
+              candidate["implementation_id"].as<std::string>());
+    EXPECT_NE(candidate["implementation_id"].as<std::string>(),
+              c4_candidate["implementation_id"].as<std::string>());
+    EXPECT_NE(candidate["implementation_id"].as<std::string>().find(
+                    "15d_tail_commit_monitor_candidate"),
+              std::string::npos);
+
+    for (const char* field : {
+             "schema", "implementation_complete", "offline_nominal",
+             "online_residual", "execution_compatibility_gate",
+             "stored_recovery_action", "input_shaping", "pilot_only",
+             "formal_c3_c4_causal_comparison_ready",
+             "tail_commit_phase_rejoining", "max_consecutive_phase_holds",
+             "residual_feedback", "trial"}) {
+        ASSERT_TRUE(candidate[field].IsDefined()) << field;
+        EXPECT_EQ(YAML::Dump(candidate[field]), YAML::Dump(c4_candidate[field]))
+            << field;
+    }
+    EXPECT_EQ(candidate["mode"].as<std::string>(), "residual_no_gate");
+    EXPECT_FALSE(candidate["recovery_gate"].as<bool>());
+    EXPECT_EQ(c4_candidate["mode"].as<std::string>(), "phase_rejoin_full");
+    EXPECT_TRUE(c4_candidate["recovery_gate"].as<bool>());
 }
 
 }  // namespace

@@ -75,6 +75,29 @@ TEST(ExecutionModel, ResolvesPhysicalDelayIntoGridAndFractionalParts) {
     EXPECT_EQ(2, model.gridExecutionLeadSteps());
 }
 
+TEST(ExecutionModel, ProjectsMeasuredActuatorStateIntoOutputEnvelope) {
+    ExecutionModelContract contract = baseContract();
+    contract.linear.output_min = 0.0;
+    contract.linear.output_max = 0.8;
+    contract.angular.output_min = -1.2;
+    contract.angular.output_max = 1.2;
+    const ExecutionModel model = configuredModel(contract);
+
+    RobotState robot;
+    robot.v = -0.000326144;
+    robot.omega = 1.35;
+    ExecutionAugmentedState state;
+    std::string error;
+    ASSERT_TRUE(model.initializeHeld(
+        robot, SloshState{}, VelocityCommand{}, state, error)) << error;
+
+    EXPECT_DOUBLE_EQ(0.0, state.robot.v);
+    EXPECT_DOUBLE_EQ(state.robot.v, state.linear.actuator_output);
+    EXPECT_DOUBLE_EQ(1.2, state.robot.omega);
+    EXPECT_DOUBLE_EQ(state.robot.omega, state.angular.actuator_output);
+    EXPECT_TRUE(model.validState(state));
+}
+
 TEST(ExecutionModel, NewDecisionRespectsDifferentChannelDelays) {
     ExecutionModelContract contract = baseContract();
     contract.linear.delay_sec = 0.15;

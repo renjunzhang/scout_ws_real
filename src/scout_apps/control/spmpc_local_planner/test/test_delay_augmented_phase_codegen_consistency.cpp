@@ -6,6 +6,7 @@
 #include <gtest/gtest.h>
 
 #include <array>
+#include <algorithm>
 #include <cmath>
 #include <random>
 #include <string>
@@ -223,7 +224,7 @@ TEST(DelayAugmentedPhaseCodegen,
 }
 
 TEST(DelayAugmentedPhaseCodegen,
-     FirstStepJacobianHasNoPrematurePhysicalEffect) {
+     FirstStepJacobianRespectsDelayAndInertia) {
     const DelayAugmentedPhaseDynamics dynamics = generatedDynamics();
     const StateVector state = serialize(initialState(dynamics));
     const ControlVector q = {{0.0, 0.0, 0.2}};
@@ -232,12 +233,18 @@ TEST(DelayAugmentedPhaseCodegen,
                manifest::kStateCount * manifest::kControlCount> jacobian{};
     ASSERT_TRUE(casadiStepJacobian(state, q, next, jacobian));
 
+    double angular_physical_sensitivity = 0.0;
     for (int physical_index = 0; physical_index < 10; ++physical_index) {
         EXPECT_NEAR(jacobian[physical_index], 0.0, 1e-15);
-        EXPECT_NEAR(jacobian[
-                        manifest::kStateCount + physical_index],
-                    0.0, 1e-15);
+        angular_physical_sensitivity = std::max(
+            angular_physical_sensitivity,
+            std::abs(jacobian[manifest::kStateCount + physical_index]));
     }
+    // The angular delay has no integer grid slots, so its command reaches
+    // the first-order actuator after the fractional event and has a
+    // measurable first-step effect.  The linear channel still has three
+    // integer slots, hence its control column remains physically zero here.
+    EXPECT_GT(angular_physical_sensitivity, 1e-12);
     EXPECT_NEAR(jacobian[
                     manifest::kLinearBufferOffset
                     + manifest::kLinearBufferCount - 1],

@@ -516,7 +516,7 @@ double percentile(const std::vector<double>& sorted, double probability) {
 }  // namespace
 
 TEST(DelayAugmentedPhaseOnline,
-     ExplicitCycleUses22DBackendAndPublishesOneAuditedCommandTruth) {
+     ExplicitCycleUsesCompiledBackendAndPublishesOneAuditedCommandTruth) {
     if (!DelayAugmentedPhaseAcadosSolver::compiled()) {
         GTEST_SKIP() << "delay-augmented generated capsule is unavailable";
     }
@@ -527,17 +527,26 @@ TEST(DelayAugmentedPhaseOnline,
     ASSERT_TRUE(result.solver_success) << result.solver_output.status;
     EXPECT_EQ(result.solver_output.pre_solve_snapshot.backend,
               kSolverBackendDelayAugmentedPhaseAcados);
-    EXPECT_EQ(result.solver_output.pre_solve_snapshot.state_width, 22);
+    EXPECT_EQ(result.solver_output.pre_solve_snapshot.state_width,
+              manifest::kStateCount);
     EXPECT_EQ(result.solver_output.pre_solve_snapshot.control_width, 3);
     EXPECT_EQ(result.solver_output.pre_solve_snapshot.parameter_width,
               manifest::kParameterCount);
     EXPECT_EQ(result.solver_output.predicted_horizon.backend,
               kSolverBackendDelayAugmentedPhaseAcados);
-    EXPECT_EQ(result.solver_output.predicted_horizon.states.size(), 11u);
+    EXPECT_EQ(result.solver_output.predicted_horizon.states.size(),
+              static_cast<std::size_t>(manifest::kHorizonSteps + 1));
     ASSERT_FALSE(result.solver_output.predicted_horizon.states.empty());
     EXPECT_DOUBLE_EQ(
         result.solver_output.progress_abs_s,
         result.solver_output.predicted_horizon.states.front().s);
+    ASSERT_TRUE(result.solver_output.successor_execution_state.valid);
+    EXPECT_EQ(result.solver_output.successor_execution_state.stage_index, 1u);
+    ASSERT_TRUE(result.solver_output.terminal_execution_state.valid);
+    EXPECT_EQ(result.solver_output.terminal_execution_state.stage_index,
+              static_cast<std::uint64_t>(manifest::kHorizonSteps));
+    EXPECT_NE(result.solver_output.successor_execution_state.stage_index,
+              result.solver_output.terminal_execution_state.stage_index);
     EXPECT_TRUE(result.phase_decision.current_execution_compatible);
     EXPECT_TRUE(result.phase_decision.terminal_execution_compatible);
     EXPECT_TRUE(result.phase_decision.terminal_gate_accepted);
@@ -829,14 +838,18 @@ TEST(DelayAugmentedPhaseOnline,
     const PhaseRejoinDecision bad_terminal_execution = coordinator.decide(
         preparation, RobotState{}, SloshState{}, true, solve);
     EXPECT_TRUE(bad_terminal_execution.recovery_command_used);
-    EXPECT_FALSE(bad_terminal_execution.command_contract_consistent);
+    EXPECT_TRUE(bad_terminal_execution.command_contract_consistent);
+    EXPECT_EQ(bad_terminal_execution.status,
+              "ENFORCE_RESIDUAL_REJECTED_RECOVERY");
 
     solve.terminal_execution = zeroExecution(manifest::kHorizonSteps);
     solve.terminal_state_available = false;
     const PhaseRejoinDecision missing_terminal_9d = coordinator.decide(
         preparation, RobotState{}, SloshState{}, true, solve);
     EXPECT_TRUE(missing_terminal_9d.recovery_command_used);
-    EXPECT_FALSE(missing_terminal_9d.command_contract_consistent);
+    EXPECT_TRUE(missing_terminal_9d.command_contract_consistent);
+    EXPECT_EQ(missing_terminal_9d.status,
+              "ENFORCE_RESIDUAL_REJECTED_RECOVERY");
 
     PhaseRejoinCoordinator development;
     PhaseRejoinParams development_params = phaseParams();

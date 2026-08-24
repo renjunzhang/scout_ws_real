@@ -31,36 +31,18 @@ SESSION_SEED_KEYS = {
     "tune": "recovery_tune",
     "held_out": "recovery_held_out",
 }
-DATASET_COLUMNS = (
+DATASET_ID_COLUMNS = (
     "split",
     "rollout_id",
     "seed",
     "phase_index",
     "recovered",
-    "x",
-    "y",
-    "yaw",
-    "v",
-    "omega",
-    "eta_x",
-    "eta_x_dot",
-    "eta_y",
-    "eta_y_dot",
-    "linear_output",
-    "angular_output",
-    "linear_pending_0",
-    "linear_pending_1",
-    "linear_pending_2",
-    "linear_pending_3",
-    "linear_pending_4",
-    "angular_pending_0",
-    "angular_pending_1",
-    "angular_pending_2",
-    "angular_pending_3",
-    "angular_pending_4",
-    "angular_pending_5",
-    "angular_pending_6",
 )
+DATASET_STATE_COLUMNS = (
+    "x", "y", "yaw", "v", "omega", "eta_x", "eta_x_dot", "eta_y",
+    "eta_y_dot",
+)
+DATASET_EXECUTION_FIXED_COLUMNS = ("linear_output", "angular_output")
 
 
 class DatasetGenerationError(RuntimeError):
@@ -193,6 +175,41 @@ def _read_csv(path: Path) -> Tuple[Tuple[str, ...], List[Mapping[str, str]]]:
     return header, rows
 
 
+def _validate_dataset_header(header: Tuple[str, ...]) -> None:
+    """Validate the generated schema while deriving queue widths from it."""
+    fixed = (
+        DATASET_ID_COLUMNS
+        + DATASET_STATE_COLUMNS
+        + DATASET_EXECUTION_FIXED_COLUMNS
+    )
+    if len(header) <= len(fixed) or header[: len(fixed)] != fixed:
+        raise DatasetGenerationError("C++ sampler dataset fixed header mismatch")
+    linear = header[len(fixed) :]
+    linear_count = 0
+    angular_count = 0
+    phase = "linear"
+    for name in linear:
+        if phase == "linear" and name.startswith("linear_pending_"):
+            suffix = name[len("linear_pending_") :]
+            if suffix != str(linear_count):
+                raise DatasetGenerationError(
+                    "C++ sampler linear pending columns are not contiguous"
+                )
+            linear_count += 1
+        elif name.startswith("angular_pending_"):
+            phase = "angular"
+            suffix = name[len("angular_pending_") :]
+            if suffix != str(angular_count):
+                raise DatasetGenerationError(
+                    "C++ sampler angular pending columns are not contiguous"
+                )
+            angular_count += 1
+        else:
+            raise DatasetGenerationError("C++ sampler pending header is invalid")
+    if linear_count == 0 or angular_count == 0:
+        raise DatasetGenerationError("C++ sampler pending queues are empty")
+
+
 def _validate_partial(
     split: str,
     seed: int,
@@ -201,10 +218,14 @@ def _validate_partial(
     profile_count: int,
     dataset_path: Path,
     audit_path: Path,
-) -> Tuple[List[Mapping[str, str]], Tuple[str, ...], List[Mapping[str, str]]]:
+) -> Tuple[
+    List[Mapping[str, str]],
+    Tuple[str, ...],
+    Tuple[str, ...],
+    List[Mapping[str, str]],
+]:
     header, rows = _read_csv(dataset_path)
-    if header != DATASET_COLUMNS:
-        raise DatasetGenerationError("C++ sampler dataset header mismatch")
+    _validate_dataset_header(header)
     expected_count = (phase_end - phase_begin + 1) * profile_count
     if len(rows) != expected_count:
         raise DatasetGenerationError(
@@ -241,7 +262,7 @@ def _validate_partial(
             or audit.get("external_liquid_truth_used_for_label") != "1"
         ):
             raise DatasetGenerationError("C++ sampler truth isolation failed")
-    return rows, audit_header, audits
+    return rows, header, audit_header, audits
 
 
 def _csv_bytes(
@@ -354,6 +375,7 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
     dataset_rows: List[Mapping[str, str]] = []
     audit_rows: List[Mapping[str, str]] = []
     audit_header: Tuple[str, ...] = ()
+    dataset_header: Tuple[str, ...] = ()
     invocations = []
     with tempfile.TemporaryDirectory(prefix="spmpc_recovery_dataset.") as temporary:
         root = Path(temporary)
@@ -399,7 +421,7 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
                             split, seed, completed.stderr.strip()
                         )
                     )
-                rows, current_audit_header, audits = _validate_partial(
+                rows, current_dataset_header, current_audit_header, audits = _validate_partial(
                     split,
                     seed,
                     args.phase_begin,
@@ -408,6 +430,9 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
                     partial_dataset,
                     partial_audit,
                 )
+                if dataset_header and current_dataset_header != dataset_header:
+                    raise DatasetGenerationError("dataset headers differ by seed")
+                dataset_header = current_dataset_header
                 if audit_header and current_audit_header != audit_header:
                     raise DatasetGenerationError("audit headers differ by seed")
                 audit_header = current_audit_header
@@ -435,7 +460,9 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
     if not (phase_sets["fit"] == phase_sets["tune"] == phase_sets["held_out"]):
         raise DatasetGenerationError("phase coverage differs across splits")
 
-    dataset_contents = _csv_bytes(DATASET_COLUMNS, dataset_rows)
+    if not dataset_header:
+        raise DatasetGenerationError("sampler did not produce a dataset header")
+    dataset_contents = _csv_bytes(dataset_header, dataset_rows)
     audit_contents = _csv_bytes(audit_header, audit_rows)
     recovered_by_split = {
         split: sum(
@@ -453,7 +480,8 @@ def generate(args: argparse.Namespace) -> Mapping[str, Any]:
         "physical_parameter_claim": False,
         "source_limitations_acknowledged": True,
         "paper_main_result_eligible": False,
-        "nominal_source": "offline_plan_replayed_with_compiled_22d_transition",
+        "nominal_source": "offline_plan_replayed_with_generated_execution_transition",
+        "dataset_columns": list(dataset_header),
         "candidate_policy_reads_external_liquid_truth": False,
         "features_use_external_liquid_truth": False,
         "label_uses_external_liquid_truth": True,

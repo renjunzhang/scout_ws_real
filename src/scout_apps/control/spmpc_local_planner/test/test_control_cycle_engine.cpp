@@ -308,6 +308,27 @@ TEST(PhaseSolveAdapterTest,
     EXPECT_DOUBLE_EQ(0.31, view.current_execution.robot.v);
 }
 
+TEST(PhaseSolveAdapterTest, MapsCausalSuccessorInsteadOfTerminalExecution) {
+    SolverOutput output;
+    output.delay_augmented_execution_solution = true;
+    output.successor_execution_state.valid = true;
+    output.successor_execution_state.stage_index = 1;
+    output.successor_execution_state.robot.v = 0.12;
+    output.terminal_execution_state.valid = true;
+    output.terminal_execution_state.stage_index = 10;
+    output.terminal_execution_state.robot.v = 0.91;
+
+    const PhaseSolveView view = makePhaseSolveView(output, -1);
+
+    ASSERT_TRUE(view.successor_execution_state_available);
+    EXPECT_EQ(view.successor_execution.stage_index, 1u);
+    EXPECT_DOUBLE_EQ(view.successor_execution.robot.v, 0.12);
+    ASSERT_TRUE(view.terminal_execution_state_available);
+    EXPECT_EQ(view.terminal_execution.stage_index, 10u);
+    EXPECT_NE(view.successor_execution.stage_index,
+              view.terminal_execution.stage_index);
+}
+
 TEST(ControlCycleEngineTest, InvokesInjectedSolverAndReturnsSolverCommand) {
     EngineFixture fixture;
     fixture.solver.next_output.success = true;

@@ -414,7 +414,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             !shared_cmd_angular_limit_enable_ &&
             command_contract_params_.fail_closed_on_post_limit_change;
         if (!release_contract) {
-            ROS_FATAL("[spmpc_local_planner] matched development release contract rejected variant=%s; require main 10D solver, processed_imu/fail_closed, common epoch, delay shadow, 3-step liquid cost, common weights, disabled redundant limiters, and fail-closed command audit",
+            ROS_FATAL("[spmpc_local_planner] matched development release contract rejected variant=%s; require mainline solver, processed_imu/fail_closed, common epoch, delay shadow, 3-step liquid cost, common weights, disabled redundant limiters, and fail-closed command audit",
                       variant_.name.c_str());
             return false;
         }
@@ -1231,9 +1231,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
 
     SpeedReferenceEvaluation speed_reference;
     if (delay_augmented_phase_enabled_) {
-        // The nx=22 backend tracks the frozen phase-indexed nominal image and
-        // deliberately has no runtime v_ref parameter. AppConfig rejects all
-        // override/profile/governor features for this backend, so diagnostics
+        // The manifest-driven backend tracks the frozen phase-indexed nominal
+        // image and deliberately has no runtime v_ref parameter. AppConfig
+        // rejects all override/profile/governor features for this backend,
+        // so diagnostics
         // must not imply that an unused reference reached the solver.
         speed_reference.v_ref_status =
             "DELAY_AUGMENTED_ARTIFACT_NOMINAL";

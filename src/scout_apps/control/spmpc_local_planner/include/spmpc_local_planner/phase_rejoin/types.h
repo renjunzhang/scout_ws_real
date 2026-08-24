@@ -122,8 +122,8 @@ struct NominalArtifactMetadata {
     double kappa_y = 0.0;
     double dynamics_tolerance = 0.0;
     // V3 binds the complete augmented nominal and recovery interfaces used by
-    // the nx=22 online solver.  V1/V2 leave these fields inactive and cannot
-    // authorize that backend.
+    // the manifest-driven online solver.  V1/V2 leave these fields inactive
+    // and cannot authorize that backend.
     bool delay_augmented_nominal = false;
     std::string execution_contract_id;
     std::string execution_contract_hash;
@@ -180,7 +180,8 @@ struct DelayAugmentedPhaseCostWeights {
     double progress_rate = 0.0;
 };
 
-// Complete per-cycle parameter image consumed by the generated nx=22 solver.
+// Complete per-cycle parameter image consumed by the generated
+// manifest-driven solver.
 // `stages` contains N+1 nominal augmented states; nominal controls at stage N
 // are retained for a single canonical image even though terminal cost has no
 // control argument.
@@ -197,12 +198,17 @@ struct DelayAugmentedPhaseSolverContext {
     std::size_t current_index = 0;
     std::size_t terminal_index = 0;
     bool terminal_empirical_gate_bound = false;
-    // C3 and C4 bind the same V3 radii and use the same generated 22D
-    // capsule.  C4 enforces the terminal empirical inequality; strict C3
+    // C3 and C4 bind the same V3 radii and use the same generated
+    // manifest-driven capsule.  C4 enforces the terminal empirical
+    // inequality; strict C3
     // keeps the same metric as monitor-only evidence while disabling its
     // effect on the NLP and coordinator admission decision.
     bool terminal_empirical_gate_enforced = true;
     bool execution_compatibility_bound = false;
+    // Runtime-only residual authority taper.  This is deliberately outside
+    // the generated parameter schema; the two residual bounds below carry
+    // the scaled values into the existing parameter image.
+    double residual_authority_alpha = 1.0;
     double max_residual_v = 0.0;
     double max_residual_omega = 0.0;
     DelayAugmentedPhaseCostWeights weights;
@@ -232,11 +238,13 @@ struct PhaseRejoinSolverContext {
     int liquid_steps = 0;
     double nominal_publish_v = 0.0;
     double nominal_publish_omega = 0.0;
+    double residual_authority_alpha = 1.0;
     double max_residual_v = 0.0;
     double max_residual_omega = 0.0;
     std::vector<PhaseNominalStage> stages;
-    // Present only for the explicit delay-augmented backend.  Legacy 10D
-    // solvers ignore an inactive image and retain their frozen behavior.
+    // Present only for the explicit delay-augmented backend.  Legacy
+    // non-augmented solvers ignore an inactive image and retain their frozen
+    // behavior.
     DelayAugmentedPhaseSolverContext delay_augmented;
 };
 
@@ -262,6 +270,13 @@ struct PhaseCandidateSelectorParams {
 
 struct PhaseRejoinParams {
     PhaseRejoinMode mode = PhaseRejoinMode::Off;
+    // Tail-Commit extensions are opt-in.  Keeping all three gates disabled
+    // preserves the historical phase-rejoin behavior until the coordinator
+    // explicitly consumes them.
+    bool progress_governor_enabled = false;
+    bool successor_admission_enabled = false;
+    bool tail_commit_enabled = false;
+    int max_consecutive_phase_holds = 3;
     // This is the only formal C3/C4 ablation switch.  It never disables
     // B_exec, phase selection, residual authority, recovery action, or the
     // final-command transaction.
@@ -389,6 +404,10 @@ struct PhaseRejoinPreparation {
     bool ready = false;
     bool command_intervention_allowed = false;
     PhaseCandidateResult candidate;
+    // Absolute PhaseClock observation.  This remains distinct from
+    // candidate.clock_index, which is the selector's governed effective
+    // clock and may intentionally remain on the frozen progress cursor.
+    std::size_t phase_clock_index = 0;
     PhaseRejoinSolverContext solver_context;
     double nominal_cmd_v = 0.0;
     double nominal_cmd_omega = 0.0;
@@ -397,6 +416,17 @@ struct PhaseRejoinPreparation {
     int solver_terminal_step = 0;
     bool solver_origin_at_execution_front = true;
     bool solver_origin_is_execution_augmented = false;
+    // Tail-Commit uses the same frozen artifact but no longer asks the
+    // residual solver to reinterpret its cursor.  `tail_commit_armed` marks
+    // the last phase at which a complete solver horizon still exists;
+    // `tail_committed_mode` supplies one feedback-tail command directly.
+    bool tail_commit_armed = false;
+    bool tail_committed_mode = false;
+    bool tail_backup_used = false;
+    bool tail_released = false;
+    bool tail_aborted = false;
+    std::size_t tail_artifact_index = 0;
+    double residual_authority_alpha = 1.0;
     double phase_clock_elapsed_sec = 0.0;
     std::string status = "NOT_RUN";
 };
@@ -413,6 +443,8 @@ struct PhaseSolveView {
     SloshState terminal_slosh;
     bool current_execution_state_available = false;
     ExecutionAugmentedState current_execution;
+    bool successor_execution_state_available = false;
+    ExecutionAugmentedState successor_execution;
     bool terminal_execution_state_available = false;
     ExecutionAugmentedState terminal_execution;
 };
@@ -427,6 +459,22 @@ struct PhaseRejoinDecision {
     bool recovery_command_used = false;
     bool controlled_stop_used = false;
     bool command_contract_consistent = false;
+    bool successor_admission_evaluated = false;
+    bool successor_advance_admitted = false;
+    bool successor_hold_admitted = false;
+    bool phase_progress_decision_valid = false;
+    std::string phase_progress_action = "DISABLED";
+    std::size_t phase_progress_next_index = 0;
+    std::size_t phase_progress_clock_index = 0;
+    std::size_t phase_progress_lag_steps = 0;
+    std::string phase_progress_status = "NOT_RUN";
+    std::string phase_progress_reason = "NOT_RUN";
+    double residual_authority_alpha = 1.0;
+    bool tail_command_used = false;
+    bool tail_commit_requested = false;
+    bool tail_committed_mode = false;
+    bool tail_backup_used = false;
+    std::size_t tail_artifact_index = 0;
     double solver_cmd_v = 0.0;
     double solver_cmd_omega = 0.0;
     double output_cmd_v = 0.0;
@@ -437,6 +485,10 @@ struct PhaseRejoinDecision {
     EmpiricalRecoveryGateResult current_gate;
     ExecutionCompatibilityGateResult terminal_execution_gate;
     ExecutionCompatibilityGateResult current_execution_gate;
+    EmpiricalRecoveryGateResult successor_advance_empirical_gate;
+    ExecutionCompatibilityGateResult successor_advance_execution_gate;
+    EmpiricalRecoveryGateResult successor_hold_empirical_gate;
+    ExecutionCompatibilityGateResult successor_hold_execution_gate;
     std::string status = "NOT_RUN";
 };
 
@@ -472,6 +524,22 @@ struct PhaseRejoinDebugData {
     bool controlled_stop_used = false;
     bool command_contract_consistent = false;
     bool terminal_release_authorized = false;
+    bool successor_admission_evaluated = false;
+    bool successor_advance_admitted = false;
+    bool successor_hold_admitted = false;
+    std::string phase_progress_action = "DISABLED";
+    std::size_t phase_progress_next_index = 0;
+    std::size_t phase_progress_clock_index = 0;
+    std::size_t phase_progress_lag_steps = 0;
+    std::string phase_progress_status = "NOT_RUN";
+    std::string phase_progress_reason = "NOT_RUN";
+    bool tail_commit_armed = false;
+    bool tail_command_used = false;
+    bool tail_commit_requested = false;
+    bool tail_committed_mode = false;
+    bool tail_backup_used = false;
+    std::size_t tail_artifact_index = 0;
+    double residual_authority_alpha = 1.0;
     double nominal_cmd_v = 0.0;
     double nominal_cmd_omega = 0.0;
     double solver_cmd_v = 0.0;

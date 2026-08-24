@@ -8,7 +8,8 @@
 //   ineq_adj_N = J_h^T (lam_lower - lam_upper)
 //
 // The terminal constraints are the empirical 9D ellipsoid followed by two
-// parameter-affine inequalities for each of the 14 execution-bound boxes.
+// parameter-affine inequalities for each manifest-defined execution-bound
+// box.
 // All derivatives below are independently recomputed in physical units and
 // mapped to the scaled OCP variable basis.
 
@@ -154,7 +155,7 @@ TEST(DelayAugmentedPhaseKktDecomposition,
     const int gate_indices[manifest::kGateRadiusCount] = {
         0, 1, 2, 3, 5, 6, 7, 8, 9};
     const int execution_indices[manifest::kExecutionBoundCount] = {
-        3, 5, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
+        3, 5, 10, 11, 12, 13, 14};
 
     double max_decomposition_error = 0.0;
     int max_error_index = -1;

@@ -28,6 +28,9 @@ PhaseSolveView makePhaseSolveView(const SolverOutput& output,
             view.current_execution_state_available = true;
             view.current_execution = output.initial_execution_state;
         }
+        view.successor_execution_state_available =
+            output.successor_execution_state.valid;
+        view.successor_execution = output.successor_execution_state;
         view.terminal_execution_state_available =
             output.terminal_execution_state.valid;
         view.terminal_execution = output.terminal_execution_state;

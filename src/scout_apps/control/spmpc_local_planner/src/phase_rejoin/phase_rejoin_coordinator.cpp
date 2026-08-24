@@ -36,12 +36,35 @@ bool finiteNonnegativeWeights(
     return true;
 }
 
+double clampUnit(double value) {
+    return std::max(0.0, std::min(1.0, value));
+}
+
 }  // namespace
 
 bool PhaseRejoinCoordinator::configure(const PhaseRejoinParams& params,
                                        std::string& error) {
     error.clear();
+    PhaseCandidateSelectorParams governed_candidate = params.candidate;
+    governed_candidate.backward_radius = 0;
+    governed_candidate.forward_radius = 0;
+    governed_candidate.initial_forward_radius = 0;
+    governed_candidate.max_clock_lead_steps = 0;
+    const bool any_extension_enabled =
+        params.progress_governor_enabled ||
+        params.successor_admission_enabled ||
+        params.tail_commit_enabled;
+    const bool all_extensions_enabled =
+        params.progress_governor_enabled &&
+        params.successor_admission_enabled &&
+        params.tail_commit_enabled;
+    const bool extension_dependencies_valid =
+        !any_extension_enabled ||
+        (all_extensions_enabled &&
+         params.mode == PhaseRejoinMode::Enforce);
     const bool valid = params.liquid_horizon_steps > 0 &&
+        params.max_consecutive_phase_holds >= 0 &&
+        extension_dependencies_valid &&
         finiteNonnegative(params.max_residual_v) &&
         finiteNonnegative(params.max_residual_omega) &&
         finiteNonnegative(params.artifact_dt_tolerance_sec) &&
@@ -50,7 +73,10 @@ bool PhaseRejoinCoordinator::configure(const PhaseRejoinParams& params,
         finiteNonnegative(params.artifact_model_tolerance) &&
         finiteNonnegative(params.artifact_command_tolerance) &&
         params.candidate.max_clock_lead_steps >= 0 &&
-        selector_.configure(params.candidate);
+        selector_.configure(params.candidate) &&
+        governed_selector_.configure(governed_candidate) &&
+        progress_governor_.configure(
+            params.max_consecutive_phase_holds);
     if (!valid) {
         configured_ = false;
         contract_valid_ = false;
@@ -114,6 +140,11 @@ bool PhaseRejoinCoordinator::validateRuntimeContract(
         return true;
     } else if (!artifact_.valid()) {
         error = "ARTIFACT_UNAVAILABLE";
+    } else if (params_.tail_commit_enabled &&
+               (!runtime.delay_augmented_solver_requested ||
+                artifact_.metadata().schema !=
+                    "phase_rejoin_empirical_augmented_v3")) {
+        error = "TAIL_COMMIT_AUGMENTED_V3_REQUIRED";
     } else if (!std::isfinite(runtime.dt) || runtime.dt <= 0.0 ||
                std::abs(runtime.dt - artifact_.metadata().dt) >
                    params_.artifact_dt_tolerance_sec) {
@@ -326,6 +357,7 @@ void PhaseRejoinCoordinator::resetProgress() {
     accepted_index_ = 0;
     terminal_release_authorized_ = false;
     phase_clock_.reset();
+    progress_governor_.reset();
 }
 
 PhaseNominalStage PhaseRejoinCoordinator::makeStage(
@@ -382,8 +414,26 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     }
     const int solver_terminal_step = params_.liquid_horizon_steps +
         (solver_origin_at_execution_front ? 0 : front_steps);
-    if (front_steps < 0 || solver_terminal_step < 0 ||
-        solver_horizon_steps < solver_terminal_step) {
+    if (front_steps < 0 || solver_terminal_step < 0) {
+        preparation.status = "SOLVER_HORIZON_TOO_SHORT";
+        return preparation;
+    }
+    if (solver_horizon_steps < solver_terminal_step) {
+        // Preserve the real clock observation even when the residual horizon
+        // is unavailable; ControlCycleEngine may use the verified backup
+        // anchor for this same aligned cycle.
+        const std::size_t required_tail = static_cast<std::size_t>(
+            front_steps + params_.liquid_horizon_steps);
+        if (required_tail < artifact_.size()) {
+            const std::size_t max_current =
+                artifact_.size() - required_tail - 1;
+            const PhaseClockResult clock = phase_clock_.update(
+                artifact_, phase_time_sec, max_current);
+            if (clock.valid) {
+                preparation.phase_clock_index = clock.index;
+                preparation.phase_clock_elapsed_sec = clock.elapsed_sec;
+            }
+        }
         preparation.status = "SOLVER_HORIZON_TOO_SHORT";
         return preparation;
     }
@@ -433,6 +483,11 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         preparation.status = clock.status;
         return preparation;
     }
+    // Keep the absolute clock observation separate from the governed
+    // selector cursor.  Once progress is initialized, the selector is
+    // intentionally pinned to that cursor, but lag accounting must continue
+    // against the real PhaseClock.
+    preparation.phase_clock_index = clock.index;
     preparation.phase_clock_elapsed_sec = clock.elapsed_sec;
 
     ExecutionHorizonCompatibilityParams horizon_filter;
@@ -443,19 +498,52 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     horizon_filter.max_published_angular_acceleration =
         runtime_contract_.max_published_angular_acceleration;
     horizon_filter.slosh_model = runtime_contract_.slosh_model;
-    preparation.candidate = selector_.select(
+    const bool governed_phase = params_.progress_governor_enabled &&
+        progress_governor_.initialized();
+    const std::size_t selection_clock_index = governed_phase
+        ? progress_governor_.currentIndex()
+        : clock.index;
+    const bool selection_have_last = governed_phase
+        ? true
+        : have_accepted_index_;
+    const std::size_t selection_last_index = governed_phase
+        ? progress_governor_.currentIndex()
+        : accepted_index_;
+    const PhaseCandidateSelector& active_selector =
+        params_.progress_governor_enabled
+        ? governed_selector_
+        : selector_;
+    preparation.candidate = active_selector.select(
         artifact_, execution_front_robot, execution_front_slosh,
         front_steps, params_.liquid_horizon_steps,
-        clock.index,
-        have_accepted_index_, accepted_index_,
+        selection_clock_index,
+        selection_have_last, selection_last_index,
         !solver_origin_is_execution_augmented,
         solver_origin_is_execution_augmented ? current_execution : nullptr,
-        solver_origin_is_execution_augmented ? execution_horizon : nullptr,
-        solver_origin_is_execution_augmented ? &horizon_filter : nullptr);
+        solver_origin_is_execution_augmented && !governed_phase
+            ? execution_horizon
+            : nullptr,
+        solver_origin_is_execution_augmented && !governed_phase
+            ? &horizon_filter
+            : nullptr);
     if (!preparation.candidate.valid) {
         preparation.status = preparation.candidate.status;
         return preparation;
     }
+    if (params_.progress_governor_enabled &&
+        !progress_governor_.initialized() &&
+        !progress_governor_.initialize(
+            preparation.candidate.current_index, max_current + 1)) {
+        preparation.candidate = PhaseCandidateResult{};
+        preparation.status = "PROGRESS_GOVERNOR_INITIALIZATION_FAILED";
+        return preparation;
+    }
+    // Reaching the last complete OCP window is not, by itself, evidence that
+    // the current command can be safely used as the tail anchor.  Tail-Commit
+    // is requested only after the normal solver command has passed all
+    // current/terminal/successor and residual-contract checks in decide().
+    preparation.tail_commit_armed = false;
+    preparation.tail_artifact_index = preparation.candidate.current_index;
 
     const PhaseNominalSample* current = artifact_.sample(
         preparation.candidate.current_index);
@@ -465,6 +553,35 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         preparation.status = "ARTIFACT_INDEX_MISSING";
         return preparation;
     }
+
+    // Tail-Commit owns the final incomplete-horizon region.  Taper only the
+    // residual authority presented to the solver; the execution-horizon
+    // candidate filter intentionally keeps the original upper bounds as a
+    // conservative admission check.  C3 leaves the empirical metric in
+    // monitor-only mode, while C4 shrinks authority as the current metric
+    // approaches its empirical boundary.
+    double residual_authority_alpha = 1.0;
+    if (params_.tail_commit_enabled && solver_origin_is_execution_augmented) {
+        const int horizon_steps = std::max(
+            1, augmented_manifest::kHorizonSteps);
+        const double remaining = max_current >
+                preparation.candidate.current_index
+            ? static_cast<double>(
+                max_current - preparation.candidate.current_index)
+            : 0.0;
+        const double tail_alpha = clampUnit(
+            remaining / static_cast<double>(horizon_steps));
+        double gate_alpha = 1.0;
+        if (params_.empirical_gate_enforced) {
+            const EmpiricalRecoveryGateResult current_gate = gate_.evaluate(
+                *current, execution_front_robot, execution_front_slosh);
+            gate_alpha = current_gate.valid
+                ? clampUnit(1.0 - current_gate.metric)
+                : 0.0;
+        }
+        residual_authority_alpha = std::min(tail_alpha, gate_alpha);
+    }
+    preparation.residual_authority_alpha = residual_authority_alpha;
 
     // Monitor is a strict shadow: it may inspect the same solve but must not
     // activate a solver-side phase objective or constraint.
@@ -525,8 +642,11 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
         augmented.terminal_empirical_gate_enforced =
             params_.empirical_gate_enforced;
         augmented.execution_compatibility_bound = true;
-        augmented.max_residual_v = params_.max_residual_v;
-        augmented.max_residual_omega = params_.max_residual_omega;
+        augmented.residual_authority_alpha = residual_authority_alpha;
+        augmented.max_residual_v =
+            params_.max_residual_v * residual_authority_alpha;
+        augmented.max_residual_omega =
+            params_.max_residual_omega * residual_authority_alpha;
         augmented.weights = runtime_contract_.delay_augmented_weights;
         augmented.stages.reserve(
             static_cast<std::size_t>(augmented.horizon_steps + 1));
@@ -562,8 +682,12 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     preparation.nominal_cmd_omega = front->u_pub_omega;
     preparation.solver_context.nominal_publish_v = front->u_pub_v;
     preparation.solver_context.nominal_publish_omega = front->u_pub_omega;
-    preparation.solver_context.max_residual_v = params_.max_residual_v;
-    preparation.solver_context.max_residual_omega = params_.max_residual_omega;
+    preparation.solver_context.residual_authority_alpha =
+        residual_authority_alpha;
+    preparation.solver_context.max_residual_v =
+        params_.max_residual_v * residual_authority_alpha;
+    preparation.solver_context.max_residual_omega =
+        params_.max_residual_omega * residual_authority_alpha;
     if (artifact_.metadata().schema ==
             "phase_rejoin_empirical_augmented_v3") {
         const BoundedTrackingRecoveryPolicyResult recovery =
@@ -588,6 +712,81 @@ PhaseRejoinPreparation PhaseRejoinCoordinator::prepare(
     return preparation;
 }
 
+PhaseRejoinPreparation PhaseRejoinCoordinator::prepareCommittedTail(
+    std::size_t artifact_index,
+    const ExecutionAugmentedState& current_execution) const {
+    PhaseRejoinPreparation preparation;
+    preparation.tail_committed_mode = true;
+    preparation.tail_artifact_index = artifact_index;
+    preparation.residual_authority_alpha = 0.0;
+    preparation.phase_clock_index = phase_clock_.index();
+    if (!configured_) {
+        preparation.status = "NOT_CONFIGURED";
+        return preparation;
+    }
+    if (!params_.tail_commit_enabled ||
+        params_.mode != PhaseRejoinMode::Enforce) {
+        preparation.status = "TAIL_COMMIT_DISABLED";
+        return preparation;
+    }
+    if (!contract_valid_) {
+        preparation.status = contract_status_;
+        return preparation;
+    }
+    if (!current_execution.valid) {
+        preparation.status = "TAIL_EXECUTION_STATE_UNAVAILABLE";
+        return preparation;
+    }
+    if (artifact_.metadata().schema !=
+            "phase_rejoin_empirical_augmented_v3") {
+        preparation.status = "TAIL_V3_ARTIFACT_REQUIRED";
+        return preparation;
+    }
+    const PhaseNominalSample* sample = artifact_.sample(artifact_index);
+    if (sample == nullptr || !sample->augmented_execution_valid ||
+        !ExecutionCompatibilityGate::validBounds(
+            sample->execution_bounds, sample->augmented_execution)) {
+        preparation.status = "TAIL_ARTIFACT_SAMPLE_INVALID";
+        return preparation;
+    }
+    const BoundedTrackingRecoveryPolicyResult recovery =
+        recovery_policy_.evaluate(*sample, current_execution.robot);
+    if (!recovery.valid) {
+        preparation.status = recovery.status;
+        return preparation;
+    }
+
+    preparation.candidate.valid = true;
+    preparation.candidate.clock_index = artifact_index;
+    preparation.candidate.current_index = artifact_index;
+    preparation.candidate.front_index = artifact_index;
+    preparation.candidate.terminal_index = artifact_index;
+    preparation.candidate.candidate_count = 1;
+    preparation.candidate.status = "TAIL_CURSOR";
+    preparation.solver_origin_is_execution_augmented = true;
+    preparation.solver_origin_at_execution_front = false;
+    preparation.solver_context.active = true;
+    preparation.solver_context.enforce = true;
+    preparation.solver_context.owns_terminal_maneuver = true;
+    preparation.solver_context.residual_authority_alpha = 0.0;
+    preparation.solver_context.current_index = artifact_index;
+    preparation.solver_context.front_index = artifact_index;
+    preparation.solver_context.terminal_index = artifact_index;
+    preparation.solver_context.delay_augmented.active = true;
+    preparation.solver_context.delay_augmented.residual_authority_alpha =
+        0.0;
+    preparation.solver_context.delay_augmented.current_index = artifact_index;
+    preparation.solver_context.delay_augmented.terminal_index = artifact_index;
+    preparation.nominal_cmd_v = sample->u_pub_v;
+    preparation.nominal_cmd_omega = sample->u_pub_omega;
+    preparation.recovery_cmd_v = recovery.command.linear;
+    preparation.recovery_cmd_omega = recovery.command.angular;
+    preparation.ready = true;
+    preparation.command_intervention_allowed = true;
+    preparation.status = "TAIL_COMMITTED_READY";
+    return preparation;
+}
+
 PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     const PhaseRejoinPreparation& preparation,
     const RobotState& execution_front_robot,
@@ -599,6 +798,8 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     decision.solver_cmd_omega = solve.cmd_omega;
     decision.output_cmd_v = solve.cmd_v;
     decision.output_cmd_omega = solve.cmd_omega;
+    decision.residual_authority_alpha =
+        preparation.residual_authority_alpha;
     if (!preparation.ready || !preparation.candidate.valid) {
         decision.status = preparation.status;
         if (params_.mode == PhaseRejoinMode::Enforce) {
@@ -608,6 +809,94 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
             decision.controlled_stop_used = true;
             decision.status = "ENFORCE_NOT_READY_STOP_" + preparation.status;
         }
+        return decision;
+    }
+
+    if (preparation.tail_committed_mode ||
+        preparation.tail_commit_armed) {
+        decision.tail_committed_mode = preparation.tail_committed_mode;
+        decision.tail_commit_requested = preparation.tail_commit_armed;
+        decision.tail_artifact_index = preparation.tail_artifact_index;
+        const PhaseNominalSample* tail = artifact_.sample(
+            preparation.tail_artifact_index);
+        if (tail == nullptr ||
+            !solve.current_execution_state_available ||
+            !solve.current_execution.valid) {
+            decision.output_cmd_v = 0.0;
+            decision.output_cmd_omega = 0.0;
+            decision.command_intervened = true;
+            decision.controlled_stop_used = true;
+            decision.status = "TAIL_EXECUTION_CONTRACT_UNAVAILABLE_STOP";
+            return decision;
+        }
+        const ExecutionAugmentedState& actual = solve.current_execution;
+        decision.current_gate = gate_.evaluate(
+            *tail, actual.robot, actual.slosh);
+        decision.current_gate_accepted =
+            decision.current_gate.accepted;
+        decision.current_execution_gate = execution_gate_.evaluate(
+            tail->augmented_execution,
+            tail->execution_bounds,
+            actual);
+        decision.current_execution_compatible =
+            decision.current_execution_gate.accepted;
+        decision.terminal_execution_compatible = true;
+        decision.evaluated = true;
+        const bool empirical_admitted =
+            !params_.empirical_gate_enforced ||
+            decision.current_gate_accepted;
+        // Once the tail has been committed, retain both empirical checks as
+        // telemetry but do not let a transient model/measurement excursion
+        // revoke the already validated tail.  The first armed/commit cycle
+        // still requires their joint admission below.
+        if ((!preparation.tail_committed_mode &&
+             (!empirical_admitted ||
+              !decision.current_execution_compatible)) ||
+            actual.linear.pending_commands.empty() ||
+            actual.angular.pending_commands.empty() ||
+            !std::isfinite(runtime_contract_.dt) ||
+            runtime_contract_.dt <= 0.0) {
+            decision.output_cmd_v = 0.0;
+            decision.output_cmd_omega = 0.0;
+            decision.command_intervened = true;
+            decision.controlled_stop_used = true;
+            decision.status = "TAIL_CURRENT_ADMISSION_REJECTED_STOP";
+            return decision;
+        }
+        VelocityCommand desired;
+        desired.linear = preparation.recovery_cmd_v;
+        desired.angular = preparation.recovery_cmd_omega;
+        VelocityCommand previous;
+        previous.linear = actual.linear.pending_commands.back();
+        previous.angular = actual.angular.pending_commands.back();
+        const BoundedTrackingRecoveryCommandTransaction transaction =
+            applyBoundedTrackingRecoveryCommandTransaction(
+                desired, previous,
+                runtime_contract_.max_published_acceleration,
+                runtime_contract_.max_published_angular_acceleration,
+                runtime_contract_.dt, recovery_policy_.params());
+        if (!transaction.valid) {
+            decision.output_cmd_v = 0.0;
+            decision.output_cmd_omega = 0.0;
+            decision.command_intervened = true;
+            decision.controlled_stop_used = true;
+            decision.status = "TAIL_RECOVERY_RATE_CONTRACT_UNAVAILABLE_STOP";
+            return decision;
+        }
+        decision.output_cmd_v = transaction.command.linear;
+        decision.output_cmd_omega = transaction.command.angular;
+        decision.command_intervened = true;
+        decision.recovery_command_used = true;
+        decision.tail_command_used = true;
+        decision.tail_backup_used = preparation.tail_backup_used;
+        decision.command_contract_consistent = true;
+        decision.status = preparation.tail_committed_mode
+            ? (transaction.rate_limited
+                ? "TAIL_COMMITTED_COMMAND_RATE_LIMITED"
+                : "TAIL_COMMITTED_COMMAND")
+            : (transaction.rate_limited
+                ? "TAIL_COMMIT_ARMED_COMMAND_RATE_LIMITED"
+                : "TAIL_COMMIT_ARMED_COMMAND");
         return decision;
     }
 
@@ -671,6 +960,59 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     }
     decision.evaluated = true;
 
+    if (params_.successor_admission_enabled) {
+        decision.successor_admission_evaluated = true;
+        if (solve.successor_execution_state_available &&
+            solve.successor_execution.valid) {
+            const std::size_t current_index =
+                preparation.candidate.current_index;
+            const PhaseNominalSample* hold_target = artifact_.sample(
+                current_index);
+            const PhaseNominalSample* advance_target = artifact_.sample(
+                current_index + 1);
+            if (hold_target != nullptr) {
+                const EmpiricalJointSuccessorAdmissionResult hold =
+                    successor_admission_.evaluate(
+                        *hold_target, solve.successor_execution);
+                decision.successor_hold_empirical_gate =
+                    hold.empirical_gate;
+                decision.successor_hold_execution_gate =
+                    hold.execution_gate;
+                decision.successor_hold_admitted =
+                    hold.execution_gate.accepted &&
+                    (!params_.empirical_gate_enforced ||
+                     hold.empirical_gate.accepted);
+            }
+            if (advance_target != nullptr) {
+                const EmpiricalJointSuccessorAdmissionResult advance =
+                    successor_admission_.evaluate(
+                        *advance_target, solve.successor_execution);
+                decision.successor_advance_empirical_gate =
+                    advance.empirical_gate;
+                decision.successor_advance_execution_gate =
+                    advance.execution_gate;
+                decision.successor_advance_admitted =
+                    advance.execution_gate.accepted &&
+                    (!params_.empirical_gate_enforced ||
+                     advance.empirical_gate.accepted);
+            }
+        }
+        if (params_.progress_governor_enabled) {
+            const PhaseProgressDecision progress =
+                progress_governor_.evaluate(
+                    decision.successor_advance_admitted,
+                    decision.successor_hold_admitted,
+                    preparation.phase_clock_index);
+            decision.phase_progress_decision_valid = progress.valid;
+            decision.phase_progress_action = progress.action_name;
+            decision.phase_progress_next_index = progress.next_index;
+            decision.phase_progress_clock_index = progress.clock_index;
+            decision.phase_progress_lag_steps = progress.lag_steps;
+            decision.phase_progress_status = progress.status;
+            decision.phase_progress_reason = progress.reason;
+        }
+    }
+
     if (params_.mode == PhaseRejoinMode::Monitor) {
         decision.status = decision.terminal_gate_accepted &&
                 decision.current_execution_compatible &&
@@ -690,17 +1032,37 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
     const bool current_empirical_admitted =
         !params_.empirical_gate_enforced ||
         decision.current_gate_accepted;
+    const bool terminal_window =
+        preparation.candidate.terminal_index + 1u == artifact_.size();
+    const bool successor_admitted =
+        !params_.successor_admission_enabled ||
+        (decision.phase_progress_decision_valid &&
+         (decision.phase_progress_action == "ADVANCE" ||
+          decision.phase_progress_action == "HOLD" ||
+          (decision.phase_progress_action == "COMPLETE" &&
+           terminal_window)));
 
     if (solver_success && terminal_empirical_admitted &&
         decision.current_execution_compatible &&
-        decision.terminal_execution_compatible) {
+        decision.terminal_execution_compatible &&
+        successor_admitted) {
         decision.residual_v = solve.cmd_v - preparation.nominal_cmd_v;
         decision.residual_omega =
             solve.cmd_omega - preparation.nominal_cmd_omega;
+        // A hand-built preparation used by legacy callers/tests may not have
+        // an active solver context.  Normal prepared cycles always carry the
+        // scaled bounds here, including alpha == 0.
+        const double residual_bound_v = preparation.solver_context.active
+            ? preparation.solver_context.max_residual_v
+            : params_.max_residual_v;
+        const double residual_bound_omega =
+            preparation.solver_context.active
+            ? preparation.solver_context.max_residual_omega
+            : params_.max_residual_omega;
         const bool residual_consistent =
-            std::abs(decision.residual_v) <= params_.max_residual_v + 1e-7 &&
+            std::abs(decision.residual_v) <= residual_bound_v + 1e-7 &&
             std::abs(decision.residual_omega) <=
-                params_.max_residual_omega + 1e-7;
+                residual_bound_omega + 1e-7;
         if (!residual_consistent) {
             decision.output_cmd_v = 0.0;
             decision.output_cmd_omega = 0.0;
@@ -715,6 +1077,15 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
         decision.output_cmd_v = solve.cmd_v;
         decision.output_cmd_omega = solve.cmd_omega;
         decision.command_intervened = false;
+        if (params_.tail_commit_enabled && current_empirical_admitted &&
+            preparation.candidate.terminal_index + 1u == artifact_.size()) {
+            // This is the last complete solver window.  The command itself,
+            // rather than preparation reaching this index, is the validated
+            // tail anchor and will be observed transactionally after publish.
+            decision.tail_command_used = true;
+            decision.tail_commit_requested = true;
+            decision.tail_artifact_index = preparation.candidate.current_index;
+        }
         decision.status = params_.empirical_gate_enforced
             ? "ENFORCE_TERMINAL_ACCEPTED"
             : (decision.terminal_gate_accepted
@@ -782,17 +1153,30 @@ PhaseRejoinDecision PhaseRejoinCoordinator::decide(
             decision.output_cmd_omega = transaction.command.angular;
             decision.command_intervened = true;
             decision.recovery_command_used = true;
-            if (transaction.rate_limited) {
-                decision.status = solver_success
-                    ? "ENFORCE_TERMINAL_REJECTED_RECOVERY_RATE_LIMITED"
-                    : "ENFORCE_SOLVER_FAILED_RECOVERY_RATE_LIMITED";
-                return decision;
+            decision.command_contract_consistent = true;
+            if (params_.tail_commit_enabled) {
+                // A jointly admitted recovery is itself an explicit rejoin
+                // anchor.  Commit may therefore occur before the natural
+                // horizon boundary; after publication the controller follows
+                // the entire remaining frozen artifact, not a cached command.
+                decision.tail_command_used = true;
+                decision.tail_commit_requested = true;
+                decision.tail_artifact_index =
+                    preparation.candidate.current_index;
             }
+            const char* accepted_reason = solver_success
+                ? "ENFORCE_RESIDUAL_REJECTED_RECOVERY"
+                : "ENFORCE_SOLVER_FAILED_RECOVERY";
+            decision.status = transaction.rate_limited
+                ? std::string(accepted_reason) + "_RATE_LIMITED"
+                : accepted_reason;
+            return decision;
         }
         decision.output_cmd_v = preparation.recovery_cmd_v;
         decision.output_cmd_omega = preparation.recovery_cmd_omega;
         decision.command_intervened = true;
         decision.recovery_command_used = true;
+        decision.command_contract_consistent = true;
         decision.status = solver_success
             ? "ENFORCE_TERMINAL_REJECTED_RECOVERY"
             : "ENFORCE_SOLVER_FAILED_RECOVERY";
@@ -815,6 +1199,10 @@ bool PhaseRejoinCoordinator::commit(
     if (!preparation.ready || !preparation.candidate.valid) {
         return false;
     }
+    if (decision.tail_command_used || decision.tail_commit_requested ||
+        preparation.tail_committed_mode || preparation.tail_commit_armed) {
+        return false;
+    }
     const bool execution_compatible =
         !preparation.solver_context.delay_augmented.active ||
         (decision.current_execution_compatible &&
@@ -833,7 +1221,28 @@ bool PhaseRejoinCoordinator::commit(
           terminal_empirical_admitted && execution_compatible &&
           decision.command_contract_consistent));
     if (phase_admitted) {
-        accepted_index_ = preparation.candidate.current_index;
+        if (params_.progress_governor_enabled) {
+            const PhaseProgressDecision progress =
+                progress_governor_.evaluate(
+                    decision.successor_advance_admitted,
+                    decision.successor_hold_admitted,
+                    preparation.phase_clock_index);
+            if (!progress.valid ||
+                progress.action_name != decision.phase_progress_action ||
+                progress.next_index !=
+                    decision.phase_progress_next_index ||
+                progress.clock_index !=
+                    decision.phase_progress_clock_index ||
+                progress.lag_steps != decision.phase_progress_lag_steps ||
+                progress.status != decision.phase_progress_status ||
+                progress.reason != decision.phase_progress_reason ||
+                !progress_governor_.commit(progress)) {
+                return false;
+            }
+            accepted_index_ = progress_governor_.currentIndex();
+        } else {
+            accepted_index_ = preparation.candidate.current_index;
+        }
         have_accepted_index_ = true;
     }
     if (params_.mode == PhaseRejoinMode::Enforce &&
@@ -871,9 +1280,15 @@ PhaseRejoinDebugData PhaseRejoinCoordinator::makeDebug(
         debug.status = preparation->status;
         debug.nominal_cmd_v = preparation->nominal_cmd_v;
         debug.nominal_cmd_omega = preparation->nominal_cmd_omega;
+        debug.clock_index = preparation->phase_clock_index;
+        debug.tail_commit_armed = preparation->tail_commit_armed;
+        debug.tail_committed_mode = preparation->tail_committed_mode;
+        debug.tail_backup_used = preparation->tail_backup_used;
+        debug.tail_artifact_index = preparation->tail_artifact_index;
+        debug.residual_authority_alpha =
+            preparation->residual_authority_alpha;
         if (preparation->candidate.valid) {
             debug.current_index = preparation->candidate.current_index;
-            debug.clock_index = preparation->candidate.clock_index;
             debug.front_index = preparation->candidate.front_index;
             debug.terminal_index = preparation->candidate.terminal_index;
             debug.candidate_count = preparation->candidate.candidate_count;
@@ -897,6 +1312,30 @@ PhaseRejoinDebugData PhaseRejoinCoordinator::makeDebug(
         debug.controlled_stop_used = decision->controlled_stop_used;
         debug.command_contract_consistent =
             decision->command_contract_consistent;
+        debug.successor_admission_evaluated =
+            decision->successor_admission_evaluated;
+        debug.successor_advance_admitted =
+            decision->successor_advance_admitted;
+        debug.successor_hold_admitted =
+            decision->successor_hold_admitted;
+        debug.phase_progress_action =
+            decision->phase_progress_action;
+        debug.phase_progress_next_index =
+            decision->phase_progress_next_index;
+        debug.phase_progress_clock_index =
+            decision->phase_progress_clock_index;
+        debug.phase_progress_lag_steps =
+            decision->phase_progress_lag_steps;
+        debug.phase_progress_status = decision->phase_progress_status;
+        debug.phase_progress_reason = decision->phase_progress_reason;
+        debug.tail_command_used = decision->tail_command_used;
+        debug.tail_commit_requested =
+            decision->tail_commit_requested;
+        debug.tail_committed_mode = decision->tail_committed_mode;
+        debug.tail_backup_used = decision->tail_backup_used;
+        debug.tail_artifact_index = decision->tail_artifact_index;
+        debug.residual_authority_alpha =
+            decision->residual_authority_alpha;
         debug.solver_cmd_v = decision->solver_cmd_v;
         debug.solver_cmd_omega = decision->solver_cmd_omega;
         debug.output_cmd_v = decision->output_cmd_v;

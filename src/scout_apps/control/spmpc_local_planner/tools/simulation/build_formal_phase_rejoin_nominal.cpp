@@ -91,6 +91,47 @@ struct PathAsset {
     std::string frame_id;
 };
 
+std::vector<std::string> recoveryDatasetColumns(
+    const spmpc::DelayAugmentedPhaseCompiledContract& compiled) {
+    std::vector<std::string> columns = {
+        "split", "rollout_id", "seed", "phase_index", "recovered",
+        "x", "y", "yaw", "v", "omega", "eta_x", "eta_x_dot",
+        "eta_y", "eta_y_dot", "linear_output", "angular_output",
+    };
+    const std::size_t linear_count = static_cast<std::size_t>(
+        compiled.execution.linear.integer_delay_steps + 1);
+    const std::size_t angular_count = static_cast<std::size_t>(
+        compiled.execution.angular.integer_delay_steps + 1);
+    for (std::size_t index = 0; index < linear_count; ++index) {
+        columns.push_back("linear_pending_" + std::to_string(index));
+    }
+    for (std::size_t index = 0; index < angular_count; ++index) {
+        columns.push_back("angular_pending_" + std::to_string(index));
+    }
+    return columns;
+}
+
+std::vector<std::string> recoveryScaleColumns(
+    const spmpc::DelayAugmentedPhaseCompiledContract& compiled) {
+    std::vector<std::string> columns = {
+        "phase_index", "phase_bin_start", "phase_bin_end", "shrinkage",
+        "r_x", "r_y", "r_yaw", "r_v", "r_omega", "r_eta_x",
+        "r_eta_x_dot", "r_eta_y", "r_eta_y_dot", "beta_linear_output",
+        "beta_angular_output",
+    };
+    const std::size_t linear_count = static_cast<std::size_t>(
+        compiled.execution.linear.integer_delay_steps + 1);
+    const std::size_t angular_count = static_cast<std::size_t>(
+        compiled.execution.angular.integer_delay_steps + 1);
+    for (std::size_t index = 0; index < linear_count; ++index) {
+        columns.push_back("beta_linear_pending_" + std::to_string(index));
+    }
+    for (std::size_t index = 0; index < angular_count; ++index) {
+        columns.push_back("beta_angular_pending_" + std::to_string(index));
+    }
+    return columns;
+}
+
 std::string trim(const std::string& value) {
     const std::string whitespace = " \t\r\n";
     const std::size_t first = value.find_first_not_of(whitespace);
@@ -475,18 +516,9 @@ bool loadRecoveryScales(const std::string& path,
         error = "cannot open recovery scales";
         return false;
     }
-    const std::vector<std::string> expected = {
-        "phase_index", "phase_bin_start", "phase_bin_end", "shrinkage",
-        "r_x", "r_y", "r_yaw", "r_v", "r_omega", "r_eta_x",
-        "r_eta_x_dot", "r_eta_y", "r_eta_y_dot",
-        "beta_linear_output", "beta_angular_output",
-        "beta_linear_pending_0", "beta_linear_pending_1",
-        "beta_linear_pending_2", "beta_linear_pending_3",
-        "beta_linear_pending_4", "beta_angular_pending_0",
-        "beta_angular_pending_1", "beta_angular_pending_2",
-        "beta_angular_pending_3", "beta_angular_pending_4",
-        "beta_angular_pending_5", "beta_angular_pending_6",
-    };
+    const spmpc::DelayAugmentedPhaseCompiledContract compiled =
+        spmpc::DelayAugmentedPhaseAcadosSolver::compiledContract();
+    const std::vector<std::string> expected = recoveryScaleColumns(compiled);
     std::string line;
     if (!std::getline(input, line) || splitCsv(line) != expected) {
         error = "recovery scales header mismatch";
@@ -538,8 +570,12 @@ bool loadRecoveryScales(const std::string& path,
             error = "invalid actuator execution bound";
             return false;
         }
-        row.execution.linear_pending_commands.resize(5);
-        row.execution.angular_pending_commands.resize(7);
+        row.execution.linear_pending_commands.resize(
+            static_cast<std::size_t>(
+                compiled.execution.linear.integer_delay_steps + 1));
+        row.execution.angular_pending_commands.resize(
+            static_cast<std::size_t>(
+                compiled.execution.angular.integer_delay_steps + 1));
         for (double& bound : row.execution.linear_pending_commands) {
             if (!parseDouble(fields[column++], bound) || bound < 1.0e-9) {
                 error = "invalid linear pending bound";
@@ -702,15 +738,10 @@ bool verifyRecoveryBundle(const Arguments& args,
         }
         const std::string expected_dataset_hash =
             manifest["input"]["sha256"].as<std::string>();
-        const std::vector<std::string> dataset_columns = {
-            "split", "rollout_id", "seed", "phase_index", "recovered",
-            "x", "y", "yaw", "v", "omega", "eta_x", "eta_x_dot",
-            "eta_y", "eta_y_dot", "linear_output", "angular_output",
-            "linear_pending_0", "linear_pending_1", "linear_pending_2",
-            "linear_pending_3", "linear_pending_4", "angular_pending_0",
-            "angular_pending_1", "angular_pending_2", "angular_pending_3",
-            "angular_pending_4", "angular_pending_5", "angular_pending_6",
-        };
+        const spmpc::DelayAugmentedPhaseCompiledContract current_compiled =
+            spmpc::DelayAugmentedPhaseAcadosSolver::compiledContract();
+        const std::vector<std::string> dataset_columns =
+            recoveryDatasetColumns(current_compiled);
         const std::string expected_scales_hash =
             manifest["outputs"]["scales"]["sha256"].as<std::string>();
         const std::string expected_report_hash =
@@ -749,11 +780,19 @@ bool verifyRecoveryBundle(const Arguments& args,
             return false;
         }
         const YAML::Node compiled = manifest["compiled_contract"];
-        if (compiled["state_width"].as<std::size_t>() != 22 ||
+        if (compiled["state_width"].as<std::size_t>() !=
+                static_cast<std::size_t>(current_compiled.state_width) ||
             compiled["gate_radius_count"].as<std::size_t>() != 9 ||
-            compiled["execution_bound_count"].as<std::size_t>() != 14 ||
-            compiled["linear_pending_count"].as<std::size_t>() != 5 ||
-            compiled["angular_pending_count"].as<std::size_t>() != 7 ||
+            compiled["execution_bound_count"].as<std::size_t>() !=
+                static_cast<std::size_t>(2 +
+                    current_compiled.execution.linear.integer_delay_steps + 1 +
+                    current_compiled.execution.angular.integer_delay_steps + 1) ||
+            compiled["linear_pending_count"].as<std::size_t>() !=
+                static_cast<std::size_t>(
+                    current_compiled.execution.linear.integer_delay_steps + 1) ||
+            compiled["angular_pending_count"].as<std::size_t>() !=
+                static_cast<std::size_t>(
+                    current_compiled.execution.angular.integer_delay_steps + 1) ||
             compiled["execution_compatibility_contract"].as<std::string>() !=
                 "phase_indexed_execution_box_v1" ||
             std::abs(compiled["minimum_denominator"].as<double>() - 1.0e-9) >

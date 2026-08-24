@@ -36,12 +36,12 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         contract = spec["contract"]
         scale_x, scale_u = state_scaling_vectors(spec)
 
-        self.assertEqual((22, 1), symbolic["x_next"].shape)
+        self.assertEqual((15, 1), symbolic["x_next"].shape)
         self.assertEqual((2, 1), symbolic["published"].shape)
         self.assertEqual(
             (6 + 2 * len(layout["execution_indices"]), 1),
             symbolic["stage_constraints"].shape)
-        self.assertEqual(10, contract["horizon_steps"])
+        self.assertEqual(7, contract["horizon_steps"])
         self.assertTrue(spec["use_linear_model"])
         self.assertFalse(spec["use_parabola_term"])
         self.assertEqual(0, len(symbolic["idxbx"]))
@@ -92,11 +92,13 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         np.testing.assert_allclose(values[6:], -0.5, atol=1e-12)
 
         # Reproduce the stopped-tail failure mode: a command that was valid
-        # when published has shifted to angular_pending_3 while the phase-
-        # indexed radius has tightened.  The path constraint must expose the
-        # exact named component before the command can strand the selector.
+        # when published has shifted to the final angular pending slot while
+        # the phase-indexed radius has tightened.  The path constraint must
+        # expose the exact named component before the command can strand the
+        # selector.
         shifted = np.zeros(layout["state_width"])
-        shifted_index = layout["angular_buffer_offset"] + 3
+        shifted_index = (layout["angular_buffer_offset"]
+                         + layout["angular_buffer_count"] - 1)
         shifted[shifted_index] = 0.00105380837
         shifted_image = np.zeros(spec["parameters"]["parameter_width"])
         shifted_image[names.index("max_residual_v")] = 1.0
@@ -137,13 +139,13 @@ class DelayAugmentedPhaseAcadosCodegenTest(unittest.TestCase):
         parameters = spec["parameters"]
         names = parameters["names"]
         scale_x, scale_u = state_scaling_vectors(spec)
-        self.assertEqual(64, parameters["parameter_width"])
-        self.assertEqual(22, parameters["nominal_control_offset"])
-        self.assertEqual(25, parameters["nominal_publish_offset"])
-        self.assertEqual(27, parameters["residual_bound_offset"])
-        self.assertEqual(29, parameters["weight_offset"])
-        self.assertEqual(41, parameters["gate_radius_offset"])
-        self.assertEqual(50, parameters["execution_bound_offset"])
+        self.assertEqual(50, parameters["parameter_width"])
+        self.assertEqual(15, parameters["nominal_control_offset"])
+        self.assertEqual(18, parameters["nominal_publish_offset"])
+        self.assertEqual(20, parameters["residual_bound_offset"])
+        self.assertEqual(22, parameters["weight_offset"])
+        self.assertEqual(34, parameters["gate_radius_offset"])
+        self.assertEqual(43, parameters["execution_bound_offset"])
 
         stage_cost = ca.Function(
             "delay_augmented_stage_cost_test",
