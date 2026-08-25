@@ -28,6 +28,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
+find_package(OsqpEigen QUIET)
 find_package(OpenSSL REQUIRED)
 find_package(yaml-cpp REQUIRED)
 
@@ -295,6 +296,52 @@ target_link_libraries(spmpc_phase_rejoin
   spmpc_runtime
 )
 
+execute_process(
+  COMMAND git -C ${CMAKE_CURRENT_SOURCE_DIR} rev-parse HEAD
+  OUTPUT_VARIABLE SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+  RESULT_VARIABLE SPMPC_BT_RESIDUAL_GIT_RESULT
+)
+string(LENGTH "${SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD}"
+  SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD_LENGTH)
+if(NOT SPMPC_BT_RESIDUAL_GIT_RESULT EQUAL 0 OR
+   NOT SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD_LENGTH EQUAL 40 OR
+   NOT SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD MATCHES "^[0-9a-f]+$")
+  message(FATAL_ERROR
+    "[spmpc] cannot bind BT-residual evidence targets to a Git HEAD")
+endif()
+
+function(spmpc_bind_evidence_source_identity target role)
+  target_sources(${target} PRIVATE
+    src/provenance/compiled_source_identity.cpp)
+  target_compile_definitions(${target} PRIVATE
+    "SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD=\"${SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD}\""
+    "SPMPC_SOURCE_IDENTITY_${role}=1"
+  )
+endfunction()
+
+spmpc_bind_evidence_source_identity(spmpc_model MODEL)
+spmpc_bind_evidence_source_identity(spmpc_controller CONTROLLER)
+spmpc_bind_evidence_source_identity(spmpc_phase_rejoin PHASE_REJOIN)
+spmpc_bind_evidence_source_identity(spmpc_safety SAFETY)
+spmpc_bind_evidence_source_identity(spmpc_reference REFERENCE)
+spmpc_bind_evidence_source_identity(spmpc_runtime RUNTIME)
+
+add_library(spmpc_bt_residual_structure
+  src/bt_residual/bt_residual_structure.cpp
+  src/bt_residual/bt_residual_bt_oracle.cpp
+)
+target_compile_definitions(spmpc_bt_residual_structure PRIVATE
+  "SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD=\"${SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD}\""
+)
+target_link_libraries(spmpc_bt_residual_structure
+  PUBLIC
+  spmpc_phase_rejoin
+  spmpc_runtime
+  PRIVATE
+  spmpc_controller
+)
+
 add_library(spmpc_solver_api
   src/solver/api/backend.cpp
   src/solver/api/backend_policy.cpp
@@ -339,6 +386,7 @@ add_library(spmpc_estimation
   src/estimation/slosh_observer_bank.cpp
   src/estimation/slosh_observer_selector.cpp
 )
+spmpc_bind_evidence_source_identity(spmpc_estimation ESTIMATION)
 target_link_libraries(spmpc_estimation
   spmpc_model
   ${EIGEN3_LIBRARIES}
@@ -730,6 +778,49 @@ target_link_libraries(spmpc_phase_rejoin_closed_loop_trial
   yaml-cpp
 )
 
+# CR0--CR2 source-tree evidence builder for the independently identified
+# BT-centered residual method.  It intentionally remains outside the runtime
+# install/export set and does not link the old phase-rejoin solver capsule.
+if(OsqpEigen_FOUND)
+  add_executable(spmpc_build_bt_residual_structure_bundle
+    tools/simulation/build_bt_residual_structure_bundle.cpp
+  )
+  target_link_libraries(spmpc_build_bt_residual_structure_bundle
+    PRIVATE
+    spmpc_bt_residual_structure
+    spmpc_controller
+    spmpc_phase_rejoin
+    spmpc_runtime
+    spmpc_model
+    spmpc_reference
+    spmpc_estimation
+    spmpc_safety
+    OsqpEigen::OsqpEigen
+    OpenSSL::Crypto
+    yaml-cpp
+  )
+  target_include_directories(spmpc_build_bt_residual_structure_bundle PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/generated/casadi
+  )
+  target_compile_definitions(spmpc_build_bt_residual_structure_bundle PRIVATE
+    "SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD=\"${SPMPC_BT_RESIDUAL_BUILD_SOURCE_HEAD}\""
+  )
+  if(CATKIN_ENABLE_TESTING)
+    add_test(NAME test_bt_residual_bundle_synthetic_qp
+      COMMAND spmpc_build_bt_residual_structure_bundle
+        --internal-synthetic-qp-self-test
+        ${CMAKE_CURRENT_SOURCE_DIR}/config/simulation/bt_residual_structural_go_no_go_v1.yaml
+    )
+    set_tests_properties(test_bt_residual_bundle_synthetic_qp PROPERTIES
+      ENVIRONMENT
+        "LD_LIBRARY_PATH=${CATKIN_DEVEL_PREFIX}/lib:$ENV{LD_LIBRARY_PATH}"
+    )
+  endif()
+else()
+  message(WARNING
+    "[spmpc] OsqpEigen unavailable: CR0--CR2 BT-residual evidence builder disabled")
+endif()
+
 # Source-tree formal-simulation asset builder.  It deliberately reuses the
 # production V3 loader and the compiled execution contract, but is not part of
 # the robot runtime installation/export list.
@@ -1020,6 +1111,13 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_delay_augmented_phase_dynamics)
     target_link_libraries(test_delay_augmented_phase_dynamics
       spmpc_solver_delay_augmented
+    )
+  endif()
+  catkin_add_gtest(test_bt_residual_structure
+    test/test_bt_residual_structure.cpp)
+  if(TARGET test_bt_residual_structure)
+    target_link_libraries(test_bt_residual_structure
+      spmpc_bt_residual_structure
     )
   endif()
   catkin_add_gtest(test_delay_augmented_phase_codegen_consistency

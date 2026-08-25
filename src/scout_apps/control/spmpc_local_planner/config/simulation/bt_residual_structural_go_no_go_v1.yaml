@@ -1,0 +1,153 @@
+schema: spmpc_bt_residual_structural_campaign_v1
+freeze_id: BT_RESIDUAL_CR0_CR2_ONE_SHOT_V1
+created_date: "2026-08-25"
+
+scope:
+  development_only: true
+  online_solver_implemented: false
+  independent_plant_used_for_admission: false
+  robust_invariance_claim: false
+  one_shot_no_retune: true
+
+method:
+  schema: spmpc_bt_residual_structural_contract_v1
+  implementation_id: bt_centered_residual_terminal_mpc_v1
+  claim_level: linearized_deterministic_development_only
+  expected_artifact_sha256: ff2b4d4b8858a1df2545cc32705dbe5c3542918ca51a761c7e3810166c2721cc
+  expected_artifact_contract_id: phase_rejoin_p2_smooth43_tail_commit_15d_v3_development
+  expected_execution_contract_hash: b7bbc6e4b921b513e798e4faaf22a8b147b6aea526408e2ed6c13ef9f8e0344a
+  expected_bt_policy_contract_id: bounded_tracking_recovery_policy_v1
+
+execution_model:
+  schema_version: 1
+  contract_id: delay_augmented_phase_codegen_candidate_v1
+  contract_hash: b7bbc6e4b921b513e798e4faaf22a8b147b6aea526408e2ed6c13ef9f8e0344a
+  dt: 0.033333333299999997
+  linear:
+    delay_sec: 0.10199999999999999
+    time_constant_sec: 0.090999999999999998
+    positive_gain: 1.0
+    negative_gain: 1.0
+    deadzone: 0.0
+    output_min: 0.0
+    output_max: 0.8
+  angular:
+    delay_sec: 0.01
+    time_constant_sec: 0.34200000000000003
+    positive_gain: 1.0
+    negative_gain: 1.0
+    deadzone: 0.0
+    output_min: -1.2
+    output_max: 1.2
+
+controller_slosh_model:
+  container_radius: 0.0185
+  liquid_height: 0.058
+  liquid_density: 1000.0
+  damping_ratio: 0.05
+  mode_index: 1
+  dt: 0.033333333299999997
+  slosh_height_ref: 0.005
+  slosh_eta_dot_ratio: 0.3
+  use_linear_model: true
+  use_parabola_term: false
+
+horizon:
+  residual_prefix_steps: 16
+  recovery_suffix_steps: 60
+  authority_taper_begin_index: 1000
+  authority_zero_index: 1100
+
+publication_contract:
+  maximum_published_acceleration: 0.6
+  maximum_published_angular_acceleration: 1.2
+
+residual_contract:
+  maximum_v: 0.020
+  maximum_omega: 0.050
+  maximum_slew_v: 0.010
+  maximum_slew_omega: 0.025
+  cumulative_progress_budget_m: 0.0030
+  cumulative_yaw_budget_rad: 0.0080
+  minimum_nonzero: 0.0001
+
+linearization:
+  relative_step: 0.0001
+  maximum_reconstruction_error: 1.0e-7
+  identity_tolerance: 1.0e-12
+  state_scales:
+    [0.05, 0.05, 0.10, 0.10, 0.05, 0.20,
+     0.00010, 0.0020, 0.00010, 0.0020,
+     0.10, 0.10, 0.10, 0.10, 0.20]
+
+terminal_contract:
+  # This is a deterministic linearized preimage plus nonlinear BT rollout,
+  # not a robust invariant certificate.
+  deviation_bounds:
+    [0.10, 0.10, 0.10, 0.0020, 0.10, 0.0050,
+     0.000050, 0.0020, 0.000050, 0.0020,
+     0.00010, 0.00010, 0.00010, 0.00010, 0.00010]
+  absolute_bounds:
+    [0.10, 0.10, 0.10, 0.00010, 0.10, 0.00010,
+     0.000050, 0.0020, 0.000050, 0.0020,
+     0.000001, 0.000001, 0.000001, 0.000001, 0.000001]
+  liquid_increment_eta: 0.000010
+  liquid_increment_eta_dot: 0.00050
+  maximum_absolute_eta: 0.00012
+  maximum_absolute_eta_dot: 0.0030
+  candidate_path_deviation_bounds:
+    [0.020, 0.020, 0.040, 0.050, 0.010, 0.100,
+     0.000020, 0.0010, 0.000020, 0.0010,
+     0.020, 0.020, 0.020, 0.020, 0.050]
+  recovery_path_deviation_bounds:
+    [0.10, 0.10, 0.15, 0.15, 0.10, 0.30,
+     0.00012, 0.0030, 0.00012, 0.0030,
+     0.15, 0.15, 0.15, 0.15, 0.30]
+
+model_dominance:
+  minimum_relative_tracking_improvement: 0.10
+  minimum_absolute_tracking_improvement: 0.010
+  objective_margin: 0.005
+  tracking_scales:
+    [0.05, 0.05, 0.10, 0.10, 0.05, 0.20,
+     0.00010, 0.0020, 0.00010, 0.0020,
+     0.10, 0.10, 0.10, 0.10, 0.20]
+  liquid_weight: 0.20
+  residual_weight: 0.02
+
+state_envelopes:
+  nominal_phase_indices: [0, 300, 600, 900, 1050]
+  d1:
+    id: D1_INITIAL_POSE
+    lateral_offset_m: 0.050
+    yaw_offset_rad: 0.100
+    scale_fractions: [0.5, 1.0]
+  d2:
+    id: D2_SHORT_LINEAR_SPEED_CAP
+    begin_artifact_index: 750
+    cycle_count: 10
+    linear_cap_mps: 0.320
+    snapshot_cycles: [2, 5, 10]
+
+candidate_search:
+  solver: osqp_full_stage_residual_qp_v2_convex_joint_certificate
+  maximum_iterations: 20000
+  absolute_tolerance: 1.0e-7
+  relative_tolerance: 1.0e-7
+  polishing: true
+  hessian_regularization: 1.0e-10
+  constraint_audit_tolerance_multiplier: 10.0
+  value_tolerance_multiplier: 50.0
+  tracking_multiplier_initial: 1.0
+  tracking_multiplier_growth: 10.0
+  tracking_multiplier_expansions: 16
+  tracking_multiplier_bisection_iterations: 60
+  nonlinear_validation_scales: [1.0, 0.75, 0.50, 0.25]
+
+decision:
+  require_all_disturbance_baselines_recoverable: true
+  minimum_useful_fraction_each_disturbance: 0.50
+  require_zero_residual_identity: true
+  require_all_linearizations_finite: true
+  failure_decision: NO_GO_ROUTE_B
+  success_decision: GO_CR3
