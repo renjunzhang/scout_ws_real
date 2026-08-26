@@ -385,6 +385,9 @@ FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS:-false}"
 RECORD_SCAN="${RECORD_SCAN:-true}"
 RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH:-true}"
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
+RECORD_MOCAP="${RECORD_MOCAP:-false}"
+RECORD_MOCAP_PATH="${RECORD_MOCAP_PATH:-true}"
+MOCAP_TRACKER="${MOCAP_TRACKER:-Tracker0}"
 RGB_CALIBRATION_FILE="${RGB_CALIBRATION_FILE:-${LIQUID_CALIBRATION:-}}"
 RGB_CALIBRATION_EXPECTED_SHA256="${RGB_CALIBRATION_EXPECTED_SHA256:-}"
 RGB_CALIBRATION_ACTUAL_SHA256=""
@@ -419,6 +422,10 @@ RETRY_REASON_FILE="${RETRY_REASON_FILE:-}"
 PATH_EXPECTED_SHA256="${PATH_EXPECTED_SHA256:-}"
 PATH_ACTUAL_SHA256=""
 REQUIRE_PATH_HASH="${REQUIRE_PATH_HASH:-false}"
+
+if [[ ! "${MOCAP_TRACKER}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  fail "MOCAP_TRACKER must contain only letters, digits, dot, underscore, or dash"
+fi
 
 require_cmd timeout
 require_cmd rostopic
@@ -779,6 +786,9 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "record_depth=${RECORD_DEPTH}"
   echo "record_online_liquid=${RECORD_ONLINE_LIQUID}"
   echo "record_online_liquid_debug_images=${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}"
+  echo "record_mocap=${RECORD_MOCAP}"
+  echo "record_mocap_path=${RECORD_MOCAP_PATH}"
+  echo "mocap_tracker=${MOCAP_TRACKER}"
   echo "forbid_image_streams=${FORBID_IMAGE_STREAMS}"
   echo "rgb_calibration_file=${RGB_CALIBRATION_FILE}"
   echo "rgb_calibration_expected_sha256=${RGB_CALIBRATION_EXPECTED_SHA256}"
@@ -807,6 +817,7 @@ echo "  recorder      = ${RECORD_SEC}s max (Ctrl+C stops earlier)"
 echo "  out_dir       = ${RUN_OUT_DIR}"
 echo "  record_rgb    = ${RECORD_RGB}"
 echo "  online_liquid = ${RECORD_ONLINE_LIQUID} (debug images ${RECORD_ONLINE_LIQUID_DEBUG_IMAGES})"
+echo "  mocap         = ${RECORD_MOCAP} (${MOCAP_TRACKER}; accumulating path ${RECORD_MOCAP_PATH})"
 echo "  forbid_images = ${FORBID_IMAGE_STREAMS}"
 echo "  path_source   = ${PATH_SOURCE_MODE}"
 echo "  path_file     = ${PATH_FILE}"
@@ -1033,6 +1044,9 @@ start_recorder() {
   RECORD_STANDALONE_SLOSH="${RECORD_STANDALONE_SLOSH}" \
   RECORD_ONLINE_LIQUID="${RECORD_ONLINE_LIQUID}" \
   RECORD_ONLINE_LIQUID_DEBUG_IMAGES="${RECORD_ONLINE_LIQUID_DEBUG_IMAGES}" \
+  RECORD_MOCAP="${RECORD_MOCAP}" \
+  RECORD_MOCAP_PATH="${RECORD_MOCAP_PATH}" \
+  MOCAP_TRACKER="${MOCAP_TRACKER}" \
   FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS}" \
   RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS}" \
   RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO}" \

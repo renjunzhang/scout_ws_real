@@ -31,6 +31,10 @@ RECORD_ONLINE_LIQUID_DEBUG_IMAGES="${RECORD_ONLINE_LIQUID_DEBUG_IMAGES:-false}"
 # sensor_msgs/Image or sensor_msgs/CompressedImage can slip into the archive.
 FORBID_IMAGE_STREAMS="${FORBID_IMAGE_STREAMS:-false}"
 RECORD_MOCAP="${RECORD_MOCAP:-false}"
+# /mocap/scout_path is an ever-growing nav_msgs/Path in the NOKOV monitor.
+# Keep the historical default for existing callers, but allow long-running
+# execution-chain trials to omit it while still recording both pose streams.
+RECORD_MOCAP_PATH="${RECORD_MOCAP_PATH:-true}"
 RECORD_ROSOUT="${RECORD_ROSOUT:-true}"
 RECORD_TOPIC_INFO="${RECORD_TOPIC_INFO:-true}"
 ROSBAG_BUFFER_SIZE_MB="${ROSBAG_BUFFER_SIZE_MB:-4096}"
@@ -495,9 +499,11 @@ if truthy "${RECORD_MOCAP}"; then
     "/vrpn_client_node/${MOCAP_TRACKER}/pose"
     /mocap/scout_pose
     /mocap/scout_odom
-    /mocap/scout_path
     /mocap/status
   )
+  if truthy "${RECORD_MOCAP_PATH}"; then
+    record_topics+=(/mocap/scout_path)
+  fi
 fi
 
 if truthy "${RECORD_ROSOUT}"; then
@@ -540,6 +546,7 @@ write_topic_info_snapshot
   echo "forbid_image_streams=${FORBID_IMAGE_STREAMS}"
   echo "rosbag_buffer_size_mb=${ROSBAG_BUFFER_SIZE_MB}"
   echo "record_mocap=${RECORD_MOCAP}"
+  echo "record_mocap_path=${RECORD_MOCAP_PATH}"
   echo "record_rosout=${RECORD_ROSOUT}"
   echo "record_topic_info=${RECORD_TOPIC_INFO}"
   echo "liquid_export_after_record=${LIQUID_EXPORT_AFTER_RECORD}"
@@ -635,7 +642,7 @@ cat <<EOF
   forbid images= ${FORBID_IMAGE_STREAMS}
   liquid export= ${LIQUID_EXPORT_AFTER_RECORD} (${LIQUID_EXPORT_SOURCE})
   rosbag buffer= ${ROSBAG_BUFFER_SIZE_MB} MB
-  mocap        = ${RECORD_MOCAP}
+  mocap        = ${RECORD_MOCAP} (accumulating path ${RECORD_MOCAP_PATH})
   metadata     = ${OUT_DIR}/${NAME}_{info.txt,rosparam.yaml,topics.txt,nodes.txt,selected_topics.txt,*topics*.txt,bag_info.txt}
 ============================================
   Start this recorder BEFORE launching SPMPC to capture startup transients.
