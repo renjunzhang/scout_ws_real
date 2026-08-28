@@ -8,9 +8,14 @@
 | --- | --- | --- |
 | `record_spmpc_full_rgb_bag.sh` | 候选黑匣子 recorder，录 ROS topic 和 sidecar | future v2.0 正式链；当前仅 development |
 | `run_spmpc_real_fixed_path_trial.sh` | SPMPC 实物单次一键 runner，支持生成或重放路径 | future v2.0 正式链；当前仅 development，未来 formal 只允许 replay |
+| `mocap_field_mapping.env.example` | 动捕小场地地图、Tracker、定位与静止验收阈值模板；故意不含冻结授权 | development 建图/定位 preflight |
+| `freeze_spmpc_mocap_field_map.sh` | fail-closed 完成 Cartographer trajectory，导出并冻结唯一地图三件套及 SHA | development；真实写入必须显式 `ARM_MAP_FREEZE=YES` |
+| `analysis/validate_mocap_field_map.py` | 无 ROS 依赖的 pbstream/YAML/PGM 结构、分辨率与 SHA 校验 | development 建图/双场地切换 QC |
+| `analysis/validate_mocap_field_localization.py` | 无运动联结磁盘地图身份、运行时 Cartographer 参数、topic/TF 与静止稳定性 | development 定位硬门；拒绝 `/cmd_vel` publisher |
 | `prepare_spmpc_mocap_s_path.sh` | 人工点击一次终点，校验并冻结动捕场地紧凑 S 路径 | development 执行链辨识；不进入 G3R3 液面效果数据 |
+| `run_spmpc_mocap_path_selection_trial.sh` | 低速重放候选 S 路径并记录 `PATH_SELECTION` 证据；绑定小场地地图/SHA | development 探索；必须 `ARM_MOTION=YES`，永不占用 R01--R05 |
 | `record_spmpc_mocap_static_smoke.sh` | 不启动控制器的 NOKOV/odom/IMU 静止录包与质量门 | development 执行链辨识 preflight |
-| `run_spmpc_mocap_execution_chain_trial.sh` | 冻结 S 路径 R01--R05 单条执行链 trial | development；必须显式 `ARM_MOTION=YES` |
+| `run_spmpc_mocap_execution_chain_trial.sh` | 绑定小场地地图/SHA 与冻结 S 路径的 R01--R05 单条执行链 trial | development；必须显式 `ARM_MOTION=YES` |
 | `analysis/validate_mocap_execution_chain_bag.py` | 静止 smoke 或运动 trial 的 fail-closed postflight | development QC |
 | `analysis/analyze_mocap_execution_chain.py` | 计划覆盖、软件改命令、动捕响应及 held-out 模型分析 | development 离线分析 |
 | `run_spmpc_g2s_h0s_source_selection_trial.sh` | 固定 H0_G2、Bsmooth、IMU READY gate 和在线 RGB stamped scalar 的单条 G2S paired unit；bag 禁止图像流 | development G2S；不进入 40/64/88 |
@@ -38,6 +43,27 @@
 - `acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的 `spmpc_acados_model.py`、`spmpc_acados_cost.py`、`spmpc_acados_constraints.py` 是其装配模块，不单独运行；
 - `analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用顶层 `analyze_spmpc_delay_phase.py`；
 - `tests/` 保存 summary、正式 freeze validator 和动捕执行链工具的回归测试。
+
+## 动捕场地地图前门
+
+动捕场地尚无地图时，执行链实验的固定顺序为：
+
+```text
+无地图 mocap/odom/IMU smoke
+→ 唯一 MAP_ID 建图
+→ freeze_spmpc_mocap_field_map.sh 冻结并哈希
+→ 显式 map_file + expected SHA 重启定位
+→ validate_mocap_field_localization.py 静止 PASS
+→ 探索/冻结 S 路径
+→ 正式 static smoke
+→ R01--R05
+```
+
+建图时 Cartographer 独占动态 `map -> odom`；NOKOV 只提供隔离监测数据，不替换 `/odom`，也不发布控制 TF。小场地地图和大场地 `map_carto_20260629_R0` 必须保留为不同 stem。完整现场命令、故障处理和切回 G3R3 的旧地图/SHA 检查见：
+
+```text
+docs/实物实验注意事项/对比试验/实物对比实验/20260828_动捕场地建图定位与双场地切换SOP.md
+```
 
 ## record_spmpc_full_rgb_bag.sh
 

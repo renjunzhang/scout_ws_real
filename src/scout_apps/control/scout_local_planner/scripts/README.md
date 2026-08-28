@@ -27,6 +27,7 @@ docs/重要文档/20260527_SloshPriorityMPC正式对比实验验证方案.md
 | 脚本 | 当前用途 |
 |---|---|
 | `launch_real_sensors_stack.sh` | 实物启动入口：CAN、底盘、nanoscan3、Cartographer 纯定位、IMU、RealSense |
+| `launch_real_sensors_no_localization.sh` | 建图前实物入口：CAN、底盘、nanoscan3、IMU、RealSense；强制不启动定位或地图服务器 |
 | `record_slosh_experiment.sh` | rosbag 录制入口；覆盖 RGB、IMU、odom、cmd、path、MPC、reference、terminal、profile_cap、slosh 话题 |
 | `send_fixed_goal.py` | 发布目标点；可用于 MBF goal 或模板路径 goal |
 
@@ -38,6 +39,12 @@ source /home/geist/scout_ws/devel/setup.bash
 cd /home/geist/scout_ws
 
 src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_stack.sh
+```
+
+重新建图时先启动无定位传感器栈，再在另一个终端启动选定的建图 launch：
+
+```bash
+src/scout_apps/control/scout_local_planner/scripts/launch_real_sensors_no_localization.sh
 ```
 
 录包：

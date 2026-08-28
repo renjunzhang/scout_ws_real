@@ -4,6 +4,8 @@
 
   <!-- ===== 地图配置 ===== -->
   <arg name="map_file" default="$(find scout_maps)/maps/map_carto_20260629_R0.pbstream" />
+  <arg name="map_expected_sha256" default="" />
+  <arg name="occupancy_grid_resolution" default="0.02" />
 
   <!-- ===== 传感器配置 ===== -->
   <arg name="scan_topic" default="/scan_front" />
@@ -20,11 +22,14 @@
         output="screen">
     <remap from="scan" to="$(arg scan_topic)" />
     <remap from="odom" to="$(arg odom_topic)" />
+    <!-- Runtime evidence used by the field-map readiness gate. -->
+    <param name="frozen_map_file" value="$(arg map_file)" />
+    <param name="frozen_map_expected_sha256" value="$(arg map_expected_sha256)" />
   </node>
 
   <!-- 2) 栅格地图发布（用于 RViz 显示和导航） -->
   <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros" 
-        type="cartographer_occupancy_grid_node" args="-resolution 0.02"
+        type="cartographer_occupancy_grid_node" args="-resolution $(arg occupancy_grid_resolution)"
         output="screen" />
 
   <!-- 3) RViz 可视化 -->

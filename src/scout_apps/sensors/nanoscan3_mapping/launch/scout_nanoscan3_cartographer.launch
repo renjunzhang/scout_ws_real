@@ -4,25 +4,30 @@
   <arg name="scan_topic" default="/scan_front" />
   <arg name="odom_topic" default="/odom" />
   <arg name="use_rviz" default="true" />
-  <arg name="use_slam_toolbox" default="false" />
+  <arg name="configuration_basename" default="scout_2d.lua" />
+  <arg name="occupancy_grid_resolution" default="0.02" />
+  <arg name="respawn" default="false" />
 
-  <!-- 坐标变换发布 -->
-  <node pkg="tf2_ros" type="static_transform_publisher" name="map_to_odom"
-        args="0 0 0 0 0 0 1 /map /odom" />
+  <!--
+    Cartographer 在 scout_2d.lua 中使用 published_frame=odom 且
+    provide_odom_frame=false，因此它自己负责动态 map->odom。这里禁止再发布
+    静态 map->odom，否则同一 TF edge 会出现两个 authority，地图看似可用但
+    定位/路径坐标会发生不可解释的跳变。
+  -->
 
   <!-- Cartographer 节点 -->
   <node name="cartographer_node" pkg="cartographer_ros" type="cartographer_node" 
         args="-configuration_directory $(find nanoscan3_mapping)/config
-              -configuration_basename scout_2d.lua"
+              -configuration_basename $(arg configuration_basename)"
         output="screen"
-        respawn="true" respawn_delay="5">
+        respawn="$(arg respawn)" respawn_delay="5">
     <remap from="scan" to="$(arg scan_topic)" />
     <remap from="odom" to="$(arg odom_topic)" />
   </node>
 
   <!-- Cartographer 栅格地图发布 -->
   <node name="cartographer_occupancy_grid_node" pkg="cartographer_ros" 
-        type="cartographer_occupancy_grid_node" args="-resolution 0.02"
+        type="cartographer_occupancy_grid_node" args="-resolution $(arg occupancy_grid_resolution)"
         output="screen" />
 
   <!-- RViz 可视化 -->
