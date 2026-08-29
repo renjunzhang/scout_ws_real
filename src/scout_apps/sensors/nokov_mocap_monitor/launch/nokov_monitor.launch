@@ -27,11 +27,21 @@
   <arg name="use_rviz" default="false"/>
   <arg name="rviz_config" default="$(find nokov_mocap_monitor)/rviz/nokov_monitor.rviz"/>
 
-  <!-- PDF-compatible VRPN entry: roslaunch vrpn_client_ros sample.launch server:=10.1.1.198 port:=3883 -->
-  <include if="$(arg start_vrpn)" file="$(find vrpn_client_ros)/launch/sample.launch">
-    <arg name="server" value="$(arg server)"/>
-    <arg name="port" value="$(arg vrpn_port)"/>
-  </include>
+  <!-- Start the client directly: the Noetic sample.launch hard-codes port 3883
+       and only exposes server as a launch argument. -->
+  <node if="$(arg start_vrpn)"
+        pkg="vrpn_client_ros"
+        type="vrpn_client_node"
+        name="vrpn_client_node"
+        output="screen">
+    <param name="server" value="$(arg server)"/>
+    <param name="port" value="$(arg vrpn_port)"/>
+    <param name="update_frequency" value="100.0"/>
+    <param name="frame_id" value="world"/>
+    <param name="use_server_time" value="false"/>
+    <param name="broadcast_tf" value="true"/>
+    <param name="refresh_tracker_frequency" value="1.0"/>
+  </node>
 
   <node if="$(arg start_monitor_bridge)"
         pkg="nokov_mocap_monitor"

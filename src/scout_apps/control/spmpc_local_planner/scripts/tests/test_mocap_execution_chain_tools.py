@@ -6,6 +6,7 @@ import math
 import pathlib
 import tempfile
 import unittest
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -159,6 +160,48 @@ class ExecutionAnalysisMathTest(unittest.TestCase):
 
 
 class PostflightMathTest(unittest.TestCase):
+    def test_goal_reached_hold_does_not_require_solver_artifacts(self):
+        terminal_hold = SimpleNamespace(
+            solve_attempted=True,
+            solve_success=True,
+            solver_status="GOAL_REACHED",
+        )
+        active_solve = SimpleNamespace(
+            solve_attempted=True,
+            solve_success=True,
+            solver_status="B_slosh_matched5_ACADOS_OK",
+        )
+        failed_solve = SimpleNamespace(
+            solve_attempted=True,
+            solve_success=False,
+            solver_status="ACADOS_FAILURE",
+        )
+
+        self.assertFalse(POSTFLIGHT.requires_solver_artifacts(terminal_hold))
+        self.assertTrue(POSTFLIGHT.requires_solver_artifacts(active_solve))
+        self.assertFalse(POSTFLIGHT.requires_solver_artifacts(failed_solve))
+
+    def test_state_alignment_accepts_common_epoch_or_explicit_no_liquid(self):
+        common_epoch = SimpleNamespace(
+            state_alignment_required=True,
+            state_time_aligned=True,
+            state_alignment_status="INTERPOLATED",
+        )
+        no_liquid = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=True,
+            state_alignment_status="LIQUID_NOT_CONSUMED",
+        )
+        unsafe_bypass = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=True,
+            state_alignment_status="COMMON_EPOCH_DISABLED",
+        )
+
+        self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(common_epoch))
+        self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(no_liquid))
+        self.assertFalse(POSTFLIGHT.state_alignment_contract_ok(unsafe_bypass))
+
     def test_stream_stats_reports_rate_and_gap(self):
         stream = POSTFLIGHT.StreamStats(True)
         for index in range(11):

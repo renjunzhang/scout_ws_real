@@ -46,6 +46,37 @@ def header_stamp(message):
     return stamp_sec(getattr(header, "stamp", None))
 
 
+def requires_solver_artifacts(message):
+    """Return whether a successful cycle must publish horizon/snapshot data.
+
+    The ROS wrapper marks the call into SpmpcProblem as ``solve_attempted``.
+    Once the terminal controller has reached the goal, SpmpcProblem returns a
+    successful zero command with status GOAL_REACHED before invoking ACADOS.
+    Those terminal hold cycles intentionally have no new solver artifacts.
+    """
+    return (
+        bool(message.solve_attempted)
+        and bool(message.solve_success)
+        and str(message.solver_status) != "GOAL_REACHED"
+    )
+
+
+def state_alignment_contract_ok(message):
+    """Accept either aligned liquid state or an explicit no-liquid solve.
+
+    A slosh-enabled solver must require and pass the common-epoch alignment
+    gate.  A B0-style solver may bypass that gate only when the runtime marks
+    the state as aligned and explicitly reports that liquid state was not
+    consumed.
+    """
+    if bool(message.state_alignment_required):
+        return bool(message.state_time_aligned)
+    return (
+        bool(message.state_time_aligned)
+        and str(message.state_alignment_status) == "LIQUID_NOT_CONSUMED"
+    )
+
+
 def quaternion_yaw(quaternion):
     return math.atan2(
         2.0 * (quaternion.w * quaternion.z + quaternion.x * quaternion.y),
@@ -311,6 +342,8 @@ def validate(args):
     audits = []
     valid_horizon_ids = set()
     valid_snapshot_ids = set()
+    horizon_slosh_enabled = {}
+    snapshot_slosh_enabled = {}
     statuses = []
     path_messages = []
     raw_mocap_arrival_minus_header = []
@@ -367,9 +400,17 @@ def validate(args):
                         )
                         audits.append(message)
                     elif topic == HORIZON_TOPIC and message.valid:
-                        valid_horizon_ids.add(int(message.cycle_id))
+                        cycle_id = int(message.cycle_id)
+                        valid_horizon_ids.add(cycle_id)
+                        horizon_slosh_enabled[cycle_id] = bool(
+                            message.slosh_enabled
+                        )
                     elif topic == SNAPSHOT_TOPIC and message.valid:
-                        valid_snapshot_ids.add(int(message.cycle_id))
+                        cycle_id = int(message.cycle_id)
+                        valid_snapshot_ids.add(cycle_id)
+                        snapshot_slosh_enabled[cycle_id] = bool(
+                            message.slosh_enabled
+                        )
                     elif topic == CMD_TOPIC:
                         streams["cmd"].update(
                             bag_time, 0.0, (message.linear.x, message.angular.z)
@@ -590,8 +631,24 @@ def validate(args):
         failures.append("audit cycle IDs are not strictly increasing and unique")
 
     solve_audits = [message for message in audits if message.solve_attempted]
-    if len(solve_audits) < args.min_solve_cycles:
-        failures.append("solve cycles {} < {}".format(len(solve_audits), args.min_solve_cycles))
+    active_solver_audits = [
+        message for message in solve_audits
+        if str(message.solver_status) != "GOAL_REACHED"
+    ]
+    artifact_audits = [
+        message for message in active_solver_audits
+        if requires_solver_artifacts(message)
+    ]
+    goal_reached_hold_audits = [
+        message for message in solve_audits
+        if str(message.solver_status) == "GOAL_REACHED"
+    ]
+    if len(active_solver_audits) < args.min_solve_cycles:
+        failures.append(
+            "active solver cycles {} < {}".format(
+                len(active_solver_audits), args.min_solve_cycles
+            )
+        )
     nominal_audits = []
     shift_audits = []
     for message in solve_audits:
@@ -610,8 +667,15 @@ def validate(args):
             failures.append("{} post-solver limiter intervened".format(prefix))
         if message.terminal_controller_intervened and not message.terminal_phase:
             failures.append("{} terminal controller changed a non-terminal command".format(prefix))
-        if not message.state_alignment_required or not message.state_time_aligned:
-            failures.append("{} common-epoch state alignment failed".format(prefix))
+        if not state_alignment_contract_ok(message):
+            failures.append(
+                "{} state alignment contract failed: required={} aligned={} status={}".format(
+                    prefix,
+                    bool(message.state_alignment_required),
+                    bool(message.state_time_aligned),
+                    message.state_alignment_status,
+                )
+            )
         chain_stamps = [
             stamp_sec(message.solve_start_stamp),
             stamp_sec(message.solve_end_stamp),
@@ -622,7 +686,10 @@ def validate(args):
             chain_stamps
         ):
             failures.append("{} solve/publish timestamps are non-monotonic".format(prefix))
-        if message.previous_shifted_plan_available:
+        if (
+            requires_solver_artifacts(message)
+            and message.previous_shifted_plan_available
+        ):
             shift_audits.append(message)
             if int(message.previous_plan_cycle_id) + 1 != int(message.cycle_id):
                 failures.append("{} shifted plan is not from adjacent cycle".format(prefix))
@@ -631,13 +698,46 @@ def validate(args):
 
     if len(shift_audits) < args.min_shift_pairs:
         failures.append("valid shifted-plan pairs {} < {}".format(len(shift_audits), args.min_shift_pairs))
-    solve_ids = {int(message.cycle_id) for message in solve_audits if message.solve_success}
-    missing_horizons = sorted(solve_ids - valid_horizon_ids)
-    missing_snapshots = sorted(solve_ids - valid_snapshot_ids)
+    artifact_cycle_ids = {int(message.cycle_id) for message in artifact_audits}
+    missing_horizons = sorted(artifact_cycle_ids - valid_horizon_ids)
+    missing_snapshots = sorted(artifact_cycle_ids - valid_snapshot_ids)
     if missing_horizons:
-        failures.append("solve cycles missing valid horizons: {}".format(missing_horizons[:10]))
+        failures.append(
+            "active solver cycles missing valid horizons (count={}): {}".format(
+                len(missing_horizons), missing_horizons[:10]
+            )
+        )
     if missing_snapshots:
-        failures.append("solve cycles missing valid snapshots: {}".format(missing_snapshots[:10]))
+        failures.append(
+            "active solver cycles missing valid snapshots (count={}): {}".format(
+                len(missing_snapshots), missing_snapshots[:10]
+            )
+        )
+    for message in artifact_audits:
+        cycle_id = int(message.cycle_id)
+        expected_slosh_enabled = bool(message.state_alignment_required)
+        if (
+            cycle_id in horizon_slosh_enabled
+            and horizon_slosh_enabled[cycle_id] != expected_slosh_enabled
+        ):
+            failures.append(
+                "cycle {} horizon slosh_enabled={} but state contract expects {}".format(
+                    cycle_id,
+                    horizon_slosh_enabled[cycle_id],
+                    expected_slosh_enabled,
+                )
+            )
+        if (
+            cycle_id in snapshot_slosh_enabled
+            and snapshot_slosh_enabled[cycle_id] != expected_slosh_enabled
+        ):
+            failures.append(
+                "cycle {} snapshot slosh_enabled={} but state contract expects {}".format(
+                    cycle_id,
+                    snapshot_slosh_enabled[cycle_id],
+                    expected_slosh_enabled,
+                )
+            )
 
     positive_omega = sum(message.published_cmd_omega > args.omega_sign_threshold for message in nominal_audits)
     negative_omega = sum(message.published_cmd_omega < -args.omega_sign_threshold for message in nominal_audits)
@@ -704,10 +804,22 @@ def validate(args):
         "counts": {
             "audit_cycles": len(audits),
             "solve_cycles": len(solve_audits),
+            "active_solver_cycles": len(active_solver_audits),
+            "solver_artifact_cycles": len(artifact_audits),
+            "goal_reached_hold_cycles": len(goal_reached_hold_audits),
             "nominal_tracking_cycles": len(nominal_audits),
             "shift_pairs": len(shift_audits),
             "valid_horizons": len(valid_horizon_ids),
             "valid_snapshots": len(valid_snapshot_ids),
+            "slosh_enabled_horizons": sum(horizon_slosh_enabled.values()),
+            "slosh_enabled_snapshots": sum(snapshot_slosh_enabled.values()),
+            "common_epoch_required_cycles": sum(
+                bool(message.state_alignment_required) for message in solve_audits
+            ),
+            "liquid_not_consumed_cycles": sum(
+                str(message.state_alignment_status) == "LIQUID_NOT_CONSUMED"
+                for message in solve_audits
+            ),
             "positive_omega_samples": positive_omega,
             "negative_omega_samples": negative_omega,
             "linear_motion_samples": moving_v,
