@@ -74,4 +74,11 @@ bool matchedVariantCommonConfigEqual(const VariantConfig& lhs,
            same(lhs.slosh_cost_tail_discount, rhs.slosh_cost_tail_discount);
 }
 
+bool matchedVariantReleaseSpeedAllowed(double v_ref) {
+    constexpr double kNominalMatchedReleaseSpeedMps = 0.20;
+    constexpr double kTolerance = 1e-12;
+    return std::isfinite(v_ref) && v_ref > 0.0 &&
+           v_ref <= kNominalMatchedReleaseSpeedMps + kTolerance;
+}
+
 }  // namespace spmpc_local_planner

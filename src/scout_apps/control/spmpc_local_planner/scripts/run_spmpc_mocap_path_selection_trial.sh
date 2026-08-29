@@ -26,13 +26,24 @@ fail() {
 
 SELECTION_ID="${SELECTION_ID:-C01}"
 ATTEMPT="${ATTEMPT:-01}"
+ACQUISITION_RETRY="${ACQUISITION_RETRY:-false}"
+RETRY_REASON_FILE="${RETRY_REASON_FILE:-}"
 VALIDATE_ONLY="${VALIDATE_ONLY:-false}"
 ARM_MOTION="${ARM_MOTION:-NO}"
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 
 [[ "${SELECTION_ID}" =~ ^C0[1-9]$ ]] || fail "SELECTION_ID must be C01..C09"
-[[ "${ATTEMPT}" == "01" ]] || fail "use a new SELECTION_ID instead of overwriting an exploration attempt"
+[[ "${ATTEMPT}" =~ ^0[1-9]$ ]] || fail "ATTEMPT must be 01..09"
+if [[ "${ATTEMPT}" == "01" ]]; then
+  truthy "${ACQUISITION_RETRY}" && \
+    fail "ATTEMPT=01 cannot be marked as an acquisition retry"
+else
+  truthy "${ACQUISITION_RETRY}" || \
+    fail "ATTEMPT=${ATTEMPT} requires ACQUISITION_RETRY=true"
+  [[ -n "${RETRY_REASON_FILE}" && -s "${RETRY_REASON_FILE}" ]] || \
+    fail "ATTEMPT=${ATTEMPT} requires a non-empty RETRY_REASON_FILE"
+fi
 
 PATH_FILE="${PATH_FILE:-}"
 [[ -n "${PATH_FILE}" ]] || fail "PATH_FILE is required"
@@ -75,6 +86,24 @@ W_SMOOTH="${W_SMOOTH:-1.0}"
 W_ALPHA="${W_ALPHA:-1.0}"
 W_DU_A="${W_DU_A:-1.0}"
 W_DU_VS="${W_DU_VS:-1.0}"
+if [[ "${VARIANT}" == "B_slosh_matched0" ||
+      "${VARIANT}" == "B_slosh_matched5" ]]; then
+  expected_w_slosh=0.0
+  [[ "${VARIANT}" == "B_slosh_matched5" ]] && expected_w_slosh=5.0
+  awk -v value="${V_REF}" 'BEGIN {exit !(value > 0 && value <= 0.20)}' || \
+    fail "matched release requires 0 < V_REF <= 0.20 m/s"
+  for field in \
+    "W_SLOSH:${W_SLOSH}:${expected_w_slosh}" \
+    "W_SMOOTH:${W_SMOOTH}:1.0" \
+    "W_ALPHA:${W_ALPHA}:1.0" \
+    "W_DU_A:${W_DU_A}:1.0" \
+    "W_DU_VS:${W_DU_VS}:1.0"; do
+    IFS=: read -r label value expected <<< "${field}"
+    awk -v value="${value}" -v expected="${expected}" \
+      'BEGIN {delta=value-expected; if (delta < 0) delta=-delta; exit !(delta <= 1e-12)}' || \
+      fail "matched release requires ${label}=${expected}, got ${value}"
+  done
+fi
 MOCAP_TRACKER="${MOCAP_TRACKER:-Tracker0}"
 MOCAP_HOST="${MOCAP_HOST:-192.168.203.85}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
@@ -111,7 +140,8 @@ python3 "${MAP_VALIDATOR}" "${FIELD_MAP_FILE}" \
 
 if truthy "${VALIDATE_ONLY}"; then
   echo "[${SCRIPT_NAME}] validate-only PASS"
-  echo "  run_class=PATH_SELECTION selection=${SELECTION_ID} (does not consume R01--R05)"
+  echo "  run_class=PATH_SELECTION selection=${SELECTION_ID} attempt=${ATTEMPT} (does not consume R01--R05)"
+  echo "  acquisition_retry=${ACQUISITION_RETRY} retry_reason_file=${RETRY_REASON_FILE:-none}"
   echo "  variant=${VARIANT} w_slosh=${W_SLOSH} v_ref=${V_REF} max_v_ref=${MAX_SELECTION_V_REF}"
   echo "  path=${PATH_FILE}"
   echo "  path_sha256=${PATH_EXPECTED_SHA256,,}"
@@ -124,7 +154,8 @@ fi
 [[ "${ARM_MOTION}" == "YES" ]] || \
   fail "set ARM_MOTION=YES only after localization PASS, path clearance and E-stop checks"
 for output in "${BAG_PATH}" "${BAG_PATH}.active" "${POSTFLIGHT_REPORT}" "${PROTOCOL_META}"; do
-  [[ ! -e "${output}" ]] || fail "output already exists; choose a new SELECTION_ID: ${output}"
+  [[ ! -e "${output}" ]] || \
+    fail "output already exists; preserve it and choose a documented new ATTEMPT: ${output}"
 done
 
 # shellcheck disable=SC1091
@@ -163,6 +194,11 @@ mkdir -p "${RUN_OUT_DIR}"
   printf 'run_class=%s\n' 'PATH_SELECTION'
   printf 'selection_id=%s\n' "${SELECTION_ID}"
   printf 'attempt=%s\n' "${ATTEMPT}"
+  printf 'acquisition_retry=%s\n' "${ACQUISITION_RETRY}"
+  printf 'retry_reason_file=%s\n' "${RETRY_REASON_FILE}"
+  if [[ -n "${RETRY_REASON_FILE}" ]]; then
+    printf 'retry_reason_sha256=%s\n' "$(sha256sum "${RETRY_REASON_FILE}" | awk '{print $1}')"
+  fi
   printf 'formal_trial_consumed=%s\n' 'false'
   printf 'variant=%s\n' "${VARIANT}"
   printf 'v_ref=%s\n' "${V_REF}"
@@ -179,7 +215,7 @@ mkdir -p "${RUN_OUT_DIR}"
 } > "${PROTOCOL_META}"
 
 echo "================ mocap PATH_SELECTION ================"
-echo "  selection     = ${SELECTION_ID}; formal_trial_consumed=false"
+echo "  selection     = ${SELECTION_ID}/${ATTEMPT}; retry=${ACQUISITION_RETRY}; formal_trial_consumed=false"
 echo "  variant       = ${VARIANT}; w_slosh=${W_SLOSH}; v_ref=${V_REF}"
 echo "  path          = ${PATH_FILE}"
 echo "  map           = ${FIELD_MAP_FILE}"
@@ -211,8 +247,9 @@ RECORD_STANDALONE_SLOSH=false RECORD_SCAN=true FORBID_IMAGE_STREAMS=true \
 RECORD_ALL_EXISTING_TOPICS=false RECORD_TOPIC_INFO=true \
 RECORD_MOCAP=true RECORD_MOCAP_PATH=false MOCAP_TRACKER="${MOCAP_TRACKER}" \
 RECORD_SEC="${RECORD_SEC}" MAX_RECORD_SEC="${RECORD_SEC}" \
-BLOCK_SEGMENT_ID="MOCAP_PATH_SELECTION_${SELECTION_ID}" SPLIT_BLOCK=false \
-ORDER_POSITION="${SELECTION_ID#C}" ACQUISITION_RETRY=false SEND_ZERO_ON_EXIT=true \
+BLOCK_SEGMENT_ID="MOCAP_PATH_SELECTION_${SELECTION_ID}_A${ATTEMPT}" SPLIT_BLOCK=false \
+ORDER_POSITION="${SELECTION_ID#C}" SEND_ZERO_ON_EXIT=true \
+ACQUISITION_RETRY="${ACQUISITION_RETRY}" RETRY_REASON_FILE="${RETRY_REASON_FILE}" \
 OPERATOR_NOTE="low-speed PATH_SELECTION development run; never R01-R05" \
 bash "${RUNNER}"
 
@@ -225,4 +262,4 @@ python3 "${POSTFLIGHT}" "${BAG_PATH}" \
   --path-sha256 "${PATH_EXPECTED_SHA256}" \
   --report "${POSTFLIGHT_REPORT}"
 
-echo "[${SCRIPT_NAME}] PASS: PATH_SELECTION ${SELECTION_ID}; R01--R05 remain unused"
+echo "[${SCRIPT_NAME}] PASS: PATH_SELECTION ${SELECTION_ID}/${ATTEMPT}; R01--R05 remain unused"

@@ -50,4 +50,10 @@ double sloshCostStageScale(const VariantConfig& config,
 bool matchedVariantCommonConfigEqual(const VariantConfig& lhs,
                                      const VariantConfig& rhs);
 
+// Hardware may conservatively lower the common reference speed before the
+// first trial, but it must never raise it above the matched-pair release speed.
+// Keeping this rule outside the ROS wrapper makes the startup gate directly
+// unit-testable and preserves v_ref equality in matchedVariantCommonConfigEqual.
+bool matchedVariantReleaseSpeedAllowed(double v_ref);
+
 }  // namespace spmpc_local_planner

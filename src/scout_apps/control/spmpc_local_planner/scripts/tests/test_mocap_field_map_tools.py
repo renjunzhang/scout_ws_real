@@ -259,7 +259,61 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("does not consume R01--R05", result.stdout)
+        self.assertIn("selection=C01 attempt=01", result.stdout)
         self.assertFalse((stem.parent / "slosh_bags").exists())
+
+        retry_env = {
+            "PATH": "/usr/bin:/bin",
+            "HOME": str(stem.parent),
+            "VALIDATE_ONLY": "true",
+            "SELECTION_ID": "C01",
+            "ATTEMPT": "02",
+            "ACQUISITION_RETRY": "true",
+            "PATH_FILE": str(path),
+            "PATH_EXPECTED_SHA256": path_hash,
+            "FIELD_MAP_FILE": str(stem.with_suffix(".pbstream")),
+            "FIELD_MAP_EXPECTED_SHA256": map_hash,
+            "FIELD_MAP_RESOLUTION": "0.02",
+            "V_REF": "0.10",
+        }
+        missing_reason = subprocess.run(
+            ["bash", str(selector)],
+            env=retry_env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(missing_reason.returncode, 2)
+        self.assertIn("RETRY_REASON_FILE", missing_reason.stderr)
+
+        retry_reason = stem.parent / "startup_abort_reason.log"
+        retry_reason.write_text("planner startup contract rejection\n", encoding="utf-8")
+        retry_env["RETRY_REASON_FILE"] = str(retry_reason)
+        retry = subprocess.run(
+            ["bash", str(selector)],
+            env=retry_env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(retry.returncode, 0, retry.stderr)
+        self.assertIn("selection=C01 attempt=02", retry.stdout)
+        self.assertIn("acquisition_retry=true", retry.stdout)
+
+        wrong_weight_env = dict(retry_env)
+        wrong_weight_env["W_SLOSH"] = "4.0"
+        wrong_weight = subprocess.run(
+            ["bash", str(selector)],
+            env=wrong_weight_env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+        )
+        self.assertEqual(wrong_weight.returncode, 2)
+        self.assertIn("W_SLOSH=5.0", wrong_weight.stderr)
 
     def test_formal_execution_chain_is_bound_to_runtime_field_map(self):
         formal = (SCRIPT_ROOT / "run_spmpc_mocap_execution_chain_trial.sh").read_text(
@@ -271,6 +325,7 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
         self.assertIn("/cartographer_node/frozen_map_expected_sha256", formal)
         self.assertIn("Cartographer runtime map does not match", formal)
         self.assertIn("refuse the reserved large-field G3R3 map", formal)
+        self.assertIn("matched release requires 0 < V_REF <= 0.20 m/s", formal)
 
 
 if __name__ == "__main__":

@@ -2,6 +2,8 @@
 
 #include <gtest/gtest.h>
 
+#include <limits>
+
 namespace spmpc_local_planner {
 namespace {
 
@@ -50,6 +52,17 @@ TEST(VariantConfig, RecognizesDevelopmentMatchedNames) {
               "B_slosh_matched0");
     EXPECT_EQ(makeVariantConfig("B_slosh_matched5").name,
               "B_slosh_matched5");
+}
+
+TEST(VariantConfig, MatchedReleaseAllowsOnlyConservativePositiveSpeed) {
+    EXPECT_TRUE(matchedVariantReleaseSpeedAllowed(0.10));
+    EXPECT_TRUE(matchedVariantReleaseSpeedAllowed(0.15));
+    EXPECT_TRUE(matchedVariantReleaseSpeedAllowed(0.20));
+    EXPECT_FALSE(matchedVariantReleaseSpeedAllowed(0.0));
+    EXPECT_FALSE(matchedVariantReleaseSpeedAllowed(-0.10));
+    EXPECT_FALSE(matchedVariantReleaseSpeedAllowed(0.200001));
+    EXPECT_FALSE(matchedVariantReleaseSpeedAllowed(
+        std::numeric_limits<double>::quiet_NaN()));
 }
 
 }  // namespace

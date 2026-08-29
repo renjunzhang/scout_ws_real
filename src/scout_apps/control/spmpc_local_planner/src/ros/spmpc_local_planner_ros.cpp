@@ -549,19 +549,20 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             std::abs(variant_.w_progress - 0.2) <= 1e-12 &&
             std::abs(variant_.w_v - 1.0) <= 1e-12 &&
             std::abs(variant_.w_vs - 0.3) <= 1e-12 &&
-            std::abs(variant_.v_ref - 0.20) <= 1e-12 &&
             std::abs(variant_.w_control - 0.3) <= 1e-12 &&
             std::abs(variant_.w_smooth - 1.0) <= 1e-12 &&
             std::abs(variant_.w_alpha - 1.0) <= 1e-12 &&
             std::abs(variant_.w_du_a - 1.0) <= 1e-12 &&
             std::abs(variant_.w_du_vs - 1.0) <= 1e-12 &&
             std::abs(variant_.w_accel) <= 1e-12;
+        const bool release_speed =
+            matchedVariantReleaseSpeedAllowed(variant_.v_ref);
         const double expected_slosh_weight =
             variant_.name == "B_slosh_matched5" ? 5.0 : 0.0;
         const bool release_contract =
             solver_params.solver_backend == kSolverBackendContinuousMpccAcados &&
             variant_.slosh_enable && variant_.smooth_priority_enable &&
-            !variant_.slosh_constraint_enable && common_weights &&
+            !variant_.slosh_constraint_enable && common_weights && release_speed &&
             std::abs(variant_.w_slosh - expected_slosh_weight) <= 1e-12 &&
             variant_.slosh_cost_horizon_steps == 3 &&
             std::abs(variant_.slosh_cost_tail_discount) <= 1e-12 &&
@@ -575,8 +576,37 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             !shared_cmd_angular_limit_enable_ &&
             command_contract_params_.fail_closed_on_post_limit_change;
         if (!release_contract) {
-            ROS_FATAL("[spmpc_local_planner] matched development release contract rejected variant=%s; require main 10D solver, processed_imu/fail_closed, common epoch, delay shadow, 3-step liquid cost, common weights, disabled redundant limiters, and fail-closed command audit",
-                      variant_.name.c_str());
+            ROS_FATAL("[spmpc_local_planner] matched development release contract rejected "
+                      "variant=%s backend_ok=%s slosh_ok=%s smooth_ok=%s "
+                      "soft_constraint_ok=%s common_weights_ok=%s v_ref=%.6f "
+                      "v_ref_ok=%s slosh_weight_ok=%s short_cost_ok=%s "
+                      "observer_ok=%s common_epoch_ok=%s delay_shadow_ok=%s "
+                      "redundant_limiters_off=%s command_audit_ok=%s; require "
+                      "0 < v_ref <= 0.20 m/s and an otherwise unchanged matched contract",
+                      variant_.name.c_str(),
+                      boolText(solver_params.solver_backend ==
+                               kSolverBackendContinuousMpccAcados),
+                      boolText(variant_.slosh_enable),
+                      boolText(variant_.smooth_priority_enable),
+                      boolText(!variant_.slosh_constraint_enable),
+                      boolText(common_weights),
+                      variant_.v_ref,
+                      boolText(release_speed),
+                      boolText(std::abs(variant_.w_slosh -
+                                        expected_slosh_weight) <= 1e-12),
+                      boolText(variant_.slosh_cost_horizon_steps == 3 &&
+                               std::abs(variant_.slosh_cost_tail_discount) <=
+                                   1e-12),
+                      boolText(slosh_observer_selector_params_.nominal_source ==
+                                   SloshObserverSource::ProcessedImu &&
+                               slosh_observer_selector_params_.fallback_policy ==
+                                   SloshObserverFallbackPolicy::FailClosed),
+                      boolText(state_timing_params_.require_common_epoch),
+                      boolText(delay_phase_params_.mode == DelayPhaseMode::Shadow),
+                      boolText(!shared_cmd_linear_accel_limit_enable_ &&
+                               !shared_cmd_angular_limit_enable_),
+                      boolText(
+                          command_contract_params_.fail_closed_on_post_limit_change));
             return false;
         }
     }

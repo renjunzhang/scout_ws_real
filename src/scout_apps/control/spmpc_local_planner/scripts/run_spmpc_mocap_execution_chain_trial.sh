@@ -72,6 +72,24 @@ W_SMOOTH="${W_SMOOTH:-1.0}"
 W_ALPHA="${W_ALPHA:-1.0}"
 W_DU_A="${W_DU_A:-1.0}"
 W_DU_VS="${W_DU_VS:-1.0}"
+if [[ "${VARIANT}" == "B_slosh_matched0" ||
+      "${VARIANT}" == "B_slosh_matched5" ]]; then
+  expected_w_slosh=0.0
+  [[ "${VARIANT}" == "B_slosh_matched5" ]] && expected_w_slosh=5.0
+  awk -v value="${V_REF}" 'BEGIN {exit !(value > 0 && value <= 0.20)}' || \
+    fail "matched release requires 0 < V_REF <= 0.20 m/s"
+  for field in \
+    "W_SLOSH:${W_SLOSH}:${expected_w_slosh}" \
+    "W_SMOOTH:${W_SMOOTH}:1.0" \
+    "W_ALPHA:${W_ALPHA}:1.0" \
+    "W_DU_A:${W_DU_A}:1.0" \
+    "W_DU_VS:${W_DU_VS}:1.0"; do
+    IFS=: read -r label value expected <<< "${field}"
+    awk -v value="${value}" -v expected="${expected}" \
+      'BEGIN {delta=value-expected; if (delta < 0) delta=-delta; exit !(delta <= 1e-12)}' || \
+      fail "matched release requires ${label}=${expected}, got ${value}"
+  done
+fi
 MOCAP_TRACKER="${MOCAP_TRACKER:-Tracker0}"
 MOCAP_HOST="${MOCAP_HOST:-192.168.203.85}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
