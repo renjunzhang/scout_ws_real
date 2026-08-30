@@ -324,6 +324,9 @@ STATE_TIMING_MAX_ROBOT_EXTRAPOLATION_SEC="${STATE_TIMING_MAX_ROBOT_EXTRAPOLATION
 EXECUTION_CONTRACT_FAIL_CLOSED="${EXECUTION_CONTRACT_FAIL_CLOSED:-false}"
 EXECUTION_CONTRACT_MAX_DELTA_V="${EXECUTION_CONTRACT_MAX_DELTA_V:-0.0001}"
 EXECUTION_CONTRACT_MAX_DELTA_OMEGA="${EXECUTION_CONTRACT_MAX_DELTA_OMEGA:-0.0001}"
+SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE:-false}"
+V_SAFE_MAX="${V_SAFE_MAX:-0.15}"
+SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE:-0.0001}"
 case "${CURRENT_OBSERVER_SOURCE}" in
   odom) ;;
   processed_imu|imu) CURRENT_OBSERVER_SOURCE=processed_imu ;;
@@ -343,6 +346,11 @@ if truthy "${IMU_SHADOW_ENABLE}"; then
   IMU_SHADOW_ENABLE=true
 else
   IMU_SHADOW_ENABLE=false
+fi
+if truthy "${SPEED_SAFETY_ENABLE}"; then
+  SPEED_SAFETY_ENABLE=true
+else
+  SPEED_SAFETY_ENABLE=false
 fi
 IMU_SHADOW_READY_TOPIC="${IMU_SHADOW_READY_TOPIC:-/spmpc/debug/slosh_observer_imu}"
 OBSERVER_SELECTION_TOPIC="${OBSERVER_SELECTION_TOPIC:-/spmpc/debug/slosh_observer_selection}"
@@ -493,6 +501,8 @@ for kv in \
   "STATE_TIMING_MAX_ROBOT_EXTRAPOLATION_SEC=${STATE_TIMING_MAX_ROBOT_EXTRAPOLATION_SEC}" \
   "EXECUTION_CONTRACT_MAX_DELTA_V=${EXECUTION_CONTRACT_MAX_DELTA_V}" \
   "EXECUTION_CONTRACT_MAX_DELTA_OMEGA=${EXECUTION_CONTRACT_MAX_DELTA_OMEGA}" \
+  "V_SAFE_MAX=${V_SAFE_MAX}" \
+  "SPEED_SAFETY_TOLERANCE=${SPEED_SAFETY_TOLERANCE}" \
   "DELAY_PHASE_LINEAR_DELAY_SEC=${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   "DELAY_PHASE_ANGULAR_DELAY_SEC=${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   "ALPHA_MAX=${ALPHA_MAX}" \
@@ -504,6 +514,10 @@ for kv in \
   "PLANNER_STARTUP_SEC=${PLANNER_STARTUP_SEC}"; do
   require_number "${kv%%=*}" "${kv#*=}"
 done
+awk -v value="${V_SAFE_MAX}" 'BEGIN {exit !(value > 0.0)}' || \
+  fail "V_SAFE_MAX must be > 0, got '${V_SAFE_MAX}'"
+awk -v value="${SPEED_SAFETY_TOLERANCE}" 'BEGIN {exit !(value >= 0.0)}' || \
+  fail "SPEED_SAFETY_TOLERANCE must be >= 0, got '${SPEED_SAFETY_TOLERANCE}'"
 case "${IMU_SUBSCRIBER_QUEUE_SIZE}" in
   ''|*[!0-9]*) fail "IMU_SUBSCRIBER_QUEUE_SIZE must be an integer in [1,1000], got '${IMU_SUBSCRIBER_QUEUE_SIZE}'" ;;
 esac
@@ -662,6 +676,9 @@ planner_cmd=(
   "execution_contract_fail_closed_on_post_limit_change:=${EXECUTION_CONTRACT_FAIL_CLOSED}"
   "execution_contract_max_post_limit_delta_v:=${EXECUTION_CONTRACT_MAX_DELTA_V}"
   "execution_contract_max_post_limit_delta_omega:=${EXECUTION_CONTRACT_MAX_DELTA_OMEGA}"
+  "speed_safety_enable:=${SPEED_SAFETY_ENABLE}"
+  "v_safe_max:=${V_SAFE_MAX}"
+  "speed_safety_tolerance:=${SPEED_SAFETY_TOLERANCE}"
   "v_ref:=${V_REF}"
   "w_slosh:=${W_SLOSH}"
   "w_smooth:=${W_SMOOTH}"
@@ -777,6 +794,9 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "execution_contract_fail_closed=${EXECUTION_CONTRACT_FAIL_CLOSED}"
   echo "execution_contract_max_delta_v=${EXECUTION_CONTRACT_MAX_DELTA_V}"
   echo "execution_contract_max_delta_omega=${EXECUTION_CONTRACT_MAX_DELTA_OMEGA}"
+  echo "speed_safety_enable=${SPEED_SAFETY_ENABLE}"
+  echo "v_safe_max=${V_SAFE_MAX}"
+  echo "speed_safety_tolerance=${SPEED_SAFETY_TOLERANCE}"
   echo "observer_selection_topic=${OBSERVER_SELECTION_TOPIC}"
   echo "recorder_active_timeout_sec=${RECORDER_ACTIVE_TIMEOUT_SEC}"
   echo "record_rgb=${RECORD_RGB}"
@@ -1074,6 +1094,9 @@ start_recorder() {
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
   DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+  SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE}" \
+  V_SAFE_MAX="${V_SAFE_MAX}" \
+  SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE}" \
   IMU_SHADOW_ENABLE="${IMU_SHADOW_ENABLE}" \
   IMU_TOPIC="${IMU_TOPIC}" \
   IMU_SUBSCRIBER_QUEUE_SIZE="${IMU_SUBSCRIBER_QUEUE_SIZE}" \

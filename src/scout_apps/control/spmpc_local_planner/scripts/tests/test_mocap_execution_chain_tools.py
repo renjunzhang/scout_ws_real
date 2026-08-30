@@ -30,6 +30,10 @@ POSTFLIGHT = load_module(
     "validate_mocap_execution_chain_bag",
     ANALYSIS_ROOT / "validate_mocap_execution_chain_bag.py",
 )
+DELAY_GATE = load_module(
+    "validate_mocap_b0_delay_mode_summary",
+    ANALYSIS_ROOT / "validate_mocap_b0_delay_mode_summary.py",
+)
 
 
 class MocapPathValidationTest(unittest.TestCase):
@@ -233,6 +237,69 @@ class PostflightMathTest(unittest.TestCase):
         self.assertLess(metrics["yaw_deviation_p95_rad"], 0.001)
 
 
+class B0DelayGateTest(unittest.TestCase):
+    def make_summary(self, mode="fixed_robot_only"):
+        fixed = mode == "fixed_robot_only"
+        return {
+            "topics": {"critical_missing": []},
+            "intent": {
+                "variant": "B0",
+                "delay_phase_mode": mode,
+                "v_ref": "0.10",
+                "speed_safety_enable": "true",
+                "v_safe_max": "0.15",
+                "speed_safety_tolerance": "0.0001",
+            },
+            "observed": {"controller_variant_last": "B0"},
+            "metrics": {
+                "delay_state": {
+                    "delay_compensation_applied_frac": 1.0 if fixed else 0.0,
+                    "robot_delay_compensation_applied_frac": 1.0 if fixed else 0.0,
+                    "liquid_delay_compensation_applied_frac": 0.0,
+                    "history_complete_frac": 1.0,
+                    "predicted_valid_frac": 1.0,
+                },
+                "effective_config_last": {
+                    "delay_phase_mode_code": 4.0 if fixed else 2.0,
+                    "v_ref": 0.10,
+                    "platform_v_max": 0.8,
+                    "speed_safety_enable": 1.0,
+                    "v_safe_max": 0.15,
+                    "v_max": 0.15,
+                    "effective_v_max": 0.15,
+                    "speed_safety_tolerance": 0.0001,
+                },
+                "command_intervention": {
+                    "solver_cmd_v_abs": {"n": 10, "max": 0.15},
+                    "post_gate_cmd_v_abs": {"n": 10, "max": 0.15},
+                    "published_cmd_v_abs": {"n": 10, "max": 0.15},
+                    "speed_safety_violation_frac": 0.0,
+                    "speed_safety_latched_frac": 0.0,
+                },
+                "cmd_vel": {"linear_x_abs": {"n": 10, "max": 0.15}},
+            },
+        }
+
+    def test_fixed_and_shadow_contracts_pass_when_only_application_differs(self):
+        fixed = DELAY_GATE.validate_summary(
+            self.make_summary("fixed_robot_only"), "fixed_robot_only", 4.0
+        )
+        shadow = DELAY_GATE.validate_summary(
+            self.make_summary("shadow"), "shadow", 2.0
+        )
+        self.assertTrue(fixed["pass"], fixed["failures"])
+        self.assertTrue(shadow["pass"], shadow["failures"])
+
+    def test_real_cmd_vel_overspeed_fails_gate(self):
+        summary = self.make_summary()
+        summary["metrics"]["cmd_vel"]["linear_x_abs"]["max"] = 0.151
+        report = DELAY_GATE.validate_summary(summary, "fixed_robot_only", 4.0)
+        self.assertFalse(report["pass"])
+        self.assertTrue(
+            any("bag_/cmd_vel.linear.x" in item for item in report["failures"])
+        )
+
+
 class ReleaseWiringTest(unittest.TestCase):
     def test_runner_requires_motion_arm_hash_and_mocap(self):
         wrapper = (SCRIPT_ROOT / "run_spmpc_mocap_execution_chain_trial.sh").read_text(
@@ -251,6 +318,47 @@ class ReleaseWiringTest(unittest.TestCase):
         self.assertIn('RECORD_MOCAP="${RECORD_MOCAP}"', runner)
         self.assertIn('RECORD_MOCAP_PATH="${RECORD_MOCAP_PATH}"', runner)
         self.assertIn('MOCAP_TRACKER="${MOCAP_TRACKER}"', runner)
+
+    def test_b0_delay_wrapper_freezes_agile_speed_and_mode_contract(self):
+        wrapper = (SCRIPT_ROOT / "run_spmpc_mocap_b0_delay_mode_trial.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('VARIANT="${VARIANT:-B0}"', wrapper)
+        self.assertIn('V_REF="${V_REF:-0.10}"', wrapper)
+        self.assertIn('SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE:-true}"', wrapper)
+        self.assertIn('V_SAFE_MAX="${V_SAFE_MAX:-0.15}"', wrapper)
+        self.assertIn(
+            'SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE:-0.0001}"',
+            wrapper,
+        )
+        self.assertIn("DELAY_PHASE_MODE must be shadow|fixed_robot_only", wrapper)
+        self.assertIn("speed_safety_enable:=", wrapper)
+        self.assertIn("v_safe_max:=", wrapper)
+        self.assertIn("validate_mocap_b0_delay_mode_summary.py", wrapper)
+        self.assertIn('--expected-mode "${DELAY_PHASE_MODE}"', wrapper)
+        self.assertNotIn("CONFIRM_HARD_SPEED_LIMIT", wrapper)
+
+    def test_common_runner_and_recorder_preserve_speed_safety_intent(self):
+        runner = (SCRIPT_ROOT / "run_spmpc_real_fixed_path_trial.sh").read_text(
+            encoding="utf-8"
+        )
+        recorder = (SCRIPT_ROOT / "record_spmpc_full_rgb_bag.sh").read_text(
+            encoding="utf-8"
+        )
+        for token in (
+            '"speed_safety_enable:=${SPEED_SAFETY_ENABLE}"',
+            '"v_safe_max:=${V_SAFE_MAX}"',
+            '"speed_safety_tolerance:=${SPEED_SAFETY_TOLERANCE}"',
+            'SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE}"',
+            'V_SAFE_MAX="${V_SAFE_MAX}"',
+            'SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE}"',
+        ):
+            self.assertIn(token, runner)
+        self.assertIn('echo "speed_safety_enable=${SPEED_SAFETY_ENABLE}"', recorder)
+        self.assertIn('echo "v_safe_max=${V_SAFE_MAX}"', recorder)
+        self.assertIn(
+            'echo "speed_safety_tolerance=${SPEED_SAFETY_TOLERANCE}"', recorder
+        )
 
     def test_static_smoke_cannot_start_motion(self):
         smoke = (SCRIPT_ROOT / "record_spmpc_mocap_static_smoke.sh").read_text(

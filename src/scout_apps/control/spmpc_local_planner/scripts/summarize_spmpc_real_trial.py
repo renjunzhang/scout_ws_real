@@ -74,6 +74,7 @@ ZERO_REASON_FIELDS = [
     "zero_due_to_waiting_for_tf",
     "zero_due_to_terminal_spin_fail",
     "zero_due_to_tracking_safety",
+    "zero_due_to_speed_safety",
 ]
 
 
@@ -346,6 +347,7 @@ def pair_state_deltas(raw_samples, solver_samples):
 
 
 def summarize_command_intervention(samples):
+    solver_v = series_field(samples, "solver_cmd_v")
     published_v = series_field(samples, "published_cmd_v")
     published_w = series_field(samples, "published_cmd_omega")
     post_gate_v = series_field(samples, "post_gate_cmd_v")
@@ -373,9 +375,26 @@ def summarize_command_intervention(samples):
         "angular_rate_limited_frac": angular_rate_limited_frac,
         "angular_accel_limited_frac": angular_accel_limited_frac,
         "command_limiter_frac": max(limiter_candidates) if limiter_candidates else float("nan"),
+        "solver_cmd_v_abs": numeric_summary(abs(value) for value in solver_v),
+        "post_gate_cmd_v_abs": numeric_summary(abs(value) for value in post_gate_v),
+        "published_cmd_v_abs": numeric_summary(abs(value) for value in published_v),
+        "speed_safety_violation_frac": fraction_true(
+            series_field(samples, "speed_safety_violation")
+        ),
+        "speed_safety_latched_frac": fraction_true(
+            series_field(samples, "speed_safety_latched")
+        ),
         "published_minus_post_gate_v_abs": numeric_summary(mismatch_v),
         "published_minus_post_gate_omega_abs": numeric_summary(mismatch_w),
         "zero_reason_counts": {field: int(sum(1 for s in samples if abs(s.get(field, 0.0)) > 0.5)) for field in ZERO_REASON_FIELDS},
+    }
+
+
+def summarize_cmd_vel(samples):
+    return {
+        "samples": len(samples),
+        "linear_x_abs": numeric_summary(abs(sample["v"]) for sample in samples),
+        "angular_z_abs": numeric_summary(abs(sample["omega"]) for sample in samples),
     }
 
 
@@ -388,6 +407,8 @@ def compare_intent_effective(sidecar_meta, effective_samples):
         ("delay_phase_linear_delay_sec", "delay_linear_sec", 1e-3),
         ("delay_phase_angular_delay_sec", "delay_angular_sec", 1e-3),
         ("v_ref", "v_ref", 1e-3),
+        ("v_safe_max", "v_safe_max", 1e-4),
+        ("speed_safety_tolerance", "speed_safety_tolerance", 1e-6),
         ("w_slosh", "w_slosh", 1e-3),
         ("slosh_height_max", "slosh_height_max", 1e-4),
     ]
@@ -401,6 +422,21 @@ def compare_intent_effective(sidecar_meta, effective_samples):
         effective = last[field]
         if finite(effective) and abs(intent - effective) > tol:
             result["mismatches"].append({"intent": meta_key, "effective_field": field, "intent_value": intent, "effective_value": effective})
+    raw_enable = sidecar_meta.get("speed_safety_enable")
+    if raw_enable is not None and finite(last.get("speed_safety_enable")):
+        expected_enable = str(raw_enable).strip().lower() in {
+            "1", "true", "yes", "on"
+        }
+        effective_enable = abs(float(last["speed_safety_enable"])) > 0.5
+        if expected_enable != effective_enable:
+            result["mismatches"].append(
+                {
+                    "intent": "speed_safety_enable",
+                    "effective_field": "speed_safety_enable",
+                    "intent_value": expected_enable,
+                    "effective_value": effective_enable,
+                }
+            )
     return result
 
 
@@ -460,6 +496,13 @@ def build_red_flags(summary):
     if bad_reasons or solver_fail_count > 0:
         detail = {"zero_reasons": bad_reasons, "status_fail_count": int(solver_fail_count)}
         flags.append({"code": "solver_fail_or_gate_fail", "detail": str(detail)})
+    if finite(cmd.get("speed_safety_violation_frac")) and cmd["speed_safety_violation_frac"] > 0.0:
+        flags.append(
+            {
+                "code": "speed_safety_violation",
+                "detail": f"violation_frac={fmt(cmd['speed_safety_violation_frac'])}",
+            }
+        )
 
     warm_start = summary["metrics"].get("warm_start", {})
     if warm_start.get("used_fallback_field_readable") is not True:
@@ -568,6 +611,9 @@ def summarize_bag(bag_path):
             "delay_phase_mode": sidecars["meta"].get("delay_phase_mode") or sidecars["meta"].get("DELAY_PHASE_MODE"),
             "delay_phase_linear_delay_sec": sidecars["meta"].get("delay_phase_linear_delay_sec") or sidecars["meta"].get("DELAY_PHASE_LINEAR_DELAY_SEC"),
             "delay_phase_angular_delay_sec": sidecars["meta"].get("delay_phase_angular_delay_sec") or sidecars["meta"].get("DELAY_PHASE_ANGULAR_DELAY_SEC"),
+            "speed_safety_enable": sidecars["meta"].get("speed_safety_enable") or sidecars["meta"].get("SPEED_SAFETY_ENABLE"),
+            "v_safe_max": sidecars["meta"].get("v_safe_max") or sidecars["meta"].get("V_SAFE_MAX"),
+            "speed_safety_tolerance": sidecars["meta"].get("speed_safety_tolerance") or sidecars["meta"].get("SPEED_SAFETY_TOLERANCE"),
             "goal_x": sidecars["meta"].get("goal_x") or sidecars["meta"].get("GOAL_X"),
             "goal_y": sidecars["meta"].get("goal_y") or sidecars["meta"].get("GOAL_Y"),
         },
@@ -609,6 +655,7 @@ def summarize_bag(bag_path):
                 "h_modal_p95_pred_mm": numeric_summary(series_field_any(horizon, ["h_modal_p95_pred_mm", "h_p95_pred_mm", "h_p95_pred", "h_p95"])),
             },
             "command_intervention": summarize_command_intervention(cmd_samples),
+            "cmd_vel": summarize_cmd_vel(data["cmd_vel"]),
             "warm_start": {
                 "used_fallback_field_readable": bool(warm_start_fallback_values),
                 "valid_frac": fraction_true(series_field(warm_start, "valid")),

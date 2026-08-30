@@ -15,6 +15,7 @@ PATH_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_s_path.py"
 MAP_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_field_map.py"
 POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_mocap_execution_chain_bag.py"
 SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
+DELAY_GATE_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_b0_delay_mode_summary.py"
 
 truthy() {
   case "${1:-}" in
@@ -33,7 +34,6 @@ ATTEMPT="${ATTEMPT:-01}"
 DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_robot_only}"
 VALIDATE_ONLY="${VALIDATE_ONLY:-true}"
 ARM_MOTION="${ARM_MOTION:-NO}"
-CONFIRM_HARD_SPEED_LIMIT="${CONFIRM_HARD_SPEED_LIMIT:-NO}"
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 
@@ -52,10 +52,22 @@ awk -v value="${W_SLOSH}" 'BEGIN {exit !(value == 0.0)}' || \
   fail "B0 delay diagnostic requires W_SLOSH=0.0"
 
 V_REF="${V_REF:-0.10}"
-MAX_DIAGNOSTIC_V_REF="0.10"
-awk -v value="${V_REF}" -v maximum="${MAX_DIAGNOSTIC_V_REF}" \
-  'BEGIN {exit !(value > 0.0 && maximum > 0.0 && value <= maximum)}' || \
-  fail "B0 delay diagnostic requires 0 < V_REF <= ${MAX_DIAGNOSTIC_V_REF} m/s"
+awk -v value="${V_REF}" \
+  'BEGIN {delta=value-0.10; if (delta < 0) delta=-delta; exit !(delta <= 1e-12)}' || \
+  fail "B0 delay diagnostic requires V_REF=0.10 m/s"
+
+SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE:-true}"
+truthy "${SPEED_SAFETY_ENABLE}" || \
+  fail "B0 delay diagnostic requires SPEED_SAFETY_ENABLE=true"
+SPEED_SAFETY_ENABLE=true
+V_SAFE_MAX="${V_SAFE_MAX:-0.15}"
+SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE:-0.0001}"
+awk -v value="${V_SAFE_MAX}" \
+  'BEGIN {delta=value-0.15; if (delta < 0) delta=-delta; exit !(delta <= 1e-12)}' || \
+  fail "B0 delay diagnostic requires V_SAFE_MAX=0.15 m/s"
+awk -v value="${SPEED_SAFETY_TOLERANCE}" \
+  'BEGIN {delta=value-0.0001; if (delta < 0) delta=-delta; exit !(delta <= 1e-12)}' || \
+  fail "B0 delay diagnostic requires SPEED_SAFETY_TOLERANCE=0.0001 m/s"
 
 W_SMOOTH="${W_SMOOTH:-1.0}"
 W_ALPHA="${W_ALPHA:-1.0}"
@@ -123,6 +135,7 @@ PROTOCOL_META="${PROTOCOL_META:-${RUN_OUT_DIR}/${NAME}_protocol.env}"
 
 for required_file in \
   "${RUNNER}" "${PATH_VALIDATOR}" "${MAP_VALIDATOR}" "${POSTFLIGHT}" "${SUMMARIZER}" \
+  "${DELAY_GATE_VALIDATOR}" \
   "${PATH_FILE}" "${FIELD_MAP_FILE}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
@@ -159,6 +172,9 @@ validate_launch_contract() {
     observer_source:=processed_imu \
     observer_fallback_policy:=fail_closed \
     observer_latch_fallback:=false \
+    speed_safety_enable:="${SPEED_SAFETY_ENABLE}" \
+    v_safe_max:="${V_SAFE_MAX}" \
+    speed_safety_tolerance:="${SPEED_SAFETY_TOLERANCE}" \
     v_ref:="${V_REF}" \
     w_slosh:=0.0 \
     w_smooth:=1.0 \
@@ -174,8 +190,12 @@ validate_launch_contract() {
     "/spmpc_local_planner/imu_shadow/enable: true"
     "/spmpc_local_planner/slosh_observer/source: processed_imu"
     "/spmpc_local_planner/slosh_observer/fallback_policy: fail_closed"
+    "/spmpc_local_planner/speed_safety/enable: true"
+    "/spmpc_local_planner/speed_safety/v_safe_max: 0.15"
+    "/spmpc_local_planner/speed_safety/tolerance: 0.0001"
     "/spmpc_local_planner/variants/B0/slosh_enable: false"
     "/spmpc_local_planner/variants/B0/w_slosh: 0.0"
+    "/spmpc_local_planner/variants/B0/v_ref: 0.1"
   )
   local expected_line
   for expected_line in "${expected_lines[@]}"; do
@@ -194,6 +214,7 @@ if truthy "${VALIDATE_ONLY}"; then
   echo "  mode/code      = ${DELAY_PHASE_MODE}/${EXPECTED_MODE_CODE}"
   echo "  robot state    = $([[ "${DELAY_PHASE_MODE}" == "fixed_robot_only" ]] && echo predicted || echo measured)"
   echo "  liquid state   = diagnostic only; B0 does not consume it"
+  echo "  speed contract = v_ref=0.10; hard ceiling=0.15 m/s; fail-closed=true"
   echo "  path sha256    = ${FROZEN_PATH_SHA256}"
   echo "  map sha256     = ${FROZEN_MAP_SHA256}"
   echo "  output         = ${BAG_PATH}"
@@ -203,8 +224,6 @@ fi
 
 [[ "${ARM_MOTION}" == "YES" ]] || \
   fail "real motion is disarmed; keep VALIDATE_ONLY=true until ready, then set ARM_MOTION=YES"
-[[ "${CONFIRM_HARD_SPEED_LIMIT}" == "YES" ]] || \
-  fail "do not move yet: set CONFIRM_HARD_SPEED_LIMIT=YES only after the independent hard-speed gate is implemented and verified"
 
 for output in \
   "${BAG_PATH}" "${BAG_PATH}.active" "${POSTFLIGHT_REPORT}" \
@@ -240,7 +259,7 @@ fi
 
 mkdir -p "${RUN_OUT_DIR}"
 {
-  printf 'protocol_id=%s\n' 'SMPCC_mocap_b0_delay_mode_diagnostic_v1'
+  printf 'protocol_id=%s\n' 'SMPCC_mocap_b0_delay_mode_diagnostic_v2'
   printf 'run_class=%s\n' 'B0_DELAY_DIAGNOSTIC'
   printf 'formal_trial_consumed=%s\n' 'false'
   printf 'delay_test_id=%s\n' "${DELAY_TEST_ID}"
@@ -253,7 +272,9 @@ mkdir -p "${RUN_OUT_DIR}"
   printf 'delay_phase_mode_code=%s\n' "${EXPECTED_MODE_CODE}"
   printf 'delay_phase_linear_delay_sec=%s\n' "${DELAY_PHASE_LINEAR_DELAY_SEC}"
   printf 'delay_phase_angular_delay_sec=%s\n' "${DELAY_PHASE_ANGULAR_DELAY_SEC}"
-  printf 'hard_speed_limit_confirmed=%s\n' "${CONFIRM_HARD_SPEED_LIMIT}"
+  printf 'speed_safety_enable=%s\n' "${SPEED_SAFETY_ENABLE}"
+  printf 'v_safe_max=%s\n' "${V_SAFE_MAX}"
+  printf 'speed_safety_tolerance=%s\n' "${SPEED_SAFETY_TOLERANCE}"
   printf 'path_file=%s\n' "${PATH_FILE}"
   printf 'path_sha256=%s\n' "${FROZEN_PATH_SHA256}"
   printf 'map_file=%s\n' "$(readlink -f "${FIELD_MAP_FILE}")"
@@ -269,19 +290,22 @@ echo "  diagnostic    = ${DELAY_TEST_ID}/${ATTEMPT}; formal_trial_consumed=false
 echo "  mode/code     = ${DELAY_PHASE_MODE}/${EXPECTED_MODE_CODE}"
 echo "  variant       = B0; slosh=false; w_slosh=0; v_ref=${V_REF}"
 echo "  delay         = ${DELAY_PHASE_LINEAR_DELAY_SEC}/${DELAY_PHASE_ANGULAR_DELAY_SEC} s"
+echo "  speed safety  = enabled; v_ref=${V_REF}; v_safe_max=${V_SAFE_MAX} m/s"
 echo "  path          = ${PATH_FILE}"
 echo "  output        = ${BAG_PATH}"
 echo "============================================================="
 
 DATE="${DATE}" STAMP="${STAMP}" PILOT_MODE=true PILOT_METHOD=B0 \
 PILOT_RECORD_RGB=false PILOT_RECORD_ONLINE_LIQUID=false \
-PILOT_CONDITION=SMPCC_mocap_b0_delay_mode_diagnostic_v1 \
+PILOT_CONDITION=SMPCC_mocap_b0_delay_mode_diagnostic_v2 \
 RUN_LABEL="${RUN_LABEL}" NAME="${NAME}" RUN_OUT_DIR="${RUN_OUT_DIR}" \
 PATH_SOURCE_MODE=replay PATH_FILE="${PATH_FILE}" \
 PATH_EXPECTED_SHA256="${FROZEN_PATH_SHA256}" REQUIRE_PATH_HASH=true \
 START_POS_TOL="${START_POS_TOL}" START_YAW_TOL="${START_YAW_TOL}" \
 START_HOLD_SEC="${START_HOLD_SEC}" START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC}" \
-V_REF="${V_REF}" W_SLOSH=0.0 W_SMOOTH=1.0 W_ALPHA=1.0 W_DU_A=1.0 W_DU_VS=1.0 \
+V_REF="${V_REF}" SPEED_SAFETY_ENABLE="${SPEED_SAFETY_ENABLE}" \
+V_SAFE_MAX="${V_SAFE_MAX}" SPEED_SAFETY_TOLERANCE="${SPEED_SAFETY_TOLERANCE}" \
+W_SLOSH=0.0 W_SMOOTH=1.0 W_ALPHA=1.0 W_DU_A=1.0 W_DU_VS=1.0 \
 DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
 DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
 DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
@@ -316,96 +340,9 @@ python3 "${POSTFLIGHT}" "${BAG_PATH}" \
 python3 "${SUMMARIZER}" "${BAG_PATH}" --out-dir "${RUN_OUT_DIR}"
 [[ -s "${SUMMARY_JSON}" ]] || fail "summary missing after postflight: ${SUMMARY_JSON}"
 
-python3 - "${SUMMARY_JSON}" "${DELAY_PHASE_MODE}" "${EXPECTED_MODE_CODE}" "${DELAY_GATE_REPORT}" <<'PY'
-import json
-import math
-import sys
-from pathlib import Path
-
-summary_path = Path(sys.argv[1])
-expected_mode = sys.argv[2]
-expected_code = float(sys.argv[3])
-report_path = Path(sys.argv[4])
-summary = json.loads(summary_path.read_text(encoding="utf-8"))
-
-failures = []
-intent = summary.get("intent", {})
-observed = summary.get("observed", {})
-metrics = summary.get("metrics", {})
-delay = metrics.get("delay_state", {})
-effective = metrics.get("effective_config_last", {})
-
-
-def finite(value):
-    try:
-        return value is not None and math.isfinite(float(value))
-    except (TypeError, ValueError):
-        return False
-
-
-def require_fraction(name, minimum=None, maximum=None):
-    value = delay.get(name)
-    if not finite(value):
-        failures.append(f"{name} is missing/non-finite")
-        return
-    value = float(value)
-    if minimum is not None and value < minimum:
-        failures.append(f"{name}={value:.4f} < {minimum:.4f}")
-    if maximum is not None and value > maximum:
-        failures.append(f"{name}={value:.4f} > {maximum:.4f}")
-
-
-if str(intent.get("delay_phase_mode", "")) != expected_mode:
-    failures.append(
-        f"intent delay mode {intent.get('delay_phase_mode')!r} != {expected_mode!r}"
-    )
-if str(intent.get("variant", "")) != "B0":
-    failures.append(f"intent variant {intent.get('variant')!r} != 'B0'")
-if str(observed.get("controller_variant_last", "")) != "B0":
-    failures.append(
-        f"observed variant {observed.get('controller_variant_last')!r} != 'B0'"
-    )
-effective_code = effective.get("delay_phase_mode_code")
-if not finite(effective_code) or abs(float(effective_code) - expected_code) > 1e-6:
-    failures.append(
-        f"effective delay mode code {effective_code!r} != {expected_code:.0f}"
-    )
-critical_missing = summary.get("topics", {}).get("critical_missing", [])
-if critical_missing:
-    failures.append("critical topics missing: " + ", ".join(critical_missing))
-
-if expected_mode == "fixed_robot_only":
-    require_fraction("delay_compensation_applied_frac", minimum=0.95)
-    require_fraction("robot_delay_compensation_applied_frac", minimum=0.95)
-    require_fraction("liquid_delay_compensation_applied_frac", maximum=0.05)
-    require_fraction("history_complete_frac", minimum=0.95)
-else:
-    require_fraction("delay_compensation_applied_frac", maximum=0.05)
-    require_fraction("robot_delay_compensation_applied_frac", maximum=0.05)
-    require_fraction("liquid_delay_compensation_applied_frac", maximum=0.05)
-    # cmd_odom_alignment includes the intentional pre-release
-    # NO_REFERENCE/IMU-bias window, so shadow_valid_frac is not expected to be
-    # near one over the whole bag.  predicted_state covers the actual predictor
-    # output without misclassifying that stationary startup interval.
-    require_fraction("predicted_valid_frac", minimum=0.95)
-    require_fraction("history_complete_frac", minimum=0.95)
-
-report = {
-    "schema": "spmpc_mocap_b0_delay_mode_gate_v1",
-    "summary": str(summary_path),
-    "expected_mode": expected_mode,
-    "expected_mode_code": int(expected_code),
-    "observed_mode_code": effective_code,
-    "delay_state": delay,
-    "pass": not failures,
-    "failures": failures,
-}
-report_path.write_text(
-    json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
-)
-print(json.dumps(report, ensure_ascii=False, indent=2))
-if failures:
-    raise SystemExit(2)
-PY
+python3 "${DELAY_GATE_VALIDATOR}" "${SUMMARY_JSON}" \
+  --expected-mode "${DELAY_PHASE_MODE}" \
+  --expected-code "${EXPECTED_MODE_CODE}" \
+  --report "${DELAY_GATE_REPORT}"
 
 echo "[${SCRIPT_NAME}] PASS: ${DELAY_PHASE_MODE} ${DELAY_TEST_ID}/${ATTEMPT}; R01--R05 remain unused"

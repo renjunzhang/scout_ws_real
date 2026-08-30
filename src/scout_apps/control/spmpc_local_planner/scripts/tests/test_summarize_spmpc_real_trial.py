@@ -94,6 +94,57 @@ class SummarizeSpmpcRealTrialTest(unittest.TestCase):
         self.assertIn("robot_only_delay_not_applied", codes)
         self.assertIn("robot_only_delay_touched_liquid", codes)
 
+    def test_speed_safety_summary_uses_absolute_stage_and_cmd_vel_maxima(self):
+        command = MODULE.summarize_command_intervention(
+            [
+                {
+                    "solver_cmd_v": -0.12,
+                    "post_gate_cmd_v": -0.11,
+                    "post_gate_cmd_omega": 0.2,
+                    "published_cmd_v": -0.10,
+                    "published_cmd_omega": 0.2,
+                    "speed_safety_violation": 0.0,
+                    "speed_safety_latched": 0.0,
+                },
+                {
+                    "solver_cmd_v": 0.15,
+                    "post_gate_cmd_v": 0.14,
+                    "post_gate_cmd_omega": -0.2,
+                    "published_cmd_v": 0.13,
+                    "published_cmd_omega": -0.2,
+                    "speed_safety_violation": 0.0,
+                    "speed_safety_latched": 0.0,
+                },
+            ]
+        )
+        self.assertAlmostEqual(command["solver_cmd_v_abs"]["max"], 0.15)
+        self.assertAlmostEqual(command["published_cmd_v_abs"]["max"], 0.13)
+        self.assertEqual(command["speed_safety_violation_frac"], 0.0)
+
+        cmd_vel = MODULE.summarize_cmd_vel(
+            [{"v": -0.15, "omega": 0.1}, {"v": 0.10, "omega": -0.3}]
+        )
+        self.assertAlmostEqual(cmd_vel["linear_x_abs"]["max"], 0.15)
+
+    def test_speed_safety_intent_effective_mismatch_is_detected(self):
+        compared = MODULE.compare_intent_effective(
+            {
+                "speed_safety_enable": "true",
+                "v_safe_max": "0.15",
+                "speed_safety_tolerance": "0.0001",
+            },
+            [
+                {
+                    "speed_safety_enable": 0.0,
+                    "v_safe_max": 0.20,
+                    "speed_safety_tolerance": 0.0001,
+                }
+            ],
+        )
+        fields = {item["effective_field"] for item in compared["mismatches"]}
+        self.assertIn("speed_safety_enable", fields)
+        self.assertIn("v_safe_max", fields)
+
 
 if __name__ == "__main__":
     unittest.main()
