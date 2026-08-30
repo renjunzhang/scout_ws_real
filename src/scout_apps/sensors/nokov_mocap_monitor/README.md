@@ -471,6 +471,24 @@ run_mocap_imu_calibration_sequence.sh 会启动上述 recorder，并用单个长
     VALIDATE_ONLY=true MOCAP_TRACKER=Tracker0 \
     bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_imu_calibration_sequence.sh
 
+### 9.5 NOKOV 相对 IMU 延迟快速测量
+
+`run_mocap_imu_relative_latency_trial.sh` 复用第 9.3 节的只录制 recorder，它自身不发布 `/cmd_vel`。脚本会依次录制 5 s 静止、30 s 左右 yaw 换向和 5 s 静止，然后自动从原始 VRPN pose 求 yaw 角速度，与 IMU `angular_velocity.z` 做互相关。
+
+在线检查但不录包：
+
+    VALIDATE_ONLY=true MOCAP_TRACKER=Tracker0 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_imu_relative_latency_trial.sh
+
+实际快速测量：
+
+    LATENCY_TEST_ID=N01 ATTEMPT=01 MOCAP_TRACKER=Tracker0 \
+    bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_imu_relative_latency_trial.sh
+
+进入运动阶段后，操作者用 Scout 遥控器、受监督的 teleop 或安全的人工方式让车约每 1--2 s 左右换向，至少 10 次。默认拒绝已有 `/cmd_vel` 发布者；若明确使用受监督 teleop，可显式设置 `ALLOW_EXISTING_CMD_PUBLISHER=true`。
+
+结束后生成 bag、SHA-256、`*_relative_latency.json`、`*_relative_latency.md`、对齐信号 CSV 和互相关图。结果正值表示 NOKOV 比 IMU 晚，负值表示 NOKOV 更早或 IMU 更晚。这项结果只能称为“NOKOV 相对 IMU 延迟”，不能称为 NOKOV 绝对延迟。
+
 ---
 
 ## 10. 诊断脚本
