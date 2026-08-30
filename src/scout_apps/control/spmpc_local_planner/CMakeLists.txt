@@ -95,6 +95,7 @@ add_library(${PROJECT_NAME}
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
   src/core/slosh_risk_governor.cpp
+  src/core/speed_safety_contract.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
   src/reference/reference_path.cpp
@@ -248,6 +249,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_control_cycle_contract test/test_control_cycle_contract.cpp)
   if(TARGET test_control_cycle_contract)
     target_link_libraries(test_control_cycle_contract
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_speed_safety_contract test/test_speed_safety_contract.cpp)
+  if(TARGET test_speed_safety_contract)
+    target_link_libraries(test_speed_safety_contract
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

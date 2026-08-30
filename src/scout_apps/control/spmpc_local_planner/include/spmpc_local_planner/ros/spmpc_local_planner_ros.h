@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/core/slosh_risk_governor.h"
+#include "spmpc_local_planner/core/speed_safety_contract.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
 #include "spmpc_local_planner/estimation/slosh_observer_bank.h"
@@ -145,6 +146,7 @@ private:
     DelayPhaseParams delay_phase_params_;
     StateTimingParams state_timing_params_;
     CommandExecutionContractParams command_contract_params_;
+    SpeedSafetyContract speed_safety_contract_;
     EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
     ros::Time last_odom_receive_stamp_;

@@ -76,6 +76,11 @@ struct CommandInterventionDebug {
     bool angular_rate_limited = false;
     bool angular_accel_limited = false;
     bool publish_cmd_vel = false;
+    // Appended diagnostics for the independent hard linear-speed contract.
+    bool zero_due_to_speed_safety = false;
+    bool speed_safety_violation = false;
+    bool speed_safety_latched = false;
+    double v_safe_max = 0.0;
 };
 
 struct StateTimingParams {
@@ -159,6 +164,11 @@ struct ControlCycleAuditDebug {
 
     ExcitationAuditDebug odom_excitation;
     ExcitationAuditDebug imu_excitation;
+
+    bool zero_due_to_speed_safety = false;
+    bool speed_safety_violation = false;
+    bool speed_safety_latched = false;
+    double v_safe_max = 0.0;
 };
 
 struct OdomTimingDebug {

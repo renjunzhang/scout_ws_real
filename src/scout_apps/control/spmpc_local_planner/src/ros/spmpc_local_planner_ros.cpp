@@ -380,6 +380,33 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
     pnh_.param("robot/alpha_max", solver_params.alpha_max, solver_params.alpha_max);
+    const double platform_v_max = solver_params.v_max;
+    SpeedSafetyParams speed_safety_params;
+    pnh_.param("speed_safety/enable",
+               speed_safety_params.enable,
+               speed_safety_params.enable);
+    pnh_.param("speed_safety/v_safe_max",
+               speed_safety_params.v_safe_max,
+               speed_safety_params.v_safe_max);
+    pnh_.param("speed_safety/tolerance",
+               speed_safety_params.tolerance,
+               speed_safety_params.tolerance);
+    std::string speed_safety_error;
+    if (!speed_safety_contract_.configure(
+            speed_safety_params, platform_v_max, &speed_safety_error)) {
+        ROS_FATAL("[spmpc_local_planner] invalid speed_safety contract: %s "
+                  "(enable=%s platform_v_max=%.6f v_safe_max=%.6f tolerance=%.6f)",
+                  speed_safety_error.c_str(),
+                  boolText(speed_safety_params.enable),
+                  platform_v_max,
+                  speed_safety_params.v_safe_max,
+                  speed_safety_params.tolerance);
+        return false;
+    }
+    // Solver runtime bounds, v_s bounds, warm start, and solver command clamp
+    // all consume this single field.  No solver-internal duplicate ceiling is
+    // introduced by the diagnostic safety feature.
+    solver_params.v_max = speed_safety_contract_.effectiveVMax();
     shared_cmd_linear_accel_max_ = solver_params.a_max;
     shared_cmd_angular_rate_max_ = solver_params.omega_max;
     shared_cmd_angular_accel_max_ = solver_params.alpha_max;
@@ -632,6 +659,13 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              boolText(solver_params.homotopy_enable),
              boolText(solver_params.corridor_enable),
              boolText(solver_params.corridor_hard_bound_enable));
+    ROS_INFO("[spmpc_local_planner] speed_safety enable=%s platform_v_max=%.6f "
+             "v_safe_max=%.6f effective_v_max=%.6f tolerance=%.6f",
+             boolText(speed_safety_contract_.enabled()),
+             speed_safety_contract_.platformVMax(),
+             speed_safety_contract_.params().v_safe_max,
+             speed_safety_contract_.effectiveVMax(),
+             speed_safety_contract_.params().tolerance);
 
     effective_config_.solver_backend_code = solverBackendCode(solver_params.solver_backend);
     effective_config_.control_frequency = control_frequency_;
@@ -691,6 +725,13 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.w_progress = variant_.w_progress;
     effective_config_.w_v = variant_.w_v;
     effective_config_.w_vs = variant_.w_vs;
+    effective_config_.platform_v_max = speed_safety_contract_.platformVMax();
+    effective_config_.speed_safety_enable =
+        speed_safety_contract_.enabled() ? 1.0 : 0.0;
+    effective_config_.v_safe_max = speed_safety_contract_.params().v_safe_max;
+    effective_config_.effective_v_max = speed_safety_contract_.effectiveVMax();
+    effective_config_.speed_safety_tolerance =
+        speed_safety_contract_.params().tolerance;
 
     problem_.configure(solver_params, variant_);
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
@@ -1121,10 +1162,22 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
     CommandInterventionDebug debug = intervention;
+    debug.v_safe_max = speed_safety_contract_.params().v_safe_max;
+    debug.speed_safety_latched =
+        debug.speed_safety_latched || speed_safety_contract_.latched();
+    debug.zero_due_to_speed_safety =
+        debug.zero_due_to_speed_safety || speed_safety_contract_.latched();
     debug.publish_cmd_vel = publish_cmd_vel_;
     debug.published_cmd_v = 0.0;
     debug.published_cmd_omega = 0.0;
     diagnostics_.publishCommandIntervention(debug);
+    if (audit) {
+        audit->v_safe_max = speed_safety_contract_.params().v_safe_max;
+        audit->speed_safety_latched =
+            audit->speed_safety_latched || speed_safety_contract_.latched();
+        audit->zero_due_to_speed_safety =
+            audit->zero_due_to_speed_safety || speed_safety_contract_.latched();
+    }
     if (!publish_cmd_vel_) {
         if (audit) {
             audit->publish_cmd_vel = false;
@@ -1210,12 +1263,37 @@ void SpmpcLocalPlannerROS::publishCommand(
     const CommandInterventionDebug& intervention,
     ControlCycleAuditDebug* audit) {
     if (!publish_cmd_vel_) {
+        const auto speed_decision = speed_safety_contract_.inspect(
+            intervention.solver_cmd_v, desired.linear.x, desired.linear.x);
+        const bool speed_fail_closed =
+            speed_decision.enabled && speed_decision.latched;
         CommandInterventionDebug debug = intervention;
+        debug.zero_due_to_speed_safety = speed_fail_closed;
+        debug.speed_safety_violation = speed_decision.violation;
+        debug.speed_safety_latched = speed_decision.latched;
+        debug.v_safe_max = speed_decision.v_safe_max;
         debug.publish_cmd_vel = false;
         diagnostics_.publishCommandIntervention(debug);
+        if (speed_fail_closed) {
+            diagnostics_.publishStatus(
+                speed_decision.violation
+                    ? "SPEED_SAFETY_CONTRACT_VIOLATION"
+                    : "SPEED_SAFETY_CONTRACT_LATCHED");
+        }
         if (audit) {
             audit->publish_cmd_vel = false;
             audit->command_was_published = false;
+            audit->zero_due_to_speed_safety = speed_fail_closed;
+            audit->speed_safety_violation = speed_decision.violation;
+            audit->speed_safety_latched = speed_decision.latched;
+            audit->v_safe_max = speed_decision.v_safe_max;
+            if (speed_fail_closed) {
+                audit->command_accepted = false;
+                audit->safety_gate_intervened = true;
+                audit->status = speed_decision.violation
+                    ? "SPEED_SAFETY_CONTRACT_VIOLATION"
+                    : "SPEED_SAFETY_CONTRACT_LATCHED";
+            }
             diagnostics_.publishControlCycleAudit(
                 *audit, problem_.referenceFrameId());
         }
@@ -1229,6 +1307,11 @@ void SpmpcLocalPlannerROS::publishCommand(
     bool angular_accel_limited = false;
     auto cmd = applySharedCommandLimits(
         desired, stamp, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
+    const double publish_candidate_v = cmd.linear.x;
+    const auto speed_decision = speed_safety_contract_.inspect(
+        intervention.solver_cmd_v, desired.linear.x, publish_candidate_v);
+    const bool speed_fail_closed =
+        speed_decision.enabled && speed_decision.latched;
     const bool command_contract_violation =
         std::abs(cmd.linear.x - desired.linear.x) >
             command_contract_params_.max_post_limit_delta_v ||
@@ -1239,6 +1322,28 @@ void SpmpcLocalPlannerROS::publishCommand(
     if (contract_fail_closed) {
         cmd = geometry_msgs::Twist();
         diagnostics_.publishStatus("COMMAND_EXECUTION_CONTRACT_VIOLATION");
+    }
+    if (speed_fail_closed) {
+        cmd = geometry_msgs::Twist();
+        const char* status = speed_decision.violation
+            ? "SPEED_SAFETY_CONTRACT_VIOLATION"
+            : "SPEED_SAFETY_CONTRACT_LATCHED";
+        diagnostics_.publishStatus(status);
+        if (speed_decision.newly_latched) {
+            ROS_ERROR("[spmpc_local_planner] speed safety latched: status=%s "
+                      "solver_v=%.6f post_gate_v=%.6f publish_candidate_v=%.6f "
+                      "limit=%.6f tolerance=%.6f",
+                      speed_decision.status.c_str(),
+                      intervention.solver_cmd_v,
+                      desired.linear.x,
+                      publish_candidate_v,
+                      speed_decision.v_safe_max,
+                      speed_decision.tolerance);
+        } else {
+            ROS_ERROR_THROTTLE(
+                1.0,
+                "[spmpc_local_planner] speed safety remains latched; publishing zero");
+        }
     }
     CommandPublishMeta meta;
     meta.is_zero_cmd = std::abs(cmd.linear.x) <= 1e-9 && std::abs(cmd.angular.z) <= 1e-9;
@@ -1255,6 +1360,10 @@ void SpmpcLocalPlannerROS::publishCommand(
     debug.angular_rate_limited = angular_rate_limited;
     debug.angular_accel_limited = angular_accel_limited;
     debug.zero_due_to_command_contract = contract_fail_closed;
+    debug.zero_due_to_speed_safety = speed_fail_closed;
+    debug.speed_safety_violation = speed_decision.violation;
+    debug.speed_safety_latched = speed_decision.latched;
+    debug.v_safe_max = speed_decision.v_safe_max;
     debug.publish_cmd_vel = true;
     diagnostics_.publishCommandIntervention(debug);
     cmd_pub_.publish(cmd);
@@ -1264,6 +1373,10 @@ void SpmpcLocalPlannerROS::publishCommand(
         audit->publish_cmd_vel = true;
         audit->command_was_published = true;
         audit->command_contract_violation = command_contract_violation;
+        audit->zero_due_to_speed_safety = speed_fail_closed;
+        audit->speed_safety_violation = speed_decision.violation;
+        audit->speed_safety_latched = speed_decision.latched;
+        audit->v_safe_max = speed_decision.v_safe_max;
         audit->linear_limited = linear_limited;
         audit->angular_rate_limited = angular_rate_limited;
         audit->angular_accel_limited = angular_accel_limited;
@@ -1271,6 +1384,13 @@ void SpmpcLocalPlannerROS::publishCommand(
         audit->published_cmd_omega = cmd.angular.z;
         if (contract_fail_closed) {
             audit->status = "COMMAND_EXECUTION_CONTRACT_VIOLATION";
+        }
+        if (speed_fail_closed) {
+            audit->command_accepted = false;
+            audit->safety_gate_intervened = true;
+            audit->status = speed_decision.violation
+                ? "SPEED_SAFETY_CONTRACT_VIOLATION"
+                : "SPEED_SAFETY_CONTRACT_LATCHED";
         }
         diagnostics_.publishControlCycleAudit(
             *audit, problem_.referenceFrameId());
@@ -1500,6 +1620,29 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         static_cast<std::int64_t>(cycle_start.toNSec());
     cycle_audit.variant = variant_.name;
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
+    cycle_audit.v_safe_max = speed_safety_contract_.params().v_safe_max;
+
+    // A speed violation is process-lifetime fail-closed.  Do not continue
+    // solving after the first violation: every subsequent cycle publishes an
+    // explicit zero until the planner node is restarted.
+    if (speed_safety_contract_.latched()) {
+        diagnostics_.publishStatus("SPEED_SAFETY_CONTRACT_LATCHED");
+        ROS_ERROR_THROTTLE(
+            1.0,
+            "[spmpc_local_planner] speed safety is latched; restart the node "
+            "after diagnosing the overspeed source");
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_speed_safety = true;
+        intervention.speed_safety_latched = true;
+        intervention.v_safe_max = speed_safety_contract_.params().v_safe_max;
+        cycle_audit.status = "SPEED_SAFETY_CONTRACT_LATCHED";
+        cycle_audit.command_accepted = false;
+        cycle_audit.safety_gate_intervened = true;
+        cycle_audit.zero_due_to_speed_safety = true;
+        cycle_audit.speed_safety_latched = true;
+        publishZeroCommand(intervention, &cycle_audit);
+        return;
+    }
 
     if (!have_odom_) {
         resetTerminalSpinFailGate();

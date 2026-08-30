@@ -142,10 +142,10 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs";
-    msg.layout.dim[0].size = 51;
-    msg.layout.dim[0].stride = 51;
-    msg.data.resize(51, 0.0f);
+        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs,platform_v_max,speed_safety_enable,v_safe_max,effective_v_max,speed_safety_tolerance";
+    msg.layout.dim[0].size = 56;
+    msg.layout.dim[0].stride = 56;
+    msg.data.resize(56, 0.0f);
     msg.data[0] = static_cast<float>(config.solver_backend_code);
     msg.data[1] = static_cast<float>(config.control_frequency);
     msg.data[2] = static_cast<float>(config.dt);
@@ -197,6 +197,11 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[48] = static_cast<float>(config.w_progress);
     msg.data[49] = static_cast<float>(config.w_v);
     msg.data[50] = static_cast<float>(config.w_vs);
+    msg.data[51] = static_cast<float>(config.platform_v_max);
+    msg.data[52] = static_cast<float>(config.speed_safety_enable);
+    msg.data[53] = static_cast<float>(config.v_safe_max);
+    msg.data[54] = static_cast<float>(config.effective_v_max);
+    msg.data[55] = static_cast<float>(config.speed_safety_tolerance);
     effective_config_pub_.publish(msg);
 }
 
@@ -283,10 +288,10 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_waiting_for_slosh_observer,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,zero_due_to_command_contract,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel";
-    msg.layout.dim[0].size = 19;
-    msg.layout.dim[0].stride = 19;
-    msg.data.resize(19, 0.0f);
+        "solver_cmd_v,solver_cmd_omega,post_gate_cmd_v,post_gate_cmd_omega,published_cmd_v,published_cmd_omega,output_success,zero_due_to_solver_failure,zero_due_to_waiting_for_odom,zero_due_to_waiting_for_reference,zero_due_to_waiting_for_tf,zero_due_to_waiting_for_slosh_observer,zero_due_to_terminal_spin_fail,zero_due_to_tracking_safety,zero_due_to_command_contract,linear_limited,angular_rate_limited,angular_accel_limited,publish_cmd_vel,zero_due_to_speed_safety,speed_safety_violation,speed_safety_latched,v_safe_max";
+    msg.layout.dim[0].size = 23;
+    msg.layout.dim[0].stride = 23;
+    msg.data.resize(23, 0.0f);
     msg.data[0] = static_cast<float>(intervention.solver_cmd_v);
     msg.data[1] = static_cast<float>(intervention.solver_cmd_omega);
     msg.data[2] = static_cast<float>(intervention.post_gate_cmd_v);
@@ -306,6 +311,10 @@ void DiagnosticsPublisher::publishCommandIntervention(const CommandInterventionD
     msg.data[16] = intervention.angular_rate_limited ? 1.0f : 0.0f;
     msg.data[17] = intervention.angular_accel_limited ? 1.0f : 0.0f;
     msg.data[18] = intervention.publish_cmd_vel ? 1.0f : 0.0f;
+    msg.data[19] = intervention.zero_due_to_speed_safety ? 1.0f : 0.0f;
+    msg.data[20] = intervention.speed_safety_violation ? 1.0f : 0.0f;
+    msg.data[21] = intervention.speed_safety_latched ? 1.0f : 0.0f;
+    msg.data[22] = static_cast<float>(intervention.v_safe_max);
     command_intervention_pub_.publish(msg);
 }
 
@@ -318,7 +327,7 @@ void DiagnosticsPublisher::publishControlCycleAudit(
             ? audit.timing.command_publish_stamp_ns
             : audit.timing.horizon_available_stamp_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 1;
+    msg.schema_version = 2;
     fillCycleTiming(audit.timing, msg);
     msg.command_publish_stamp = rosTimeFromNanoseconds(
         audit.timing.command_publish_stamp_ns);
@@ -383,6 +392,10 @@ void DiagnosticsPublisher::publishControlCycleAudit(
     msg.imu_omega = audit.imu_excitation.omega;
     msg.imu_alpha = audit.imu_excitation.alpha;
     msg.imu_sample_dt_sec = audit.imu_excitation.sample_dt_sec;
+    msg.zero_due_to_speed_safety = audit.zero_due_to_speed_safety;
+    msg.speed_safety_violation = audit.speed_safety_violation;
+    msg.speed_safety_latched = audit.speed_safety_latched;
+    msg.v_safe_max = audit.v_safe_max;
     control_cycle_audit_pub_.publish(msg);
 }
 

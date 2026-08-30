@@ -87,3 +87,10 @@ float64 imu_ay
 float64 imu_omega
 float64 imu_alpha
 float64 imu_sample_dt_sec
+
+# Independent hard linear-speed contract.  Fields are additive so offline
+# readers can distinguish a solver/gate failure from an overspeed latch.
+bool zero_due_to_speed_safety
+bool speed_safety_violation
+bool speed_safety_latched
+float64 v_safe_max

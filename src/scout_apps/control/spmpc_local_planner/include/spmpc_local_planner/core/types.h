@@ -171,6 +171,13 @@ struct EffectiveConfigDebug {
     double w_progress = 0.0;
     double w_v = 0.0;
     double w_vs = 0.0;
+    // Additive speed-safety identity.  v_max above remains the actual solver
+    // ceiling for backward-compatible readers.
+    double platform_v_max = 0.0;
+    double speed_safety_enable = 0.0;
+    double v_safe_max = 0.0;
+    double effective_v_max = 0.0;
+    double speed_safety_tolerance = 0.0;
 };
 
 // ROS-independent timestamps for one authoritative control cycle.  All stamps

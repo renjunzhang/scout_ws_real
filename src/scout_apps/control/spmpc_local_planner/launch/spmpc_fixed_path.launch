@@ -30,6 +30,9 @@
   <arg name="shared_angular_accel_max" default="-1.0"/>
   <arg name="shared_angular_accel_max_dt" default="-1.0"/>
   <arg name="alpha_max" default="-1.0" doc="诊断/消融用: 覆盖 robot/alpha_max; 负值时用 platform yaml"/>
+  <arg name="speed_safety_enable" default="false"/>
+  <arg name="v_safe_max" default="0.15"/>
+  <arg name="speed_safety_tolerance" default="0.0001"/>
   <arg name="delay_phase_mode" default="off" doc="off|monitor|shadow|fixed_closed_loop|fixed_robot_only; fixed_robot_only 仅预测机器人状态，保留当前液体测量"/>
   <arg name="delay_phase_linear_delay_sec" default="-1.0"/>
   <arg name="delay_phase_angular_delay_sec" default="-1.0"/>
@@ -74,6 +77,9 @@
     <arg name="shared_angular_accel_max" value="$(arg shared_angular_accel_max)"/>
     <arg name="shared_angular_accel_max_dt" value="$(arg shared_angular_accel_max_dt)"/>
     <arg name="alpha_max" value="$(arg alpha_max)"/>
+    <arg name="speed_safety_enable" value="$(arg speed_safety_enable)"/>
+    <arg name="v_safe_max" value="$(arg v_safe_max)"/>
+    <arg name="speed_safety_tolerance" value="$(arg speed_safety_tolerance)"/>
     <arg name="delay_phase_mode" value="$(arg delay_phase_mode)"/>
     <arg name="delay_phase_linear_delay_sec" value="$(arg delay_phase_linear_delay_sec)"/>
     <arg name="delay_phase_angular_delay_sec" value="$(arg delay_phase_angular_delay_sec)"/>

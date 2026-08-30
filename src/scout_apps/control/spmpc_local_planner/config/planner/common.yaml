@@ -164,6 +164,14 @@ slosh_risk_governor:
   beta_rate_down_per_sec: 2.0
   include_parabola_height: true
 
+# Independent hard linear-speed boundary for real-vehicle diagnostics.
+# Disabled by default so historical/formal runners keep their configured
+# platform ceiling unless they explicitly opt in.
+speed_safety:
+  enable: false
+  v_safe_max: 0.15
+  tolerance: 0.0001
+
 # P0/P1 delay-phase handling. Disabled by default.
 # monitor/shadow only publish diagnostics. fixed_closed_loop uses guarded predicted
 # execution state as SolverInput and falls back to raw state when guards fail.
