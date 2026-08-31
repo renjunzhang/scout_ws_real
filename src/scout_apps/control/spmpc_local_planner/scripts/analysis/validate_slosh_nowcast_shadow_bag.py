@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Fail-closed postflight for the B0 O0/I0/I1/L22 shadow trial."""
+"""Fail-closed postflight for O0/I0/I1/L22 observer-contract trials.
+
+The default arguments preserve the original B0 shadow protocol.  A
+slosh-enabled caller can explicitly require that the solver consumes liquid
+and that exactly one raw observer method (currently I0) is applied.
+"""
 
 import argparse
 import json
@@ -30,6 +35,22 @@ def parse_args():
     parser.add_argument("--max-future-skew-sec", type=float, default=0.005)
     parser.add_argument("--expected-v-safe-max", type=float, default=0.15)
     parser.add_argument("--speed-tolerance", type=float, default=0.0001)
+    parser.add_argument(
+        "--expected-solver-consumes-liquid",
+        action="store_true",
+        help="Require every active comparison to report a liquid-consuming solver.",
+    )
+    parser.add_argument(
+        "--expected-applied-method",
+        choices=("none", "O0", "I0", "I1", "L22"),
+        default="none",
+        help="The only method allowed and required to be applied in every active row.",
+    )
+    parser.add_argument(
+        "--protocol",
+        default="SMPCC_slosh_state_nowcast_dev_v1",
+        help="Protocol identifier written into the postflight report.",
+    )
     parser.add_argument("--linear-motion-threshold", type=float, default=0.03)
     parser.add_argument("--angular-motion-threshold", type=float, default=0.03)
     parser.add_argument("--motion-tail-sec", type=float, default=3.0)
@@ -68,6 +89,21 @@ def summary(values):
         "min": min(clean),
         "max": max(clean),
     }
+
+
+def applied_method_contract_failure(method_name, rows, expected_applied_method):
+    """Return one deterministic failure string for a method application contract."""
+    name = str(method_name).upper()
+    expected = str(expected_applied_method).upper()
+    applied = sum(bool(row.applied_to_solver) for row in rows)
+    if name == expected:
+        if applied != len(rows):
+            return "{} applied in {}/{} active rows, expected every row".format(
+                name, applied, len(rows)
+            )
+    elif applied:
+        return "{} unexpectedly entered the solver {} times".format(name, applied)
+    return None
 
 
 def target_time(message):
@@ -144,7 +180,7 @@ def validate(args):
         args.motion_tail_sec,
     )
     if window is None:
-        failures.append("no effective B0 motion window")
+        failures.append("no effective motion window")
     active_comparisons = [message for message in comparisons if in_window(target_time(message), window)]
     active_selections = [
         message for message in selections
@@ -166,18 +202,26 @@ def validate(args):
     if len(active_audits) < 10:
         failures.append("fewer than 10 control audits in motion window")
 
+    expected_applied_method = args.expected_applied_method.upper()
+    if expected_applied_method != "NONE" and not args.expected_solver_consumes_liquid:
+        failures.append(
+            "an applied liquid method requires --expected-solver-consumes-liquid"
+        )
+
     method_report = {}
     for method in METHODS:
         rows = [getattr(message, method) for message in active_comparisons]
         valid = [row for row in rows if bool(row.valid)]
         coverage = len(valid) / len(rows) if rows else 0.0
         applied = sum(bool(row.applied_to_solver) for row in rows)
+        expected_applied = method.upper() == expected_applied_method
         statuses = Counter(str(row.status) for row in rows)
         method_report[method.upper()] = {
             "count": len(rows),
             "valid": len(valid),
             "coverage": coverage,
             "applied_to_solver_count": applied,
+            "expected_applied": expected_applied,
             "statuses": dict(statuses),
         }
         if coverage < args.minimum_coverage:
@@ -186,12 +230,20 @@ def validate(args):
                     method.upper(), coverage, args.minimum_coverage
                 )
             )
-        if applied:
-            failures.append("{} entered the B0 solver {} times".format(method.upper(), applied))
+        application_failure = applied_method_contract_failure(
+            method, rows, expected_applied_method
+        )
+        if application_failure:
+            failures.append(application_failure)
 
     schema_bad = sum(int(message.schema_version) != 1 for message in active_comparisons)
     disabled = sum(not bool(message.comparison_enabled) for message in active_comparisons)
     liquid_consumed = sum(bool(message.solver_consumes_liquid) for message in active_comparisons)
+    liquid_consumption_mismatch = sum(
+        bool(message.solver_consumes_liquid)
+        != bool(args.expected_solver_consumes_liquid)
+        for message in active_comparisons
+    )
     wrong_source = sum(
         int(message.selected_source) != 2 or str(message.selected_source_name) != "processed_imu"
         for message in active_comparisons
@@ -200,8 +252,13 @@ def validate(args):
         failures.append("comparison schema mismatch count={}".format(schema_bad))
     if disabled:
         failures.append("comparison_enabled=false count={}".format(disabled))
-    if liquid_consumed:
-        failures.append("B0 comparison says solver consumed liquid count={}".format(liquid_consumed))
+    if liquid_consumption_mismatch:
+        failures.append(
+            "solver_consumes_liquid mismatched expected={} count={}".format(
+                bool(args.expected_solver_consumes_liquid),
+                liquid_consumption_mismatch,
+            )
+        )
     if wrong_source:
         failures.append("comparison selected source is not processed_imu count={}".format(wrong_source))
 
@@ -251,7 +308,11 @@ def validate(args):
         for message in active_audits
     )
     if speed_limit_mismatch:
-        failures.append("v_safe_max differs from frozen 0.15 m/s")
+        failures.append(
+            "v_safe_max differs from expected {:.6f} m/s".format(
+                args.expected_v_safe_max
+            )
+        )
     if overspeed:
         failures.append("published speed exceeded v_safe_max count={}".format(overspeed))
     if speed_faults:
@@ -277,7 +338,7 @@ def validate(args):
 
     report = {
         "schema": "spmpc_slosh_nowcast_shadow_postflight_v1",
-        "protocol": "SMPCC_slosh_state_nowcast_dev_v1",
+        "protocol": args.protocol,
         "status": "PASS" if not failures else "FAIL",
         "bag": str(bag_path),
         "failures": failures,
@@ -298,6 +359,11 @@ def validate(args):
             "schema_mismatch_count": schema_bad,
             "comparison_disabled_count": disabled,
             "solver_consumes_liquid_count": liquid_consumed,
+            "solver_consumption_mismatch_count": liquid_consumption_mismatch,
+            "expected_solver_consumes_liquid": bool(
+                args.expected_solver_consumes_liquid
+            ),
+            "expected_applied_method": expected_applied_method,
             "wrong_selected_source_count": wrong_source,
             "fallback_or_wrong_policy_count": fallback,
             "pipeline_not_ready_count": pipeline_not_ready,
