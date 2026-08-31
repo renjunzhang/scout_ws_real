@@ -1,0 +1,22 @@
+std_msgs/Header header
+
+uint32 schema_version
+uint64 cycle_id
+time cycle_start_stamp
+time target_stamp
+
+bool comparison_enabled
+bool solver_consumes_liquid
+uint8 selected_source
+string selected_source_name
+
+float64 nowcast_max_prediction_sec
+float64 nowcast_max_excitation_age_sec
+float64 nowcast_max_future_skew_sec
+float64 nowcast_max_state_excitation_skew_sec
+float64 nowcast_max_integration_step_sec
+
+spmpc_local_planner/SloshEstimateDebug o0
+spmpc_local_planner/SloshEstimateDebug i0
+spmpc_local_planner/SloshEstimateDebug i1
+spmpc_local_planner/SloshEstimateDebug l22

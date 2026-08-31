@@ -39,6 +39,28 @@ double ageSeconds(std::int64_t receive_stamp_ns, std::int64_t value_stamp_ns) {
     return static_cast<double>(receive_stamp_ns - value_stamp_ns) * 1.0e-9;
 }
 
+std::int64_t excitationEffectiveStampNs(const MotionExcitation& excitation) {
+    if (excitation.accel_effective_stamp_ns > 0) {
+        return excitation.accel_effective_stamp_ns;
+    }
+    if (excitation.measurement_stamp_ns > 0) {
+        return excitation.measurement_stamp_ns;
+    }
+    return excitation.source_stamp_ns;
+}
+
+void fillSloshEstimateState(SloshEstimateDebug& estimate,
+                            const SloshState& state,
+                            double modal_height_m,
+                            double total_height_m) {
+    estimate.eta_x = state.eta_x;
+    estimate.eta_x_dot = state.eta_x_dot;
+    estimate.eta_y = state.eta_y;
+    estimate.eta_y_dot = state.eta_y_dot;
+    estimate.modal_height_m = modal_height_m;
+    estimate.total_height_m = total_height_m;
+}
+
 const char* solverBackendRole(const std::string& backend) {
     if (backend == kSolverBackendContinuousMpccAcados) {
         return "SPMPC mainline continuous MPCC";
@@ -272,6 +294,27 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("slosh_observer/max_future_skew_sec",
                slosh_observer_selector_params_.max_future_skew_sec,
                slosh_observer_selector_params_.max_future_skew_sec);
+    pnh_.param("liquid_nowcast/enable",
+               liquid_state_nowcaster_params_.enable,
+               liquid_state_nowcaster_params_.enable);
+    pnh_.param("liquid_nowcast/publish_comparison",
+               liquid_nowcast_publish_comparison_,
+               liquid_nowcast_publish_comparison_);
+    pnh_.param("liquid_nowcast/max_prediction_sec",
+               liquid_state_nowcaster_params_.max_prediction_sec,
+               liquid_state_nowcaster_params_.max_prediction_sec);
+    pnh_.param("liquid_nowcast/max_excitation_age_sec",
+               liquid_state_nowcaster_params_.max_excitation_age_sec,
+               liquid_state_nowcaster_params_.max_excitation_age_sec);
+    pnh_.param("liquid_nowcast/max_future_skew_sec",
+               liquid_state_nowcaster_params_.max_future_skew_sec,
+               liquid_state_nowcaster_params_.max_future_skew_sec);
+    pnh_.param("liquid_nowcast/max_state_excitation_skew_sec",
+               liquid_state_nowcaster_params_.max_state_excitation_skew_sec,
+               liquid_state_nowcaster_params_.max_state_excitation_skew_sec);
+    pnh_.param("liquid_nowcast/max_integration_step_sec",
+               liquid_state_nowcaster_params_.max_integration_step_sec,
+               liquid_state_nowcaster_params_.max_integration_step_sec);
     if (!parseSloshObserverSource(
             observer_source, slosh_observer_selector_params_.nominal_source)) {
         ROS_FATAL("[spmpc_local_planner] invalid slosh_observer/source='%s'; "
@@ -290,6 +333,11 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     const bool imu_is_nominal =
         slosh_observer_selector_params_.nominal_source ==
         SloshObserverSource::ProcessedImu;
+    if (liquid_state_nowcaster_params_.enable && !imu_shadow_enable_) {
+        ROS_WARN("[spmpc_local_planner] liquid_nowcast is enabled; "
+                 "forcing imu_shadow/enable=true for processed-IMU excitation");
+        imu_shadow_enable_ = true;
+    }
     if (imu_is_nominal && !imu_shadow_enable_) {
         ROS_WARN("[spmpc_local_planner] processed_imu is the nominal liquid observer; "
                  "forcing imu_shadow/enable=true for the processed-IMU pipeline");
@@ -761,6 +809,15 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     if (!execution_predictor_.configure(solver_params.slosh)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
     }
+    std::string liquid_nowcast_error;
+    if (!liquid_state_nowcaster_.configure(
+            solver_params.slosh,
+            liquid_state_nowcaster_params_,
+            &liquid_nowcast_error)) {
+        ROS_FATAL("[spmpc_local_planner] liquid_nowcast configuration failed: %s",
+                  liquid_nowcast_error.c_str());
+        return false;
+    }
     if (!slosh_risk_governor_.configure(solver_params.slosh, slosh_risk_governor_params_) &&
         slosh_risk_governor_params_.enable) {
         ROS_WARN("[spmpc_local_planner] slosh risk governor configure failed; governor will pass through v_ref");
@@ -798,7 +855,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         imu_spinner_->start();
     }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s",
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s liquid_nowcast=%s comparison=%s",
              variant_.name.c_str(),
              experiment_mode_.c_str(),
              path_topic_.c_str(),
@@ -810,7 +867,9 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              sloshObserverSourceName(slosh_observer_selector_params_.nominal_source),
              sloshObserverFallbackPolicyName(
                  slosh_observer_selector_params_.fallback_policy),
-             boolText(slosh_observer_selector_params_.latch_fallback));
+             boolText(slosh_observer_selector_params_.latch_fallback),
+             boolText(liquid_state_nowcaster_params_.enable),
+             boolText(liquid_nowcast_publish_comparison_));
     return true;
 }
 
@@ -1958,6 +2017,29 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.timing.solve_start_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
     solve_input.cycle_timing = cycle_audit.timing;
+    if (liquid_nowcast_publish_comparison_) {
+        LiquidStateNowcastInput i1_input;
+        i1_input.snapshot_valid =
+            imu_observer_health.input_ready &&
+            imu_observer_health.snapshot.valid;
+        i1_input.state = imu_observer_health.snapshot.state;
+        i1_input.state_stamp_ns = imu_observer_health.snapshot.state_stamp_ns;
+        i1_input.excitation = imu_observer_health.snapshot.excitation;
+        const auto i1_result = liquid_state_nowcaster_.predict(
+            i1_input,
+            cycle_audit.timing.solve_start_stamp_ns);
+        publishSloshEstimatorComparisonDebug(
+            rosTimeFromNanoseconds(cycle_audit.timing.solve_start_stamp_ns),
+            odom_observer_health.snapshot,
+            imu_observer_health.snapshot,
+            observer_selection,
+            i1_result,
+            shadow_prediction,
+            delay_phase_now,
+            liquid_delay_compensation_applied,
+            slosh_height_coeff,
+            cycle_audit.timing);
+    }
     SolverOutput output;
     cycle_audit.solve_attempted = true;
     problem_.solve(solve_input, output);
@@ -2526,6 +2608,190 @@ void SpmpcLocalPlannerROS::publishSloshObserverSelectionDebug(
     msg.imu_reset_epoch = selection.imu_reset_epoch;
     msg.selection_epoch = selection.selection_epoch;
     diagnostics_.publishSloshObserverSelection(msg);
+}
+
+void SpmpcLocalPlannerROS::publishSloshEstimatorComparisonDebug(
+    const ros::Time& target_stamp,
+    const SloshObserverSnapshot& odom_snapshot,
+    const SloshObserverSnapshot& imu_snapshot,
+    const SloshObserverSelection& selection,
+    const LiquidStateNowcastResult& i1_result,
+    const ExecutionStatePrediction& l22_prediction,
+    const ros::Time& l22_target_stamp,
+    bool liquid_delay_compensation_applied,
+    double height_coeff,
+    const ControlCycleTimingDebug& cycle_timing) {
+    if (!liquid_nowcast_publish_comparison_) {
+        return;
+    }
+
+    const std::int64_t target_ns = static_cast<std::int64_t>(target_stamp.toNSec());
+    const bool solver_consumes_liquid = variant_.slosh_enable;
+    const bool raw_observer_applied =
+        solver_consumes_liquid && selection.valid &&
+        !liquid_delay_compensation_applied;
+    const double modal_coeff = std::max(0.0, height_coeff);
+
+    SloshEstimatorComparison msg;
+    msg.header.stamp = target_stamp;
+    msg.header.frame_id = robot_base_frame_;
+    msg.schema_version = 1;
+    msg.cycle_id = cycle_timing.cycle_id;
+    msg.cycle_start_stamp = rosTimeFromNanoseconds(cycle_timing.cycle_start_stamp_ns);
+    msg.target_stamp = target_stamp;
+    msg.comparison_enabled = liquid_state_nowcaster_params_.enable;
+    msg.solver_consumes_liquid = solver_consumes_liquid;
+    msg.selected_source = static_cast<std::uint8_t>(selection.effective_source);
+    msg.selected_source_name = sloshObserverSourceName(selection.effective_source);
+    msg.nowcast_max_prediction_sec = liquid_state_nowcaster_params_.max_prediction_sec;
+    msg.nowcast_max_excitation_age_sec =
+        liquid_state_nowcaster_params_.max_excitation_age_sec;
+    msg.nowcast_max_future_skew_sec =
+        liquid_state_nowcaster_params_.max_future_skew_sec;
+    msg.nowcast_max_state_excitation_skew_sec =
+        liquid_state_nowcaster_params_.max_state_excitation_skew_sec;
+    msg.nowcast_max_integration_step_sec =
+        liquid_state_nowcaster_params_.max_integration_step_sec;
+
+    auto fill_raw = [&](SloshEstimateDebug& estimate,
+                        std::uint8_t method,
+                        const char* method_name,
+                        std::uint8_t source,
+                        const char* source_name,
+                        const SloshObserverSnapshot& snapshot,
+                        bool applied) {
+        estimate.method = method;
+        estimate.method_name = method_name;
+        estimate.source = source;
+        estimate.source_name = source_name;
+        estimate.configured = snapshot.configured;
+        estimate.valid = snapshot.valid;
+        estimate.applied_to_solver = applied;
+        estimate.status_code = snapshot.valid
+            ? SloshEstimateDebug::STATUS_RAW_OBSERVER
+            : SloshEstimateDebug::STATUS_NOT_AVAILABLE;
+        estimate.detail_status_code = 0;
+        estimate.status = snapshot.valid ? "RAW_OBSERVER_READY" : "RAW_OBSERVER_INVALID";
+        estimate.input_state_stamp = rosTimeFromNanoseconds(snapshot.state_stamp_ns);
+        estimate.output_state_stamp = estimate.input_state_stamp;
+        const std::int64_t excitation_stamp =
+            excitationEffectiveStampNs(snapshot.excitation);
+        estimate.excitation_effective_stamp = rosTimeFromNanoseconds(excitation_stamp);
+        estimate.input_state_age_sec = ageSeconds(target_ns, snapshot.state_stamp_ns);
+        estimate.output_state_age_sec = estimate.input_state_age_sec;
+        estimate.propagation_sec = 0.0;
+        estimate.excitation_age_sec = ageSeconds(target_ns, excitation_stamp);
+        fillSloshEstimateState(
+            estimate,
+            snapshot.state,
+            snapshot.modal_height_m,
+            snapshot.total_height_m);
+    };
+
+    fill_raw(
+        msg.o0,
+        SloshEstimateDebug::METHOD_O0,
+        "O0",
+        SloshEstimateDebug::SOURCE_ODOM,
+        "odom",
+        odom_snapshot,
+        raw_observer_applied &&
+            selection.effective_source == SloshObserverSource::Odom);
+    fill_raw(
+        msg.i0,
+        SloshEstimateDebug::METHOD_I0,
+        "I0",
+        SloshEstimateDebug::SOURCE_PROCESSED_IMU,
+        "processed_imu",
+        imu_snapshot,
+        raw_observer_applied &&
+            selection.effective_source == SloshObserverSource::ProcessedImu);
+
+    double i1_total_height_m = 0.0;
+    double l22_total_height_m = 0.0;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        i1_total_height_m = slosh_observers_.solverHeight(
+            i1_result.predicted_state,
+            imu_snapshot.excitation.omega_z);
+        l22_total_height_m = slosh_observers_.solverHeight(
+            l22_prediction.predicted_slosh,
+            l22_prediction.predicted_robot.omega);
+    }
+
+    msg.i1.method = SloshEstimateDebug::METHOD_I1;
+    msg.i1.method_name = "I1";
+    msg.i1.source = SloshEstimateDebug::SOURCE_PROCESSED_IMU;
+    msg.i1.source_name = "processed_imu_nowcast";
+    msg.i1.configured = i1_result.configured;
+    msg.i1.valid = i1_result.valid;
+    // Development v1 is shadow-only by construction.  A future release must
+    // introduce a separate, audited solver-application contract.
+    msg.i1.applied_to_solver = false;
+    if (i1_result.status_code == LiquidNowcastStatusCode::ReadyPassThrough) {
+        msg.i1.status_code = SloshEstimateDebug::STATUS_NOWCAST_PASS_THROUGH;
+    } else if (i1_result.status_code == LiquidNowcastStatusCode::ReadyPredicted) {
+        msg.i1.status_code = SloshEstimateDebug::STATUS_NOWCAST_PREDICTED;
+    } else if (i1_result.status_code == LiquidNowcastStatusCode::Disabled) {
+        msg.i1.status_code = SloshEstimateDebug::STATUS_NOT_AVAILABLE;
+    } else {
+        msg.i1.status_code = SloshEstimateDebug::STATUS_ERROR;
+    }
+    msg.i1.detail_status_code = static_cast<std::int32_t>(i1_result.status_code);
+    msg.i1.status = i1_result.status;
+    msg.i1.input_state_stamp = rosTimeFromNanoseconds(i1_result.input_state_stamp_ns);
+    msg.i1.output_state_stamp = rosTimeFromNanoseconds(i1_result.output_state_stamp_ns);
+    msg.i1.excitation_effective_stamp =
+        rosTimeFromNanoseconds(i1_result.excitation_effective_stamp_ns);
+    msg.i1.input_state_age_sec = ageSeconds(target_ns, i1_result.input_state_stamp_ns);
+    msg.i1.output_state_age_sec = ageSeconds(target_ns, i1_result.output_state_stamp_ns);
+    msg.i1.propagation_sec = i1_result.propagation_sec;
+    msg.i1.excitation_age_sec = i1_result.excitation_age_sec;
+    fillSloshEstimateState(
+        msg.i1,
+        i1_result.predicted_state,
+        modal_coeff * std::hypot(
+            i1_result.predicted_state.eta_x,
+            i1_result.predicted_state.eta_y),
+        i1_total_height_m);
+
+    const std::int64_t l22_output_ns = l22_prediction.valid
+        ? static_cast<std::int64_t>(l22_target_stamp.toNSec())
+        : selection.selected_state_stamp_ns;
+    msg.l22.method = SloshEstimateDebug::METHOD_L22;
+    msg.l22.method_name = "L22";
+    msg.l22.source = SloshEstimateDebug::SOURCE_COMMAND_HISTORY;
+    msg.l22.source_name = "command_history_legacy";
+    msg.l22.configured = true;
+    msg.l22.valid = l22_prediction.valid;
+    msg.l22.applied_to_solver =
+        solver_consumes_liquid && liquid_delay_compensation_applied;
+    msg.l22.status_code = l22_prediction.valid
+        ? SloshEstimateDebug::STATUS_LEGACY_ROLLOUT
+        : SloshEstimateDebug::STATUS_ERROR;
+    msg.l22.detail_status_code = static_cast<std::int32_t>(
+        l22_prediction.status_code);
+    msg.l22.status = l22_prediction.status.empty()
+        ? delayPhaseStatusName(l22_prediction.status_code)
+        : l22_prediction.status;
+    msg.l22.input_state_stamp =
+        rosTimeFromNanoseconds(selection.selected_state_stamp_ns);
+    msg.l22.output_state_stamp = rosTimeFromNanoseconds(l22_output_ns);
+    msg.l22.excitation_effective_stamp = ros::Time(0);
+    msg.l22.input_state_age_sec =
+        ageSeconds(target_ns, selection.selected_state_stamp_ns);
+    msg.l22.output_state_age_sec = ageSeconds(target_ns, l22_output_ns);
+    msg.l22.propagation_sec = l22_prediction.integrated_duration_sec;
+    msg.l22.excitation_age_sec = -1.0;
+    fillSloshEstimateState(
+        msg.l22,
+        l22_prediction.predicted_slosh,
+        modal_coeff * std::hypot(
+            l22_prediction.predicted_slosh.eta_x,
+            l22_prediction.predicted_slosh.eta_y),
+        l22_total_height_m);
+
+    diagnostics_.publishSloshEstimatorComparison(msg);
 }
 
 bool SpmpcLocalPlannerROS::updateReferenceSignature(const nav_msgs::Path& path) {

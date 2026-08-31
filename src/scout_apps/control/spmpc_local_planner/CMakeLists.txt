@@ -24,6 +24,8 @@ add_message_files(
   ControlCycleAudit.msg
   PredictedHorizon.msg
   PreSolveSnapshot.msg
+  SloshEstimateDebug.msg
+  SloshEstimatorComparison.msg
   SloshObserverDebug.msg
   SloshObserverSelectionDebug.msg
 )
@@ -104,6 +106,7 @@ add_library(${PROJECT_NAME}
   src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
   src/estimation/processed_imu_pipeline.cpp
+  src/estimation/liquid_state_nowcaster.cpp
   src/estimation/slosh_observer_bank.cpp
   src/estimation/slosh_observer_selector.cpp
   src/warm_start/diff_drive_flatness_warm_start.cpp
@@ -200,6 +203,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_slosh_observer_bank test/test_slosh_observer_bank.cpp)
   if(TARGET test_slosh_observer_bank)
     target_link_libraries(test_slosh_observer_bank
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_liquid_state_nowcaster test/test_liquid_state_nowcaster.cpp)
+  if(TARGET test_liquid_state_nowcaster)
+    target_link_libraries(test_liquid_state_nowcaster
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

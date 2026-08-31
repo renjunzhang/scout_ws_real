@@ -7,6 +7,7 @@
 #include "spmpc_local_planner/ControlCycleAudit.h"
 #include "spmpc_local_planner/PreSolveSnapshot.h"
 #include "spmpc_local_planner/PredictedHorizon.h"
+#include "spmpc_local_planner/SloshEstimatorComparison.h"
 #include "spmpc_local_planner/SloshObserverDebug.h"
 #include "spmpc_local_planner/SloshObserverSelectionDebug.h"
 #include <geometry_msgs/Twist.h>
@@ -48,6 +49,7 @@ public:
     void publishOdomSloshObserver(const SloshObserverDebug& msg);
     void publishImuSloshObserver(const SloshObserverDebug& msg);
     void publishSloshObserverSelection(const SloshObserverSelectionDebug& msg);
+    void publishSloshEstimatorComparison(const SloshEstimatorComparison& msg);
     void publishSloshGovernor(const SloshRiskGovernorOutput& output);
     void publishDelayPhase(const DelayPhaseDebugSummary& summary);
     void publishOdomTiming(const OdomTimingDebug& timing);
@@ -85,6 +87,7 @@ private:
     ros::Publisher odom_slosh_observer_pub_;
     ros::Publisher imu_slosh_observer_pub_;
     ros::Publisher slosh_observer_selection_pub_;
+    ros::Publisher slosh_estimator_comparison_pub_;
     ros::Publisher slosh_horizon_summary_pub_;
     ros::Publisher slosh_hard_constraint_pub_;
     ros::Publisher slosh_hard_constraint_effective_pub_;

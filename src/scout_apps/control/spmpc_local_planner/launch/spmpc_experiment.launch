@@ -11,6 +11,13 @@
   <arg name="observer_max_imu_state_age_sec" default="0.10"/>
   <arg name="observer_max_odom_state_age_sec" default="0.50"/>
   <arg name="observer_max_future_skew_sec" default="0.005"/>
+  <arg name="liquid_nowcast_enable" default="false"/>
+  <arg name="liquid_nowcast_publish_comparison" default="false"/>
+  <arg name="liquid_nowcast_max_prediction_sec" default="0.050"/>
+  <arg name="liquid_nowcast_max_excitation_age_sec" default="0.060"/>
+  <arg name="liquid_nowcast_max_future_skew_sec" default="0.005"/>
+  <arg name="liquid_nowcast_max_state_excitation_skew_sec" default="0.001"/>
+  <arg name="liquid_nowcast_max_integration_step_sec" default="0.020"/>
   <arg name="costmap_topic" default="/map"/>
   <arg name="cmd_vel_topic" default="/cmd_vel"/>
   <arg name="publish_cmd_vel" default="true"/>
@@ -66,6 +73,13 @@
     <param name="slosh_observer/max_imu_state_age_sec" value="$(arg observer_max_imu_state_age_sec)"/>
     <param name="slosh_observer/max_odom_state_age_sec" value="$(arg observer_max_odom_state_age_sec)"/>
     <param name="slosh_observer/max_future_skew_sec" value="$(arg observer_max_future_skew_sec)"/>
+    <param name="liquid_nowcast/enable" value="$(arg liquid_nowcast_enable)"/>
+    <param name="liquid_nowcast/publish_comparison" value="$(arg liquid_nowcast_publish_comparison)"/>
+    <param name="liquid_nowcast/max_prediction_sec" value="$(arg liquid_nowcast_max_prediction_sec)"/>
+    <param name="liquid_nowcast/max_excitation_age_sec" value="$(arg liquid_nowcast_max_excitation_age_sec)"/>
+    <param name="liquid_nowcast/max_future_skew_sec" value="$(arg liquid_nowcast_max_future_skew_sec)"/>
+    <param name="liquid_nowcast/max_state_excitation_skew_sec" value="$(arg liquid_nowcast_max_state_excitation_skew_sec)"/>
+    <param name="liquid_nowcast/max_integration_step_sec" value="$(arg liquid_nowcast_max_integration_step_sec)"/>
     <param name="topics/costmap" value="$(arg costmap_topic)"/>
     <param name="topics/cmd_vel" value="$(arg cmd_vel_topic)"/>
     <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>

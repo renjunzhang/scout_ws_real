@@ -86,6 +86,8 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     imu_slosh_observer_pub_ = nh.advertise<SloshObserverDebug>("debug/slosh_observer_imu", 1);
     slosh_observer_selection_pub_ = nh.advertise<SloshObserverSelectionDebug>(
         "debug/slosh_observer_selection", 1);
+    slosh_estimator_comparison_pub_ = nh.advertise<SloshEstimatorComparison>(
+        "debug/slosh_estimator_comparison", 1);
     slosh_horizon_summary_pub_ = nh.advertise<std_msgs::Float32MultiArray>("slosh_horizon_summary", 1);
     slosh_hard_constraint_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint", 1);
     slosh_hard_constraint_effective_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/slosh_hard_constraint_effective", 1);
@@ -1039,6 +1041,11 @@ void DiagnosticsPublisher::publishImuSloshObserver(const SloshObserverDebug& msg
 void DiagnosticsPublisher::publishSloshObserverSelection(
     const SloshObserverSelectionDebug& msg) {
     slosh_observer_selection_pub_.publish(msg);
+}
+
+void DiagnosticsPublisher::publishSloshEstimatorComparison(
+    const SloshEstimatorComparison& msg) {
+    slosh_estimator_comparison_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishStatus(const std::string& status) {

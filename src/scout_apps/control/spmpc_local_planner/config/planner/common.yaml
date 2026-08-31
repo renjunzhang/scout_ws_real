@@ -89,6 +89,19 @@ imu_shadow:
   quaternion_norm_min: 0.95
   quaternion_norm_max: 1.05
 
+# Development-only liquid-state timestamp nowcast.  It is disabled by default
+# and never replaces SolverInput in protocol v1.  When explicitly enabled with
+# publish_comparison=true, O0/I0/I1/L22 are emitted on one structured debug
+# topic for same-motion bag analysis.
+liquid_nowcast:
+  enable: false
+  publish_comparison: false
+  max_prediction_sec: 0.050
+  max_excitation_age_sec: 0.060
+  max_future_skew_sec: 0.005
+  max_state_excitation_skew_sec: 0.001
+  max_integration_step_sec: 0.020
+
 reference:
   lookahead_distance: 0.6
   preprocess_enable: false

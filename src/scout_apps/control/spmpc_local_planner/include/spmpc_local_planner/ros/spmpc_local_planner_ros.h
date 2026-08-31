@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/speed_safety_contract.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/estimation/processed_imu_pipeline.h"
+#include "spmpc_local_planner/estimation/liquid_state_nowcaster.h"
 #include "spmpc_local_planner/estimation/slosh_observer_bank.h"
 #include "spmpc_local_planner/estimation/slosh_observer_selector.h"
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
@@ -99,6 +100,17 @@ private:
         const SloshObserverSelection& selection,
         bool solver_consumes_selected_state,
         const ControlCycleTimingDebug& cycle_timing);
+    void publishSloshEstimatorComparisonDebug(
+        const ros::Time& target_stamp,
+        const SloshObserverSnapshot& odom_snapshot,
+        const SloshObserverSnapshot& imu_snapshot,
+        const SloshObserverSelection& selection,
+        const LiquidStateNowcastResult& i1_result,
+        const ExecutionStatePrediction& l22_prediction,
+        const ros::Time& l22_target_stamp,
+        bool liquid_delay_compensation_applied,
+        double height_coeff,
+        const ControlCycleTimingDebug& cycle_timing);
     bool updateReferenceSignature(const nav_msgs::Path& path);
     ReferencePath referencePathFromMsg(const nav_msgs::Path& path) const;
     CostmapGrid costmapFromMsg(const nav_msgs::OccupancyGrid& map) const;
@@ -137,6 +149,8 @@ private:
     SloshObserverBank slosh_observers_;
     SloshObserverSelector slosh_observer_selector_;
     SloshObserverSelectorParams slosh_observer_selector_params_;
+    LiquidStateNowcaster liquid_state_nowcaster_;
+    LiquidStateNowcasterParams liquid_state_nowcaster_params_;
     ImuShadowRosAdapter imu_shadow_adapter_;
     SloshRiskGovernor slosh_risk_governor_;
     SloshRiskGovernorParams slosh_risk_governor_params_;
@@ -184,6 +198,7 @@ private:
     bool publish_cmd_vel_ = true;
     bool imu_shadow_enable_ = false;
     bool imu_shadow_publish_diagnostics_ = true;
+    bool liquid_nowcast_publish_comparison_ = false;
     int imu_subscriber_queue_size_ = 10;
     double imu_observer_dt_sec_ = 0.02;
     bool use_tf_pose_ = true;
