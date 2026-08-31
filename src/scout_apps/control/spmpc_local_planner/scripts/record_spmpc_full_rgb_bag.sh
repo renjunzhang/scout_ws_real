@@ -104,6 +104,13 @@ OBSERVER_LATCH_FALLBACK="${OBSERVER_LATCH_FALLBACK:-}"
 OBSERVER_MAX_IMU_STATE_AGE_SEC="${OBSERVER_MAX_IMU_STATE_AGE_SEC:-}"
 OBSERVER_MAX_ODOM_STATE_AGE_SEC="${OBSERVER_MAX_ODOM_STATE_AGE_SEC:-}"
 OBSERVER_MAX_FUTURE_SKEW_SEC="${OBSERVER_MAX_FUTURE_SKEW_SEC:-}"
+LIQUID_NOWCAST_ENABLE="${LIQUID_NOWCAST_ENABLE:-}"
+LIQUID_NOWCAST_PUBLISH_COMPARISON="${LIQUID_NOWCAST_PUBLISH_COMPARISON:-}"
+LIQUID_NOWCAST_MAX_PREDICTION_SEC="${LIQUID_NOWCAST_MAX_PREDICTION_SEC:-}"
+LIQUID_NOWCAST_MAX_EXCITATION_AGE_SEC="${LIQUID_NOWCAST_MAX_EXCITATION_AGE_SEC:-}"
+LIQUID_NOWCAST_MAX_FUTURE_SKEW_SEC="${LIQUID_NOWCAST_MAX_FUTURE_SKEW_SEC:-}"
+LIQUID_NOWCAST_MAX_STATE_EXCITATION_SKEW_SEC="${LIQUID_NOWCAST_MAX_STATE_EXCITATION_SKEW_SEC:-}"
+LIQUID_NOWCAST_MAX_INTEGRATION_STEP_SEC="${LIQUID_NOWCAST_MAX_INTEGRATION_STEP_SEC:-}"
 CONTROL_FREQUENCY="${CONTROL_FREQUENCY:-}"
 MAP_FILE="${MAP_FILE:-}"
 GOAL_X="${GOAL_X:-}"
@@ -279,6 +286,7 @@ record_topics=(
   /spmpc/debug/slosh_observer_odom
   /spmpc/debug/slosh_observer_imu
   /spmpc/debug/slosh_observer_selection
+  /spmpc/debug/slosh_estimator_comparison
   /spmpc/debug/slosh_cost_monitor
   /spmpc/debug/slosh_hard_constraint
   /spmpc/debug/slosh_hard_constraint_effective
@@ -607,6 +615,13 @@ write_topic_info_snapshot
   echo "observer_max_imu_state_age_sec=${OBSERVER_MAX_IMU_STATE_AGE_SEC}"
   echo "observer_max_odom_state_age_sec=${OBSERVER_MAX_ODOM_STATE_AGE_SEC}"
   echo "observer_max_future_skew_sec=${OBSERVER_MAX_FUTURE_SKEW_SEC}"
+  echo "liquid_nowcast_enable=${LIQUID_NOWCAST_ENABLE}"
+  echo "liquid_nowcast_publish_comparison=${LIQUID_NOWCAST_PUBLISH_COMPARISON}"
+  echo "liquid_nowcast_max_prediction_sec=${LIQUID_NOWCAST_MAX_PREDICTION_SEC}"
+  echo "liquid_nowcast_max_excitation_age_sec=${LIQUID_NOWCAST_MAX_EXCITATION_AGE_SEC}"
+  echo "liquid_nowcast_max_future_skew_sec=${LIQUID_NOWCAST_MAX_FUTURE_SKEW_SEC}"
+  echo "liquid_nowcast_max_state_excitation_skew_sec=${LIQUID_NOWCAST_MAX_STATE_EXCITATION_SKEW_SEC}"
+  echo "liquid_nowcast_max_integration_step_sec=${LIQUID_NOWCAST_MAX_INTEGRATION_STEP_SEC}"
   echo "control_frequency=${CONTROL_FREQUENCY}"
   echo "map_file=${MAP_FILE}"
   echo "goal_x=${GOAL_X}"
