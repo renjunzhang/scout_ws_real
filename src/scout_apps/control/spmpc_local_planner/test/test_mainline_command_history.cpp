@@ -538,6 +538,9 @@ TEST(MainlineCommandHistory, SamplesZohAndChecksCoveragePredecessorAndGap) {
             history.capture(SteadyTimeNs(5000000000LL),
                             ModelTimeNs(13000000000LL), snapshot));
   ASSERT_EQ(3u, snapshot.size());
+  EXPECT_EQ(nullptr, snapshot.eventIfPresent(snapshot.size()));
+  ASSERT_NE(nullptr, snapshot.eventIfPresent(1));
+  EXPECT_EQ(1u, snapshot.eventIfPresent(1)->cycle.cycle_id);
 
   PublishedCommandEvent sampled;
   EXPECT_EQ(HistorySampleResult::kExact,

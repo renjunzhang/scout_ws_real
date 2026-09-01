@@ -248,6 +248,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_known_prefix
+    test/test_mainline_known_prefix.cpp
+  )
+  if(TARGET test_mainline_known_prefix)
+    target_link_libraries(test_mainline_known_prefix
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline

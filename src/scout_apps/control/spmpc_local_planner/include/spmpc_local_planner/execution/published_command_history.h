@@ -92,10 +92,16 @@ class CommandHistorySnapshot {
   }
 
   const PublishedCommandEvent& event(std::size_t index) const {
-    if (index >= size_) {
+    const PublishedCommandEvent* selected = eventIfPresent(index);
+    if (selected == nullptr) {
       throw std::out_of_range("command history snapshot index is out of range");
     }
-    return events_[index];
+    return *selected;
+  }
+
+  const PublishedCommandEvent* eventIfPresent(
+      std::size_t index) const noexcept {
+    return index < size_ ? &events_[index] : nullptr;
   }
 
   HistorySampleResult sampleAt(ModelTimeNs stamp,
