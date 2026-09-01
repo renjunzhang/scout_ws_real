@@ -224,6 +224,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_delay_fopdt
+    test/test_mainline_delay_fopdt.cpp
+  )
+  if(TARGET test_mainline_delay_fopdt)
+    target_link_libraries(test_mainline_delay_fopdt
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline
