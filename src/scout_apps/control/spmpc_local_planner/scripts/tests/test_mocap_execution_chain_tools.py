@@ -185,7 +185,7 @@ class PostflightMathTest(unittest.TestCase):
         self.assertTrue(POSTFLIGHT.requires_solver_artifacts(active_solve))
         self.assertFalse(POSTFLIGHT.requires_solver_artifacts(failed_solve))
 
-    def test_state_alignment_accepts_common_epoch_or_explicit_no_liquid(self):
+    def test_state_alignment_accepts_common_epoch_or_safe_non_required_state(self):
         common_epoch = SimpleNamespace(
             state_alignment_required=True,
             state_time_aligned=True,
@@ -196,6 +196,16 @@ class PostflightMathTest(unittest.TestCase):
             state_time_aligned=True,
             state_alignment_status="LIQUID_NOT_CONSUMED",
         )
+        fixed_b0 = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=True,
+            state_alignment_status="DELAY_PREDICTED_COMMON_EPOCH",
+        )
+        misaligned_fixed_b0 = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=False,
+            state_alignment_status="DELAY_PREDICTED_COMMON_EPOCH",
+        )
         unsafe_bypass = SimpleNamespace(
             state_alignment_required=False,
             state_time_aligned=True,
@@ -204,6 +214,8 @@ class PostflightMathTest(unittest.TestCase):
 
         self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(common_epoch))
         self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(no_liquid))
+        self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(fixed_b0))
+        self.assertFalse(POSTFLIGHT.state_alignment_contract_ok(misaligned_fixed_b0))
         self.assertFalse(POSTFLIGHT.state_alignment_contract_ok(unsafe_bypass))
 
     def test_stream_stats_reports_rate_and_gap(self):

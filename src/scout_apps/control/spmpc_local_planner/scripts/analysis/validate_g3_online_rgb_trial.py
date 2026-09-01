@@ -91,6 +91,14 @@ def parse_args():
     parser.add_argument("--expected-fps", type=float, default=30.0)
     parser.add_argument("--process-every", type=int, default=1)
     parser.add_argument("--zero-frames", type=int, default=30)
+    parser.add_argument("--max-zero-window-spread-mm", type=float)
+    parser.add_argument("--initial-stability-sec", type=float, default=0.0)
+    parser.add_argument(
+        "--min-initial-stability-valid-fraction", type=float, default=0.0
+    )
+    parser.add_argument("--max-initial-h-vis-p95-mm", type=float)
+    parser.add_argument("--max-initial-abs-height-p95-mm", type=float)
+    parser.add_argument("--max-initial-half-median-drift-mm", type=float)
     parser.add_argument("--t-hvis-tail-sec", type=float, default=5.0)
     parser.add_argument("--t-motion-max-sec", type=float, default=42.0)
     parser.add_argument("--rolling-window", type=int, default=5)
@@ -234,6 +242,26 @@ def causal_rolling_median(records, window=5, max_gap=0.35):
     return output
 
 
+def signed_stability_metrics(records, midpoint, window=5, max_gap=0.35):
+    """Summarize a corrected-height window without hiding negative bias."""
+    smoothed = causal_rolling_median(records, window=window, max_gap=max_gap)
+    signed_values = [value for _, value in smoothed]
+    first_half = [value for stamp, value in smoothed if stamp < midpoint]
+    second_half = [value for stamp, value in smoothed if stamp >= midpoint]
+    drift = (
+        abs(statistics.median(second_half) - statistics.median(first_half))
+        if first_half and second_half
+        else math.nan
+    )
+    return {
+        "h_vis_p95_mm": percentile([max(0.0, value) for value in signed_values], 0.95),
+        "abs_height_p95_mm": percentile([abs(value) for value in signed_values], 0.95),
+        "half_median_drift_mm": drift,
+        "first_half_samples": len(first_half),
+        "second_half_samples": len(second_half),
+    }
+
+
 def in_window(records, start, end, stamp_index=0):
     if start is None or end is None:
         return []
@@ -286,6 +314,10 @@ def main():
         failures.append("T_HVIS_TAIL must be positive")
     if args.t_motion_max_sec <= 0.0:
         failures.append("T_MOTION_MAX must be positive")
+    if args.initial_stability_sec < 0.0:
+        failures.append("initial stability duration cannot be negative")
+    if not 0.0 <= args.min_initial_stability_valid_fraction <= 1.0:
+        failures.append("initial stability valid fraction must be in [0,1]")
 
     required_topics = REQUIRED_TOPICS + (args.measurement_topic,)
     counts = collections.Counter()
@@ -492,6 +524,7 @@ def main():
     zero_values = sorted({record["zero_value"] for record in locked})
     zero_windows = sorted({(record["zero_start"], record["zero_end"]) for record in locked})
     zero_histories = {record["zero_history"] for record in locked}
+    zero_window_spread = math.nan
     if not locked:
         failures.append("online RGB never locked its zero reference")
     else:
@@ -517,8 +550,19 @@ def main():
             history = next(iter(zero_histories))
             if len(history) != args.zero_frames or not all(finite(value) for value in history):
                 failures.append("online zero history is incomplete/non-finite")
-            elif len(zero_values) == 1 and abs(statistics.median(history) - zero_values[0]) > 1e-4:
-                failures.append("online zero value does not match recorded history median")
+            else:
+                zero_window_spread = percentile(history, 0.95) - percentile(history, 0.05)
+                if len(zero_values) == 1 and abs(statistics.median(history) - zero_values[0]) > 1e-4:
+                    failures.append("online zero value does not match recorded history median")
+                if (
+                    args.max_zero_window_spread_mm is not None
+                    and zero_window_spread > args.max_zero_window_spread_mm
+                ):
+                    failures.append(
+                        "online zero-window P95-P05 {:.4f}mm > {:.4f}mm".format(
+                            zero_window_spread, args.max_zero_window_spread_mm
+                        )
+                    )
 
     online_rate = rate_hz(source_times)
     online_gap = max_gap_sec(source_times)
@@ -579,6 +623,107 @@ def main():
                 args.min_online_pre_motion_sec
             )
         )
+
+    initial_stability_start = (
+        motion_start - args.initial_stability_sec
+        if motion_start is not None and args.initial_stability_sec > 0.0
+        else None
+    )
+    initial_stability_records = [
+        record
+        for record in measurements
+        if initial_stability_start is not None
+        and initial_stability_start <= record["source_time"] < motion_start
+    ]
+    initial_stability_valid_records = [
+        record for record in initial_stability_records if measurement_valid(record)
+    ]
+    initial_stability_valid_fraction = fraction(
+        len(initial_stability_valid_records), len(initial_stability_records)
+    )
+    initial_stability_complete = args.initial_stability_sec <= 0.0
+    initial_h_vis_p95 = math.nan
+    initial_abs_height_p95 = math.nan
+    initial_half_median_drift = math.nan
+    if args.initial_stability_sec > 0.0:
+        initial_stability_complete = bool(initial_stability_records) and (
+            initial_stability_records[0]["source_time"]
+            <= initial_stability_start + args.max_online_gap_sec
+            and initial_stability_records[-1]["source_time"]
+            >= motion_start - args.max_online_gap_sec
+        )
+        if not initial_stability_complete:
+            failures.append(
+                "online RGB lacks the complete {:.1f}s initial-stability window".format(
+                    args.initial_stability_sec
+                )
+            )
+        if (
+            initial_stability_valid_fraction + 1.0e-12
+            < args.min_initial_stability_valid_fraction
+        ):
+            failures.append(
+                "initial-stability RGB valid fraction {:.4f} < {:.4f}".format(
+                    initial_stability_valid_fraction,
+                    args.min_initial_stability_valid_fraction,
+                )
+            )
+        initial_metrics = signed_stability_metrics(
+            [
+                (record["source_time"], record["height_mm"])
+                for record in initial_stability_valid_records
+            ],
+            midpoint=initial_stability_start + 0.5 * args.initial_stability_sec,
+            window=args.rolling_window,
+            max_gap=args.max_online_gap_sec,
+        )
+        initial_h_vis_p95 = initial_metrics["h_vis_p95_mm"]
+        initial_abs_height_p95 = initial_metrics["abs_height_p95_mm"]
+        initial_half_median_drift = initial_metrics["half_median_drift_mm"]
+        if not (
+            initial_metrics["first_half_samples"]
+            and initial_metrics["second_half_samples"]
+        ):
+            failures.append("initial-stability RGB half windows are incomplete")
+        if (
+            args.max_initial_h_vis_p95_mm is not None
+            and (
+                not finite(initial_h_vis_p95)
+                or initial_h_vis_p95 > args.max_initial_h_vis_p95_mm
+            )
+        ):
+            failures.append(
+                "initial-stability H_vis P95 {:.4f}mm > {:.4f}mm".format(
+                    initial_h_vis_p95, args.max_initial_h_vis_p95_mm
+                )
+            )
+        if (
+            args.max_initial_abs_height_p95_mm is not None
+            and (
+                not finite(initial_abs_height_p95)
+                or initial_abs_height_p95 > args.max_initial_abs_height_p95_mm
+            )
+        ):
+            failures.append(
+                "initial-stability |signed height| P95 {:.4f}mm > {:.4f}mm".format(
+                    initial_abs_height_p95,
+                    args.max_initial_abs_height_p95_mm,
+                )
+            )
+        if (
+            args.max_initial_half_median_drift_mm is not None
+            and (
+                not finite(initial_half_median_drift)
+                or initial_half_median_drift
+                > args.max_initial_half_median_drift_mm
+            )
+        ):
+            failures.append(
+                "initial-stability half-median drift {:.4f}mm > {:.4f}mm".format(
+                    initial_half_median_drift,
+                    args.max_initial_half_median_drift_mm,
+                )
+            )
 
     window_records = [
         record
@@ -904,6 +1049,15 @@ def main():
             "zero_sample_counts": zero_counts,
             "zero_values_mm": zero_values,
             "zero_windows_sec": zero_windows,
+            "zero_window_p95_p05_mm": zero_window_spread,
+            "initial_stability_sec": args.initial_stability_sec,
+            "initial_stability_complete": initial_stability_complete,
+            "initial_stability_samples": len(initial_stability_records),
+            "initial_stability_valid_samples": len(initial_stability_valid_records),
+            "initial_stability_valid_fraction": initial_stability_valid_fraction,
+            "initial_stability_h_vis_p95_mm": initial_h_vis_p95,
+            "initial_stability_abs_height_p95_mm": initial_abs_height_p95,
+            "initial_stability_half_median_drift_mm": initial_half_median_drift,
         },
         "processed_imu": {
             "selection_motion_samples": len(selection_motion),

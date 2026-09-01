@@ -61,6 +61,23 @@ class G3OnlineRgbGateTest(unittest.TestCase):
         )
         self.assertEqual(output[-1], (1.0, 9.0))
 
+    def test_initial_stability_does_not_hide_negative_signed_bias(self):
+        metrics = VALIDATOR.signed_stability_metrics(
+            [(index / 30.0, -0.4) for index in range(150)],
+            midpoint=2.5,
+        )
+        self.assertEqual(metrics["h_vis_p95_mm"], 0.0)
+        self.assertAlmostEqual(metrics["abs_height_p95_mm"], 0.4)
+        self.assertAlmostEqual(metrics["half_median_drift_mm"], 0.0)
+
+    def test_initial_stability_detects_signed_half_window_drift(self):
+        records = [
+            (index / 30.0, -0.1 if index < 75 else -0.3)
+            for index in range(150)
+        ]
+        metrics = VALIDATOR.signed_stability_metrics(records, midpoint=2.5)
+        self.assertGreater(metrics["half_median_drift_mm"], 0.15)
+
     def test_robot_only_delay_application_contract(self):
         self.assertIsNone(
             VALIDATOR.application_requirement_failure(

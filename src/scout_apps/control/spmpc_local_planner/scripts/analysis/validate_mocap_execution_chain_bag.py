@@ -62,18 +62,23 @@ def requires_solver_artifacts(message):
 
 
 def state_alignment_contract_ok(message):
-    """Accept either aligned liquid state or an explicit no-liquid solve.
+    """Accept an aligned required state or a safe non-required state.
 
     A slosh-enabled solver must require and pass the common-epoch alignment
-    gate.  A B0-style solver may bypass that gate only when the runtime marks
-    the state as aligned and explicitly reports that liquid state was not
-    consumed.
+    gate.  A B0-style solver normally reports ``LIQUID_NOT_CONSUMED`` before
+    delay composition.  In ``fixed_closed_loop`` the composer can then replace
+    both robot and diagnostic liquid states with one command-history rollout;
+    the audit consequently reports ``DELAY_PREDICTED_COMMON_EPOCH`` even though
+    B0 still does not consume liquid.  Both statuses are safe only when the
+    runtime also marks the state as aligned.  Unsafe bypass/partial-application
+    statuses remain rejected.
     """
     if bool(message.state_alignment_required):
         return bool(message.state_time_aligned)
     return (
         bool(message.state_time_aligned)
-        and str(message.state_alignment_status) == "LIQUID_NOT_CONSUMED"
+        and str(message.state_alignment_status)
+        in {"LIQUID_NOT_CONSUMED", "DELAY_PREDICTED_COMMON_EPOCH"}
     )
 
 
