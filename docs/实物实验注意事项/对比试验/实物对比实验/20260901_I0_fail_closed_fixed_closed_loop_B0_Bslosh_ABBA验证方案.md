@@ -4,7 +4,7 @@
 
 协议 ID：`SMPCC_I0_FAILCLOSED_FIXED_SHORT100_ABBA_DEV_V2`
 
-状态：`CODE-AUDITED / HARDWARE-UNVERIFIED / WORKTREE-IMPLEMENTED / UNCOMMITTED`
+状态：`CODE-AUDITED / HARDWARE-UNVERIFIED / SOURCE-COMMITTED / LOCAL-BUILD-VERIFIED`
 
 ## Material Passport
 
@@ -12,7 +12,8 @@
 - Origin Mode: plan
 - Origin Date: 2026-09-01
 - Verification Status: CODE-AUDITED / HARDWARE-UNVERIFIED
-- Source Status: WORKTREE-IMPLEMENTED / UNCOMMITTED
+- Source Status: SOURCE-COMMITTED / LOCAL-BUILD-VERIFIED
+- Implementation Commit: `bb60399865d198cf1c590f82494440e6d67e406f`（已 push）
 - Version Label: i0_failclosed_fixed_short100_abba_dev_v2
 
 ## 0. 一页结论
@@ -54,12 +55,15 @@ liquid cost stages 4..60 = w_slosh_eta=w_slosh_eta_dot=0
 当前代码准备状态：
 
 ```text
-静态/纯逻辑回归 = 以本次工作区实现的最终验证记录为准；阶段提交前新增回归均须 PASS
-实车运行         = 尚未执行
-源码状态         = 工作区已实现；阶段提交、实车机同步和重编译尚未完成
+本机重新编译     = slosh_models / spmpc_local_planner / realsense_liquid_measurement PASS
+本次直接复跑     = 52 个 Python 测试 + 6 个 VariantConfig C++ 测试，全部 PASS
+catkin 当前汇总  = 226 tests，0 errors，0 failures
+v2 validate-only = Row01 B0 与 Row02 Bslosh-short100 均 PASS；motion NOT started
+v2 实车运行      = 尚未执行
+源码状态         = bb60399 已提交并 push；本机 build 已更新
 ```
 
-正式运动前必须把包含本方案、runner 和证据工具的阶段提交同步到实车机、重新编译，并保证 `git status --short` 无输出。专用 runner 会拒绝带未提交 runtime/evidence 修改的实车运动；v2 还会在发路径前核对 latched `/spmpc/controller_variant`，旧二进制将新名字回退为 `B0` 时不会放车。
+`bb60399` 已包含本方案、runner 和证据工具。正式运动前仍必须在实车工作区重新编译，并保证 `git status --short` 无输出。专用 runner 会拒绝带未提交 runtime/evidence 修改的实车运动；v2 还会在发路径前核对 latched `/spmpc/controller_variant`，旧二进制将新名字回退为 `B0` 时不会放车。
 
 ## 1. 研究问题、假设和结论边界
 
@@ -124,10 +128,13 @@ DeltaRMS >= 0
 41f0937831aab2edfb82d579c6ed853b7919556b
 SMPCC_I0_FAILCLOSED_FIXED_ABBA_DEV_V1
 treatment = 历史 B_slosh，全约 2 s horizon 都计入液体代价
-hardware  = 未执行
+hardware  = 2026-09-01 已执行 Block 1（Row01 B0 -> Row02 Bslosh）
+decision  = STOP_BLOCK1_FUTILITY；按规则未执行 Row03/Row04
 ```
 
-v1 没有实物结果，不撤回也不覆盖；它保留为设计演进证据。当前 v2 以独立 protocol、variant、runner、输出目录、stem、prereg/order、postflight suffix、analysis report type 和 session marker 取代 v1 的待执行入口。v1/v2 的任何 bag、report 或 PASS marker 都不得互相满足前序门，也不得池化分析。
+v1 Block 1 的预注册 RGB 结果为：B0 `P95/RMS=1.440/0.741 mm`，Bslosh `7.081/3.890 mm`，`DeltaP95=-5.641 mm`，Bslosh/B0 到点时间比 `1.016`。独立 B0 复测只支持 B0 低晃动的重复性，不替换原 Row01。完整记录见 [20260901 I0 fail-closed + fixed_closed_loop 历史 Bslosh v1 Block 1 分析](../实物对比试验分析/20260901_I0_fail_closed_fixed_closed_loop_B0_Bslosh_Block1分析.md)。
+
+v1 有效负结果不撤回也不覆盖。当前 v2 以独立 protocol、variant、runner、输出目录、stem、prereg/order、postflight suffix、analysis report type 和 session marker 开展新的 short100 筛查。v1/v2 的任何 bag、report 或 PASS marker 都不得互相满足前序门，也不得池化分析。
 
 ### 2.2 `03bcfee` 的边界
 
@@ -147,7 +154,7 @@ legacy_delay_applied=false
 actuator_candidate_applied=false
 ```
 
-它没有实现新执行器模型，也没有改变既有控制器默认行为。本次实验不撤回 `03bcfee`，但使用的是当前工作区新增、尚未阶段提交的独立 B0/Bslosh-short100 ABBA profile。
+它没有实现新执行器模型，也没有改变既有控制器默认行为。本次实验不撤回 `03bcfee`，但使用的是 `bb60399` 已提交的独立 B0/Bslosh-short100 ABBA profile。
 
 ### 2.3 与未来正式方案的关系
 
@@ -281,7 +288,7 @@ RealSense 原始图像仅供在线 detector 使用。bag 只保存 `/liquid/meas
 
 ## 5. 实验前代码冻结与编译
 
-本方案相关源码已在工作区实现，但尚未形成最终实验提交。必须先完成测试、阶段提交，再在实车机同步该提交、重新编译并确认相关路径 clean；此前不允许运动。同步后执行：
+本方案相关源码已由 `bb60399` 阶段提交并 push。必须在当前实车工作区重新编译并确认工作区 clean；此前不允许运动。执行：
 
 ```bash
 cd /home/geist/scout_ws
@@ -303,6 +310,8 @@ experiment_commit = 实车运行前填写 git rev-parse HEAD；必须包含 shor
 ```
 
 runner 只能证明相关源代码 clean，不能自动证明 `devel` 对应当前提交，因此本节的重新编译不能省略。
+
+2026-09-01 本机收口记录：上述三个包 Release 编译通过；本次直接复跑的 `52` 个 Python 测试与 `6` 个 `VariantConfig` C++ 测试全部通过，`catkin_test_results` 当前汇总为 `226 tests, 0 errors, 0 failures`。v2 Row01/Row02 validate-only 均通过，未启动运动。
 
 ## 6. 终端 A：底盘、传感器与冻结地图定位
 
@@ -409,6 +418,30 @@ rosparam get /cartographer_node/frozen_map_file
 rosparam get /cartographer_node/frozen_map_expected_sha256
 ```
 
+相机进程长时间运行或系统时间发生校正后，还必须在发车前检查图像源时间戳。下面使用轻量的 `camera_info` 连续检查 10 帧；其时间源与 color image 相同：
+
+```bash
+python3 - <<'PY'
+import statistics
+import time
+
+import rospy
+from sensor_msgs.msg import CameraInfo
+
+rospy.init_node("check_realsense_source_stamp", anonymous=True, disable_signals=True)
+lags = []
+for _ in range(10):
+    msg = rospy.wait_for_message("/camera/color/camera_info", CameraInfo, timeout=3.0)
+    lags.append(time.time() - msg.header.stamp.to_sec())
+
+print("camera source lag: min={:.3f}s median={:.3f}s max={:.3f}s".format(
+    min(lags), statistics.median(lags), max(lags)))
+if min(lags) < -0.05 or max(lags) > 0.50:
+    raise SystemExit("FAIL: restart/recheck RealSense before motion")
+print("camera source stamp PASS")
+PY
+```
+
 预期：
 
 ```text
@@ -416,7 +449,12 @@ rosparam get /cartographer_node/frozen_map_expected_sha256
 runtime map 指向冻结 pbstream
 runtime map SHA = 34e45fd8205a766dbc6e3dcea667c5a0a618e26b331d48351c25645e31a19595
 camera_info = 1920 x 1080
+camera source lag 每帧位于 [-0.05, 0.50] s
 ```
+
+若图像时间戳超前系统时间超过 `0.05 s`，不得发车。postflight 虽会把该包判无效，但不能用事后判废代替发车前检查。
+
+2026-09-01 相机重启后的现场复核：`1920x1080 rgb8`，`camera_info≈27.24 Hz`，连续样本的 source lag 为 `0.040～0.111 s`，通过上述门；`/liquid/measurement` 无残留 publisher。该记录只证明当时状态，正式 Row01 前仍需重新执行检查。
 
 ### 8.2 唯一命令发布者
 
@@ -649,6 +687,8 @@ normal-motion post-solver limiter change  = 0
 该 5 s |signed corrected height| P95           <= 0.25 mm
 该 5 s signed 前后半窗 median 漂移            <= 0.05 mm
 motion+tail RGB clean coverage                >= 98%
+source stamp future skew                      <= 0.05 s
+publish-lag P95                               <= 0.50 s
 ```
 
 这些数值是运动后的 postflight qualification：能阻止坏包进入 A/B 结论，但实时发车门只检查 zero-lock 和 clean 消息，因此仍可能在事后判定该行无效。
@@ -780,3 +820,4 @@ operator        =
 - [G3R2 逐预测步 RGB 与 IMU observer 匹配度分析（short100 依据）](../实物对比试验分析/20260802_G3R2逐预测步_RGB与IMU_observer匹配度初筛及完整曲线方案.md)
 - [G3R3 短可信时域公平配对实现与实物放行记录](../实物对比试验分析/20260819_G3R3短可信时域公平配对实现与实物放行记录.md)
 - [G3R3 短可信时域公平配对实物验证方案](20260819_G3R3短可信时域公平配对实物验证方案.md)
+- [20260901 历史 Bslosh v1 Block 1 实物分析](../实物对比试验分析/20260901_I0_fail_closed_fixed_closed_loop_B0_Bslosh_Block1分析.md)
