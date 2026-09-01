@@ -193,6 +193,21 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
+  find_program(SPMPC_PYTHON3_EXECUTABLE NAMES python3)
+  if(NOT SPMPC_PYTHON3_EXECUTABLE)
+    message(FATAL_ERROR "[spmpc] python3 is required for mainline contract tests")
+  endif()
+  add_test(
+    NAME test_mainline_stage0_contract_manifest
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/scripts/tests/test_mainline_stage0_contract.py
+  )
+  catkin_add_gtest(test_mainline_contract test/test_mainline_contract.cpp)
+  if(TARGET test_mainline_contract)
+    target_link_libraries(test_mainline_contract
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline
