@@ -292,9 +292,7 @@ class KnownPrefixPropagator {
     }
     const long double nanoseconds =
         static_cast<long double>(maximum_delay) * 1000000000.0L;
-    if (!std::isfinite(nanoseconds) ||
-        nanoseconds >=
-            static_cast<long double>(std::numeric_limits<std::int64_t>::max())) {
+    if (!std::isfinite(nanoseconds) || nanoseconds < 0.0L) {
       throw std::overflow_error("known prefix maximum delay exceeds int64");
     }
     const long double nearest_integer = std::round(nanoseconds);
@@ -305,7 +303,19 @@ class KnownPrefixPropagator {
         std::fabs(nanoseconds - nearest_integer) <= tolerance_ns
             ? nearest_integer
             : nanoseconds;
-    return static_cast<std::int64_t>(std::ceil(normalized));
+    // A long double may have the same precision as double.  In that case
+    // converting INT64_MAX to floating point rounds it to 2^63.  Guard the
+    // value which is actually converted, rather than relying on a comparison
+    // against a rounded representation of INT64_MAX: conversion of an
+    // out-of-range floating value to int64_t is undefined behavior.
+    const long double rounded_up = std::ceil(normalized);
+    const long double int64_max_exclusive =
+        static_cast<long double>(std::numeric_limits<std::int64_t>::max());
+    if (!std::isfinite(normalized) || !std::isfinite(rounded_up) ||
+        rounded_up < 0.0L || rounded_up >= int64_max_exclusive) {
+      throw std::overflow_error("known prefix maximum delay exceeds int64");
+    }
+    return static_cast<std::int64_t>(rounded_up);
   }
 
   static double nanosecondsToSeconds(std::int64_t nanoseconds) noexcept {
@@ -373,10 +383,18 @@ class KnownPrefixPropagator {
 
   static KnownPrefixStatus validateHistory(
       const Snapshot& history, const CycleRequest& target_cycle) noexcept {
+    const PublishedCommandEvent* first_event = history.eventIfPresent(0);
     const PublishedCommandEvent* latest_event =
         history.eventIfPresent(history.size() - 1);
-    if (latest_event == nullptr) {
+    if (first_event == nullptr || latest_event == nullptr) {
       return KnownPrefixStatus::kInvalidHistory;
+    }
+    std::int64_t first_grid_offset = 0;
+    try {
+      first_grid_offset =
+          ReleaseGridContract::boundaryOffsetNs(first_event->cycle.cycle_id);
+    } catch (const std::overflow_error&) {
+      return KnownPrefixStatus::kTimeOverflow;
     }
     const PublishedCommandEvent& latest = *latest_event;
     if (latest.cycle.release_model.value >=
@@ -413,6 +431,38 @@ class KnownPrefixPropagator {
           event.release_generation == 0) {
         return KnownPrefixStatus::kInvalidHistory;
       }
+
+      // The event stream is a fixed absolute release grid.  Monotonic
+      // timestamps alone are insufficient: a malformed older event could
+      // otherwise shift one delay switch while the latest-to-target check
+      // still passes.  Compare both clock domains with the cycle-relative
+      // absolute grid offset, using checked differences before any arithmetic.
+      std::int64_t event_grid_offset = 0;
+      std::int64_t expected_grid_gap = 0;
+      std::int64_t model_gap_from_first = 0;
+      std::int64_t steady_gap_from_first = 0;
+      try {
+        event_grid_offset =
+            ReleaseGridContract::boundaryOffsetNs(event.cycle.cycle_id);
+      } catch (const std::overflow_error&) {
+        return KnownPrefixStatus::kTimeOverflow;
+      }
+      if (!checkedNonnegativeDifference(event_grid_offset, first_grid_offset,
+                                        expected_grid_gap) ||
+          !checkedNonnegativeDifference(
+              event.cycle.release_model.value,
+              first_event->cycle.release_model.value, model_gap_from_first) ||
+          !checkedNonnegativeDifference(
+              event.cycle.release_steady.value,
+              first_event->cycle.release_steady.value,
+              steady_gap_from_first)) {
+        return KnownPrefixStatus::kTimeOverflow;
+      }
+      if (model_gap_from_first != expected_grid_gap ||
+          steady_gap_from_first != expected_grid_gap) {
+        return KnownPrefixStatus::kTargetCycleMismatch;
+      }
+
       if (event.cycle.release_model.value >=
           target_cycle.release_model.value) {
         return KnownPrefixStatus::kFutureEvent;

@@ -215,6 +215,16 @@ TEST(MainlineKnownPrefix, ValidatesFrozenConfigurationAndWidths) {
   EXPECT_THROW(Prefix(invalid, makePlantParams(), kMaximumGridGapNs),
                std::overflow_error);
 
+  // The immediately lower double can still round up to the signed 64-bit
+  // boundary after conversion to nanoseconds.  The constructor must reject
+  // it before any floating-to-int64 conversion, including on platforms where
+  // long double has only double precision.
+  invalid = makeConfig();
+  invalid.maximum_linear_delay_sec = std::nextafter(
+      static_cast<double>(std::numeric_limits<std::int64_t>::max()) * 1e-9,
+      0.0);
+  EXPECT_ANY_THROW(Prefix(invalid, makePlantParams(), kMaximumGridGapNs));
+
   ZohPlantParams invalid_plant = makePlantParams();
   invalid_plant.linear_actuator.tau_sec = 0.0;
   EXPECT_THROW(Prefix(makeConfig(), invalid_plant, kMaximumGridGapNs),
