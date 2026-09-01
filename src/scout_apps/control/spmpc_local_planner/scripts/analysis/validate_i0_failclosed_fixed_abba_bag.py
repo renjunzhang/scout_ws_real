@@ -23,6 +23,19 @@ from pathlib import Path
 
 import rosbag
 
+ANALYSIS_DIR = Path(__file__).resolve().parent
+if str(ANALYSIS_DIR) not in sys.path:
+    sys.path.insert(0, str(ANALYSIS_DIR))
+
+from liquid_cost_window_contract import (  # noqa: E402
+    parse_expected_config_items,
+    validate_config_fields,
+    validate_deep_cycle_coverage,
+    validate_effective_config as validate_liquid_effective_config,
+    validate_metadata as validate_liquid_metadata,
+    validate_snapshot_stage_weights,
+)
+
 
 AUDIT_TOPIC = "/spmpc/debug/control_cycle_audit"
 ALIGNMENT_TOPIC = "/spmpc/debug/cmd_odom_alignment"
@@ -33,6 +46,8 @@ SELECTION_TOPIC = "/spmpc/debug/slosh_observer_selection"
 SOLVER_INPUT_TOPIC = "/spmpc/debug/solver_input_state"
 STATUS_TOPIC = "/spmpc/status"
 WARM_START_TOPIC = "/spmpc/debug/warm_start"
+SNAPSHOT_TOPIC = "/spmpc/debug/pre_solve_snapshot"
+HORIZON_TOPIC = "/spmpc/debug/predicted_horizon"
 
 REQUIRED_TOPICS = (
     AUDIT_TOPIC,
@@ -65,6 +80,24 @@ def parse_args():
     parser.add_argument("--condition", choices=("B0", "Bslosh"), required=True)
     parser.add_argument("--report", required=True)
     parser.add_argument("--protocol", default="SMPCC_I0_FAILCLOSED_FIXED_ABBA_DEV_V1")
+    parser.add_argument(
+        "--report-schema",
+        default="spmpc_i0_failclosed_fixed_abba_postflight_v1",
+    )
+    parser.add_argument("--expected-variant")
+    parser.add_argument("--expected-slosh-cost-horizon-steps", type=int)
+    parser.add_argument("--expected-slosh-cost-tail-discount", type=float)
+    parser.add_argument("--expected-slosh-eta-dot-ratio", type=float)
+    parser.add_argument("--expected-robot-horizon-steps", type=int, default=60)
+    parser.add_argument("--expected-dt-sec", type=float)
+    parser.add_argument("--expected-control-frequency-hz", type=float)
+    parser.add_argument(
+        "--expected-config",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="repeatable effective_config field expectation (deep mode only)",
+    )
     parser.add_argument("--expected-v-ref", type=float, default=0.20)
     parser.add_argument("--expected-v-safe-max", type=float, default=0.25)
     parser.add_argument("--expected-linear-delay-sec", type=float, default=0.15)
@@ -135,10 +168,34 @@ def require_fraction(failures, label, observed, minimum):
 def validate(args):
     bag_path = Path(args.bag).expanduser().resolve()
     report_path = Path(args.report).expanduser().resolve()
-    expected_variant = "B0" if args.condition == "B0" else "B_slosh"
+    expected_variant = args.expected_variant or (
+        "B0" if args.condition == "B0" else "B_slosh"
+    )
     expected_slosh = args.condition == "Bslosh"
     expected_weight = 5.0 if expected_slosh else 0.0
     failures = []
+
+    extra_expected_config, expected_config_parse_failures = (
+        parse_expected_config_items(args.expected_config)
+    )
+    failures.extend(expected_config_parse_failures)
+
+    deep_values = (
+        args.expected_slosh_cost_horizon_steps,
+        args.expected_slosh_cost_tail_discount,
+        args.expected_slosh_eta_dot_ratio,
+        args.expected_dt_sec,
+        args.expected_control_frequency_hz,
+    )
+    deep_cost_contract = all(value is not None for value in deep_values)
+    if any(value is not None for value in deep_values) and not deep_cost_contract:
+        failures.append(
+            "liquid cost deep contract requires steps, tail, eta-dot ratio, dt, and control frequency together"
+        )
+    if args.expected_config and not deep_cost_contract:
+        failures.append("--expected-config requires the deep liquid cost contract")
+    if args.expected_robot_horizon_steps <= 0:
+        failures.append("expected robot horizon steps must be positive")
 
     audits = []
     alignments = []
@@ -149,6 +206,8 @@ def validate(args):
     solver_inputs = []
     statuses = []
     warm_starts = []
+    snapshots = []
+    horizons = []
 
     if not close(args.minimum_application_fraction, 1.0, tolerance=1.0e-12):
         failures.append(
@@ -163,10 +222,13 @@ def validate(args):
         try:
             with rosbag.Bag(str(bag_path), "r") as bag:
                 available = bag.get_type_and_topic_info().topics
-                for topic in REQUIRED_TOPICS:
+                required_topics = list(REQUIRED_TOPICS)
+                if deep_cost_contract:
+                    required_topics.extend((SNAPSHOT_TOPIC, HORIZON_TOPIC))
+                for topic in required_topics:
                     if topic not in available:
                         failures.append("missing required topic {}".format(topic))
-                wanted = [topic for topic in REQUIRED_TOPICS if topic in available]
+                wanted = [topic for topic in required_topics if topic in available]
                 for topic, message, bag_stamp in bag.read_messages(topics=wanted):
                     when = message_stamp(message, bag_stamp.to_sec())
                     if topic == AUDIT_TOPIC:
@@ -187,6 +249,10 @@ def validate(args):
                         statuses.append((when, str(message.data)))
                     elif topic == WARM_START_TOPIC:
                         warm_starts.append((when, parse_multiarray(message)))
+                    elif topic == SNAPSHOT_TOPIC:
+                        snapshots.append((when, message))
+                    elif topic == HORIZON_TOPIC:
+                        horizons.append((when, message))
         except Exception as exc:  # noqa: BLE001
             failures.append("could not read bag: {}".format(exc))
 
@@ -245,18 +311,88 @@ def validate(args):
         "speed_safety_enable": 1.0,
         "v_safe_max": args.expected_v_safe_max,
     }
-    for field, expected in expected_config.items():
-        if not close(config.get(field), expected):
-            failures.append(
-                "effective_config {}={!r}, expected {}".format(
-                    field, config.get(field), expected
+    config_field_failures = []
+    if deep_cost_contract:
+        for field, expected in extra_expected_config.items():
+            if field in expected_config and not close(
+                expected_config[field], expected
+            ):
+                config_field_failures.append(
+                    "expected config {}={} conflicts with frozen value {}".format(
+                        field, expected, expected_config[field]
+                    )
+                )
+                continue
+            expected_config[field] = expected
+    configs_to_validate = (
+        motion_configs if deep_cost_contract else motion_configs[-1:]
+    )
+    if not configs_to_validate:
+        configs_to_validate = [(0.0, {})]
+    deep_config_failures = []
+    for config_index, (_, config_row) in enumerate(configs_to_validate):
+        label = "effective_config[{}]".format(config_index)
+        config_field_failures.extend(
+            validate_config_fields(config_row, label, expected_config)
+        )
+        if deep_cost_contract:
+            deep_config_failures.extend(
+                validate_liquid_effective_config(
+                    config_row,
+                    label,
+                    expected_slosh,
+                    expected_weight,
+                    args.expected_slosh_eta_dot_ratio,
+                    args.expected_slosh_cost_horizon_steps,
+                    args.expected_slosh_cost_tail_discount,
+                    args.expected_robot_horizon_steps,
+                    args.expected_dt_sec,
+                    args.expected_control_frequency_hz,
                 )
             )
+    failures.extend(config_field_failures)
+    failures.extend(deep_config_failures)
+
+    solve_cycle_sequence = [
+        int(message.cycle_id)
+        for _, message in motion_audits
+        if bool(message.solve_attempted)
+    ]
+    solve_cycle_ids = set(solve_cycle_sequence)
+    cycle_audit_failures = []
+    deep_selection_failures = []
+    snapshot_coverage_failures = []
+    horizon_coverage_failures = []
+    selections_to_validate = motion_selections
+    valid_snapshots = []
+    valid_horizons = []
+    if deep_cost_contract:
+        coverage = validate_deep_cycle_coverage(
+            motion_audits,
+            selections,
+            snapshots,
+            horizons,
+        )
+        solve_cycle_sequence = list(coverage.solve_cycle_sequence)
+        solve_cycle_ids = coverage.solve_cycle_ids
+        cycle_audit_failures = list(coverage.audit_failures)
+        deep_selection_failures = list(coverage.selection_failures)
+        snapshot_coverage_failures = list(coverage.snapshot_failures)
+        horizon_coverage_failures = list(coverage.horizon_failures)
+        selections_to_validate = list(coverage.selection_records)
+        valid_snapshots = [
+            message for _, message in coverage.valid_snapshot_records
+        ]
+        valid_horizons = [
+            message for _, message in coverage.valid_horizon_records
+        ]
+        failures.extend(cycle_audit_failures)
+        failures.extend(deep_selection_failures)
 
     selection_bad = 0
     consumption_bad = 0
     selection_reset_epochs = set()
-    for _, message in motion_selections:
+    for _, message in selections_to_validate:
         selection_reset_epochs.add(int(message.imu_reset_epoch))
         if not (
             bool(message.configured)
@@ -411,6 +547,50 @@ def validate(args):
     if common_epoch_bad:
         failures.append("fixed common-epoch mismatch count={}".format(common_epoch_bad))
 
+    liquid_artifact_failures = (
+        snapshot_coverage_failures + horizon_coverage_failures
+    )
+    if deep_cost_contract:
+        for message in valid_snapshots:
+            label = "snapshot cycle {}".format(message.cycle_id)
+            liquid_artifact_failures.extend(
+                validate_liquid_metadata(
+                    message,
+                    label,
+                    expected_variant,
+                    expected_slosh,
+                    args.expected_slosh_cost_horizon_steps,
+                    args.expected_slosh_cost_tail_discount,
+                    args.expected_robot_horizon_steps,
+                    args.expected_dt_sec,
+                )
+            )
+            if expected_slosh:
+                liquid_artifact_failures.extend(
+                    validate_snapshot_stage_weights(
+                        message,
+                        label,
+                        expected_weight,
+                        args.expected_slosh_eta_dot_ratio,
+                        args.expected_slosh_cost_horizon_steps,
+                        args.expected_slosh_cost_tail_discount,
+                    )
+                )
+        for message in valid_horizons:
+            liquid_artifact_failures.extend(
+                validate_liquid_metadata(
+                    message,
+                    "horizon cycle {}".format(message.cycle_id),
+                    expected_variant,
+                    expected_slosh,
+                    args.expected_slosh_cost_horizon_steps,
+                    args.expected_slosh_cost_tail_discount,
+                    args.expected_robot_horizon_steps,
+                    args.expected_dt_sec,
+                )
+            )
+        failures.extend(liquid_artifact_failures)
+
     zero_counts = {
         field: sum(row.get(field, 0.0) > 0.5 for _, row in motion_interventions)
         for field in BAD_ZERO_FIELDS
@@ -436,7 +616,7 @@ def validate(args):
         failures.append("GOAL_REACHED was not recorded")
 
     report = {
-        "schema": "spmpc_i0_failclosed_fixed_abba_postflight_v1",
+        "schema": args.report_schema,
         "protocol": args.protocol,
         "status": "PASS" if not failures else "FAIL",
         "condition": args.condition,
@@ -448,8 +628,11 @@ def validate(args):
             "alignment_motion": len(motion_alignments),
             "imu_motion": len(motion_imu),
             "selection_motion": len(motion_selections),
+            "selection_joined_to_solve": len(selections_to_validate),
             "solver_input_motion": len(motion_solver_inputs),
             "warm_start_motion": len(motion_warm_starts),
+            "valid_snapshot_motion": len(valid_snapshots),
+            "valid_horizon_motion": len(valid_horizons),
         },
         "contracts": {
             "selected_observer": "processed_imu_I0",
@@ -460,6 +643,7 @@ def validate(args):
             "delay_sec": [args.expected_linear_delay_sec, args.expected_angular_delay_sec],
             "selection_bad_count": selection_bad,
             "selection_consumption_bad_count": consumption_bad,
+            "selection_cycle_failure_count": len(deep_selection_failures),
             "selection_reset_epochs": sorted(selection_reset_epochs),
             "imu_bad_count": imu_bad,
             "imu_reset_epochs": sorted(imu_reset_epochs),
@@ -473,6 +657,23 @@ def validate(args):
             "audit_failure_counts": dict(audit_failures),
             "zero_reason_counts": zero_counts,
             "goal_reached": goal_reached,
+            "deep_liquid_cost_contract": deep_cost_contract,
+            "expected_robot_horizon_steps": args.expected_robot_horizon_steps
+            if deep_cost_contract
+            else None,
+            "expected_slosh_cost_horizon_steps": args.expected_slosh_cost_horizon_steps,
+            "expected_slosh_cost_tail_discount": args.expected_slosh_cost_tail_discount,
+            "expected_slosh_eta_dot_ratio": args.expected_slosh_eta_dot_ratio,
+            "expected_dt_sec": args.expected_dt_sec,
+            "expected_control_frequency_hz": args.expected_control_frequency_hz,
+            "expected_effective_config": expected_config
+            if deep_cost_contract
+            else {},
+            "effective_config_field_failure_count": len(config_field_failures),
+            "liquid_config_failure_count": len(deep_config_failures),
+            "cycle_audit_coverage_failure_count": len(cycle_audit_failures),
+            "liquid_artifact_failure_count": len(liquid_artifact_failures),
+            "solve_cycle_count": len(solve_cycle_ids),
         },
         "effective_config_last": config,
         "failures": failures,

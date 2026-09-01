@@ -31,6 +31,29 @@ variants:
     w_smooth: 0.1
     w_slosh: 5.0   # bug A 修复后 slosh 与 contour 同量级; 调到 5 让 slosh 能改变候选选择 (后续可 sweep)
 
+  # Development-only literal B_slosh profile whose liquid-state cost is
+  # restricted to solver state stages 0..3 (0..100 ms at 30 Hz).  Robot
+  # dynamics and every non-liquid cost still use the full ~2 s OCP horizon.
+  # Keep historical B_slosh unchanged so old bags and protocols retain their
+  # original full-horizon identity.
+  B_slosh_short100:
+    slosh_enable: true
+    smooth_priority_enable: false
+    slosh_constraint_enable: false
+    primitive_mode: linear
+    w_contour: 1.0
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.25
+    w_control: 0.1
+    w_accel: 0.0
+    w_smooth: 0.1
+    w_slosh: 5.0
+    slosh_cost_horizon_steps: 3
+    slosh_cost_tail_discount: 0.0
+
   B_slosh_hard:
     slosh_enable: true
     smooth_priority_enable: false

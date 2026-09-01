@@ -70,8 +70,11 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
     effective_config_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/effective_config", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
-    predicted_horizon_pub_ = nh.advertise<PredictedHorizon>("debug/predicted_horizon", 1);
-    pre_solve_snapshot_pub_ = nh.advertise<PreSolveSnapshot>("debug/pre_solve_snapshot", 1);
+    // These large, per-solve evidence messages are consumed by rosbag rather
+    // than the control loop.  A small burst buffer prevents transient recorder
+    // scheduling jitter from invalidating otherwise complete cycle coverage.
+    predicted_horizon_pub_ = nh.advertise<PredictedHorizon>("debug/predicted_horizon", 10);
+    pre_solve_snapshot_pub_ = nh.advertise<PreSolveSnapshot>("debug/pre_solve_snapshot", 10);
     progress_pub_ = nh.advertise<std_msgs::Float32>("debug/progress_s", 1);
     v_ref_current_pub_ = nh.advertise<std_msgs::Float32>("debug/v_ref_current", 1);
     map_vref_status_pub_ = nh.advertise<std_msgs::String>("debug/map_vref_status", 1);

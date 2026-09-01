@@ -67,6 +67,14 @@ SLOSH_ONLY_CRITICAL_TOPICS = [
     "/spmpc/debug/slosh_cost_monitor",
     "/spmpc/slosh_horizon_summary",
 ]
+# Variants whose trial summary must contain the liquid diagnostics used by the
+# literal B_slosh family.  Keep this explicit so unrelated research variants do
+# not acquire stricter summary requirements by name-prefix accident.
+SLOSH_SIGNAL_VARIANTS = frozenset({"B_slosh", "B_slosh_short100"})
+# Aggregate cost-share heuristics were calibrated for the full-horizon
+# treatment.  Short-window variants still require liquid diagnostics, but a
+# small total share is expected and must not be labeled inactive by this rule.
+FULL_HORIZON_SLOSH_COST_HEURISTIC_VARIANTS = frozenset({"B_slosh"})
 ZERO_REASON_FIELDS = [
     "zero_due_to_solver_failure",
     "zero_due_to_waiting_for_odom",
@@ -473,13 +481,14 @@ def build_red_flags(summary):
         "controller_variant_last"
     )
     opt = summary["metrics"].get("optimizer_pressure", {})
-    if variant == "B_slosh":
+    if variant in FULL_HORIZON_SLOSH_COST_HEURISTIC_VARIANTS:
         slosh_pct = opt.get("pct_slosh_total_abs_sum", {}).get("p50")
         eta_dot_pct = opt.get("pct_eta_dot_in_slosh", {}).get("p50")
         if finite(slosh_pct) and abs(slosh_pct) < 1.0:
             flags.append({"code": "slosh_cost_inactive", "detail": f"median slosh pct={fmt(slosh_pct)}%"})
         if finite(eta_dot_pct) and abs(eta_dot_pct) < 5.0:
             flags.append({"code": "eta_dot_cost_inactive", "detail": f"median eta_dot share={fmt(eta_dot_pct)}%"})
+    if variant in SLOSH_SIGNAL_VARIANTS:
         if opt.get("h_modal_peak_pred_mm", {}).get("n", 0) == 0:
             flags.append({"code": "horizon_peak_missing", "detail": "missing /spmpc/slosh_horizon_summary"})
 
@@ -541,7 +550,9 @@ def summarize_bag(bag_path):
     intended_variant = sidecars["meta"].get("variant") or sidecars["meta"].get("VARIANT")
     observed_variants = data["strings"].get("/spmpc/controller_variant", [])
     variant_for_contract = intended_variant or (observed_variants[-1] if observed_variants else None)
-    slosh_signals_expected = str(variant_for_contract or "") == "B_slosh"
+    slosh_signals_expected = (
+        str(variant_for_contract or "") in SLOSH_SIGNAL_VARIANTS
+    )
     required_topics = list(CRITICAL_TOPICS)
     if slosh_signals_expected:
         required_topics.extend(SLOSH_ONLY_CRITICAL_TOPICS)

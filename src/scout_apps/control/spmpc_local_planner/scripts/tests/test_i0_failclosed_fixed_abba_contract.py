@@ -1,54 +1,118 @@
 #!/usr/bin/env python3
-"""Static contract tests for the literal I0/fail-closed/fixed ABBA wrapper."""
+"""Contracts for the shared I0/fail-closed/fixed ABBA engine and profiles."""
 
 import py_compile
 import subprocess
+import sys
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 PLANNER_SCRIPTS = SCRIPT_DIR.parent
-WRAPPER = PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_abba_trial.sh"
-VALIDATOR = PLANNER_SCRIPTS / "analysis" / "validate_i0_failclosed_fixed_abba_bag.py"
-ANALYZER = PLANNER_SCRIPTS / "analysis" / "analyze_i0_failclosed_fixed_abba_rgb.py"
-RGB_VALIDATOR = PLANNER_SCRIPTS / "analysis" / "validate_g3_online_rgb_trial.py"
+ANALYSIS_DIR = PLANNER_SCRIPTS / "analysis"
+LEGACY_WRAPPER = PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_abba_trial.sh"
+SHORT100_WRAPPER = (
+    PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh"
+)
+ENGINE = (
+    PLANNER_SCRIPTS
+    / "lib"
+    / "run_spmpc_i0_failclosed_fixed_abba_engine.sh"
+)
+PROFILE_TOOL = ANALYSIS_DIR / "i0_failclosed_fixed_abba_profile.py"
+WINDOW_CONTRACT = ANALYSIS_DIR / "liquid_cost_window_contract.py"
+VALIDATOR = ANALYSIS_DIR / "validate_i0_failclosed_fixed_abba_bag.py"
+ANALYZER = ANALYSIS_DIR / "analyze_i0_failclosed_fixed_abba_rgb.py"
+RGB_VALIDATOR = ANALYSIS_DIR / "validate_g3_online_rgb_trial.py"
+
+sys.path.insert(0, str(ANALYSIS_DIR))
+import i0_failclosed_fixed_abba_profile as profiles  # noqa: E402
+import liquid_cost_window_contract as window  # noqa: E402
 
 
 class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.wrapper = WRAPPER.read_text(encoding="utf-8")
+        cls.legacy_wrapper = LEGACY_WRAPPER.read_text(encoding="utf-8")
+        cls.short100_wrapper = SHORT100_WRAPPER.read_text(encoding="utf-8")
+        cls.engine = ENGINE.read_text(encoding="utf-8")
         cls.validator = VALIDATOR.read_text(encoding="utf-8")
 
     def test_shell_and_python_syntax(self):
-        subprocess.run(["bash", "-n", str(WRAPPER)], check=True)
-        py_compile.compile(str(VALIDATOR), doraise=True)
-        py_compile.compile(str(ANALYZER), doraise=True)
-        py_compile.compile(str(RGB_VALIDATOR), doraise=True)
+        for script in (LEGACY_WRAPPER, SHORT100_WRAPPER, ENGINE):
+            subprocess.run(["bash", "-n", str(script)], check=True)
+        for script in (
+            PROFILE_TOOL,
+            WINDOW_CONTRACT,
+            VALIDATOR,
+            ANALYZER,
+            RGB_VALIDATOR,
+        ):
+            py_compile.compile(str(script), doraise=True)
 
-    def test_default_is_disarmed_validate_only(self):
-        self.assertIn('VALIDATE_ONLY="${VALIDATE_ONLY:-true}"', self.wrapper)
-        self.assertIn('ARM_MOTION="${ARM_MOTION:-NO}"', self.wrapper)
-        self.assertIn('CONFIRM_RGB_GEOMETRY="${CONFIRM_RGB_GEOMETRY:-NO}"', self.wrapper)
-        self.assertIn('CONFIRM_NEW_SPEED_PROFILE="${CONFIRM_NEW_SPEED_PROFILE:-NO}"', self.wrapper)
-        self.assertIn('[[ "${ARM_MOTION}" == "YES" ]]', self.wrapper)
-        self.assertIn('[[ "${CONFIRM_RGB_GEOMETRY}" == "YES" ]]', self.wrapper)
-        self.assertIn('[[ "${CONFIRM_NEW_SPEED_PROFILE}" == "YES" ]]', self.wrapper)
+    def test_thin_wrappers_select_frozen_profiles(self):
+        self.assertIn("I0FC_ABBA_PROFILE=legacy_v1", self.legacy_wrapper)
+        self.assertIn("I0FC_ABBA_PROFILE=short100_v2", self.short100_wrapper)
+        shared_engine = "lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh"
+        self.assertIn(shared_engine, self.legacy_wrapper)
+        self.assertIn(shared_engine, self.short100_wrapper)
+        self.assertLess(len(self.legacy_wrapper.splitlines()), 20)
+        self.assertLess(len(self.short100_wrapper.splitlines()), 20)
 
-    def test_literal_abba_order(self):
-        expected = (
-            "01) BLOCK=01; POSITION=01; CONDITION=B0",
-            "02) BLOCK=01; POSITION=02; CONDITION=Bslosh",
-            "03) BLOCK=02; POSITION=01; CONDITION=Bslosh",
-            "04) BLOCK=02; POSITION=02; CONDITION=B0",
+    def test_legacy_profile_is_a_golden_copy_of_v1_identity(self):
+        profile = profiles.get_profile("legacy_v1")
+        self.assertEqual(profile.protocol_id, "SMPCC_I0_FAILCLOSED_FIXED_ABBA_DEV_V1")
+        self.assertEqual(profile.output_tag, "spmpc_i0_failclosed_fixed_abba")
+        self.assertEqual(profile.treatment_variant, "B_slosh")
+        self.assertEqual(profile.runner_selector_mode, "pilot_method")
+        expected = {
+            "01": ("B0", "B0", "B0", ""),
+            "02": ("Bslosh", "W5", "B_slosh", "DEV_I0FC_FIXED_01_B0_b01_p01_a01"),
+            "03": ("Bslosh", "W5", "B_slosh", "DEV_I0FC_FIXED_02_Bslosh_b01_p02_a01"),
+            "04": ("B0", "B0", "B0", "DEV_I0FC_FIXED_03_Bslosh_b02_p01_a01"),
+        }
+        for row_id, values in expected.items():
+            row = profiles.resolve_row(profile, row_id)
+            self.assertEqual(
+                (row.condition, row.pilot_method, row.variant), values[:3]
+            )
+            self.assertEqual(profiles.previous_run_label(profile, row), values[3])
+
+    def test_short100_profile_has_independent_identity_and_direct_variant(self):
+        profile = profiles.get_profile("short100_v2")
+        self.assertEqual(
+            profile.protocol_id,
+            "SMPCC_I0_FAILCLOSED_FIXED_SHORT100_ABBA_DEV_V2",
         )
-        positions = [self.wrapper.index(item) for item in expected]
-        self.assertEqual(positions, sorted(positions))
-        self.assertIn("row_order=B0,Bslosh,Bslosh,B0", self.wrapper)
+        self.assertEqual(profile.treatment_variant, "B_slosh_short100")
+        self.assertEqual(profile.treatment_cost_horizon_steps, 3)
+        self.assertEqual(profile.treatment_cost_tail_discount, 0.0)
+        self.assertEqual(profile.runner_selector_mode, "direct_variant")
+        self.assertTrue(profile.require_fresh_session)
+        self.assertNotEqual(
+            profile.rgb_report_suffix,
+            profiles.get_profile("legacy_v1").rgb_report_suffix,
+        )
+        rows = list(profiles.iter_rows(profile))
+        self.assertEqual(
+            [row.condition for row in rows],
+            ["B0", "Bslosh", "Bslosh", "B0"],
+        )
+        self.assertTrue(all(row.pilot_method == "" for row in rows))
+        self.assertEqual(rows[1].variant, "B_slosh_short100")
+        self.assertEqual(rows[1].cost_horizon_steps, 3)
+        self.assertEqual(rows[1].cost_tail_discount, 0.0)
+        self.assertEqual(rows[0].variant, "B0")
+        self.assertEqual(rows[0].cost_horizon_steps, -1)
 
-    def test_exact_runtime_contract_is_frozen(self):
+    def test_engine_keeps_delay_speed_and_disarm_contract(self):
         required = (
+            'VALIDATE_ONLY="${VALIDATE_ONLY:-true}"',
+            'ARM_MOTION="${ARM_MOTION:-NO}"',
+            'CONFIRM_RGB_GEOMETRY="${CONFIRM_RGB_GEOMETRY:-NO}"',
+            'CONFIRM_NEW_SPEED_PROFILE="${CONFIRM_NEW_SPEED_PROFILE:-NO}"',
             "V_REF=0.20",
             "V_SAFE_MAX=0.25",
             "DELAY_PHASE_MODE=fixed_closed_loop",
@@ -56,23 +120,30 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "DELAY_PHASE_ANGULAR_DELAY_SEC=0.22",
             "CURRENT_OBSERVER_SOURCE=processed_imu",
             "OBSERVER_FALLBACK_POLICY=fail_closed",
-            "OBSERVER_LATCH_FALLBACK=false",
             "STATE_TIMING_REQUIRE_COMMON_EPOCH=true",
             "SHARED_LINEAR_ACCEL_LIMIT_ENABLE=false",
             "SHARED_ANGULAR_LIMIT_ENABLE=false",
+        )
+        for token in required:
+            self.assertIn(token, self.engine)
+        for gate in (
+            '[[ "${ARM_MOTION}" == "YES" ]]',
+            '[[ "${CONFIRM_RGB_GEOMETRY}" == "YES" ]]',
+            '[[ "${CONFIRM_NEW_SPEED_PROFILE}" == "YES" ]]',
+        ):
+            self.assertIn(gate, self.engine)
+        for frozen_runtime in (
+            "OBSERVER_LATCH_FALLBACK=false",
+            "LIQUID_NOWCAST_PUBLISH_COMPARISON=true",
             "EXECUTION_CONTRACT_FAIL_CLOSED=true",
             "SPEED_SAFETY_ENABLE=true",
-            "LIQUID_NOWCAST_PUBLISH_COMPARISON=true",
             "START_GATE_TIMEOUT_SEC=120",
             "IMU_SHADOW_READY_TIMEOUT_SEC=20",
-        )
-        for item in required:
-            self.assertIn(item, self.wrapper)
-        self.assertIn("run_spmpc_real_fixed_path_trial.sh", self.wrapper)
-        self.assertIn("continuous_mpcc_acados", self.wrapper)
+        ):
+            self.assertIn(frozen_runtime, self.engine)
 
-    def test_frozen_c02_artifacts_and_image_free_evidence(self):
-        required = (
+    def test_engine_preserves_frozen_assets_and_image_free_evidence(self):
+        for token in (
             "mocap_compact_s_C02.json",
             "1464ef37857bcb899d8b0e4867ff63ea06f017e1b871bed80e077f450be14164",
             "map_carto_20260829_mocap_exec_v1.pbstream",
@@ -84,20 +155,23 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "RECORD_ONLINE_LIQUID=true",
             "FORBID_IMAGE_STREAMS=true",
             "RECORD_CAMERA_INFO=true",
-        )
-        for item in required:
-            self.assertIn(item, self.wrapper)
+        ):
+            self.assertIn(token, self.engine)
 
-    def test_i0_to_l22_semantics_are_not_mislabeled(self):
-        self.assertIn("OBSERVER_APPLIED=none", self.wrapper)
-        self.assertIn("OBSERVER_APPLIED=L22", self.wrapper)
-        self.assertIn("selected/raw liquid observer is processed-IMU (I0)", self.validator)
-        self.assertIn("fixed_closed_loop", self.validator)
-        self.assertIn("L22_command_history_rollout", self.validator)
-        self.assertIn("solver_consumes_selected_state", self.validator)
-
-    def test_postflights_cover_rgb_nokov_observer_and_fixed_application(self):
-        required_wrapper_tokens = (
+    def test_i0_to_l22_semantics_and_postflight_chain_are_preserved(self):
+        for token in (
+            'observer_applied="none"',
+            'observer_applied="L22"',
+        ):
+            self.assertIn(token, PROFILE_TOOL.read_text(encoding="utf-8"))
+        for token in (
+            "selected/raw liquid observer is processed-IMU (I0)",
+            "fixed_closed_loop",
+            "L22_command_history_rollout",
+            "solver_consumes_selected_state",
+        ):
+            self.assertIn(token, self.validator)
+        for token in (
             "validate_i0_failclosed_fixed_abba_bag.py",
             "validate_slosh_nowcast_shadow_bag.py",
             "validate_g3_online_rgb_trial.py",
@@ -108,72 +182,275 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "--require-liquid-delay-compensation-applied true",
             "--require-state-diagnostics",
             "--minimum-application-fraction 1.0",
-            "--min-online-valid-fraction 0.98",
-            "--max-zero-window-spread-mm 0.25",
-            "--initial-stability-sec 5.0",
-            "--min-initial-stability-valid-fraction 0.98",
-            "--max-initial-h-vis-p95-mm 0.25",
-            "--max-initial-abs-height-p95-mm 0.25",
-            "--max-initial-half-median-drift-mm 0.05",
-        )
-        for item in required_wrapper_tokens:
-            self.assertIn(item, self.wrapper)
-        required_validator_tokens = (
-            '"solver_backend_code": 1.0',
-            '"delay_phase_mode_code": 3.0',
-            '"smooth_priority_enable": 0.0',
-            '"slosh_constraint_enable": 0.0',
-            '"history_complete"',
-            '"fixed_closed_loop_applied"',
-            '"robot_delay_compensation_applied"',
-            '"liquid_delay_compensation_applied"',
-            '"DELAY_PREDICTED_COMMON_EPOCH"',
-            '"GOAL_REACHED was not recorded"',
-            '"processed-IMU/fail-closed selection mismatch',
-            'WARM_START_TOPIC = "/spmpc/debug/warm_start"',
-            'default=1.0',
-            '"minimum application fraction must be exactly 1.0 for this protocol"',
-            '"application_unreadable_counts"',
-            '"warm-start fallback used during motion count={}"',
-            '"warm_start_fallback_count"',
-            '"warm_start_unreadable_count"',
-        )
-        for item in required_validator_tokens:
-            self.assertIn(item, self.validator)
+        ):
+            self.assertIn(token, self.engine)
 
-    def test_rgb_analysis_is_a_fail_closed_block_transition(self):
-        required_tokens = (
-            'RGB_ANALYSIS_REPORT="${RUN_OUT_DIR}/I0_FAILCLOSED_FIXED_ABBA_RGB_ANALYSIS.json"',
-            '--report "${RGB_ANALYSIS_REPORT}" --protocol "${PROTOCOL_ID}"',
-            "--maximum-slowdown-ratio 1.05",
-            'return 10',
-            'exit 10',
-            'BLOCK1_RAPID_SCREEN PASS PROMOTE_BLOCK2 01,02',
-            'BLOCK1_RAPID_SCREEN PROMOTE_BLOCK2 STOP_BLOCK1_FUTILITY 01,02',
-            'COMPLETE_ABBA DEVELOPMENT_POSITIVE NO_DEVELOPMENT_POSITIVE,RGB_POSITIVE_SLOWDOWN_CONFOUNDED 01,02,03,04',
-        )
-        for item in required_tokens:
-            self.assertIn(item, self.wrapper)
-
-        marker = self.wrapper.index('> "${UNIT_PASS}"')
-        block1_analysis = self.wrapper.index(
-            'BLOCK1_RAPID_SCREEN PROMOTE_BLOCK2 STOP_BLOCK1_FUTILITY 01,02',
+    def test_rgb_decision_remains_after_unit_marker_and_before_next_block(self):
+        marker = self.engine.index('> "${UNIT_PASS}"')
+        block1 = self.engine.index(
+            "BLOCK1_RAPID_SCREEN PROMOTE_BLOCK2 STOP_BLOCK1_FUTILITY 01,02",
             marker,
         )
-        final_analysis = self.wrapper.index(
-            'COMPLETE_ABBA DEVELOPMENT_POSITIVE NO_DEVELOPMENT_POSITIVE,RGB_POSITIVE_SLOWDOWN_CONFOUNDED 01,02,03,04',
+        final = self.engine.index(
+            "COMPLETE_ABBA DEVELOPMENT_POSITIVE NO_DEVELOPMENT_POSITIVE,RGB_POSITIVE_SLOWDOWN_CONFOUNDED 01,02,03,04",
             marker,
         )
-        self.assertLess(marker, block1_analysis)
-        self.assertLess(marker, final_analysis)
-
-        row3_guard = self.wrapper.index('if [[ "${PAIR_ROW}" == "03" ]]')
-        promotion_check = self.wrapper.index(
-            'BLOCK1_RAPID_SCREEN PASS PROMOTE_BLOCK2 01,02', row3_guard
+        self.assertLess(marker, block1)
+        self.assertLess(marker, final)
+        row3_guard = self.engine.index('if [[ "${PAIR_ROW}" == "03" ]]')
+        promotion = self.engine.index(
+            "BLOCK1_RAPID_SCREEN PASS PROMOTE_BLOCK2 01,02", row3_guard
         )
-        motion_runner = self.wrapper.index('bash "${RUNNER}"', promotion_check)
-        self.assertLess(row3_guard, promotion_check)
-        self.assertLess(promotion_check, motion_runner)
+        motion = self.engine.index('bash "${RUNNER}"', promotion)
+        self.assertLess(row3_guard, promotion)
+        self.assertLess(promotion, motion)
+
+    def test_short100_cannot_fall_back_through_w5_mapping(self):
+        self.assertIn('direct_variant)', self.engine)
+        self.assertIn(
+            'runner_selector_env=("PILOT_METHOD=" "VARIANT=${VARIANT}" "ALG=${VARIANT}")',
+            self.engine,
+        )
+        self.assertIn(
+            'validate_launch_variant "${TREATMENT_VARIANT}"', self.engine
+        )
+        self.assertIn("slosh_cost_horizon_steps", self.engine)
+        self.assertIn("slosh_cost_tail_discount", self.engine)
+
+    def test_short100_postflight_activates_solver_artifact_deep_check(self):
+        required = (
+            '--expected-variant "${VARIANT}"',
+            '--expected-slosh-cost-horizon-steps "${EXPECTED_COST_HORIZON_STEPS}"',
+            '--expected-slosh-cost-tail-discount "${EXPECTED_COST_TAIL_DISCOUNT}"',
+            "--expected-slosh-eta-dot-ratio 0.3",
+            "--expected-robot-horizon-steps 60",
+            "--expected-dt-sec 0.0333333333333333",
+            "--expected-control-frequency-hz 30.0",
+            '--expected-config "w_smooth=${I0FC_RUNTIME_W_SMOOTH}"',
+            '--expected-config "w_alpha=${I0FC_RUNTIME_W_ALPHA}"',
+            '--expected-config "w_du_a=${I0FC_RUNTIME_W_DU_A}"',
+            '--expected-config "w_du_vs=${I0FC_RUNTIME_W_DU_VS}"',
+            '--expected-config "slosh_height_max=${I0FC_RUNTIME_SLOSH_HEIGHT_MAX}"',
+            '--expected-config "alpha_max=${I0FC_RUNTIME_ALPHA_MAX}"',
+            '--report-suffix "${RGB_REPORT_SUFFIX}"',
+            '--postflight-suffix "${RGB_REPORT_SUFFIX}"',
+            '--report-type "${RGB_ANALYSIS_REPORT_TYPE}"',
+        )
+        for token in required:
+            self.assertIn(token, self.engine)
+        validator_tokens = (
+            'SNAPSHOT_TOPIC = "/spmpc/debug/pre_solve_snapshot"',
+            'HORIZON_TOPIC = "/spmpc/debug/predicted_horizon"',
+            '"--expected-config"',
+            "validate_snapshot_stage_weights",
+            "validate_deep_cycle_coverage",
+            "deep_cost_contract",
+        )
+        for token in validator_tokens:
+            self.assertIn(token, self.validator)
+
+    def test_stage_scale_boundary_and_legacy_full_horizon(self):
+        self.assertEqual(window.stage_scale(3, 60, 3, 0.0), 1.0)
+        self.assertEqual(window.stage_scale(4, 60, 3, 0.0), 0.0)
+        self.assertEqual(window.stage_scale(60, 60, -1, 1.0), 1.0)
+        self.assertEqual(window.stage_scale(61, 60, 3, 0.0), 0.0)
+
+    def test_cycle_join_keeps_artifacts_older_than_command_stamp(self):
+        audit = SimpleNamespace(cycle_id=11, solve_attempted=True)
+        selection = SimpleNamespace(cycle_id=11)
+        snapshot = SimpleNamespace(cycle_id=11, valid=True)
+        horizon = SimpleNamespace(cycle_id=11, valid=True)
+        coverage = window.validate_deep_cycle_coverage(
+            [(10.0, audit)],
+            [(9.7, selection)],
+            [(9.8, snapshot)],
+            [(9.8, horizon)],
+        )
+        self.assertEqual(coverage.audit_failures, ())
+        self.assertEqual(coverage.selection_failures, ())
+        self.assertEqual(coverage.snapshot_failures, ())
+        self.assertEqual(coverage.horizon_failures, ())
+        self.assertIs(coverage.selection_records[0][1], selection)
+        self.assertIs(coverage.valid_snapshot_records[0][1], snapshot)
+        self.assertIs(coverage.valid_horizon_records[0][1], horizon)
+
+    def test_cycle_coverage_rejects_duplicate_and_missing_audits(self):
+        duplicate = window.validate_deep_cycle_coverage(
+            [
+                (10.0, SimpleNamespace(cycle_id=20, solve_attempted=True)),
+                (10.1, SimpleNamespace(cycle_id=20, solve_attempted=True)),
+            ],
+            [(9.9, SimpleNamespace(cycle_id=20))],
+            [(9.9, SimpleNamespace(cycle_id=20, valid=True))],
+            [(9.9, SimpleNamespace(cycle_id=20, valid=True))],
+        )
+        self.assertTrue(
+            any("duplicate motion audit cycle IDs" in item for item in duplicate.audit_failures)
+        )
+
+        missing = window.validate_deep_cycle_coverage(
+            [
+                (10.0, SimpleNamespace(cycle_id=30, solve_attempted=True)),
+                (10.2, SimpleNamespace(cycle_id=32, solve_attempted=True)),
+            ],
+            [
+                (9.9, SimpleNamespace(cycle_id=30)),
+                (10.1, SimpleNamespace(cycle_id=32)),
+            ],
+            [
+                (9.9, SimpleNamespace(cycle_id=30, valid=True)),
+                (10.1, SimpleNamespace(cycle_id=32, valid=True)),
+            ],
+            [
+                (9.9, SimpleNamespace(cycle_id=30, valid=True)),
+                (10.1, SimpleNamespace(cycle_id=32, valid=True)),
+            ],
+        )
+        self.assertTrue(
+            any("missing motion audit cycle IDs" in item for item in missing.audit_failures)
+        )
+
+    def test_cycle_coverage_rejects_duplicate_and_missing_artifacts(self):
+        audits = [
+            (10.0, SimpleNamespace(cycle_id=40, solve_attempted=True)),
+            (10.1, SimpleNamespace(cycle_id=41, solve_attempted=True)),
+        ]
+        coverage = window.validate_deep_cycle_coverage(
+            audits,
+            [
+                (9.8, SimpleNamespace(cycle_id=40)),
+                (9.9, SimpleNamespace(cycle_id=40)),
+            ],
+            [
+                (9.8, SimpleNamespace(cycle_id=40, valid=True)),
+                (9.9, SimpleNamespace(cycle_id=40, valid=True)),
+            ],
+            [(9.8, SimpleNamespace(cycle_id=40, valid=True))],
+        )
+        self.assertTrue(
+            any("cycle 40 observer selection count=2" in item for item in coverage.selection_failures)
+        )
+        self.assertTrue(
+            any("cycle 41 observer selection count=0" in item for item in coverage.selection_failures)
+        )
+        self.assertTrue(
+            any("cycle 40 snapshot count=2" in item for item in coverage.snapshot_failures)
+        )
+        self.assertTrue(
+            any("cycle 41 snapshot count=0" in item for item in coverage.snapshot_failures)
+        )
+        self.assertTrue(
+            any("cycle 41 horizon count=0" in item for item in coverage.horizon_failures)
+        )
+
+    def test_expected_config_items_use_resolved_effective_values(self):
+        expected, failures = window.parse_expected_config_items(
+            [
+                "w_smooth=0.1",
+                "w_alpha=0.1",
+                "w_du_a=0.1",
+                "w_du_vs=0.1",
+                "alpha_max=1.2",
+            ]
+        )
+        self.assertEqual(failures, [])
+        self.assertEqual(expected["w_alpha"], 0.1)
+        self.assertEqual(expected["alpha_max"], 1.2)
+        config = dict(expected)
+        self.assertEqual(
+            window.validate_config_fields(config, "effective_config", expected),
+            [],
+        )
+        config["w_du_a"] = -1.0
+        self.assertTrue(
+            any(
+                "w_du_a=-1.0, expected 0.1" in item
+                for item in window.validate_config_fields(
+                    config, "effective_config", expected
+                )
+            )
+        )
+
+    def make_snapshot(self):
+        names = ["w_slosh_eta", "w_slosh_eta_dot"]
+        values = []
+        for stage in range(61):
+            values.extend(
+                window.expected_stage_weights(stage, 60, 3, 0.0, 5.0, 0.3)
+            )
+        return SimpleNamespace(
+            schema_version=2,
+            variant="B_slosh_short100",
+            slosh_enabled=True,
+            dt=1.0 / 30.0,
+            horizon_steps=60,
+            slosh_cost_horizon_steps=3,
+            slosh_cost_horizon_sec=0.1,
+            slosh_cost_tail_discount=0.0,
+            parameter_names=names,
+            parameter_width=2,
+            stage_parameters=values,
+        )
+
+    def test_snapshot_checks_both_liquid_weights_at_stage_three_four_boundary(self):
+        snapshot = self.make_snapshot()
+        failures = window.validate_snapshot_stage_weights(
+            snapshot, "snapshot", 5.0, 0.3, 3, 0.0
+        )
+        self.assertEqual(failures, [])
+        snapshot.stage_parameters[4 * 2] = 5.0
+        snapshot.stage_parameters[4 * 2 + 1] = 1.5
+        failures = window.validate_snapshot_stage_weights(
+            snapshot, "snapshot", 5.0, 0.3, 3, 0.0
+        )
+        self.assertTrue(any("stage 4 w_slosh_eta=" in item for item in failures))
+        self.assertTrue(
+            any("stage 4 w_slosh_eta_dot=" in item for item in failures)
+        )
+
+    def test_snapshot_metadata_keeps_full_robot_horizon(self):
+        snapshot = self.make_snapshot()
+        self.assertEqual(
+            window.validate_metadata(
+                snapshot,
+                "snapshot",
+                "B_slosh_short100",
+                True,
+                3,
+                0.0,
+                60,
+                1.0 / 30.0,
+            ),
+            [],
+        )
+        snapshot.horizon_steps = 3
+        failures = window.validate_metadata(
+            snapshot,
+            "snapshot",
+            "B_slosh_short100",
+            True,
+            3,
+            0.0,
+            60,
+            1.0 / 30.0,
+        )
+        self.assertTrue(any("horizon_steps=3" in item for item in failures))
+
+    def test_snapshot_metadata_rejects_self_consistent_150ms_window(self):
+        snapshot = self.make_snapshot()
+        snapshot.dt = 0.05
+        snapshot.slosh_cost_horizon_sec = 0.15
+        failures = window.validate_metadata(
+            snapshot,
+            "snapshot",
+            "B_slosh_short100",
+            True,
+            3,
+            0.0,
+            60,
+            1.0 / 30.0,
+        )
+        self.assertTrue(any("dt=0.05" in item for item in failures))
 
 
 if __name__ == "__main__":

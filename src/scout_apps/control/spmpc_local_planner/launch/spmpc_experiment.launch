@@ -1,5 +1,5 @@
 <launch>
-  <arg name="planner_variant" default="B0" doc="B0|B_accel|B_slosh|B_slosh_linear|B_slosh_anti|B_smooth|B_ours|B_ours_anti|B_slosh_matched0|B_slosh_matched5"/>
+  <arg name="planner_variant" default="B0" doc="B0|B_accel|B_slosh|B_slosh_short100|B_slosh_linear|B_slosh_anti|B_smooth|B_ours|B_ours_anti|B_slosh_matched0|B_slosh_matched5"/>
   <arg name="experiment_mode" default="fixed_path" doc="fixed_path|point_to_point"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
   <arg name="imu_topic" default="/imu/data"/>

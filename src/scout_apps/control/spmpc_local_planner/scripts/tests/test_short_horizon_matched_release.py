@@ -35,6 +35,15 @@ class ShortHorizonMatchedReleaseTest(unittest.TestCase):
             self.assertEqual(config["w_du_a"], 1.0)
             self.assertEqual(config["w_du_vs"], 1.0)
 
+    def test_literal_short100_differs_from_historical_bslosh_only_by_window(self):
+        historical = dict(self.variants["B_slosh"])
+        short100 = dict(self.variants["B_slosh_short100"])
+        self.assertEqual(short100.pop("slosh_cost_horizon_steps"), 3)
+        self.assertEqual(short100.pop("slosh_cost_tail_discount"), 0.0)
+        self.assertEqual(short100, historical)
+        self.assertNotIn("slosh_cost_horizon_steps", historical)
+        self.assertNotIn("slosh_cost_tail_discount", historical)
+
 
 if __name__ == "__main__":
     unittest.main()

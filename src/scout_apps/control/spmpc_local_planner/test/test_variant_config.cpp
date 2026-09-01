@@ -54,6 +54,11 @@ TEST(VariantConfig, RecognizesDevelopmentMatchedNames) {
               "B_slosh_matched5");
 }
 
+TEST(VariantConfig, RecognizesLiteralShortOneHundredMillisecondName) {
+    EXPECT_EQ(makeVariantConfig("B_slosh_short100").name,
+              "B_slosh_short100");
+}
+
 TEST(VariantConfig, MatchedReleaseAllowsOnlyConservativePositiveSpeed) {
     EXPECT_TRUE(matchedVariantReleaseSpeedAllowed(0.10));
     EXPECT_TRUE(matchedVariantReleaseSpeedAllowed(0.15));

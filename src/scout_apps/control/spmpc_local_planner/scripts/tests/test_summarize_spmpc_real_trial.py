@@ -65,6 +65,18 @@ class SummarizeSpmpcRealTrialTest(unittest.TestCase):
         }
         self.assertIn("horizon_peak_missing", codes)
 
+    def test_b_slosh_short100_requires_the_same_slosh_signals(self):
+        summary = base_summary("B_slosh_short100")
+        summary["metrics"]["optimizer_pressure"] = {
+            "pct_slosh_total_abs_sum": {"p50": 0.1},
+            "pct_eta_dot_in_slosh": {"p50": 0.1},
+        }
+        codes = {item["code"] for item in MODULE.build_red_flags(summary)}
+        self.assertIn("horizon_peak_missing", codes)
+        self.assertNotIn("slosh_cost_inactive", codes)
+        self.assertNotIn("eta_dot_cost_inactive", codes)
+        self.assertIn("B_slosh_short100", MODULE.SLOSH_SIGNAL_VARIANTS)
+
     def test_robot_only_delay_split_has_no_false_red_flag(self):
         summary = base_summary("B0")
         summary["intent"]["delay_phase_mode"] = "fixed_robot_only"

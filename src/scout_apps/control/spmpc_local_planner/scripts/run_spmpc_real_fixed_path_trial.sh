@@ -377,6 +377,11 @@ fi
 IMU_SHADOW_READY_TOPIC="${IMU_SHADOW_READY_TOPIC:-/spmpc/debug/slosh_observer_imu}"
 OBSERVER_SELECTION_TOPIC="${OBSERVER_SELECTION_TOPIC:-/spmpc/debug/slosh_observer_selection}"
 IMU_SHADOW_READY_TIMEOUT_SEC="${IMU_SHADOW_READY_TIMEOUT_SEC:-20}"
+# Optional experiment-level identity gate.  When enabled, the planner must
+# publish the exact latched runtime variant before a gated path can be released.
+# Generic/legacy callers leave this empty and retain their established order.
+EXPECTED_RUNTIME_VARIANT="${EXPECTED_RUNTIME_VARIANT:-}"
+RUNTIME_VARIANT_TIMEOUT_SEC="${RUNTIME_VARIANT_TIMEOUT_SEC:-5}"
 if truthy "${PILOT_MODE}"; then
   DELAY_PHASE_MODE="${DELAY_PHASE_MODE:-fixed_closed_loop}"
   DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC:-0.15}"
@@ -579,6 +584,16 @@ if truthy "${IMU_SHADOW_ENABLE}"; then
     fail "RECORDER_ACTIVE_TIMEOUT_SEC must be > 0, got '${RECORDER_ACTIVE_TIMEOUT_SEC}'"
   fi
 fi
+if [[ -n "${EXPECTED_RUNTIME_VARIANT}" ]]; then
+  [[ "${EXPECTED_RUNTIME_VARIANT}" =~ ^[A-Za-z0-9_.-]+$ ]] || \
+    fail "EXPECTED_RUNTIME_VARIANT contains unsafe characters"
+  truthy "${IMU_SHADOW_ENABLE}" || \
+    fail "EXPECTED_RUNTIME_VARIANT requires the no-reference IMU startup gate"
+  require_number "RUNTIME_VARIANT_TIMEOUT_SEC" "${RUNTIME_VARIANT_TIMEOUT_SEC}"
+  if ! awk -v value="${RUNTIME_VARIANT_TIMEOUT_SEC}" 'BEGIN { exit !(value > 0.0) }'; then
+    fail "RUNTIME_VARIANT_TIMEOUT_SEC must be > 0, got '${RUNTIME_VARIANT_TIMEOUT_SEC}'"
+  fi
+fi
 for kv in \
   "GOAL_REPEAT_COUNT=${GOAL_REPEAT_COUNT}" \
   "PATH_SMOOTH_ITERATIONS=${PATH_SMOOTH_ITERATIONS}"; do
@@ -622,6 +637,7 @@ send_goal_log="${RUN_OUT_DIR}/${NAME}_send_goal.log"
 recorder_log="${RUN_OUT_DIR}/${NAME}_recorder.log"
 planner_log="${RUN_OUT_DIR}/${NAME}_planner.log"
 imu_shadow_ready_log="${RUN_OUT_DIR}/${NAME}_imu_shadow_ready.log"
+runtime_variant_ready_log="${RUN_OUT_DIR}/${NAME}_runtime_variant_ready.log"
 recorder_active_bag="${RUN_OUT_DIR}/${NAME}.bag.active"
 
 path_generator_pid=""
@@ -852,6 +868,8 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "v_safe_max=${V_SAFE_MAX}"
   echo "speed_safety_tolerance=${SPEED_SAFETY_TOLERANCE}"
   echo "observer_selection_topic=${OBSERVER_SELECTION_TOPIC}"
+  echo "expected_runtime_variant=${EXPECTED_RUNTIME_VARIANT}"
+  echo "runtime_variant_timeout_sec=${RUNTIME_VARIANT_TIMEOUT_SEC}"
   echo "recorder_active_timeout_sec=${RECORDER_ACTIVE_TIMEOUT_SEC}"
   echo "record_rgb=${RECORD_RGB}"
   echo "record_camera=${RECORD_CAMERA}"
@@ -918,6 +936,10 @@ require_shadow_topics_idle() {
   local topic purpose
   local guarded_topics=("${REF_TOPIC}" "${CMD_TOPIC}" "${IMU_SHADOW_READY_TOPIC}" "${OBSERVER_SELECTION_TOPIC}")
   local guarded_purposes=("Reference topic" "Command topic" "IMU READY topic" "Observer selection topic")
+  if [[ -n "${EXPECTED_RUNTIME_VARIANT}" ]]; then
+    guarded_topics+=("/spmpc/controller_variant")
+    guarded_purposes+=("Runtime variant topic")
+  fi
   if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then
     guarded_topics+=("${GOAL_TOPIC}")
     guarded_purposes+=("Goal topic")
@@ -1237,7 +1259,27 @@ wait_for_imu_shadow_ready() {
   fi
   require_shadow_run_active "completion of the IMU shadow READY gate"
   echo "imu_shadow_ready_wall_time=$(date --iso-8601=seconds)" >> "${run_meta}"
-  echo "[imu-shadow] READY; enabling the path/goal stage"
+  echo "[imu-shadow] READY; continuing startup gates"
+}
+
+wait_for_runtime_variant() {
+  [[ -n "${EXPECTED_RUNTIME_VARIANT}" ]] || return 0
+  echo "[variant-gate] waiting for runtime variant ${EXPECTED_RUNTIME_VARIANT}"
+  if ! timeout --foreground "${RUNTIME_VARIANT_TIMEOUT_SEC}s" \
+    rostopic echo -n 1 \
+      --filter "m.data == '${EXPECTED_RUNTIME_VARIANT}'" \
+      /spmpc/controller_variant > "${runtime_variant_ready_log}" 2>&1; then
+    show_log_tail "${runtime_variant_ready_log}" "runtime variant gate"
+    echo "[debug] latest /spmpc/controller_variant sample:" >&2
+    timeout --foreground 2s rostopic echo -n 1 \
+      /spmpc/controller_variant >&2 || true
+    show_log_tail "${planner_log}" "planner"
+    fail "planner did not publish expected runtime variant ${EXPECTED_RUNTIME_VARIANT}; path remains blocked"
+  fi
+  require_shadow_run_active "completion of the runtime variant gate"
+  echo "runtime_variant_verified=${EXPECTED_RUNTIME_VARIANT}" >> "${run_meta}"
+  echo "runtime_variant_verified_wall_time=$(date --iso-8601=seconds)" >> "${run_meta}"
+  echo "[variant-gate] PASS; enabling the path/goal stage"
 }
 
 if truthy "${IMU_SHADOW_ENABLE}"; then
@@ -1252,6 +1294,7 @@ if truthy "${IMU_SHADOW_ENABLE}"; then
   require_shadow_topics_idle
   start_planner
   wait_for_imu_shadow_ready
+  wait_for_runtime_variant
   require_shadow_run_active "release of the path/goal stage"
   start_path_source true
   prepare_reference true
