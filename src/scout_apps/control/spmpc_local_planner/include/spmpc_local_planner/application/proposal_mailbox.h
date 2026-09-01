@@ -1,6 +1,5 @@
 #pragma once
 
-#include <array>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -8,22 +7,11 @@
 #include <stdexcept>
 #include <type_traits>
 
+#include "spmpc_local_planner/domain/content_identity.h"
 #include "spmpc_local_planner/domain/mainline_types.h"
 
 namespace spmpc_local_planner {
 namespace mainline {
-
-struct Sha256Digest {
-  std::array<std::uint8_t, 32> bytes{};
-};
-
-inline bool operator==(const Sha256Digest& lhs, const Sha256Digest& rhs) {
-  return lhs.bytes == rhs.bytes;
-}
-
-inline bool operator!=(const Sha256Digest& lhs, const Sha256Digest& rhs) {
-  return !(lhs == rhs);
-}
 
 struct ProposalIdentity {
   ProposalIdentity() : release_steady(0), release_model(0) {}
