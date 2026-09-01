@@ -232,6 +232,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_piecewise_plant
+    test/test_mainline_piecewise_plant.cpp
+  )
+  if(TARGET test_mainline_piecewise_plant)
+    target_link_libraries(test_mainline_piecewise_plant
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline
