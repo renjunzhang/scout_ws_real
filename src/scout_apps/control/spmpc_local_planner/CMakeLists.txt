@@ -256,6 +256,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_reference_progress_projector
+    test/test_mainline_reference_progress_projector.cpp
+  )
+  if(TARGET test_mainline_reference_progress_projector)
+    target_link_libraries(test_mainline_reference_progress_projector
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline
