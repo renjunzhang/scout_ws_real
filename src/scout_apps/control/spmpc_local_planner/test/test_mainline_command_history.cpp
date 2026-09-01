@@ -378,6 +378,28 @@ TEST(MainlineCommandHistory, RejectsNonFiniteCommandAndAuthority) {
   }
 }
 
+TEST(MainlineCommandHistory, RejectsInvalidSafetyResetValues) {
+  {
+    PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
+    EXPECT_EQ(HistoryCommitResult::kInvalidCommand,
+              history.commitEmitted(makeCommit(
+                  0, 0, command(0.01, 0.0), acceleration(0.0, 0.0),
+                  EmissionReason::kDeadlineZero)));
+    EXPECT_TRUE(history.faultLatched());
+    EXPECT_EQ(0u, history.generation());
+  }
+
+  {
+    PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
+    EXPECT_EQ(HistoryCommitResult::kInvalidAuthority,
+              history.commitEmitted(makeCommit(
+                  0, 0, command(0.2, -0.1), acceleration(0.01, 0.0),
+                  EmissionReason::kSafetyOverride)));
+    EXPECT_TRUE(history.faultLatched());
+    EXPECT_EQ(0u, history.generation());
+  }
+}
+
 TEST(MainlineCommandHistory, RejectsPublicationBeforeReleaseInBothClocks) {
   {
     PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
@@ -429,6 +451,54 @@ TEST(MainlineCommandHistory, RejectsLateNominalPublication) {
   EXPECT_TRUE(history.faultLatched());
   EXPECT_EQ(0u, history.generation());
   EXPECT_EQ(0u, history.nextCycleIdForWriter());
+}
+
+TEST(MainlineCommandHistory, RecordsLateSafetyZeroOnThePlannedModelGrid) {
+  PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 5);
+  PublishedCommandEvent committed;
+  ASSERT_EQ(HistoryCommitResult::kCommitted,
+            history.commitEmitted(
+                makeCommit(0, 0, command(0, 0), acceleration(0, 0),
+                           EmissionReason::kPublishJitterZero,
+                           PublicationStatus::kPublished, 6, 9),
+                &committed));
+  EXPECT_TRUE(committed.publish_late);
+  EXPECT_EQ(cycleAt(0).release_model.value,
+            committed.cycle.release_model.value);
+  EXPECT_EQ(cycleAt(0).release_model.value + 9,
+            committed.actual_model.value);
+
+  CommandHistorySnapshot<4> snapshot;
+  ASSERT_EQ(HistorySnapshotResult::kReady,
+            history.capture(committed.actual_steady, committed.actual_model,
+                            snapshot));
+  PublishedCommandEvent sampled;
+  EXPECT_EQ(HistorySampleResult::kExact,
+            snapshot.sampleAt(committed.cycle.release_model, sampled));
+  EXPECT_EQ(HistorySampleResult::kFutureHold,
+            snapshot.sampleAt(committed.actual_model, sampled));
+  EXPECT_EQ(0u, sampled.cycle.cycle_id);
+}
+
+TEST(MainlineCommandHistory, RejectsInvalidCoverageAndSnapshotClockRegression) {
+  CommandHistorySnapshot<4> empty_snapshot;
+  EXPECT_EQ(HistoryCoverageStatus::kInvalidRange,
+            empty_snapshot.coverage(ModelTimeNs(2), ModelTimeNs(1), 1)
+                .status);
+  EXPECT_EQ(HistoryCoverageStatus::kInvalidRange,
+            empty_snapshot.coverage(ModelTimeNs(1), ModelTimeNs(2), -1)
+                .status);
+
+  PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
+  const EmittedCommandCommit commit =
+      makeCommit(0, 0, command(1, -1), acceleration(2, -2));
+  ASSERT_EQ(HistoryCommitResult::kCommitted, history.commitEmitted(commit));
+  CommandHistorySnapshot<4> snapshot;
+  EXPECT_EQ(HistorySnapshotResult::kSnapshotClockRegression,
+            history.capture(
+                SteadyTimeNs(commit.receipt.actual_steady.value - 1),
+                commit.receipt.actual_model, snapshot));
+  EXPECT_TRUE(snapshot.empty());
 }
 
 TEST(MainlineCommandHistory, UsesAbsoluteThirtyHertzReleaseBoundaries) {
