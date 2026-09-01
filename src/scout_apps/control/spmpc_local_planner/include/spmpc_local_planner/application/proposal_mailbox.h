@@ -120,6 +120,9 @@ class ProposalMailbox {
                 "proposal payload must be default constructible");
   static_assert(std::is_trivially_copyable<PendingRelease<Payload>>::value,
                 "complete pending release must be trivially copyable");
+  static_assert(
+      std::is_trivially_copy_assignable<PendingRelease<Payload>>::value,
+      "release-side pending copy must use trivial assignment");
 
   explicit ProposalMailbox(std::uint64_t reset_epoch,
                            std::uint64_t first_cycle_id = 0)

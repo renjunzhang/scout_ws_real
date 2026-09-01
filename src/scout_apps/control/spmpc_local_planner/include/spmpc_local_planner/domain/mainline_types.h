@@ -30,6 +30,8 @@ struct ClockAnchor {
 };
 
 struct CycleRequest {
+  CycleRequest() : release_steady(0), release_model(0) {}
+
   std::uint64_t cycle_id{0};
   SteadyTimeNs release_steady;
   ModelTimeNs release_model;
