@@ -409,20 +409,33 @@ class DiscreteDelayQueue {
 };
 
 template <std::size_t SelectorWidth>
+bool trySelectDelayTarget(
+    const std::array<double, SelectorWidth>& taps,
+    const std::array<double, SelectorWidth>& selector,
+    double& target) noexcept {
+  std::size_t selected_index = 0;
+  if (!delay_queue_detail::selectorIndex(selector, selected_index)) {
+    return false;
+  }
+  for (const double tap : taps) {
+    if (!std::isfinite(tap)) {
+      return false;
+    }
+  }
+  target = taps[selected_index];
+  return true;
+}
+
+template <std::size_t SelectorWidth>
 double selectDelayTarget(
     const std::array<double, SelectorWidth>& taps,
     const std::array<double, SelectorWidth>& selector) {
-  const std::size_t selected_index = delaySelectorIndex(selector);
-  for (const double tap : taps) {
-    if (!std::isfinite(tap)) {
-      throw std::invalid_argument("delay taps must be finite");
-    }
+  double target = 0.0;
+  if (!trySelectDelayTarget(taps, selector, target)) {
+    throw std::invalid_argument(
+        "delay taps must be finite and selector one-hot");
   }
-  const double result = taps[selected_index];
-  if (!std::isfinite(result)) {
-    throw std::overflow_error("delay target is non-finite");
-  }
-  return result;
+  return target;
 }
 
 template <std::size_t Width>

@@ -249,9 +249,14 @@ TEST(MainlineDelayQueue, RejectsMalformedSelectorsAndSchedules) {
 
   std::array<double, 4> taps{{40.0, 30.0, 20.0, 10.0}};
   std::array<double, 4> selector{{1.0, 1.0, 0.0, 0.0}};
+  double selected_target = 123.0;
+  EXPECT_FALSE(trySelectDelayTarget(taps, selector, selected_target));
+  EXPECT_DOUBLE_EQ(123.0, selected_target);
   EXPECT_THROW(selectDelayTarget(taps, selector), std::invalid_argument);
   selector = {{1.0, 0.0, 0.0, 0.0}};
   taps[2] = std::numeric_limits<double>::quiet_NaN();
+  EXPECT_FALSE(trySelectDelayTarget(taps, selector, selected_target));
+  EXPECT_DOUBLE_EQ(123.0, selected_target);
   EXPECT_THROW(selectDelayTarget(taps, selector), std::invalid_argument);
 
   const SyntheticQueue queue = makeSyntheticQueue();
