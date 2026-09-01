@@ -208,6 +208,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_release_mailbox
+    test/test_mainline_release_mailbox.cpp
+  )
+  if(TARGET test_mainline_release_mailbox)
+    target_link_libraries(test_mainline_release_mailbox
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline
