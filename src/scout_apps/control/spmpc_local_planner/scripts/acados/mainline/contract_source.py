@@ -7,11 +7,16 @@ prohibited. This module does not interpret or manufacture Stage 1 evidence.
 
 from __future__ import annotations
 
-import hashlib
-import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from .identity import (
+    IdentityError,
+    read_strict_json,
+    require_sha256,
+    sha256_bytes,
+)
 
 STAGE0_SCHEMA_VERSION = "spmpc_mainline_stage0_contract_v1"
 STAGE0_CONTRACT_ID = "SPMPC-MAINLINE-STAGE0-20260902"
@@ -29,32 +34,17 @@ _REQUIRED_UNFROZEN_FIELDS = {
     "execution_model.L_max_omega_sec",
     "stage1.dataset_partition_and_gate_hash",
 }
-_SHA256_LENGTH = 64
 
 
 class ContractSourceError(ValueError):
     """Raised when Stage 0 cannot authorize even a synthetic scaffold."""
 
 
-def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ContractSourceError(f"duplicate JSON object key: {key!r}")
-        result[key] = value
-    return result
-
-
-def _reject_nonfinite_constant(value: str) -> None:
-    raise ContractSourceError(f"non-finite JSON number is forbidden: {value}")
-
-
 def _sha256(value: Any, label: str) -> str:
-    if type(value) is not str or len(value) != _SHA256_LENGTH:
-        raise ContractSourceError(f"{label} must be a 64-character SHA-256")
-    if any(character not in "0123456789abcdef" for character in value):
-        raise ContractSourceError(f"{label} must be lowercase hexadecimal")
-    return value
+    try:
+        return require_sha256(value, label)
+    except IdentityError as exc:
+        raise ContractSourceError(str(exc)) from exc
 
 
 @dataclass(frozen=True)
@@ -143,28 +133,10 @@ def load_stage0_contract_reference(
     only the fields that authorize or prohibit this scaffold.
     """
 
-    if not isinstance(path, (str, Path)):
-        raise ContractSourceError("Stage 0 contract path must be str or Path")
-    contract_path = Path(path)
     try:
-        payload = contract_path.read_bytes()
-        text = payload.decode("utf-8")
-    except (OSError, UnicodeDecodeError) as exc:
-        raise ContractSourceError(
-            f"cannot read Stage 0 contract {contract_path}: {exc}"
-        ) from exc
-    try:
-        value = json.loads(
-            text,
-            object_pairs_hook=_reject_duplicate_keys,
-            parse_constant=_reject_nonfinite_constant,
-        )
-    except ContractSourceError:
-        raise
-    except json.JSONDecodeError as exc:
-        raise ContractSourceError(
-            f"invalid Stage 0 JSON in {contract_path}: {exc}"
-        ) from exc
+        value, payload = read_strict_json(path, label="Stage 0 contract")
+    except IdentityError as exc:
+        raise ContractSourceError(str(exc)) from exc
     if type(value) is not dict:
         raise ContractSourceError("Stage 0 contract root must be a JSON object")
     for key, expected in (
@@ -195,7 +167,7 @@ def load_stage0_contract_reference(
             + ", ".join(missing)
         )
 
-    contract_sha256 = hashlib.sha256(payload).hexdigest()
+    contract_sha256 = sha256_bytes(payload)
     if contract_sha256 != STAGE0_CONTRACT_SHA256:
         raise ContractSourceError(
             "Stage 0 content SHA-256 is not the pinned immutable v1 contract"

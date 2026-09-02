@@ -7,14 +7,12 @@ the Stage 0 gate that still prohibits Stage 3 production code generation.
 
 from __future__ import annotations
 
-import hashlib
-import json
-import math
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from . import identity
 from .contract_source import (
     STAGE3_PROHIBITED_STATUS,
     ContractSourceError,
@@ -36,58 +34,33 @@ ARTIFACT_GENERATION_GATE: Mapping[str, Any] = MappingProxyType(
         "required_next_authority": ("STAGE1_FROZEN_CONTRACT_SHA256_AND_DATASET_GATE"),
     }
 )
-_SHA256_LENGTH = 64
 
 
 class ManifestError(ValueError):
     """Raised when a scaffold identity is malformed or overclaims an artifact."""
 
 
-def _canonical_value(value: Any) -> Any:
-    if isinstance(value, Mapping):
-        result: dict[str, Any] = {}
-        for key, item in value.items():
-            if type(key) is not str:
-                raise ManifestError("canonical mapping keys must be strings")
-            if key in result:
-                raise ManifestError(f"duplicate canonical key: {key}")
-            result[key] = _canonical_value(item)
-        return result
-    if isinstance(value, (list, tuple)):
-        return [_canonical_value(item) for item in value]
-    if isinstance(value, bool) or value is None or isinstance(value, str):
-        return value
-    if isinstance(value, int):
-        return value
-    if isinstance(value, float):
-        if not math.isfinite(value):
-            raise ManifestError("canonical JSON cannot contain NaN or infinity")
-        return 0.0 if value == 0.0 else value
-    raise ManifestError(f"unsupported canonical value: {type(value)!r}")
-
-
 def canonical_json(value: Any) -> str:
     """Return the deterministic JSON representation used for identity hashes."""
 
-    return json.dumps(
-        _canonical_value(value),
-        ensure_ascii=False,
-        allow_nan=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    )
+    try:
+        return identity.canonical_json(value)
+    except identity.IdentityError as exc:
+        raise ManifestError(str(exc)) from exc
 
 
 def sha256_json(value: Any) -> str:
-    return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
+    try:
+        return identity.sha256_json(value)
+    except identity.IdentityError as exc:
+        raise ManifestError(str(exc)) from exc
 
 
 def _sha256(value: Any, label: str) -> str:
-    if type(value) is not str or len(value) != _SHA256_LENGTH:
-        raise ManifestError(f"{label} must be a 64-character SHA-256")
-    if any(character not in "0123456789abcdef" for character in value):
-        raise ManifestError(f"{label} must be lowercase hexadecimal")
-    return value
+    try:
+        return identity.require_sha256(value, label)
+    except identity.IdentityError as exc:
+        raise ManifestError(str(exc)) from exc
 
 
 def build_scaffold_manifest(
