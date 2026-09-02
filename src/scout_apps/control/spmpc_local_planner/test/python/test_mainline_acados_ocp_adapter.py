@@ -9,6 +9,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -95,8 +96,14 @@ class MainlineAcadosOcpLazyBoundaryTest(unittest.TestCase):
             )
         loader.assert_not_called()
 
-    def test_adapter_never_imports_solver_codegen_or_legacy_modules(self) -> None:
-        for source_name in ("acados_ocp_adapter.py", "acados_ocp_contract.py"):
+    def test_ocp_modules_never_import_solver_codegen_or_legacy_modules(self) -> None:
+        for source_name in (
+            "acados_backend.py",
+            "acados_ocp_adapter.py",
+            "acados_ocp_contract.py",
+            "acados_ocp_validation.py",
+            "acados_solver_options_adapter.py",
+        ):
             source = MAINLINE_ROOT / source_name
             tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
             imported = []
@@ -118,7 +125,7 @@ class MainlineAcadosOcpLazyBoundaryTest(unittest.TestCase):
 
 @unittest.skipUnless(CASADI_AVAILABLE, "CasADi is not installed")
 class MainlineAcadosOcpDependencyFailureTest(unittest.TestCase):
-    def test_missing_acados_template_fails_without_file_side_effect(self) -> None:
+    def _typed_inputs(self):
         capacity = load_development_capacity(CAPACITY)
         layout = build_development_layout(capacity)
         graph = build_casadi_graph(
@@ -126,7 +133,10 @@ class MainlineAcadosOcpDependencyFailureTest(unittest.TestCase):
             layout,
             ConstraintBounds(*([10.0] * 7)),
         )
-        options = build_solver_options_snapshot(layout)
+        return graph, build_solver_options_snapshot(layout)
+
+    def test_missing_acados_template_fails_without_file_side_effect(self) -> None:
+        graph, options = self._typed_inputs()
         with tempfile.TemporaryDirectory() as directory:
             work_directory = Path(directory)
             previous_directory = Path.cwd()
@@ -146,6 +156,15 @@ class MainlineAcadosOcpDependencyFailureTest(unittest.TestCase):
                 if sentinel is not None:
                     sys.modules["acados_template"] = sentinel
             self.assertEqual(before, after)
+
+    def test_incomplete_acados_template_is_a_typed_dependency_failure(self) -> None:
+        graph, options = self._typed_inputs()
+        incomplete_template = types.ModuleType("acados_template")
+        with (
+            patch.dict(sys.modules, {"acados_template": incomplete_template}),
+            self.assertRaises(AcadosOcpDependencyError),
+        ):
+            assemble_acados_ocp(graph, options)
 
 
 @unittest.skipUnless(
@@ -203,6 +222,16 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
             "nh_e": 1,
             "nbu": 3,
             "nbx_0": 48,
+            "nbx": 0,
+            "nbx_e": 0,
+            "ng": 0,
+            "ng_e": 0,
+            "nphi_0": 0,
+            "nphi": 0,
+            "nphi_e": 0,
+            "ns_0": 0,
+            "ns": 0,
+            "ns_e": 0,
         }
         for name, expected in expected_dimensions.items():
             with self.subTest(dimension=name):
@@ -251,6 +280,7 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
             {"x", "p"},
         )
         self.assertTrue(ocp.constraints.has_x0)
+        np.testing.assert_array_equal(ocp.constraints.x0, np.zeros(48))
         np.testing.assert_array_equal(ocp.constraints.idxbx_0, np.arange(48))
         np.testing.assert_array_equal(ocp.constraints.idxbxe_0, np.arange(48))
         np.testing.assert_array_equal(ocp.constraints.lbx_0, np.zeros(48))
