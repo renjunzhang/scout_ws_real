@@ -1,0 +1,148 @@
+{
+  "schema_version": "stage2_fg_execution_projection_golden_v1",
+  "numeric": {
+    "absolute_tolerance": 1e-12
+  },
+  "known_prefix_cases": [
+    {
+      "id": "KnownPrefixNonuniformPhysicalGolden",
+      "history_capacity": 16,
+      "maximum_history_gap_ns": 33333334,
+      "maximum_publish_lateness_ns": 500000,
+      "snapshot_lateness_ns": 300000,
+      "reset_epoch": 7,
+      "clock": {
+        "anchor_steady_ns": 1000000000,
+        "anchor_model_ns": 0
+      },
+      "config": {
+        "dt_sec": 0.03333333333333333,
+        "maximum_linear_delay_sec": 0.1,
+        "maximum_angular_delay_sec": 0.1,
+        "linear_delay_sec": 0.016666666666666666,
+        "angular_delay_sec": 0.04166666666666666,
+        "integer_snap_tolerance_ratio": 1e-12,
+        "duration_tolerance_sec": 1e-12
+      },
+      "plant": {
+        "linear_actuator": {"tau_sec": 0.2, "gain": 1.0},
+        "angular_actuator": {"tau_sec": 0.4, "gain": 1.0},
+        "liquid": {
+          "natural_frequency_rad_per_sec": 1.3,
+          "damping_ratio": 0.2,
+          "longitudinal_coupling": 1.1,
+          "lateral_coupling": 0.9
+        }
+      },
+      "start_model_ns": 176000000,
+      "target_cycle_id": 8,
+      "initial_physical": {
+        "pose": {"x": 0.1, "y": -0.2, "heading": 0.3},
+        "actual": {"linear_velocity": 0.2, "angular_velocity": -0.1},
+        "liquid": {"eta_x": 0.01, "eta_x_dot": -0.02, "eta_y": 0.03, "eta_y_dot": -0.04}
+      },
+      "history": [
+        {"cycle_id": 0, "release_generation": 1, "emission_reason": "nominal", "linear_command": 0.0, "angular_command": 0.0, "linear_acceleration": 0.0, "angular_acceleration": 0.0, "actual_lateness_ns": 0},
+        {"cycle_id": 1, "release_generation": 2, "emission_reason": "nominal", "linear_command": 1.0, "angular_command": -0.5, "linear_acceleration": 0.1, "angular_acceleration": -0.2, "actual_lateness_ns": 100000},
+        {"cycle_id": 2, "release_generation": 3, "emission_reason": "nominal", "linear_command": 2.0, "angular_command": -1.0, "linear_acceleration": 0.2, "angular_acceleration": -0.4, "actual_lateness_ns": 200000},
+        {"cycle_id": 3, "release_generation": 4, "emission_reason": "nominal", "linear_command": 3.0, "angular_command": -1.5, "linear_acceleration": 0.3, "angular_acceleration": -0.6, "actual_lateness_ns": 300000},
+        {"cycle_id": 4, "release_generation": 5, "emission_reason": "nominal", "linear_command": 4.0, "angular_command": -2.0, "linear_acceleration": 0.4, "angular_acceleration": -0.8, "actual_lateness_ns": 0},
+        {"cycle_id": 5, "release_generation": 6, "emission_reason": "nominal", "linear_command": 5.0, "angular_command": -2.5, "linear_acceleration": 0.5, "angular_acceleration": -1.0, "actual_lateness_ns": 100000},
+        {"cycle_id": 6, "release_generation": 7, "emission_reason": "nominal", "linear_command": 6.0, "angular_command": -3.0, "linear_acceleration": 0.6, "angular_acceleration": -1.2, "actual_lateness_ns": 200000},
+        {"cycle_id": 7, "release_generation": 8, "emission_reason": "nominal", "linear_command": 7.0, "angular_command": -3.5, "linear_acceleration": 0.7, "angular_acceleration": -1.4, "actual_lateness_ns": 300000}
+      ],
+      "expected": {
+        "status": "ok",
+        "state": {
+          "physical": {
+            "pose": {"x": 0.20311850974626217, "y": -0.16982577392279685, "heading": 0.27037537832359243},
+            "actual": {"linear_velocity": 2.2269903814851522, "angular_velocity": -0.58348831328728301},
+            "liquid": {"eta_x": -0.088275822166507673, "eta_x_dot": -2.1951067727774145, "eta_y": 0.027209713334967387, "eta_y_dot": -0.0047302016378731101}
+          },
+          "publisher": {"previous_linear_command": 7.0, "previous_angular_command": -3.5, "previous_linear_acceleration": 0.7, "previous_angular_acceleration": -1.4},
+          "linear_older": [6.0, 5.0],
+          "angular_older": [-3.0, -2.5]
+        },
+        "segments": [
+          {"duration_sec": 0.0073333336666666655, "linear_target": 4.0, "angular_target": -2.0},
+          {"duration_sec": 0.024999999666666668, "linear_target": 5.0, "angular_target": -2.0},
+          {"duration_sec": 0.0083333333333333384, "linear_target": 5.0, "angular_target": -2.5},
+          {"duration_sec": 0.024999999666666661, "linear_target": 6.0, "angular_target": -2.5},
+          {"duration_sec": 0.0083333333333333315, "linear_target": 6.0, "angular_target": -3.0},
+          {"duration_sec": 0.016666667333333343, "linear_target": 7.0, "angular_target": -3.0}
+        ],
+        "segment_count": 6,
+        "history_generation": 8,
+        "last_emitted_cycle_id": 7,
+        "start_model_ns": 176000000,
+        "target_model_ns": 266666667,
+        "coverage": {
+          "status": "complete",
+          "history_generation": 8,
+          "predecessor_release_generation": 3,
+          "covered_event_count": 6,
+          "maximum_adjacent_gap_ns": 33333334,
+          "future_hold_ns": 33333334,
+          "maximum_required_gap_ns": 33333334
+        }
+      }
+    }
+  ],
+  "nominal_commit_cases": [
+    {
+      "id": "NominalStraightPoseProjectionGolden",
+      "config": {
+        "start_s_min": 0.0,
+        "start_s_max": 1.7,
+        "v_progress_bound": 30.0,
+        "forward_guard": 0.2,
+        "contour_guard": 0.25,
+        "heading_guard": 0.3,
+        "ambiguity_tolerance": 0.001,
+        "progress_equivalence_tolerance": 1e-9,
+        "minimum_segment_length": 1e-6
+      },
+      "path": {
+        "identity": {
+          "path_id": 17,
+          "path_hash": "42000000000000000000000000000000000000000000000000000000000000a7",
+          "reset_epoch": 7
+        },
+        "vertices": [
+          {"x": 0.0, "y": 0.0, "cumulative_s": 0.0},
+          {"x": 10.0, "y": 0.0, "cumulative_s": 10.0}
+        ],
+        "s_path_end": 10.0
+      },
+      "source_known_prefix_case_id": "KnownPrefixNonuniformPhysicalGolden",
+      "authority": {
+        "kind": "nominal_live_release",
+        "identity": {
+          "path_id": 17,
+          "path_hash": "42000000000000000000000000000000000000000000000000000000000000a7",
+          "reset_epoch": 7
+        },
+        "s_commit": 0.1,
+        "release_cycle_id": 7,
+        "release_generation": 8,
+        "history_generation": 8
+      },
+      "expected": {
+        "status": "ok",
+        "s": 0.20311850974626217,
+        "projected_x": 0.20311850974626217,
+        "projected_y": 0.0,
+        "projected_heading": 0.0,
+        "distance": 0.16982577392279685,
+        "signed_contour_error": -0.16982577392279685,
+        "heading_error": 0.27037537832359243,
+        "search_lower": 0.1,
+        "search_upper": 1.30000002,
+        "selected_segment": 0,
+        "accepted_candidate_count": 1,
+        "authority_cycle_id": 7,
+        "history_generation": 8
+      }
+    }
+  ]
+}
