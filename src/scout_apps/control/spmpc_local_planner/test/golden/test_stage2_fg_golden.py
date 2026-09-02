@@ -67,6 +67,26 @@ class Stage2FgGoldenTest(unittest.TestCase):
             projector["authority"]["release_generation"],
         )
 
+    def test_projector_consumes_recomputed_prefix_pose_not_fixture_expected_pose(
+        self,
+    ) -> None:
+        baseline_prefix = self.fixture["known_prefix_cases"][0]
+        baseline_projector = self.fixture["nominal_commit_cases"][0]
+        baseline = reference.calculate_nominal_commit(
+            baseline_projector,
+            baseline_prefix,
+            reference.calculate_known_prefix(baseline_prefix),
+        )
+
+        mutated_prefix = copy.deepcopy(baseline_prefix)
+        mutated_prefix["expected"]["state"]["physical"]["pose"]["x"] += 0.2
+        recomputed = reference.calculate_nominal_commit(
+            baseline_projector,
+            mutated_prefix,
+            reference.calculate_known_prefix(mutated_prefix),
+        )
+        self.assertEqual(baseline, recomputed)
+
     def test_receipt_jitter_does_not_change_planned_prefix_propagation(self) -> None:
         prefix = self.fixture["known_prefix_cases"][0]
         jittered = reference.calculate_known_prefix(prefix)

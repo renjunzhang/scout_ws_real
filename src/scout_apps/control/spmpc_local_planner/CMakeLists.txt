@@ -245,6 +245,65 @@ if(CATKIN_ENABLE_TESTING)
       --output ${SPMPC_STAGE2_GOLDEN_HEADER}
       --check
   )
+
+  # Stage 2i keeps the combined Stage 2f/2g JSON fixture as the only
+  # hand-authored numeric source.  Its generated C++ header is a build-tree
+  # artifact consumed by an independent C++ golden consumer only.
+  set(SPMPC_STAGE2_FG_GOLDEN_FIXTURE
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/fixtures/stage2_fg_execution_projection_golden_v1.json)
+  set(SPMPC_STAGE2_FG_GOLDEN_REFERENCE
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/golden/stage2_fg_reference.py)
+  set(SPMPC_STAGE2_FG_GOLDEN_GENERATOR
+    ${CMAKE_CURRENT_SOURCE_DIR}/test/golden/generate_stage2_fg_header.py)
+  set(SPMPC_STAGE2_FG_GOLDEN_BUILD_DIR
+    ${CMAKE_CURRENT_BINARY_DIR}/stage2_fg_execution_projection_golden)
+  set(SPMPC_STAGE2_FG_GOLDEN_HEADER
+    ${SPMPC_STAGE2_FG_GOLDEN_BUILD_DIR}/stage2_fg_execution_projection_golden_generated.hpp)
+  add_custom_command(
+    OUTPUT ${SPMPC_STAGE2_FG_GOLDEN_HEADER}
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${SPMPC_STAGE2_FG_GOLDEN_GENERATOR}
+      --fixture ${SPMPC_STAGE2_FG_GOLDEN_FIXTURE}
+      --output ${SPMPC_STAGE2_FG_GOLDEN_HEADER}
+    DEPENDS
+      ${SPMPC_STAGE2_FG_GOLDEN_FIXTURE}
+      ${SPMPC_STAGE2_FG_GOLDEN_REFERENCE}
+      ${SPMPC_STAGE2_FG_GOLDEN_GENERATOR}
+    COMMENT "Generating build-only Stage 2i execution/projection golden header"
+    VERBATIM)
+  add_custom_target(spmpc_stage2_fg_golden_verify
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${SPMPC_STAGE2_FG_GOLDEN_GENERATOR}
+      --fixture ${SPMPC_STAGE2_FG_GOLDEN_FIXTURE}
+      --output ${SPMPC_STAGE2_FG_GOLDEN_HEADER}
+      --check
+    DEPENDS ${SPMPC_STAGE2_FG_GOLDEN_HEADER}
+    COMMENT "Verifying Stage 2i execution/projection golden header identity"
+    VERBATIM)
+  add_test(
+    NAME test_mainline_stage2_fg_golden_python
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/golden/test_stage2_fg_golden.py
+  )
+  add_test(
+    NAME test_mainline_stage2_fg_golden_header_freshness
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${SPMPC_STAGE2_FG_GOLDEN_GENERATOR}
+      --fixture ${SPMPC_STAGE2_FG_GOLDEN_FIXTURE}
+      --output ${SPMPC_STAGE2_FG_GOLDEN_HEADER}
+      --check
+  )
+  add_executable(test_mainline_stage2_fg_golden_consumer
+    test/golden/test_stage2_fg_golden_consumer.cpp)
+  add_dependencies(test_mainline_stage2_fg_golden_consumer
+    spmpc_stage2_fg_golden_verify)
+  target_include_directories(test_mainline_stage2_fg_golden_consumer PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${SPMPC_STAGE2_FG_GOLDEN_BUILD_DIR})
+  add_test(
+    NAME test_mainline_stage2_fg_golden_consumer
+    COMMAND test_mainline_stage2_fg_golden_consumer
+  )
   add_test(
     NAME test_mainline_stage3a_layout_scaffold
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
