@@ -1,0 +1,54 @@
+{
+  "schema_version": "spmpc_mainline_development_capacity_v1",
+  "capacity_id": "SPMPC-MAINLINE-DEVELOPMENT-CAPACITY-20260903",
+  "status": "DEVELOPMENT_CAPACITY_ONLY",
+  "artifact_class": "DEV_UNVALIDATED",
+  "scope": "DEVELOPMENT_CODEGEN_QUEUE_CAPACITY_ONLY",
+  "source_identity": {
+    "repository_ref": "diag/lt-dwa-collision-tracking",
+    "commit_sha": "d601e313deefcaeaacdf027296d3ba0ce376b62e",
+    "role": "DEVELOPMENT_CAPACITY_RATIONALE_ONLY"
+  },
+  "release_grid": {
+    "frequency_hz": 30,
+    "period_sec": {
+      "numerator": 1,
+      "denominator": 30
+    }
+  },
+  "layout_basis": {
+    "base_state_count": 14,
+    "control_count": 3,
+    "execution_fixed_scalar_count": 7,
+    "execution_subsegment_slots": 3
+  },
+  "capacity": {
+    "v": {
+      "release_intervals": 12,
+      "derived": {
+        "D": 11,
+        "NQ": 13,
+        "L_max_sec": {
+          "numerator": 12,
+          "denominator": 30
+        }
+      }
+    },
+    "omega": {
+      "release_intervals": 24,
+      "derived": {
+        "D": 23,
+        "NQ": 25,
+        "L_max_sec": {
+          "numerator": 24,
+          "denominator": 30
+        }
+      }
+    }
+  },
+  "derived_dimensions": {
+    "NX": 48,
+    "NU": 3,
+    "NP_exec": 121
+  }
+}

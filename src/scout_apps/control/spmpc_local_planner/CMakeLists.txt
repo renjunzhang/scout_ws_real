@@ -310,6 +310,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_layout_scaffold.py
   )
   add_test(
+    NAME test_mainline_stage3d0_development_capacity
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_development_capacity.py
+  )
+  add_test(
     NAME test_mainline_stage1_development_evidence
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_stage1_development_evidence.py
