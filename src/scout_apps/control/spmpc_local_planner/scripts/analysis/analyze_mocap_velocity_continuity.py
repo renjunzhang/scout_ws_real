@@ -490,10 +490,12 @@ def main():
                     sensor,
                 )
                 plot_paths.append(velocity_path)
-                # NOKOV is the physical-motion primary result.  Avoid a
-                # redundant acceleration/delta-v plot set for every sensor;
-                # odom/gyro velocity remains only as a compact cross-check.
-                if sensor == "mocap":
+                # Keep a directly paired acceleration curve below every
+                # NOKOV/odom velocity curve.  The odom curve is important for
+                # distinguishing real chassis acceleration from the
+                # high-frequency noise amplified by differentiating NOKOV
+                # position twice.
+                if sensor in ("mocap", "odom"):
                     acceleration_path = args.plot_dir / "{}_{}_acceleration.png".format(
                         args.axis, sensor
                     )
@@ -506,6 +508,10 @@ def main():
                         sensor,
                     )
                     plot_paths.append(acceleration_path)
+                # Per-cycle delta-v is retained only for the NOKOV primary
+                # result; the paired odom acceleration already provides the
+                # requested compact cross-check.
+                if sensor == "mocap":
                     delta_path = args.plot_dir / "{}_{}_delta_velocity_20ms.png".format(
                         args.axis, sensor
                     )
