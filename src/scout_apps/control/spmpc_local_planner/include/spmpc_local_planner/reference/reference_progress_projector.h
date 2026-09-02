@@ -490,35 +490,33 @@ class ReferenceProgressProjector {
                                       : ReferenceProgressStatus::kInvalidPath;
     }
 
-    std::size_t best = 0;
+    Candidate best_candidate = candidates[0];
     for (std::size_t index = 1; index < candidate_count; ++index) {
-      if (candidateLess(candidates[index], candidates[best])) {
-        best = index;
+      if (candidateLess(candidates[index], best_candidate)) {
+        best_candidate = candidates[index];
       }
     }
     for (std::size_t index = 0; index < candidate_count; ++index) {
-      if (index == best || equivalentProgress(candidates[index],
-                                               candidates[best], path)) {
+      if (equivalentProgress(candidates[index], best_candidate, path)) {
         continue;
       }
       if (std::fabs(candidates[index].distance -
-                    candidates[best].distance) <=
+                    best_candidate.distance) <=
           config_.ambiguity_tolerance) {
         return ReferenceProgressStatus::kAmbiguous;
       }
     }
 
     for (std::size_t index = 0; index < candidate_count; ++index) {
-      if (index == best ||
-          !equivalentProgress(candidates[index], candidates[best], path)) {
+      if (!equivalentProgress(candidates[index], best_candidate, path)) {
         continue;
       }
-      if (equivalentCandidateLess(candidates[index], candidates[best])) {
-        best = index;
+      if (equivalentCandidateLess(candidates[index], best_candidate)) {
+        best_candidate = candidates[index];
       }
     }
 
-    const Candidate& selected = candidates[best];
+    const Candidate& selected = best_candidate;
     ReferenceProgressProjection next;
     next.s = selected.s;
     next.projected_x = selected.x;

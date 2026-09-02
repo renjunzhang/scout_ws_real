@@ -227,6 +227,27 @@ TEST(MainlineReferenceProgressProjector, ProjectsStraightLineInsideNominalWindow
   EXPECT_EQ(7u, output.history_generation);
 }
 
+TEST(MainlineReferenceProgressProjector, SupportsMinimumVertexCapacity) {
+  using MinimumProjector = ReferenceProgressProjector<2>;
+  using MinimumPath = MinimumProjector::Path;
+
+  const MinimumProjector projector(makeConfig());
+  MinimumPath path;
+  path.identity = identity();
+  path.vertices[0] = ReferencePathVertex{0.0, 0.0, 0.0};
+  path.vertices[1] = ReferencePathVertex{10.0, 0.0, 10.0};
+  path.vertex_count = 2;
+  path.s_path_end = 10.0;
+
+  ReferenceProgressProjection output;
+  ASSERT_EQ(ReferenceProgressStatus::kOk,
+            projector.projectNominalCommit(
+                pose(1.2, 0.1, 0.05), targetCycle(), identity(), 7,
+                nominalCommit(), path, output));
+  EXPECT_DOUBLE_EQ(1.2, output.s);
+  EXPECT_EQ(0u, output.selected_segment);
+}
+
 TEST(MainlineReferenceProgressProjector,
      DoesNotClampArtificialNominalWindowBoundaries) {
   const Projector projector(makeConfig());
