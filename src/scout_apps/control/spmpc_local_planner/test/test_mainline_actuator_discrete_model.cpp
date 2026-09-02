@@ -7,6 +7,7 @@
 #include <stdexcept>
 
 #include "spmpc_local_planner/execution/actuator_discrete_model.h"
+#include "stage2_execution_golden_generated.hpp"
 
 namespace spmpc_local_planner {
 namespace mainline {
@@ -14,7 +15,9 @@ namespace {
 
 constexpr double kTolerance = 1e-12;
 
-ActuatorDiscreteConfig makeConfig() {
+// Focused edge/failure tests retain local synthetic inputs.  The complete-map
+// golden scenario below exclusively consumes the generated fixture types.
+ActuatorDiscreteConfig makeSyntheticConfig() {
   ActuatorDiscreteConfig config;
   config.dt_sec = 1.0;
   config.maximum_linear_delay_sec = 3.0;
@@ -26,7 +29,7 @@ ActuatorDiscreteConfig makeConfig() {
   return config;
 }
 
-ZohPlantParams makePlantParams() {
+ZohPlantParams makeSyntheticPlantParams() {
   ZohPlantParams params;
   params.linear_actuator = FopdtChannelParams{2.0, 1.0};
   params.angular_actuator = FopdtChannelParams{4.0, 1.0};
@@ -38,7 +41,64 @@ using SyntheticModel = ActuatorDiscreteModel<4, 4>;
 using SyntheticState = SyntheticModel::State;
 using SyntheticResult = SyntheticModel::Result;
 
-SyntheticState makeState() {
+using GoldenModel = ActuatorDiscreteModel<
+    stage2_execution_golden::kLinearSelectorWidth,
+    stage2_execution_golden::kAngularSelectorWidth>;
+using GoldenState = GoldenModel::State;
+using GoldenResult = GoldenModel::Result;
+
+ActuatorDiscreteConfig makeGoldenConfig() {
+  const auto& source = stage2_execution_golden::kConfig;
+  ActuatorDiscreteConfig config;
+  config.dt_sec = source.dt_sec;
+  config.maximum_linear_delay_sec = source.maximum_linear_delay_sec;
+  config.maximum_angular_delay_sec = source.maximum_angular_delay_sec;
+  config.linear_delay_sec = source.linear_delay_sec;
+  config.angular_delay_sec = source.angular_delay_sec;
+  config.integer_snap_tolerance_ratio = source.integer_snap_tolerance_ratio;
+  config.duration_tolerance_sec = source.duration_tolerance_sec;
+  return config;
+}
+
+ZohPlantParams makeGoldenPlantParams() {
+  const auto& linear = stage2_execution_golden::kLinearActuator;
+  const auto& angular = stage2_execution_golden::kAngularActuator;
+  const auto& liquid = stage2_execution_golden::kLiquid;
+  ZohPlantParams params;
+  params.linear_actuator = FopdtChannelParams{linear.tau_sec, linear.gain};
+  params.angular_actuator = FopdtChannelParams{angular.tau_sec, angular.gain};
+  params.liquid = LiquidModalParams{
+      liquid.natural_frequency_rad_per_sec,
+      liquid.damping_ratio,
+      liquid.longitudinal_coupling,
+      liquid.lateral_coupling};
+  return params;
+}
+
+GoldenState makeGoldenState(
+    const stage2_execution_golden::GoldenState& source) {
+  GoldenState state;
+  state.physical.pose = PlanarPoseState{
+      source.physical.pose.x, source.physical.pose.y,
+      source.physical.pose.heading};
+  state.physical.actual = ActualMotionState{
+      source.physical.actual.linear_velocity,
+      source.physical.actual.angular_velocity};
+  state.physical.liquid = LiquidModalState{
+      source.physical.liquid.eta_x, source.physical.liquid.eta_x_dot,
+      source.physical.liquid.eta_y, source.physical.liquid.eta_y_dot};
+  state.progress = source.progress;
+  state.publisher = AuthoritativePublisherState{
+      source.publisher.previous_linear_command,
+      source.publisher.previous_angular_command,
+      source.publisher.previous_linear_acceleration,
+      source.publisher.previous_angular_acceleration};
+  state.linear_older = source.linear_older;
+  state.angular_older = source.angular_older;
+  return state;
+}
+
+SyntheticState makeSyntheticState() {
   SyntheticState state;
   state.progress = 10.0;
   state.publisher.previous_linear_command = 1.0;
@@ -127,6 +187,40 @@ void expectResultDoubleEq(
   expectStateDoubleEq(expected.next_state, actual.next_state);
 }
 
+template <std::size_t LinearWidth, std::size_t AngularWidth>
+void expectStateNear(
+    const PreIssueActuatorState<LinearWidth, AngularWidth>& expected,
+    const PreIssueActuatorState<LinearWidth, AngularWidth>& actual,
+    double tolerance) {
+  EXPECT_NEAR(expected.physical.pose.x, actual.physical.pose.x, tolerance);
+  EXPECT_NEAR(expected.physical.pose.y, actual.physical.pose.y, tolerance);
+  EXPECT_NEAR(expected.physical.pose.heading, actual.physical.pose.heading,
+              tolerance);
+  EXPECT_NEAR(expected.physical.actual.linear_velocity,
+              actual.physical.actual.linear_velocity, tolerance);
+  EXPECT_NEAR(expected.physical.actual.angular_velocity,
+              actual.physical.actual.angular_velocity, tolerance);
+  EXPECT_NEAR(expected.physical.liquid.eta_x,
+              actual.physical.liquid.eta_x, tolerance);
+  EXPECT_NEAR(expected.physical.liquid.eta_x_dot,
+              actual.physical.liquid.eta_x_dot, tolerance);
+  EXPECT_NEAR(expected.physical.liquid.eta_y,
+              actual.physical.liquid.eta_y, tolerance);
+  EXPECT_NEAR(expected.physical.liquid.eta_y_dot,
+              actual.physical.liquid.eta_y_dot, tolerance);
+  EXPECT_NEAR(expected.progress, actual.progress, tolerance);
+  EXPECT_NEAR(expected.publisher.previous_linear_command,
+              actual.publisher.previous_linear_command, tolerance);
+  EXPECT_NEAR(expected.publisher.previous_angular_command,
+              actual.publisher.previous_angular_command, tolerance);
+  EXPECT_NEAR(expected.publisher.previous_linear_acceleration,
+              actual.publisher.previous_linear_acceleration, tolerance);
+  EXPECT_NEAR(expected.publisher.previous_angular_acceleration,
+              actual.publisher.previous_angular_acceleration, tolerance);
+  EXPECT_EQ(expected.linear_older, actual.linear_older);
+  EXPECT_EQ(expected.angular_older, actual.angular_older);
+}
+
 void expectPhysicalDoubleEq(const PhysicalPlantState& expected,
                             const PhysicalPlantState& actual) {
   EXPECT_DOUBLE_EQ(expected.pose.x, actual.pose.x);
@@ -143,7 +237,8 @@ void expectPhysicalDoubleEq(const PhysicalPlantState& expected,
 }
 
 TEST(MainlineActuatorDiscreteModel, FreezesValidIndependentSchedules) {
-  const SyntheticModel model(makeConfig(), makePlantParams());
+  const SyntheticModel model(makeSyntheticConfig(),
+                             makeSyntheticPlantParams());
   EXPECT_EQ(0u, model.linearSchedule().integer_delay_steps);
   EXPECT_DOUBLE_EQ(0.5, model.linearSchedule().fractional_beta);
   EXPECT_EQ(0u, model.angularSchedule().integer_delay_steps);
@@ -153,84 +248,66 @@ TEST(MainlineActuatorDiscreteModel, FreezesValidIndependentSchedules) {
   EXPECT_DOUBLE_EQ(0.25, model.combinedSchedule().duration[1]);
   EXPECT_DOUBLE_EQ(0.5, model.combinedSchedule().duration[2]);
 
-  EXPECT_THROW((ActuatorDiscreteModel<3, 4>(makeConfig(),
-                                            makePlantParams())),
+  EXPECT_THROW((ActuatorDiscreteModel<3, 4>(makeSyntheticConfig(),
+                                            makeSyntheticPlantParams())),
                std::invalid_argument);
-  ActuatorDiscreteConfig invalid = makeConfig();
+  ActuatorDiscreteConfig invalid = makeSyntheticConfig();
   invalid.linear_delay_sec = 4.0;
-  EXPECT_THROW((SyntheticModel(invalid, makePlantParams())),
+  EXPECT_THROW((SyntheticModel(invalid, makeSyntheticPlantParams())),
                std::invalid_argument);
-  ZohPlantParams invalid_plant = makePlantParams();
+  ZohPlantParams invalid_plant = makeSyntheticPlantParams();
   invalid_plant.liquid.damping_ratio = -1.0;
-  EXPECT_THROW((SyntheticModel(makeConfig(), invalid_plant)),
+  EXPECT_THROW((SyntheticModel(makeSyntheticConfig(), invalid_plant)),
                std::invalid_argument);
 }
 
 TEST(MainlineActuatorDiscreteModel, MatchesIndependentCompleteMapGolden) {
-  const SyntheticModel model(makeConfig(), makePlantParams());
-  const SyntheticState state = makeState();
-  const IssueControl control{4.0, 0.0, 0.7};
-  SyntheticResult output;
+  const GoldenModel model(makeGoldenConfig(), makeGoldenPlantParams());
+  const GoldenState state =
+      makeGoldenState(stage2_execution_golden::kInitialState);
+  const IssueControl control{
+      stage2_execution_golden::kControl.linear_jerk,
+      stage2_execution_golden::kControl.angular_jerk,
+      stage2_execution_golden::kControl.progress_velocity};
+  GoldenResult output;
   ASSERT_EQ(ActuatorDiscreteStepStatus::kOk,
             model.step(state, control, output));
 
-  EXPECT_DOUBLE_EQ(5.0, output.issued.linear_command);
-  EXPECT_DOUBLE_EQ(-0.5, output.issued.angular_command);
-  EXPECT_DOUBLE_EQ(6.0, output.issued.linear_acceleration);
-  EXPECT_DOUBLE_EQ(0.5, output.issued.angular_acceleration);
-  const std::array<double, 3> expected_duration{{0.25, 0.25, 0.5}};
-  const std::array<double, 3> expected_linear{{1.0, 1.0, 5.0}};
-  const std::array<double, 3> expected_angular{{-1.0, -0.5, -0.5}};
+  const auto& expected_issued = stage2_execution_golden::kExpectedIssued;
+  const double tolerance = stage2_execution_golden::kAbsoluteTolerance;
+  EXPECT_NEAR(expected_issued.linear_command, output.issued.linear_command,
+              tolerance);
+  EXPECT_NEAR(expected_issued.angular_command, output.issued.angular_command,
+              tolerance);
+  EXPECT_NEAR(expected_issued.linear_acceleration,
+              output.issued.linear_acceleration, tolerance);
+  EXPECT_NEAR(expected_issued.angular_acceleration,
+              output.issued.angular_acceleration, tolerance);
   for (std::size_t slot = 0; slot < output.segments.size(); ++slot) {
-    EXPECT_DOUBLE_EQ(expected_duration[slot],
-                     output.segments[slot].duration_sec);
-    EXPECT_DOUBLE_EQ(expected_linear[slot],
-                     output.segments[slot].linear_target);
-    EXPECT_DOUBLE_EQ(expected_angular[slot],
-                     output.segments[slot].angular_target);
+    const auto& expected = stage2_execution_golden::kExpectedSegments[slot];
+    EXPECT_NEAR(expected.duration_sec, output.segments[slot].duration_sec,
+                tolerance);
+    EXPECT_NEAR(expected.linear_target, output.segments[slot].linear_target,
+                tolerance);
+    EXPECT_NEAR(expected.angular_target, output.segments[slot].angular_target,
+                tolerance);
   }
 
-  EXPECT_NEAR(0.44866850507437234, output.next_state.physical.pose.x,
-              1e-14);
-  EXPECT_NEAR(-0.02201289323447934, output.next_state.physical.pose.y,
-              1e-14);
-  EXPECT_NEAR(-0.0823279219013971,
-              output.next_state.physical.pose.heading, 1e-14);
-  EXPECT_NEAR(1.2782662080017468,
-              output.next_state.physical.actual.linear_velocity, 1e-14);
-  EXPECT_NEAR(-0.13571377601879525,
-              output.next_state.physical.actual.angular_velocity, 1e-14);
-  EXPECT_NEAR(-0.39274896068327525,
-              output.next_state.physical.liquid.eta_x, 1e-14);
-  EXPECT_NEAR(-1.0229532415494726,
-              output.next_state.physical.liquid.eta_x_dot, 1e-14);
-  EXPECT_NEAR(0.008365546025445678,
-              output.next_state.physical.liquid.eta_y, 1e-14);
-  EXPECT_NEAR(0.03722246763348247,
-              output.next_state.physical.liquid.eta_y_dot, 1e-14);
-  EXPECT_NEAR(10.7, output.next_state.progress, 1e-14);
-  EXPECT_DOUBLE_EQ(5.0,
-                   output.next_state.publisher.previous_linear_command);
-  EXPECT_DOUBLE_EQ(-0.5,
-                   output.next_state.publisher.previous_angular_command);
-  EXPECT_DOUBLE_EQ(6.0,
-                   output.next_state.publisher.previous_linear_acceleration);
-  EXPECT_DOUBLE_EQ(0.5,
-                   output.next_state.publisher.previous_angular_acceleration);
-  EXPECT_EQ((std::array<double, 2>{{1.0, 3.0}}),
-            output.next_state.linear_older);
-  EXPECT_EQ((std::array<double, 2>{{-1.0, 2.0}}),
-            output.next_state.angular_older);
-  expectStateDoubleEq(makeState(), state);
+  expectStateNear(
+      makeGoldenState(stage2_execution_golden::kExpectedNextState),
+      output.next_state, tolerance);
+  expectStateDoubleEq(
+      makeGoldenState(stage2_execution_golden::kInitialState), state);
 }
 
 TEST(MainlineActuatorDiscreteModel, CurrentIssueCannotLeakBeforeOneStepDelay) {
-  ActuatorDiscreteConfig config = makeConfig();
+  ActuatorDiscreteConfig config = makeSyntheticConfig();
   config.maximum_linear_delay_sec = 1.0;
   config.maximum_angular_delay_sec = 1.0;
   config.linear_delay_sec = 1.0;
   config.angular_delay_sec = 1.0;
-  const ActuatorDiscreteModel<2, 2> model(config, makePlantParams());
+  const ActuatorDiscreteModel<2, 2> model(config,
+                                         makeSyntheticPlantParams());
   ActuatorDiscreteModel<2, 2>::State state;
   state.publisher.previous_linear_command = 0.5;
   state.publisher.previous_angular_command = -0.4;
@@ -259,11 +336,11 @@ TEST(MainlineActuatorDiscreteModel, CurrentIssueCannotLeakBeforeOneStepDelay) {
 }
 
 TEST(MainlineActuatorDiscreteModel, MaximumIntegerDelayUsesOldestPreShiftTap) {
-  ActuatorDiscreteConfig config = makeConfig();
+  ActuatorDiscreteConfig config = makeSyntheticConfig();
   config.linear_delay_sec = 3.0;
   config.angular_delay_sec = 3.0;
-  const SyntheticModel model(config, makePlantParams());
-  const SyntheticState state = makeState();
+  const SyntheticModel model(config, makeSyntheticPlantParams());
+  const SyntheticState state = makeSyntheticState();
 
   SyntheticResult first;
   SyntheticResult second;
@@ -285,12 +362,13 @@ TEST(MainlineActuatorDiscreteModel, MaximumIntegerDelayUsesOldestPreShiftTap) {
 }
 
 TEST(MainlineActuatorDiscreteModel, ZeroDelayUsesCurrentIssuedCommand) {
-  ActuatorDiscreteConfig config = makeConfig();
+  ActuatorDiscreteConfig config = makeSyntheticConfig();
   config.maximum_linear_delay_sec = 0.0;
   config.maximum_angular_delay_sec = 0.0;
   config.linear_delay_sec = 0.0;
   config.angular_delay_sec = 0.0;
-  const ActuatorDiscreteModel<1, 1> model(config, makePlantParams());
+  const ActuatorDiscreteModel<1, 1> model(config,
+                                         makeSyntheticPlantParams());
   ActuatorDiscreteModel<1, 1>::State state;
   state.publisher.previous_linear_command = 1.0;
   state.publisher.previous_angular_command = -1.0;
@@ -307,11 +385,12 @@ TEST(MainlineActuatorDiscreteModel, ZeroDelayUsesCurrentIssuedCommand) {
 }
 
 TEST(MainlineActuatorDiscreteModel, SupportsIndependentSelectorWidths) {
-  ActuatorDiscreteConfig config = makeConfig();
+  ActuatorDiscreteConfig config = makeSyntheticConfig();
   config.maximum_linear_delay_sec = 0.0;
   config.linear_delay_sec = 0.0;
   config.angular_delay_sec = 2.5;
-  const ActuatorDiscreteModel<1, 4> model(config, makePlantParams());
+  const ActuatorDiscreteModel<1, 4> model(config,
+                                         makeSyntheticPlantParams());
   ActuatorDiscreteModel<1, 4>::State state;
   state.publisher.previous_linear_command = 1.0;
   state.publisher.previous_angular_command = -1.0;
@@ -334,10 +413,12 @@ TEST(MainlineActuatorDiscreteModel, SupportsIndependentSelectorWidths) {
 }
 
 TEST(MainlineActuatorDiscreteModel, ConsecutiveStepsShiftOnlyAfterPropagation) {
-  const SyntheticModel model(makeConfig(), makePlantParams());
+  const SyntheticModel model(makeSyntheticConfig(),
+                             makeSyntheticPlantParams());
   SyntheticResult first;
   ASSERT_EQ(ActuatorDiscreteStepStatus::kOk,
-            model.step(makeState(), IssueControl{4.0, 0.0, 0.7}, first));
+            model.step(makeSyntheticState(), IssueControl{4.0, 0.0, 0.7},
+                       first));
   SyntheticResult second;
   ASSERT_EQ(ActuatorDiscreteStepStatus::kOk,
             model.step(first.next_state, IssueControl{0.0, 0.0, 0.7},
@@ -351,17 +432,18 @@ TEST(MainlineActuatorDiscreteModel, ConsecutiveStepsShiftOnlyAfterPropagation) {
 }
 
 TEST(MainlineActuatorDiscreteModel, RejectsFailuresWithoutChangingOutput) {
-  const SyntheticModel model(makeConfig(), makePlantParams());
+  const SyntheticModel model(makeSyntheticConfig(),
+                             makeSyntheticPlantParams());
   const SyntheticResult sentinel = makeSentinel();
   SyntheticResult output = sentinel;
-  SyntheticState state = makeState();
+  SyntheticState state = makeSyntheticState();
 
   state.linear_older[1] = std::numeric_limits<double>::quiet_NaN();
   EXPECT_EQ(ActuatorDiscreteStepStatus::kInvalidState,
             model.step(state, IssueControl{}, output));
   expectResultDoubleEq(sentinel, output);
 
-  state = makeState();
+  state = makeSyntheticState();
   EXPECT_EQ(ActuatorDiscreteStepStatus::kInvalidControl,
             model.step(state, IssueControl{0.0, 0.0, -0.1}, output));
   expectResultDoubleEq(sentinel, output);
@@ -382,7 +464,7 @@ TEST(MainlineActuatorDiscreteModel, RejectsFailuresWithoutChangingOutput) {
                 output));
   expectResultDoubleEq(sentinel, output);
 
-  state = makeState();
+  state = makeSyntheticState();
   state.physical.actual = ActualMotionState{
       std::numeric_limits<double>::max(),
       std::numeric_limits<double>::max()};
@@ -390,7 +472,7 @@ TEST(MainlineActuatorDiscreteModel, RejectsFailuresWithoutChangingOutput) {
             model.step(state, IssueControl{}, output));
   expectResultDoubleEq(sentinel, output);
 
-  state = makeState();
+  state = makeSyntheticState();
   state.progress = std::numeric_limits<double>::max();
   EXPECT_EQ(ActuatorDiscreteStepStatus::kNonFiniteOutput,
             model.step(
