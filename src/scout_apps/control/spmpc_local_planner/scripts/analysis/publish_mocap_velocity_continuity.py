@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish one stationary linear or angular velocity step with a stamped mirror."""
+"""Publish one continuous chassis velocity profile with a stamped mirror."""
 
 import argparse
 import json
@@ -8,28 +8,27 @@ import sys
 import time
 from pathlib import Path
 
+import velocity_continuity_core as continuity_core
 
-REQUIRED_ARM_TOKEN = "MOCAP_VELOCITY_STEP_ARMED"
-HARDWARE_ACCEL_LIMIT_ARM_TOKEN = "MOCAP_HARDWARE_ACCEL_LIMIT_ARMED"
-TRIAL_CONTRACTS = ("low_speed_identification", "hardware_accel_limit")
+
+REQUIRED_ARM_TOKEN = "MOCAP_VELOCITY_CONTINUITY_ARMED"
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--cmd-topic", default="/cmd_vel")
     parser.add_argument(
-        "--stamped-topic", default="/mocap_velocity_step/cmd_vel_stamped"
+        "--stamped-topic", default="/mocap_velocity_continuity/cmd_vel_stamped"
     )
     parser.add_argument("--odom-topic", default="/odom")
     parser.add_argument("--imu-topic", default="/imu/data")
     parser.add_argument("--axis", choices=("linear", "angular"), required=True)
-    parser.add_argument(
-        "--trial-contract", choices=TRIAL_CONTRACTS, default="low_speed_identification"
-    )
-    parser.add_argument("--hardware-accel-limit-arm-token")
-    parser.add_argument("--command-value", type=float, required=True)
+    parser.add_argument("--profile", choices=continuity_core.PROFILES, required=True)
+    parser.add_argument("--target-value", type=float, required=True)
     parser.add_argument("--pre-sec", type=float, default=3.0)
-    parser.add_argument("--step-sec", type=float, default=4.0)
+    parser.add_argument("--ramp-up-sec", type=float, default=3.0)
+    parser.add_argument("--hold-sec", type=float, default=2.0)
+    parser.add_argument("--ramp-down-sec", type=float, default=3.0)
     parser.add_argument("--post-sec", type=float, default=3.0)
     parser.add_argument("--rate-hz", type=float, default=50.0)
     parser.add_argument("--run-label", default="UNSPECIFIED")
@@ -38,7 +37,6 @@ def build_parser():
         choices=("development", "validation", "final_test"),
         default="development",
     )
-    parser.add_argument("--matrix-row", default="single")
     parser.add_argument("--attempt", default="01")
     parser.add_argument("--connection-timeout-sec", type=float, default=5.0)
     parser.add_argument("--minimum-cmd-connections", type=int, default=2)
@@ -59,43 +57,61 @@ def validate_args(args):
         raise ValueError(
             "refusing motion without --arm-token {}".format(REQUIRED_ARM_TOKEN)
         )
-    if not math.isfinite(args.command_value) or args.command_value == 0.0:
-        raise ValueError("command-value must be finite and nonzero")
-    if args.trial_contract == "hardware_accel_limit":
-        if args.hardware_accel_limit_arm_token != HARDWARE_ACCEL_LIMIT_ARM_TOKEN:
+    if not math.isfinite(args.target_value) or args.target_value == 0.0:
+        raise ValueError("target-value must be finite and nonzero")
+    # The chassis high-speed mode is rated to 3.0 m/s, but this direct-command
+    # mocap protocol deliberately has a much lower site-safety ceiling.
+    speed_limit = 0.80 if args.axis == "linear" else 0.30
+    speed_unit = "m/s" if args.axis == "linear" else "rad/s"
+    if abs(args.target_value) > speed_limit:
+        raise ValueError(
+            "require |target-value| <= {:.2f} {}".format(speed_limit, speed_unit)
+        )
+    for name, value, lower, upper in (
+        ("pre-sec", args.pre_sec, 2.0, 10.0),
+        ("ramp-up-sec", args.ramp_up_sec, 2.0, 10.0),
+        ("hold-sec", args.hold_sec, 1.0, 6.0),
+        ("ramp-down-sec", args.ramp_down_sec, 2.0, 10.0),
+        ("post-sec", args.post_sec, 2.0, 10.0),
+        ("rate-hz", args.rate_hz, 20.0, 100.0),
+    ):
+        if not math.isfinite(value) or not lower <= value <= upper:
+            raise ValueError("require {} <= {} <= {}".format(lower, name, upper))
+    acceleration_factor = (
+        1.0
+        if args.profile in ("constant_accel", "trapezoidal_velocity")
+        else 2.0
+    )
+    peak_acceleration = acceleration_factor * abs(args.target_value) / min(
+        args.ramp_up_sec, args.ramp_down_sec
+    )
+    acceleration_limit = 0.60 if args.axis == "linear" else 0.40
+    acceleration_unit = "m/s^2" if args.axis == "linear" else "rad/s^2"
+    if peak_acceleration > acceleration_limit:
+        raise ValueError(
+            "profile peak acceleration {:.3f} exceeds safe test limit {:.3f} {}".format(
+                peak_acceleration, acceleration_limit, acceleration_unit
+            )
+        )
+    if args.axis == "linear":
+        if args.profile in ("constant_accel", "trapezoidal_velocity"):
+            expected_motion = abs(args.target_value) * (
+                0.5 * args.ramp_up_sec
+                + args.hold_sec
+                + 0.5 * args.ramp_down_sec
+            )
+        else:
+            expected_motion = abs(args.target_value) * (
+                args.ramp_up_sec / 3.0
+                + args.hold_sec
+                + 2.0 * args.ramp_down_sec / 3.0
+            )
+        if expected_motion > 5.0:
             raise ValueError(
-                "hardware_accel_limit requires --hardware-accel-limit-arm-token {}".format(
-                    HARDWARE_ACCEL_LIMIT_ARM_TOKEN
+                "profile expected travel {:.3f} m exceeds the 5.0 m site-safety limit".format(
+                    expected_motion
                 )
             )
-        if args.axis != "linear":
-            raise ValueError("hardware_accel_limit is frozen to the linear axis")
-        if abs(args.command_value - 0.80) > 1e-9:
-            raise ValueError("hardware_accel_limit is frozen to +0.80 m/s")
-        for name, value, frozen in (
-            ("pre-sec", args.pre_sec, 3.0),
-            ("step-sec", args.step_sec, 2.5),
-            ("post-sec", args.post_sec, 4.0),
-            ("rate-hz", args.rate_hz, 50.0),
-        ):
-            if abs(value - frozen) > 1e-9:
-                raise ValueError(
-                    "hardware_accel_limit requires {}={}".format(name, frozen)
-                )
-        limit = 0.80
-    else:
-        limit = 0.15 if args.axis == "linear" else 0.30
-    unit = "m/s" if args.axis == "linear" else "rad/s"
-    if abs(args.command_value) > limit:
-        raise ValueError("require |command-value| <= {:.2f} {}".format(limit, unit))
-    if not 2.0 <= args.pre_sec <= 10.0:
-        raise ValueError("require 2 <= pre-sec <= 10")
-    if not 2.5 <= args.step_sec <= 6.0:
-        raise ValueError("require 2.5 <= step-sec <= 6")
-    if not 2.0 <= args.post_sec <= 10.0:
-        raise ValueError("require 2 <= post-sec <= 10")
-    if not 20.0 <= args.rate_hz <= 100.0:
-        raise ValueError("require 20 <= rate-hz <= 100")
 
 
 def main():
@@ -103,7 +119,7 @@ def main():
     try:
         validate_args(args)
     except ValueError as exc:
-        print("[mocap_velocity_step][ERR] {}".format(exc), file=sys.stderr)
+        print("[mocap_velocity_continuity][ERR] {}".format(exc), file=sys.stderr)
         return 2
 
     import rospy
@@ -111,10 +127,11 @@ def main():
     from nav_msgs.msg import Odometry
     from sensor_msgs.msg import Imu
 
-    rospy.init_node("mocap_velocity_step_command", anonymous=True)
+    rospy.init_node("mocap_velocity_continuity_command", anonymous=True)
     if bool(rospy.get_param("/use_sim_time", False)):
-        rospy.logerr("Real velocity-step publisher refuses /use_sim_time=true")
+        rospy.logerr("Real velocity-continuity publisher refuses /use_sim_time=true")
         return 2
+
     command_publisher = rospy.Publisher(args.cmd_topic, Twist, queue_size=1)
     stamped_publisher = rospy.Publisher(args.stamped_topic, TwistStamped, queue_size=10)
     odom_samples = []
@@ -164,9 +181,9 @@ def main():
         now = rospy.Time.now()
         command = Twist()
         if args.axis == "linear":
-            command.linear.x = value
+            command.linear.x = float(value)
         else:
-            command.angular.z = value
+            command.angular.z = float(value)
         stamped = TwistStamped()
         stamped.header.stamp = now
         stamped.header.frame_id = phase
@@ -175,14 +192,37 @@ def main():
         stamped_publisher.publish(stamped)
         return now.to_sec()
 
-    def run_phase(duration, value, phase):
-        start_monotonic = time.monotonic()
+    def run_constant_phase(duration, value, phase):
+        phase_start = time.monotonic()
         first_stamp = None
         last_stamp = None
-        while not rospy.is_shutdown() and time.monotonic() - start_monotonic < duration:
+        while not rospy.is_shutdown() and time.monotonic() - phase_start < duration:
             stamp = publish_once(value, phase)
             first_stamp = stamp if first_stamp is None else first_stamp
             last_stamp = stamp
+            rate.sleep()
+        if first_stamp is None:
+            raise RuntimeError("phase {} published no command".format(phase))
+        return first_stamp, last_stamp
+
+    def run_ramp_phase(duration, phase, ramp_down=False):
+        phase_start = time.monotonic()
+        first_stamp = None
+        last_stamp = None
+        while not rospy.is_shutdown():
+            elapsed = time.monotonic() - phase_start
+            progress = min(1.0, elapsed / duration)
+            value = continuity_core.phase_value(
+                args.profile,
+                progress,
+                args.target_value,
+                ramp_down=ramp_down,
+            )
+            stamp = publish_once(value, phase)
+            first_stamp = stamp if first_stamp is None else first_stamp
+            last_stamp = stamp
+            if progress >= 1.0:
+                break
             rate.sleep()
         if first_stamp is None:
             raise RuntimeError("phase {} published no command".format(phase))
@@ -200,6 +240,7 @@ def main():
                     len(recent_odom), len(recent_imu)
                 )
             )
+
         def p95_abs(values):
             ordered = sorted(abs(value) for value in values)
             index = min(len(ordered) - 1, int(math.ceil(0.95 * len(ordered))) - 1)
@@ -208,11 +249,14 @@ def main():
         p95_v = p95_abs(row[1] for row in recent_odom)
         p95_odom_w = p95_abs(row[2] for row in recent_odom)
         p95_imu_w = p95_abs(row[1] for row in recent_imu)
-        if p95_v > args.max_static_v or p95_odom_w > args.max_static_odom_w or p95_imu_w > args.max_static_imu_w:
+        if (
+            p95_v > args.max_static_v
+            or p95_odom_w > args.max_static_odom_w
+            or p95_imu_w > args.max_static_imu_w
+        ):
             raise RuntimeError(
-                "robot is not stationary: p95 |v|={:.4f}, |odom w|={:.4f}, |imu w|={:.4f}".format(
-                    p95_v, p95_odom_w, p95_imu_w
-                )
+                "robot is not stationary: p95 |v|={:.4f}, |odom w|={:.4f}, "
+                "|imu w|={:.4f}".format(p95_v, p95_odom_w, p95_imu_w)
             )
         return {
             "p95_abs_odom_v_m_s": p95_v,
@@ -227,23 +271,31 @@ def main():
     exit_code = 0
     try:
         rospy.loginfo("Pre-zero for %.2f s", args.pre_sec)
-        phase_stamps["pre_zero"] = run_phase(args.pre_sec, 0.0, "pre_zero")
+        phase_stamps["pre_zero"] = run_constant_phase(args.pre_sec, 0.0, "pre_zero")
         stationary = require_stationary()
-        unit = "m/s" if args.axis == "linear" else "rad/s"
         rospy.loginfo(
-            "%s velocity step %.3f %s for %.2f s",
+            "%s %s ramp to %+.3f over %.2f s",
             args.axis,
-            args.command_value,
-            unit,
-            args.step_sec,
+            args.profile,
+            args.target_value,
+            args.ramp_up_sec,
         )
-        phase_stamps["step"] = run_phase(
-            args.step_sec, args.command_value, "{}_step".format(args.axis)
+        phase_stamps["ramp_up"] = run_ramp_phase(
+            args.ramp_up_sec, "{}_ramp_up".format(args.profile)
         )
-        rospy.loginfo("Post-zero for %.2f s", args.post_sec)
-        phase_stamps["post_zero"] = run_phase(args.post_sec, 0.0, "post_zero")
+        phase_stamps["hold"] = run_constant_phase(
+            args.hold_sec, args.target_value, "hold"
+        )
+        phase_stamps["ramp_down"] = run_ramp_phase(
+            args.ramp_down_sec,
+            "{}_ramp_down".format(args.profile),
+            ramp_down=True,
+        )
+        phase_stamps["post_zero"] = run_constant_phase(
+            args.post_sec, 0.0, "post_zero"
+        )
     except Exception as exc:
-        rospy.logerr("Velocity step aborted: %s", exc)
+        rospy.logerr("Velocity continuity profile aborted: %s", exc)
         exit_code = 2
     finally:
         for _ in range(max(10, int(args.rate_hz * 0.5))):
@@ -253,26 +305,34 @@ def main():
             rate.sleep()
 
     if args.metadata:
+        acceleration_factor = (
+            1.0
+            if args.profile in ("constant_accel", "trapezoidal_velocity")
+            else 2.0
+        )
         payload = {
-            "protocol_id": (
-                "MOCAP_HARDWARE_ACCEL_LIMIT_V1"
-                if args.trial_contract == "hardware_accel_limit"
-                else "MOCAP_VELOCITY_STEP_V2"
-            ),
+            "protocol_id": "MOCAP_VELOCITY_CONTINUITY_V1",
             "run_label": args.run_label,
             "data_split": args.data_split,
-            "matrix_row": args.matrix_row,
             "attempt": args.attempt,
-            "trial_contract": args.trial_contract,
             "axis": args.axis,
+            "profile": args.profile,
             "cmd_topic": args.cmd_topic,
             "stamped_topic": args.stamped_topic,
             "odom_topic": args.odom_topic,
             "imu_topic": args.imu_topic,
-            "command_value": args.command_value,
-            "command_unit": "m/s" if args.axis == "linear" else "rad/s",
+            "target_value": args.target_value,
+            "velocity_unit": "m/s" if args.axis == "linear" else "rad/s",
+            "acceleration_unit": "m/s^2" if args.axis == "linear" else "rad/s^2",
+            "expected_peak_acceleration": (
+                acceleration_factor
+                * abs(args.target_value)
+                / min(args.ramp_up_sec, args.ramp_down_sec)
+            ),
             "pre_sec": args.pre_sec,
-            "step_sec": args.step_sec,
+            "ramp_up_sec": args.ramp_up_sec,
+            "hold_sec": args.hold_sec,
+            "ramp_down_sec": args.ramp_down_sec,
             "post_sec": args.post_sec,
             "rate_hz": args.rate_hz,
             "stationary_preflight": stationary,

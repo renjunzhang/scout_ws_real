@@ -1,6 +1,7 @@
 robot:
   # Motion limits used by SPMPC formal comparison. They are intentionally
-  # conservative against the Scout Mini manual maximum speed (1.5 m/s).
+  # Conservative against the mode-dependent manual limits: 1.5 m/s in
+  # medium-speed mode and 3.0 m/s in high-speed mode.
   v_max: 0.8
   omega_max: 1.2
   a_max: 0.6

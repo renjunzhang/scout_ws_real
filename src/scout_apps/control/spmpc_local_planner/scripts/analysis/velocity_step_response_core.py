@@ -54,6 +54,194 @@ def centered_median(values, window=3):
     )
 
 
+def centered_mean(values, window=3):
+    """Centered moving average used only for offline display/derivatives."""
+
+    values = np.asarray(values, dtype=float)
+    window = max(1, int(window))
+    if window % 2 == 0:
+        window += 1
+    maximum = values.size if values.size % 2 else values.size - 1
+    window = min(window, maximum)
+    if window <= 1:
+        return values.copy()
+    half = window // 2
+    padded = np.pad(values, (half, half), mode="edge")
+    kernel = np.ones(window, dtype=float) / float(window)
+    return np.convolve(padded, kernel, mode="valid")
+
+
+def smooth_derivative(times, values, window_sec=0.12, median_window=3):
+    """Return a zero-phase local-linear derivative on the original time grid.
+
+    A local slope is deliberately used instead of a one-sample difference.
+    This makes NOKOV/odom acceleration plots readable without pretending that
+    a noisy numerical peak is a physical acceleration limit.  ``window_sec``
+    is therefore part of the reported measurement contract.
+    """
+
+    times, values = unique_samples(times, values)
+    if times.size < 7:
+        raise ValueError("at least seven samples are required for a derivative")
+    if not math.isfinite(window_sec) or window_sec <= 0.0:
+        raise ValueError("derivative window must be finite and positive")
+    filtered = centered_median(values, median_window)
+    half_window = 0.5 * float(window_sec)
+    slopes = np.empty_like(filtered)
+    for index, center in enumerate(times):
+        left = int(np.searchsorted(times, center - half_window, side="left"))
+        right = int(np.searchsorted(times, center + half_window, side="right"))
+        if right - left < 5:
+            left = max(0, index - 2)
+            right = min(times.size, index + 3)
+        local_time = times[left:right]
+        local_value = filtered[left:right]
+        local_time = local_time - float(np.mean(local_time))
+        local_value = local_value - float(np.mean(local_value))
+        denominator = float(np.dot(local_time, local_time))
+        slopes[index] = (
+            float(np.dot(local_time, local_value)) / denominator
+            if denominator > 1e-15
+            else 0.0
+        )
+    return times, centered_mean(slopes, 3)
+
+
+def acceleration_capability(times, acceleration, command_step, response_result):
+    """Summarize signed acceleration/deceleration over response-defined windows."""
+
+    times, acceleration = unique_samples(times, acceleration)
+    if not response_result.get("valid", False):
+        return {"valid": False, "reason": "velocity response is invalid"}
+    direction = 1.0 if float(command_step["command_value"]) > 0.0 else -1.0
+    rise_start = float(response_result["onset_time_sec"])
+    rise_stop = min(
+        float(command_step["stop_time_sec"]),
+        float(response_result["t90_time_sec"]),
+    )
+    rise_mask = (times >= rise_start) & (times <= rise_stop)
+    if np.count_nonzero(rise_mask) < 3:
+        return {"valid": False, "reason": "insufficient acceleration rise samples"}
+    directed_rise = direction * acceleration[rise_mask]
+    output = {
+        "valid": True,
+        "rise_start_time_sec": rise_start,
+        "rise_stop_time_sec": rise_stop,
+        "rise_sample_count": int(np.count_nonzero(rise_mask)),
+        "acceleration_p95": float(np.percentile(directed_rise, 95.0)),
+        "acceleration_peak": float(np.max(directed_rise)),
+        "acceleration_median": float(np.median(directed_rise)),
+    }
+    if not response_result.get("braking_valid", False):
+        output.update(
+            {
+                "braking_valid": False,
+                "braking_reason": response_result.get(
+                    "braking_reason", "velocity braking response is invalid"
+                ),
+            }
+        )
+        return output
+    brake_start = float(response_result["brake_onset_time_sec"])
+    brake_stop = float(response_result["response_stop_time_sec"])
+    brake_mask = (times >= brake_start) & (times <= brake_stop)
+    if np.count_nonzero(brake_mask) < 3:
+        output.update(
+            {
+                "braking_valid": False,
+                "braking_reason": "insufficient acceleration braking samples",
+            }
+        )
+        return output
+    directed_brake = -direction * acceleration[brake_mask]
+    output.update(
+        {
+            "braking_valid": True,
+            "brake_start_time_sec": brake_start,
+            "brake_stop_time_sec": brake_stop,
+            "brake_sample_count": int(np.count_nonzero(brake_mask)),
+            "deceleration_p95": float(np.percentile(directed_brake, 95.0)),
+            "deceleration_peak": float(np.max(directed_brake)),
+            "deceleration_median": float(np.median(directed_brake)),
+        }
+    )
+    return output
+
+
+def analyze_acceleration_onset(
+    times,
+    values,
+    command_step,
+    *,
+    baseline_sec=1.5,
+    guard_sec=0.10,
+    onset_floor=0.04,
+    onset_noise_multiplier=6.0,
+    sustain_sec=0.04,
+):
+    """Use a signed acceleration signal only as an onset/braking cross-check.
+
+    Unlike a velocity response, acceleration is transient and must not be fit
+    as a steady FOPDT output.  The result is supporting timing evidence only.
+    """
+
+    times, values = unique_samples(times, values)
+    if times.size < 20:
+        return {"valid": False, "reason": "too few acceleration samples"}
+    start = float(command_step["start_time_sec"])
+    stop = float(command_step["stop_time_sec"])
+    direction = 1.0 if float(command_step["command_value"]) > 0.0 else -1.0
+    baseline_mask = (
+        (times >= start - float(baseline_sec))
+        & (times <= start - float(guard_sec))
+    )
+    if np.count_nonzero(baseline_mask) < 8:
+        return {"valid": False, "reason": "insufficient acceleration baseline"}
+    baseline = float(np.median(values[baseline_mask]))
+    noise_sigma = robust_noise_sigma(values[baseline_mask])
+    threshold = max(
+        float(onset_floor), float(onset_noise_multiplier) * noise_sigma
+    )
+    projected = direction * (values - baseline)
+    onset = first_sustained_crossing(
+        times,
+        projected,
+        threshold,
+        start,
+        min(stop, start + 1.5),
+        sustain_sec=sustain_sec,
+    )
+    if onset is None:
+        return {
+            "valid": False,
+            "reason": "no sustained signed acceleration onset",
+            "baseline_value": baseline,
+            "noise_sigma": noise_sigma,
+            "onset_threshold": threshold,
+        }
+    braking_projected = -direction * (values - baseline)
+    brake_onset = first_sustained_crossing(
+        times,
+        braking_projected,
+        threshold,
+        stop,
+        min(float(times[-1]), stop + 1.5),
+        sustain_sec=sustain_sec,
+    )
+    return {
+        "valid": True,
+        "baseline_value": baseline,
+        "noise_sigma": noise_sigma,
+        "onset_threshold": threshold,
+        "onset_time_sec": onset,
+        "onset_delay_sec": onset - start,
+        "braking_valid": brake_onset is not None,
+        "brake_onset_time_sec": brake_onset,
+        "brake_onset_delay_sec": None if brake_onset is None else brake_onset - stop,
+        "sustain_sec": float(sustain_sec),
+    }
+
+
 def derive_yaw_rate(times, yaw, median_window=3):
     """Differentiate unwrapped yaw and timestamp each rate at its interval midpoint."""
 

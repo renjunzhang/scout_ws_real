@@ -27,7 +27,24 @@ is_number() {
 
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
-TEST_AXIS="${TEST_AXIS:-angular}"
+TRIAL_CONTRACT="${TRIAL_CONTRACT:-low_speed_identification}"
+case "${TRIAL_CONTRACT}" in
+  low_speed_identification)
+    DEFAULT_TEST_AXIS=angular
+    DEFAULT_PRE_SEC=3.0
+    DEFAULT_STEP_SEC=4.0
+    DEFAULT_POST_SEC=3.0
+    ;;
+  hardware_accel_limit)
+    DEFAULT_TEST_AXIS=linear
+    DEFAULT_PRE_SEC=3.0
+    DEFAULT_STEP_SEC=2.5
+    DEFAULT_POST_SEC=4.0
+    ;;
+  *) fail "TRIAL_CONTRACT must be low_speed_identification or hardware_accel_limit" ;;
+esac
+
+TEST_AXIS="${TEST_AXIS:-${DEFAULT_TEST_AXIS}}"
 case "${TEST_AXIS}" in
   angular)
     DEFAULT_STEP_DIRECTION=left
@@ -37,20 +54,29 @@ case "${TEST_AXIS}" in
     ;;
   linear)
     DEFAULT_STEP_DIRECTION=forward
-    DEFAULT_STEP_MAGNITUDE=0.10
+    if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
+      DEFAULT_STEP_MAGNITUDE=0.80
+      MAX_STEP_MAGNITUDE=0.80
+    else
+      DEFAULT_STEP_MAGNITUDE=0.10
+      MAX_STEP_MAGNITUDE=0.15
+    fi
     STEP_UNIT=m/s
-    MAX_STEP_MAGNITUDE=0.15
     ;;
   *) fail "TEST_AXIS must be linear or angular" ;;
 esac
 STEP_DIRECTION="${STEP_DIRECTION:-${DEFAULT_STEP_DIRECTION}}"
 STEP_MAGNITUDE="${STEP_MAGNITUDE:-${DEFAULT_STEP_MAGNITUDE}}"
-PRE_SEC="${PRE_SEC:-3.0}"
-STEP_SEC="${STEP_SEC:-4.0}"
-POST_SEC="${POST_SEC:-3.0}"
+PRE_SEC="${PRE_SEC:-${DEFAULT_PRE_SEC}}"
+STEP_SEC="${STEP_SEC:-${DEFAULT_STEP_SEC}}"
+POST_SEC="${POST_SEC:-${DEFAULT_POST_SEC}}"
 PUBLISH_RATE_HZ="${PUBLISH_RATE_HZ:-50.0}"
 VALIDATE_ONLY="${VALIDATE_ONLY:-true}"
 ARM_MOTION="${ARM_MOTION:-NO}"
+CONFIRM_HARDWARE_ACCEL_LIMIT="${CONFIRM_HARDWARE_ACCEL_LIMIT:-NO}"
+DATA_SPLIT="${DATA_SPLIT:-development}"
+MATRIX_ROW="${MATRIX_ROW:-single}"
+ATTEMPT="${ATTEMPT:-01}"
 
 MOCAP_TRACKER="${MOCAP_TRACKER:-Tracker0}"
 IMU_TOPIC="${IMU_TOPIC:-/imu/data}"
@@ -63,12 +89,19 @@ RUN_OUT_DIR="${RUN_OUT_DIR:-${HOME}/slosh_bags/real/${DATE}_mocap_velocity_step}
 BAG_PATH="${BAG_PATH:-${RUN_OUT_DIR}/${RUN_LABEL}.bag}"
 METADATA_PATH="${METADATA_PATH:-${RUN_OUT_DIR}/${RUN_LABEL}_command.json}"
 REPORT_PATH="${REPORT_PATH:-${RUN_OUT_DIR}/${RUN_LABEL}_response.json}"
-PLOT_PATH="${PLOT_PATH:-${RUN_OUT_DIR}/${RUN_LABEL}_response.png}"
+PLOT_DIR="${PLOT_DIR:-${RUN_OUT_DIR}/${RUN_LABEL}_plots}"
 
 [[ -s "${PUBLISHER}" ]] || fail "missing publisher: ${PUBLISHER}"
 [[ -s "${ANALYZER}" ]] || fail "missing analyzer: ${ANALYZER}"
 [[ "${MOCAP_TRACKER}" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "unsafe MOCAP_TRACKER"
 [[ "${RUN_LABEL}" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "unsafe RUN_LABEL"
+case "${DATA_SPLIT}" in
+  development|validation|final_test) ;;
+  *) fail "DATA_SPLIT must be development, validation, or final_test" ;;
+esac
+[[ "${MATRIX_ROW}" == "single" || "${MATRIX_ROW}" =~ ^(0[1-9]|1[0-2])$ ]] || \
+  fail "MATRIX_ROW must be single or 01..12"
+[[ "${ATTEMPT}" =~ ^[0-9][0-9]$ ]] || fail "ATTEMPT must be two digits"
 for value in "${STEP_MAGNITUDE}" "${PRE_SEC}" "${STEP_SEC}" "${POST_SEC}" "${PUBLISH_RATE_HZ}"; do
   is_number "${value}" || fail "all numeric settings must be non-negative decimal numbers"
 done
@@ -84,6 +117,26 @@ awk -v value="${POST_SEC}" 'BEGIN {exit !(value >= 2.0 && value <= 10.0)}' || \
 awk -v value="${PUBLISH_RATE_HZ}" 'BEGIN {exit !(value >= 20.0 && value <= 100.0)}' || \
   fail "require 20 <= PUBLISH_RATE_HZ <= 100"
 
+HARDWARE_ACCEL_LIMIT_ARM_TOKEN=""
+REPORT_PROTOCOL_ID=MOCAP_VELOCITY_STEP_V2
+if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
+  [[ "${TEST_AXIS}" == linear ]] || fail "hardware_accel_limit requires TEST_AXIS=linear"
+  [[ "${STEP_DIRECTION}" == forward ]] || \
+    fail "hardware_accel_limit requires STEP_DIRECTION=forward"
+  awk -v value="${STEP_MAGNITUDE}" 'BEGIN {exit !(value == 0.80)}' || \
+    fail "hardware_accel_limit requires STEP_MAGNITUDE=0.80"
+  awk -v value="${PRE_SEC}" 'BEGIN {exit !(value == 3.0)}' || \
+    fail "hardware_accel_limit requires PRE_SEC=3.0"
+  awk -v value="${STEP_SEC}" 'BEGIN {exit !(value == 2.5)}' || \
+    fail "hardware_accel_limit requires STEP_SEC=2.5"
+  awk -v value="${POST_SEC}" 'BEGIN {exit !(value == 4.0)}' || \
+    fail "hardware_accel_limit requires POST_SEC=4.0"
+  awk -v value="${PUBLISH_RATE_HZ}" 'BEGIN {exit !(value == 50.0)}' || \
+    fail "hardware_accel_limit requires PUBLISH_RATE_HZ=50.0"
+  HARDWARE_ACCEL_LIMIT_ARM_TOKEN=MOCAP_HARDWARE_ACCEL_LIMIT_ARMED
+  REPORT_PROTOCOL_ID=MOCAP_HARDWARE_ACCEL_LIMIT_V1
+fi
+
 case "${TEST_AXIS}:${STEP_DIRECTION}" in
   angular:left|linear:forward) SIGNED_COMMAND="${STEP_MAGNITUDE}" ;;
   angular:right|linear:reverse) SIGNED_COMMAND="-${STEP_MAGNITUDE}" ;;
@@ -94,13 +147,16 @@ esac
 RAW_MOCAP_TOPIC="/vrpn_client_node/${MOCAP_TRACKER}/pose"
 
 echo "================ stationary velocity step ================"
+echo "  trial contract  = ${TRIAL_CONTRACT}"
 echo "  axis/direction  = ${TEST_AXIS} / ${STEP_DIRECTION}"
 echo "  command         = ${SIGNED_COMMAND} ${STEP_UNIT}"
 echo "  phases          = zero ${PRE_SEC}s -> step ${STEP_SEC}s -> zero ${POST_SEC}s"
 echo "  command rate    = ${PUBLISH_RATE_HZ} Hz"
+echo "  split / row     = ${DATA_SPLIT} / ${MATRIX_ROW}"
 echo "  mocap / IMU     = ${RAW_MOCAP_TOPIC} / ${IMU_TOPIC}"
 echo "  odometry        = ${ODOM_TOPIC}"
 echo "  output bag      = ${BAG_PATH}"
+echo "  separated plots = ${PLOT_DIR}"
 echo "==========================================================="
 
 if truthy "${VALIDATE_ONLY}"; then
@@ -111,7 +167,11 @@ fi
 
 [[ "${ARM_MOTION}" == "YES" ]] || \
   fail "set ARM_MOTION=YES only after confirming level ground, clear motion space, and E-stop"
-for path in "${BAG_PATH}" "${BAG_PATH}.active" "${METADATA_PATH}" "${REPORT_PATH}" "${PLOT_PATH}"; do
+if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
+  [[ "${CONFIRM_HARDWARE_ACCEL_LIMIT}" == YES ]] || \
+    fail "hardware_accel_limit requires CONFIRM_HARDWARE_ACCEL_LIMIT=YES"
+fi
+for path in "${BAG_PATH}" "${BAG_PATH}.active" "${METADATA_PATH}" "${REPORT_PATH}" "${PLOT_DIR}"; do
   [[ ! -e "${path}" ]] || fail "refusing to overwrite existing output: ${path}"
 done
 
@@ -199,11 +259,17 @@ python3 "${PUBLISHER}" \
   --odom-topic "${ODOM_TOPIC}" \
   --imu-topic "${IMU_TOPIC}" \
   --axis "${TEST_AXIS}" \
+  --trial-contract "${TRIAL_CONTRACT}" \
+  --hardware-accel-limit-arm-token "${HARDWARE_ACCEL_LIMIT_ARM_TOKEN}" \
   --command-value "${SIGNED_COMMAND}" \
   --pre-sec "${PRE_SEC}" \
   --step-sec "${STEP_SEC}" \
   --post-sec "${POST_SEC}" \
   --rate-hz "${PUBLISH_RATE_HZ}" \
+  --run-label "${RUN_LABEL}" \
+  --data-split "${DATA_SPLIT}" \
+  --matrix-row "${MATRIX_ROW}" \
+  --attempt "${ATTEMPT}" \
   --arm-token MOCAP_VELOCITY_STEP_ARMED \
   --metadata "${METADATA_PATH}" &
 publisher_pid=$!
@@ -224,11 +290,16 @@ python3 "${ANALYZER}" "${BAG_PATH}" \
   --imu-topic "${IMU_TOPIC}" \
   --odom-topic "${ODOM_TOPIC}" \
   --stamped-command-topic "${STAMPED_CMD_TOPIC}" \
+  --protocol-id "${REPORT_PROTOCOL_ID}" \
+  --run-label "${RUN_LABEL}" \
+  --data-split "${DATA_SPLIT}" \
+  --matrix-row "${MATRIX_ROW}" \
+  --attempt "${ATTEMPT}" \
   --output-json "${REPORT_PATH}" \
-  --plot "${PLOT_PATH}"
+  --plot-dir "${PLOT_DIR}"
 
 trap - EXIT INT TERM
 echo "[${SCRIPT_NAME}] PASS"
 echo "  bag    : ${BAG_PATH}"
 echo "  report : ${REPORT_PATH}"
-echo "  plot   : ${PLOT_PATH}"
+echo "  plots  : ${PLOT_DIR}"

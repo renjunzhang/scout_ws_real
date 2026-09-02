@@ -9,6 +9,7 @@ from pathlib import Path
 
 import numpy as np
 
+import same_bag_delay_core as delay_core
 import velocity_step_response_core as core
 
 
@@ -93,9 +94,14 @@ def load_bag(
                 data["mocap_bag"].append((bag_time, *row))
                 data["mocap_header"].append((header_time(message, bag_time), *row))
             elif topic == imu_topic:
-                omega = float(message.angular_velocity.z)
-                data["imu_bag"].append((bag_time, omega))
-                data["imu_header"].append((header_time(message, bag_time), omega))
+                row = (
+                    float(message.angular_velocity.z),
+                    float(message.linear_acceleration.x),
+                    float(message.linear_acceleration.y),
+                    float(message.linear_acceleration.z),
+                )
+                data["imu_bag"].append((bag_time, *row))
+                data["imu_header"].append((header_time(message, bag_time), *row))
             elif topic == odom_topic:
                 row = (
                     float(message.twist.twist.linear.x),
@@ -137,7 +143,94 @@ def select_odom(rows, axis, median_window):
     return array[:, 0], core.centered_median(array[:, column], median_window)
 
 
-def derive_linear_mocap(rows, command_step, median_window):
+def select_linear_imu_acceleration(rows, forward_axis, forward_sign):
+    array = unique_matrix(rows)
+    if array.shape[0] < 20 or array.shape[1] < 5:
+        raise ValueError("too few full IMU samples for linear acceleration")
+    columns = {"x": 2, "y": 3, "z": 4}
+    column = columns[forward_axis]
+    value = float(forward_sign) * array[:, column]
+    # Preserve raw sample timing for onset detection.  A separately filtered
+    # copy is made below for display only, so zero-phase smoothing cannot make
+    # the reported IMU onset appear early.
+    return array[:, 0], value
+
+
+def attach_fopdt_fit(time, value, command_time, command_value, command_step, result, args):
+    if not result.get("valid", False):
+        result["fopdt"] = {"valid": False, "reason": "velocity response is invalid"}
+        return
+    start = float(command_step["start_time_sec"])
+    stop = float(command_step["stop_time_sec"])
+    mask = (
+        (time >= start - float(args.baseline_sec))
+        & (time <= stop + float(args.fopdt_post_sec))
+    )
+    fit_time = np.asarray(time, dtype=float)[mask]
+    fit_value = np.asarray(value, dtype=float)[mask]
+    if fit_time.size < 50:
+        result["fopdt"] = {"valid": False, "reason": "insufficient FOPDT samples"}
+        return
+    fit_dt = float(np.median(np.diff(fit_time)))
+    if not math.isfinite(fit_dt) or fit_dt <= 0.0:
+        result["fopdt"] = {"valid": False, "reason": "invalid FOPDT time grid"}
+        return
+    uniform_time = np.arange(fit_time[0], fit_time[-1] + 0.25 * fit_dt, fit_dt)
+    uniform_value = np.interp(uniform_time, fit_time, fit_value)
+    fit_command = delay_core.zoh_resample(
+        command_time, command_value, uniform_time
+    )
+    fit = delay_core.fit_fopdt_grid(
+        uniform_time,
+        fit_command,
+        uniform_value,
+        max_delay_sec=args.fopdt_max_delay_sec,
+        min_tau_sec=args.fopdt_min_tau_sec,
+        max_tau_sec=args.fopdt_max_tau_sec,
+        tau_count=args.fopdt_tau_count,
+        near_optimal_rmse_fraction=args.fopdt_near_optimal_fraction,
+    )
+    fit["fit_window"] = {
+        "definition": (
+            "command_on_rise_only"
+            if float(args.fopdt_post_sec) == 0.0
+            else "command_on_plus_explicit_post_window"
+        ),
+        "start_time_sec": float(uniform_time[0]),
+        "stop_time_sec": float(uniform_time[-1]),
+        "start_offset_sec": float(uniform_time[0] - start),
+        "stop_offset_sec": float(uniform_time[-1] - start),
+        "post_command_sec": float(args.fopdt_post_sec),
+    }
+    quality_reasons = []
+    if fit.get("valid", False):
+        if delay_core.near_optimal_touches_grid_boundary(fit):
+            quality_reasons.append("near-optimal parameters touch the fit-grid boundary")
+        if float(fit.get("r2", float("-inf"))) < float(args.fopdt_min_r2):
+            quality_reasons.append(
+                "R2 below {:.3f}".format(float(args.fopdt_min_r2))
+            )
+    else:
+        quality_reasons.append(fit.get("reason", "fit invalid"))
+    fit["identifiable"] = bool(fit.get("valid", False) and not quality_reasons)
+    fit["quality_reasons"] = quality_reasons
+    result["fopdt"] = fit
+
+
+def attach_acceleration_curve(time, value, command_step, result, args):
+    acceleration_time, acceleration = core.smooth_derivative(
+        time,
+        value,
+        window_sec=args.acceleration_window_sec,
+        median_window=args.acceleration_median_window,
+    )
+    result["acceleration_capability"] = core.acceleration_capability(
+        acceleration_time, acceleration, command_step, result
+    )
+    return acceleration_time, acceleration
+
+
+def derive_linear_mocap(rows, command_step, median_window, velocity_window_sec):
     pose = unique_matrix(rows)
     if pose.shape[0] < 20 or pose.shape[1] < 4:
         raise ValueError("too few NOKOV pose samples for linear velocity")
@@ -159,18 +252,18 @@ def derive_linear_mocap(rows, command_step, median_window):
     command_sign = 1.0 if command_step["command_value"] > 0.0 else -1.0
     body_positive_axis = command_sign * displacement / displacement_norm
     lateral_axis = np.asarray([-body_positive_axis[1], body_positive_axis[0]])
-    delta_time = np.diff(time)
-    valid = delta_time > 0.0
-    midpoint = 0.5 * (time[1:] + time[:-1])
-    world_velocity = np.column_stack((np.diff(x), np.diff(y))) / delta_time[:, None]
-    longitudinal = world_velocity @ body_positive_axis
-    longitudinal = core.centered_median(longitudinal, median_window)
     relative_position = np.column_stack((x, y)) - p0[None, :]
     along_position = relative_position @ body_positive_axis
     lateral_position = relative_position @ lateral_axis
+    velocity_time, longitudinal = core.smooth_derivative(
+        time,
+        along_position,
+        window_sec=velocity_window_sec,
+        median_window=median_window,
+    )
     return {
-        "time": midpoint[valid],
-        "velocity": longitudinal[valid],
+        "time": velocity_time,
+        "velocity": longitudinal,
         "position_time": time,
         "along_position": along_position,
         "lateral_position": lateral_position,
@@ -179,13 +272,16 @@ def derive_linear_mocap(rows, command_step, median_window):
     }
 
 
-def derive_angular_mocap(rows, median_window):
+def derive_angular_mocap(rows, median_window, velocity_window_sec):
     pose = unique_matrix(rows)
     if pose.shape[0] < 5 or pose.shape[1] < 4:
         raise ValueError("too few NOKOV pose samples for angular velocity")
     yaw = np.unwrap(pose[:, 3])
-    rate_time, omega = core.derive_yaw_rate(
-        pose[:, 0], yaw, median_window=median_window
+    rate_time, omega = core.smooth_derivative(
+        pose[:, 0],
+        yaw,
+        window_sec=velocity_window_sec,
+        median_window=median_window,
     )
     return {
         "time": rate_time,
@@ -265,18 +361,62 @@ def analyze_timebase(command_rows, mocap_rows, imu_rows, odom_rows, axis, args):
     )
 
     sensors = {}
+    acceleration_crosscheck = {}
     signals = {
         "command": {"time": command_time, "value": command_value, "label": "final /cmd_vel"}
     }
     if axis == "linear":
-        mocap = derive_linear_mocap(mocap_rows, command_step, args.mocap_median_window)
+        mocap = derive_linear_mocap(
+            mocap_rows,
+            command_step,
+            args.mocap_median_window,
+            args.mocap_velocity_window_sec,
+        )
         odom_time, odom_value = select_odom(odom_rows, axis, args.odom_median_window)
+        imu_accel_time, imu_accel_value = select_linear_imu_acceleration(
+            imu_rows,
+            args.imu_forward_axis,
+            args.imu_forward_sign,
+        )
         sensor_inputs = {
             "mocap": (mocap["time"], mocap["velocity"], "NOKOV longitudinal velocity"),
             "odom": (odom_time, odom_value, "odom linear velocity"),
         }
+        imu_accel_display = core.centered_mean(
+            core.centered_median(
+                imu_accel_value, args.imu_acceleration_median_window
+            ),
+            max(
+                1,
+                int(
+                    round(
+                        args.imu_acceleration_window_sec
+                        / max(float(np.median(np.diff(imu_accel_time))), 1e-6)
+                    )
+                ),
+            ),
+        )
+        acceleration_crosscheck["imu"] = core.analyze_acceleration_onset(
+            imu_accel_time,
+            imu_accel_value,
+            command_step,
+            baseline_sec=args.baseline_sec,
+            guard_sec=args.guard_sec,
+            onset_floor=args.linear_imu_accel_onset_floor,
+            onset_noise_multiplier=args.onset_noise_multiplier,
+            sustain_sec=args.acceleration_onset_sustain_sec,
+        )
+        signals["imu_acceleration"] = {
+            "time": imu_accel_time,
+            "value": imu_accel_display,
+            "label": "IMU body-forward acceleration",
+        }
     else:
-        mocap = derive_angular_mocap(mocap_rows, args.mocap_median_window)
+        mocap = derive_angular_mocap(
+            mocap_rows,
+            args.mocap_median_window,
+            args.mocap_velocity_window_sec,
+        )
         imu = unique_matrix(imu_rows)
         if imu.shape[0] < 2:
             raise ValueError("too few IMU samples")
@@ -295,10 +435,35 @@ def analyze_timebase(command_rows, mocap_rows, imu_rows, odom_rows, axis, args):
             command_step,
             **response_settings(axis, sensor, args)
         )
+        attach_fopdt_fit(
+            np.asarray(time, dtype=float),
+            np.asarray(value, dtype=float),
+            command_time,
+            command_value,
+            command_step,
+            result,
+            args,
+        )
+        acceleration_time, acceleration = attach_acceleration_curve(
+            time, value, command_step, result, args
+        )
         sensors[sensor] = result
-        signals[sensor] = {"time": time, "value": value, "label": label}
+        signals[sensor] = {
+            "time": time,
+            "value": value,
+            "label": label,
+            "acceleration_time": acceleration_time,
+            "acceleration": acceleration,
+        }
     attach_mocap_stopping_metrics(axis, mocap, command_step, sensors["mocap"])
-    return {"axis": axis, "command": command_step, "sensors": sensors, "signals": signals}
+    return {
+        "axis": axis,
+        "command": command_step,
+        "sensors": sensors,
+        "acceleration_crosscheck": acceleration_crosscheck,
+        "acceleration_window_sec": float(args.acceleration_window_sec),
+        "signals": signals,
+    }
 
 
 def serializable_timebase(result):
@@ -306,11 +471,96 @@ def serializable_timebase(result):
         "axis": result["axis"],
         "command": result["command"],
         "sensors": result["sensors"],
+        "acceleration_crosscheck": result["acceleration_crosscheck"],
+        "acceleration_window_sec": result["acceleration_window_sec"],
     }
 
 
 def milliseconds(value):
     return "n/a" if value is None else "{:.1f}".format(1000.0 * float(value))
+
+
+def delay_rows(result):
+    rows = {}
+    for sensor, values in result["sensors"].items():
+        fit = values.get("fopdt", {})
+        identifiable = bool(fit.get("valid", False) and fit.get("identifiable", False))
+        rows[sensor] = {
+            "signal": "velocity",
+            "onset_delay_sec": values.get("onset_delay_sec"),
+            "fopdt_identifiable": identifiable,
+            "fopdt_quality_reasons": fit.get("quality_reasons", []),
+            "fopdt_delay_sec": fit.get("delay_sec") if identifiable else None,
+            "fopdt_tau_sec": fit.get("tau_sec") if identifiable else None,
+            "fopdt_gain": fit.get("gain") if identifiable else None,
+            "fopdt_diagnostic_delay_sec": (
+                fit.get("delay_sec") if fit.get("valid", False) else None
+            ),
+        }
+    for sensor, values in result["acceleration_crosscheck"].items():
+        rows["{}_acceleration".format(sensor)] = {
+            "signal": "acceleration_onset_only",
+            "onset_delay_sec": values.get("onset_delay_sec"),
+            "fopdt_identifiable": False,
+            "fopdt_quality_reasons": ["acceleration onset is not a velocity FOPDT fit"],
+            "fopdt_delay_sec": None,
+            "fopdt_tau_sec": None,
+            "fopdt_gain": None,
+            "fopdt_diagnostic_delay_sec": None,
+        }
+    return rows
+
+
+def pairwise_delay_differences(rows, field):
+    names = [name for name, values in sorted(rows.items()) if values.get(field) is not None]
+    output = {}
+    for left_index, left in enumerate(names):
+        for right in names[left_index + 1:]:
+            output["{}_minus_{}_ms".format(left, right)] = 1000.0 * (
+                float(rows[left][field]) - float(rows[right][field])
+            )
+    return output
+
+
+def build_delay_cross_validation(primary, secondary):
+    bag_rows = delay_rows(primary)
+    header_rows = delay_rows(secondary)
+    timebase_delta = {}
+    for sensor in sorted(set(bag_rows) & set(header_rows)):
+        timebase_delta[sensor] = {}
+        for field in ("onset_delay_sec", "fopdt_delay_sec"):
+            bag_value = bag_rows[sensor].get(field)
+            header_value = header_rows[sensor].get(field)
+            timebase_delta[sensor]["bag_minus_header_{}_ms".format(field)] = (
+                None
+                if bag_value is None or header_value is None
+                else 1000.0 * (float(bag_value) - float(header_value))
+            )
+    return {
+        "interpretation": (
+            "Cross-sensor differences include each sensor's own transport/timestamp delay; "
+            "linear IMU uses acceleration onset and is supporting evidence, not an FOPDT velocity output."
+        ),
+        "bag_time": {
+            "sensors": bag_rows,
+            "onset_pairwise": pairwise_delay_differences(
+                bag_rows, "onset_delay_sec"
+            ),
+            "fopdt_pairwise": pairwise_delay_differences(
+                bag_rows, "fopdt_delay_sec"
+            ),
+        },
+        "header_time": {
+            "sensors": header_rows,
+            "onset_pairwise": pairwise_delay_differences(
+                header_rows, "onset_delay_sec"
+            ),
+            "fopdt_pairwise": pairwise_delay_differences(
+                header_rows, "fopdt_delay_sec"
+            ),
+        },
+        "bag_minus_header": timebase_delta,
+    }
 
 
 def print_sensor(name, result, axis):
@@ -339,6 +589,35 @@ def print_sensor(name, result, axis):
             velocity_unit,
         )
     )
+    fit = result.get("fopdt", {})
+    if fit.get("valid", False):
+        print(
+            "         FOPDT-rise L={} ms  tau={} ms  K={:.4f}  R2={:.4f}  identifiable={}".format(
+                milliseconds(fit["delay_sec"]),
+                milliseconds(fit["tau_sec"]),
+                fit["gain"],
+                fit["r2"],
+                "YES" if fit.get("identifiable", False) else "NO",
+            )
+        )
+        if not fit.get("identifiable", False):
+            print(
+                "         FOPDT diagnostic only: {}".format(
+                    "; ".join(fit.get("quality_reasons", ["quality gate failed"]))
+                )
+            )
+    else:
+        print("         FOPDT INVALID: {}".format(fit.get("reason", "unknown")))
+    capability = result.get("acceleration_capability", {})
+    if capability.get("valid", False):
+        capability_text = "         curve a_p95={:.4f} {}".format(
+            capability["acceleration_p95"], acceleration_unit
+        )
+        if capability.get("braking_valid", False):
+            capability_text += "  decel_p95={:.4f} {}".format(
+                capability["deceleration_p95"], acceleration_unit
+            )
+        print(capability_text)
     if result.get("braking_valid", False):
         print(
             "         brake_onset={} ms  stop={} ms  decel_eff={:.4f} {}".format(
@@ -382,62 +661,315 @@ def print_report(bag_path, primary, secondary):
     print("header-stamp cross-check:")
     for sensor, result in secondary["sensors"].items():
         print_sensor(sensor.upper(), result, axis)
+    for sensor, result in primary["acceleration_crosscheck"].items():
+        if result.get("valid", False):
+            print(
+                "{} acceleration onset cross-check={} ms".format(
+                    sensor.upper(), milliseconds(result["onset_delay_sec"])
+                )
+            )
+        else:
+            print(
+                "{} acceleration onset cross-check INVALID: {}".format(
+                    sensor.upper(), result.get("reason", "unknown")
+                )
+            )
     print("Note: effective acceleration uses the measured 10%-90% velocity slope.")
 
 
-def make_plot(path, result):
+PLOT_COLORS = {
+    "command": "#555555",
+    "mocap": "#0072B2",
+    "imu": "#E69F00",
+    "odom": "#009E73",
+}
+
+
+def prepare_plotting():
     import matplotlib
 
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    return plt
+
+
+def add_step_boundaries(axis, result):
+    start = float(result["command"]["start_time_sec"])
+    stop = float(result["command"]["stop_time_sec"])
+    axis.axvline(0.0, color="#555555", linestyle="--", linewidth=0.9)
+    axis.axvline(stop - start, color="#888888", linestyle="--", linewidth=0.9)
+    axis.set_xlim(-1.0, stop - start + 3.0)
+    axis.grid(True, alpha=0.25)
+
+
+def make_velocity_plot(path, result, sensor):
+    plt = prepare_plotting()
     axis_name = result["axis"]
-    start = result["command"]["start_time_sec"]
-    stop = result["command"]["stop_time_sec"]
-    colors = {"command": "#173F67", "mocap": "#0072B2", "imu": "#E69F00", "odom": "#009E73"}
-    figure, axis = plt.subplots(figsize=(10.0, 5.2), constrained_layout=True)
-    for name, signal in result["signals"].items():
-        axis.plot(
-            signal["time"] - start,
-            signal["value"],
-            label=signal["label"],
-            color=colors[name],
-            linewidth=1.8 if name == "command" else 1.1,
-            alpha=1.0 if name != "imu" else 0.82,
-        )
-    command_direction = 1.0 if result["command"]["command_value"] > 0.0 else -1.0
-    for sensor, sensor_result in result["sensors"].items():
-        if not sensor_result.get("valid", False):
-            continue
+    start = float(result["command"]["start_time_sec"])
+    signal = result["signals"][sensor]
+    command = result["signals"]["command"]
+    sensor_result = result["sensors"][sensor]
+    figure, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
+    axis.plot(
+        command["time"] - start,
+        command["value"],
+        color=PLOT_COLORS["command"],
+        linewidth=1.1,
+        linestyle="--",
+        label="command",
+    )
+    axis.plot(
+        signal["time"] - start,
+        signal["value"],
+        color=PLOT_COLORS[sensor],
+        linewidth=1.5,
+        label=signal["label"],
+    )
+    if sensor_result.get("valid", False):
+        direction = 1.0 if result["command"]["command_value"] > 0.0 else -1.0
         axis.axvline(
             sensor_result["onset_delay_sec"],
-            color=colors[sensor],
+            color="#CC3311",
             linestyle=":",
-            linewidth=0.9,
+            linewidth=1.1,
+            label="detected onset",
         )
         axis.scatter(
             [sensor_result["t10_sec"], sensor_result["t90_sec"]],
             [
                 sensor_result["baseline_value"]
-                + command_direction * 0.10 * sensor_result["signed_amplitude"],
+                + direction * 0.10 * sensor_result["signed_amplitude"],
                 sensor_result["baseline_value"]
-                + command_direction * 0.90 * sensor_result["signed_amplitude"],
+                + direction * 0.90 * sensor_result["signed_amplitude"],
             ],
-            color=colors[sensor],
-            s=24,
+            color=PLOT_COLORS[sensor],
+            s=30,
             zorder=5,
+            label="10% / 90%",
         )
-    axis.axvline(0.0, color="#555555", linestyle="--", linewidth=0.9)
-    axis.axvline(stop - start, color="#888888", linestyle="--", linewidth=0.9)
-    axis.set_xlim(-1.0, stop - start + 3.0)
+    add_step_boundaries(axis, result)
     axis.set_xlabel("Time from command step [s]")
-    axis.set_ylabel("Linear velocity [m/s]" if axis_name == "linear" else "Angular velocity [rad/s]")
-    axis.set_title("Stationary {} velocity-step response".format(axis_name))
+    axis.set_ylabel(
+        "Linear velocity [m/s]" if axis_name == "linear" else "Angular velocity [rad/s]"
+    )
+    axis.set_title("{} {} response".format(sensor.upper(), axis_name))
+    axis.legend(loc="best")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(str(path), dpi=170)
+    plt.close(figure)
+
+
+def make_acceleration_plot(path, result, sensor):
+    plt = prepare_plotting()
+    axis_name = result["axis"]
+    start = float(result["command"]["start_time_sec"])
+    signal = result["signals"][sensor]
+    figure, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
+    axis.plot(
+        signal["acceleration_time"] - start,
+        signal["acceleration"],
+        color=PLOT_COLORS[sensor],
+        linewidth=1.35,
+        label="{} derived acceleration".format(sensor.upper()),
+    )
+    axis.axhline(0.0, color="#777777", linewidth=0.8)
+    add_step_boundaries(axis, result)
+    axis.set_xlabel("Time from command step [s]")
+    axis.set_ylabel(
+        "Linear acceleration [m/s^2]"
+        if axis_name == "linear"
+        else "Angular acceleration [rad/s^2]"
+    )
+    axis.set_title(
+        "{} {} acceleration ({} s local slope)".format(
+            sensor.upper(), axis_name, result["acceleration_window_sec"]
+        )
+    )
+    capability = result["sensors"][sensor].get("acceleration_capability", {})
+    response = result["sensors"][sensor]
+    if capability.get("valid", False):
+        annotation = "a_eff={:.3f}\na_P95={:.3f}".format(
+            response["effective_acceleration"], capability["acceleration_p95"]
+        )
+        if capability.get("braking_valid", False):
+            annotation += "\ndecel_eff={:.3f}\ndecel_P95={:.3f}".format(
+                response["effective_deceleration"], capability["deceleration_p95"]
+            )
+        axis.text(
+            0.985,
+            0.76,
+            annotation,
+            transform=axis.transAxes,
+            ha="right",
+            va="top",
+            bbox={"facecolor": "white", "edgecolor": "#BBBBBB", "alpha": 0.88},
+        )
+    axis.legend(loc="best")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(str(path), dpi=170)
+    plt.close(figure)
+
+
+def make_fopdt_plot(path, result, sensor):
+    sensor_result = result["sensors"][sensor]
+    fit = sensor_result.get("fopdt", {})
+    if not fit.get("valid", False):
+        return False
+    plt = prepare_plotting()
+    start = float(result["command"]["start_time_sec"])
+    signal = result["signals"][sensor]
+    command = result["signals"]["command"]
+    fit_window = fit.get("fit_window", {})
+    fit_start = float(fit_window.get("start_time_sec", signal["time"][0]))
+    fit_stop = float(fit_window.get("stop_time_sec", signal["time"][-1]))
+    fit_mask = (signal["time"] >= fit_start) & (signal["time"] <= fit_stop)
+    plot_time = signal["time"][fit_mask]
+    plot_value = signal["value"][fit_mask]
+    if plot_time.size < 2:
+        return False
+    command_on_sensor_grid = delay_core.zoh_resample(
+        command["time"], command["value"], plot_time
+    )
+    basis = delay_core.simulate_fopdt(
+        plot_time, command_on_sensor_grid, fit["delay_sec"], fit["tau_sec"]
+    )
+    predicted = fit["offset"] + fit["gain"] * basis
+    figure, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
+    axis.plot(
+        plot_time - start,
+        plot_value,
+        color=PLOT_COLORS[sensor],
+        linewidth=1.35,
+        label="measured {}".format(sensor.upper()),
+    )
+    axis.plot(
+        plot_time - start,
+        predicted,
+        color="#CC3311",
+        linewidth=1.25,
+        linestyle="--",
+        label="FOPDT fit",
+    )
+    axis.axvline(0.0, color="#555555", linestyle="--", linewidth=0.9)
+    axis.set_xlim(float(plot_time[0] - start), float(plot_time[-1] - start))
+    axis.set_xlabel("Time from command step [s]")
+    axis.set_ylabel(
+        "Linear velocity [m/s]"
+        if result["axis"] == "linear"
+        else "Angular velocity [rad/s]"
+    )
+    axis.set_title(
+        "{} rise FOPDT: L={:.1f} ms, tau={:.1f} ms, K={:.3f}, R2={:.3f} ({})".format(
+            sensor.upper(),
+            1000.0 * fit["delay_sec"],
+            1000.0 * fit["tau_sec"],
+            fit["gain"],
+            fit["r2"],
+            "accepted" if fit.get("identifiable", False) else "diagnostic only",
+        )
+    )
     axis.grid(True, alpha=0.25)
     axis.legend(loc="best")
     path.parent.mkdir(parents=True, exist_ok=True)
-    figure.savefig(str(path), dpi=160)
+    figure.savefig(str(path), dpi=170)
     plt.close(figure)
+    return True
+
+
+def make_linear_imu_acceleration_plot(path, result):
+    values = result["acceleration_crosscheck"].get("imu", {})
+    signal = result["signals"].get("imu_acceleration")
+    if signal is None:
+        return False
+    plt = prepare_plotting()
+    start = float(result["command"]["start_time_sec"])
+    baseline = float(values.get("baseline_value", 0.0))
+    figure, axis = plt.subplots(figsize=(9.2, 4.8), constrained_layout=True)
+    axis.plot(
+        signal["time"] - start,
+        signal["value"] - baseline,
+        color=PLOT_COLORS["imu"],
+        linewidth=1.25,
+        label="IMU forward acceleration minus static bias",
+    )
+    if values.get("valid", False):
+        axis.axvline(
+            values["onset_delay_sec"],
+            color="#CC3311",
+            linestyle=":",
+            linewidth=1.1,
+            label="detected onset",
+        )
+    axis.axhline(0.0, color="#777777", linewidth=0.8)
+    add_step_boundaries(axis, result)
+    axis.set_xlabel("Time from command step [s]")
+    axis.set_ylabel("Linear acceleration [m/s^2]")
+    axis.set_title("IMU linear-acceleration onset cross-check")
+    axis.legend(loc="best")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(str(path), dpi=170)
+    plt.close(figure)
+    return True
+
+
+def make_delay_bar(path, rows, field, title):
+    available = [
+        (name, values[field])
+        for name, values in sorted(rows.items())
+        if values.get(field) is not None
+    ]
+    if not available:
+        return False
+    plt = prepare_plotting()
+    labels = [name.replace("_acceleration", "\naccel") for name, _ in available]
+    values_ms = [1000.0 * float(value) for _, value in available]
+    figure, axis = plt.subplots(figsize=(7.4, 4.6), constrained_layout=True)
+    bars = axis.bar(labels, values_ms, color="#4477AA", width=0.58)
+    for bar, value in zip(bars, values_ms):
+        axis.text(
+            bar.get_x() + 0.5 * bar.get_width(),
+            bar.get_height(),
+            "{:.1f}".format(value),
+            ha="center",
+            va="bottom",
+        )
+    axis.set_ylabel("Delay [ms]")
+    axis.set_title(title)
+    axis.grid(True, axis="y", alpha=0.25)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    figure.savefig(str(path), dpi=170)
+    plt.close(figure)
+    return True
+
+
+def make_separated_plots(plot_dir, result):
+    plot_dir.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for sensor in sorted(result["sensors"]):
+        velocity_path = plot_dir / "{}_{}_velocity.png".format(result["axis"], sensor)
+        make_velocity_plot(velocity_path, result, sensor)
+        paths.append(velocity_path)
+        acceleration_path = plot_dir / "{}_{}_acceleration.png".format(
+            result["axis"], sensor
+        )
+        make_acceleration_plot(acceleration_path, result, sensor)
+        paths.append(acceleration_path)
+        fit_path = plot_dir / "{}_{}_fopdt_fit.png".format(result["axis"], sensor)
+        if make_fopdt_plot(fit_path, result, sensor):
+            paths.append(fit_path)
+    if result["axis"] == "linear":
+        imu_path = plot_dir / "linear_imu_acceleration.png"
+        if make_linear_imu_acceleration_plot(imu_path, result):
+            paths.append(imu_path)
+    rows = delay_rows(result)
+    onset_path = plot_dir / "delay_onset_crosscheck.png"
+    if make_delay_bar(onset_path, rows, "onset_delay_sec", "Observed onset delay cross-check"):
+        paths.append(onset_path)
+    fit_delay_path = plot_dir / "delay_fopdt_crosscheck.png"
+    if make_delay_bar(fit_delay_path, rows, "fopdt_delay_sec", "FOPDT dead-time cross-check"):
+        paths.append(fit_delay_path)
+    return paths
 
 
 def build_parser():
@@ -449,8 +981,30 @@ def build_parser():
     parser.add_argument("--imu-topic", default="/imu/data")
     parser.add_argument("--odom-topic", default=ODOM_TOPIC)
     parser.add_argument("--stamped-command-topic", default=STAMPED_CMD_TOPIC)
+    parser.add_argument(
+        "--protocol-id",
+        choices=("MOCAP_VELOCITY_STEP_V2", "MOCAP_HARDWARE_ACCEL_LIMIT_V1"),
+        default="MOCAP_VELOCITY_STEP_V2",
+    )
+    parser.add_argument("--run-label", default="UNSPECIFIED")
+    parser.add_argument(
+        "--data-split",
+        choices=("development", "validation", "final_test"),
+        default="development",
+    )
+    parser.add_argument("--matrix-row", default="single")
+    parser.add_argument("--attempt", default="01")
     parser.add_argument("--output-json", type=Path)
-    parser.add_argument("--plot", type=Path)
+    parser.add_argument(
+        "--plot-dir",
+        type=Path,
+        help="Directory for separated sensor/metric plots",
+    )
+    parser.add_argument(
+        "--plot",
+        type=Path,
+        help="Deprecated compatibility alias; its stem becomes a separated plot directory",
+    )
     parser.add_argument("--minimum-command", type=float)
     parser.add_argument("--minimum-step-duration", type=float, default=2.0)
     parser.add_argument("--baseline-sec", type=float, default=1.5)
@@ -465,13 +1019,69 @@ def build_parser():
     parser.add_argument("--angular-imu-onset-floor", type=float, default=0.005)
     parser.add_argument("--angular-odom-onset-floor", type=float, default=0.008)
     parser.add_argument("--mocap-median-window", type=int, default=3)
+    parser.add_argument("--mocap-velocity-window-sec", type=float, default=0.12)
     parser.add_argument("--imu-median-window", type=int, default=3)
     parser.add_argument("--odom-median-window", type=int, default=3)
+    parser.add_argument("--acceleration-window-sec", type=float, default=0.12)
+    parser.add_argument("--acceleration-median-window", type=int, default=3)
+    parser.add_argument("--imu-acceleration-window-sec", type=float, default=0.08)
+    parser.add_argument("--imu-acceleration-median-window", type=int, default=3)
+    parser.add_argument("--acceleration-onset-sustain-sec", type=float, default=0.04)
+    parser.add_argument("--linear-imu-accel-onset-floor", type=float, default=0.04)
+    parser.add_argument("--imu-forward-axis", choices=("x", "y", "z"), default="x")
+    parser.add_argument("--imu-forward-sign", type=float, choices=(-1.0, 1.0), default=1.0)
+    parser.add_argument("--fopdt-max-delay-sec", type=float, default=1.20)
+    parser.add_argument("--fopdt-min-tau-sec", type=float, default=0.01)
+    parser.add_argument("--fopdt-max-tau-sec", type=float, default=2.50)
+    parser.add_argument("--fopdt-tau-count", type=int, default=96)
+    parser.add_argument(
+        "--fopdt-post-sec",
+        type=float,
+        default=0.0,
+        help="Extra post-command data in the FOPDT fit; default 0 keeps the asymmetric braking edge out",
+    )
+    parser.add_argument("--fopdt-min-r2", type=float, default=0.80)
+    parser.add_argument("--fopdt-near-optimal-fraction", type=float, default=0.01)
     return parser
+
+
+def validate_analysis_args(args):
+    positive = {
+        "acceleration-window-sec": args.acceleration_window_sec,
+        "mocap-velocity-window-sec": args.mocap_velocity_window_sec,
+        "imu-acceleration-window-sec": args.imu_acceleration_window_sec,
+        "acceleration-onset-sustain-sec": args.acceleration_onset_sustain_sec,
+        "linear-imu-accel-onset-floor": args.linear_imu_accel_onset_floor,
+        "fopdt-max-delay-sec": args.fopdt_max_delay_sec,
+        "fopdt-min-tau-sec": args.fopdt_min_tau_sec,
+        "fopdt-max-tau-sec": args.fopdt_max_tau_sec,
+    }
+    for name, value in positive.items():
+        if not math.isfinite(value) or value <= 0.0:
+            raise ValueError("{} must be finite and positive".format(name))
+    if not math.isfinite(args.fopdt_post_sec) or args.fopdt_post_sec < 0.0:
+        raise ValueError("fopdt-post-sec must be finite and non-negative")
+    if not math.isfinite(args.fopdt_min_r2) or not 0.0 <= args.fopdt_min_r2 <= 1.0:
+        raise ValueError("fopdt-min-r2 must be finite and within [0, 1]")
+    if args.fopdt_min_tau_sec >= args.fopdt_max_tau_sec:
+        raise ValueError("fopdt-min-tau-sec must be below fopdt-max-tau-sec")
+    if args.fopdt_tau_count < 8:
+        raise ValueError("fopdt-tau-count must be at least 8")
+    for name, value in (
+        ("acceleration-median-window", args.acceleration_median_window),
+        ("imu-acceleration-median-window", args.imu_acceleration_median_window),
+    ):
+        if value < 1:
+            raise ValueError("{} must be at least 1".format(name))
 
 
 def main():
     args = build_parser().parse_args()
+    try:
+        validate_analysis_args(args)
+    except ValueError as exc:
+        print("[analyze_mocap_velocity_step][ERR] {}".format(exc), file=sys.stderr)
+        return 2
     if not args.bag.is_file():
         print("bag does not exist: {}".format(args.bag), file=sys.stderr)
         return 2
@@ -505,8 +1115,13 @@ def main():
         return 2
 
     print_report(args.bag, primary, secondary)
+    delay_cross_validation = build_delay_cross_validation(primary, secondary)
     report = {
-        "protocol_id": "MOCAP_VELOCITY_STEP_V1",
+        "protocol_id": args.protocol_id,
+        "run_label": args.run_label,
+        "data_split": args.data_split,
+        "matrix_row": args.matrix_row,
+        "attempt": args.attempt,
         "axis": args.axis,
         "bag": str(args.bag.resolve()),
         "topics": {
@@ -519,6 +1134,24 @@ def main():
         "primary_timebase": "rosbag_arrival_time",
         "bag_time": serializable_timebase(primary),
         "header_time": serializable_timebase(secondary),
+        "delay_cross_validation": delay_cross_validation,
+        "analysis_config": {
+            "acceleration_window_sec": args.acceleration_window_sec,
+            "mocap_velocity_window_sec": args.mocap_velocity_window_sec,
+            "acceleration_median_window": args.acceleration_median_window,
+            "imu_acceleration_window_sec": args.imu_acceleration_window_sec,
+            "imu_acceleration_median_window": args.imu_acceleration_median_window,
+            "linear_imu_accel_onset_floor": args.linear_imu_accel_onset_floor,
+            "imu_forward_axis": args.imu_forward_axis,
+            "imu_forward_sign": args.imu_forward_sign,
+            "fopdt_max_delay_sec": args.fopdt_max_delay_sec,
+            "fopdt_min_tau_sec": args.fopdt_min_tau_sec,
+            "fopdt_max_tau_sec": args.fopdt_max_tau_sec,
+            "fopdt_tau_count": args.fopdt_tau_count,
+            "fopdt_post_sec": args.fopdt_post_sec,
+            "fopdt_min_r2": args.fopdt_min_r2,
+            "fopdt_near_optimal_fraction": args.fopdt_near_optimal_fraction,
+        },
         "stream_rate_hz": {
             "command": stream_rate(data["command_bag"]),
             "mocap": stream_rate(data["mocap_bag"]),
@@ -526,12 +1159,24 @@ def main():
             "odom": stream_rate(data["odom_bag"]),
         },
         "measurement_definition": {
+            "mocap_velocity": "zero-phase local-linear slope of NOKOV position/yaw; the configured window is recorded and timing is cross-checked against raw IMU/odom",
             "onset": "first sustained response above max(floor, 6*sigma, 2% steady amplitude)",
             "effective_acceleration": "80% measured steady velocity divided by t10-to-t90 rise time",
             "effective_deceleration": "80% measured steady velocity divided by 90%-to-10% fall time",
+            "acceleration_curve": "zero-phase local-linear derivative; window is recorded and peaks are supporting capability estimates",
+            "fopdt": "rising-edge-only grid fit of y=offset+gain*first_order(command delayed by L); braking is evaluated separately; parameters are accepted only when the quality gate passes",
+            "linear_imu": "bias-removed configured forward-axis acceleration is onset-only supporting evidence",
             "warning": "t90 includes gradual response build-up and is not pure dead time",
         },
     }
+    plot_dir = args.plot_dir
+    if plot_dir is None and args.plot is not None:
+        plot_dir = args.plot.parent / "{}_plots".format(args.plot.stem)
+        print("plot alias: writing separated plots to {}".format(plot_dir))
+    if plot_dir is not None:
+        plot_paths = make_separated_plots(plot_dir, primary)
+        report["plots"] = [str(path.resolve()) for path in plot_paths]
+        print("plot dir  : {} ({} files)".format(plot_dir, len(plot_paths)))
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(
@@ -539,16 +1184,25 @@ def main():
             encoding="utf-8",
         )
         print("report    : {}".format(args.output_json))
-    if args.plot:
-        make_plot(args.plot, primary)
-        print("plot      : {}".format(args.plot))
 
-    required_sensors = ("mocap", "odom") if args.axis == "linear" else ("mocap", "imu")
+    required_sensors = (
+        ("mocap", "odom")
+        if args.axis == "linear"
+        else ("mocap", "imu", "odom")
+    )
     complete = all(
         primary["sensors"][sensor].get("valid", False)
         and primary["sensors"][sensor].get("braking_valid", False)
+        and primary["sensors"][sensor].get("fopdt", {}).get("valid", False)
+        and primary["sensors"][sensor]
+        .get("acceleration_capability", {})
+        .get("valid", False)
         for sensor in required_sensors
     )
+    if args.axis == "linear":
+        complete = complete and primary["acceleration_crosscheck"].get("imu", {}).get(
+            "valid", False
+        )
     return 0 if complete else 2
 
 
