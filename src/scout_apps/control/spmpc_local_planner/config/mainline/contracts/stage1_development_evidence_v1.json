@@ -1,0 +1,148 @@
+{
+  "schema_version": "spmpc_mainline_stage1_development_evidence_v1",
+  "evidence_id": "SPMPC-MAINLINE-STAGE1-DEVELOPMENT-20260902",
+  "status": "DEVELOPMENT_EVIDENCE_ONLY_STAGE1_NOT_FROZEN",
+  "authority": {
+    "stage0_contract": {
+      "path": "src/scout_apps/control/spmpc_local_planner/config/mainline/contracts/stage0_contract_v1.json",
+      "sha256": "2a9b1fdd91a474af5894a23b9cb882a94580204ea76cea1fc95ec13ce80508bd"
+    },
+    "source_documents": [
+      {
+        "role": "ACTUATOR_DEVELOPMENT_ANALYSIS",
+        "path": "docs/实物实验注意事项/对比试验/解决问题的思路/20260830_延迟问题.md",
+        "sha256": "296063c95542f4f14147dc7d1ff78ff45083e6f91428ffb61548c269a844cc74"
+      },
+      {
+        "role": "SLOSH_OBSERVER_DEVELOPMENT_ANALYSIS",
+        "path": "docs/实物实验注意事项/对比试验/实物对比试验分析/20260831_slosh状态输入与短时延迟补偿三包分析.md",
+        "sha256": "ffda7fd6ee4ea5070ed7bbb484ef310fde9cd27d702a0de0c1a80de4d8017a40"
+      }
+    ]
+  },
+  "dataset_partitions": {
+    "development": [
+      {
+        "trial_id": "D02_fixed_robot_only_a01",
+        "evidence_kind": "ACTUATOR_CLOSED_LOOP_PATH_RESPONSE",
+        "bag_sha256": "dbad29e7390e2634228ab6325d59b88874244026f9570e8634bf82b83b0219ad",
+        "source_document_role": "ACTUATOR_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": []
+      },
+      {
+        "trial_id": "D03_fixed_robot_only_a02",
+        "evidence_kind": "ACTUATOR_CLOSED_LOOP_PATH_RESPONSE",
+        "bag_sha256": "cfa8f955b97a719367b7e66a8aa8bd6193cfe22b79a502f78c18c5fa3d512ac5",
+        "source_document_role": "ACTUATOR_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": []
+      },
+      {
+        "trial_id": "D04_fixed_robot_only_a01",
+        "evidence_kind": "ACTUATOR_CLOSED_LOOP_PATH_RESPONSE",
+        "bag_sha256": "2d432213e203cca91b8151897a65d3830e1df04a73f068a75687729ac4248c0f",
+        "source_document_role": "ACTUATOR_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": [
+          "git_dirty=1"
+        ]
+      },
+      {
+        "trial_id": "DEV_SLOSH_NOWCAST_N01_a01",
+        "evidence_kind": "SLOSH_OBSERVER_SHADOW_COMPARISON",
+        "bag_sha256": "9faa7efd2ae7a89716142b44fc4ce87d7f906d6644159e1fd9f4353d3ade6df2",
+        "source_document_role": "SLOSH_OBSERVER_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": []
+      },
+      {
+        "trial_id": "DEV_SLOSH_NOWCAST_N02_a01",
+        "evidence_kind": "SLOSH_OBSERVER_SHADOW_COMPARISON",
+        "bag_sha256": "33aeba4497bce25fd71e4ba685befc7fd59a06c8b6cd3cfa28216c3c2240f3fd",
+        "source_document_role": "SLOSH_OBSERVER_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": []
+      },
+      {
+        "trial_id": "DEV_SLOSH_NOWCAST_N03_a01",
+        "evidence_kind": "SLOSH_OBSERVER_SHADOW_COMPARISON",
+        "bag_sha256": "710438c9a8aed22b219c087de55e072676e2bc40b9b06384fd3fe0d55af25810",
+        "source_document_role": "SLOSH_OBSERVER_DEVELOPMENT_ANALYSIS",
+        "availability": "EXTERNAL_BYTES_NOT_AVAILABLE_ON_THIS_HOST",
+        "provenance_flags": []
+      }
+    ],
+    "validation": [],
+    "final_test": []
+  },
+  "accepted_findings": {
+    "scope": "DEVELOPMENT_DIRECTION_ONLY",
+    "observer_input": {
+      "selected": "PROCESSED_IMU_I0",
+      "i0_vs_o0_mean_mae_improvement_fraction": 0.2769,
+      "improved_trial_count": 3,
+      "trial_count": 3,
+      "full_four_state_truth_claimed": false
+    },
+    "extra_liquid_nowcast": {
+      "I1": {
+        "allowed_in_solver": false,
+        "mean_mae_regression_fraction": 0.1195,
+        "regressed_trial_count": 3,
+        "trial_count": 3
+      },
+      "L22": {
+        "allowed_in_solver": false,
+        "reason": "LEGACY_DIAGNOSTIC_WITH_COMMAND_HISTORY_NOT_ACTUAL_EXCITATION"
+      }
+    },
+    "tested_effective_window_baseline": {
+      "status": "PROVISIONAL_TESTED_LEGACY_EFFECTIVE_WINDOW_NOT_FOPDT_DELAY",
+      "linear_sec": 0.15,
+      "angular_sec": 0.22,
+      "allowed_as_new_mainline_fopdt_parameter": false
+    }
+  },
+  "descriptive_actuator_candidate": {
+    "status": "INCONCLUSIVE_OFFLINE_DESCRIPTION_ONLY",
+    "linear": {
+      "descriptive_L_sec": 0.08,
+      "tau_sec": 0.086,
+      "gain": 1.05,
+      "near_optimal_L_envelope_lower_sec": 0.02,
+      "near_optimal_L_envelope_upper_sec": 0.16,
+      "near_optimal_L_scope": "CROSS_BAG_ENVELOPE_NOT_PER_TRIAL_INTERVAL",
+      "fit_boundary_observation": "TAU_LOWER_SEARCH_BOUND_TOUCHED"
+    },
+    "angular": {
+      "descriptive_L_sec": 0.07,
+      "tau_sec": 0.677,
+      "gain": 0.99,
+      "near_optimal_L_envelope_lower_sec": 0.0,
+      "near_optimal_L_envelope_upper_sec": 0.36,
+      "near_optimal_L_scope": "CROSS_BAG_ENVELOPE_NOT_PER_TRIAL_INTERVAL",
+      "fit_boundary_observation": "L_LOWER_SEARCH_BOUND_TOUCHED"
+    }
+  },
+  "gates": {
+    "stage1_freeze_allowed": false,
+    "stage3_codegen_allowed": false,
+    "stage1_status": "BLOCKED_MISSING_DEDICATED_VALIDATION_AND_FINAL_TEST",
+    "stage3_status": "PROHIBITED_UNTIL_STAGE1_L_MAX_IS_FROZEN",
+    "dataset_gate_status": "INCOMPLETE_DEVELOPMENT_ONLY",
+    "fit_identifiability_status": "INCONCLUSIVE_SEARCH_BOUNDARY_AND_WIDE_NEAR_OPTIMUM",
+    "lmax_status": "UNFROZEN_NO_PHYSICAL_MARGIN_EVIDENCE",
+    "execution_parameters_status": "UNFROZEN_DEDICATED_IDENTIFICATION_REQUIRED",
+    "required_missing_authorities": [
+      "dedicated_open_loop_identification_trials",
+      "verified_bag_paths_bytes_and_motion_windows",
+      "actuator_validation_partition",
+      "actuator_final_test_partition",
+      "frozen_delay_tau_gain",
+      "frozen_lmax_and_queue_dimensions",
+      "frozen_acceleration_and_jerk_ranges",
+      "validation_and_final_test_gate_hash"
+    ]
+  }
+}

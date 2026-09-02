@@ -1,4 +1,4 @@
-"""Stage 3A schema-only helpers for the future mainline acados generator."""
+"""Contract and schema helpers for the future mainline acados generator."""
 
 from .contract_source import (
     STAGE0_CONTRACT_SHA256,
