@@ -220,6 +220,324 @@ def _validate_codegen_options_structure(snapshot: CodegenOptionsSnapshot) -> Non
         raise CodegenOptionsError(str(exc)) from exc
 
 
+def _strict_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool/int equality aliasing."""
+
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return set(left) == set(right) and all(
+            _strict_equal(left[key], right[key]) for key in left
+        )
+    if type(left) is list:
+        return len(left) == len(right) and all(
+            _strict_equal(item, other) for item, other in zip(left, right)
+        )
+    return bool(left == right)
+
+
+def _object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
+    if type(value) is not dict or set(value) != keys:
+        raise CodegenOptionsError(f"{label} keys do not match the v1 schema")
+    return value
+
+
+def _validate_codegen_options_payload(
+    payload: Any,
+    *,
+    expected_development_layout_sha256: Any = None,
+) -> dict[str, Any]:
+    """Validate a serialized payload excluding ``semantic_identity``.
+
+    Tolerances and compiler-environment values are observations selected for a
+    generation run, so their values are validated by type and policy range.
+    Their shape, all policy strings, all backend switches, and all filenames
+    are fixed here for both typed and offline validation.
+    """
+
+    root = _object(
+        payload,
+        {
+            "schema_version",
+            "scope",
+            "model_id",
+            "status",
+            "source_identity",
+            "horizon",
+            "runtime_schedule_contract",
+            "acados_codegen",
+            "runtime_identity_exclusions",
+        },
+        "codegen-options payload",
+    )
+    if root["schema_version"] != CODEGEN_OPTIONS_SCHEMA:
+        raise CodegenOptionsError("codegen-option schema is not canonical")
+    if root["scope"] != CODEGEN_OPTIONS_SCOPE or root["model_id"] != MODEL_ID:
+        raise CodegenOptionsError("codegen-option scope/model identity drifted")
+    status = _object(
+        root["status"],
+        {"codegen_options", "artifact", "target_performance"},
+        "codegen-option status",
+    )
+    if not _strict_equal(
+        status,
+        {
+            "codegen_options": CODEGEN_OPTIONS_STATUS,
+            "artifact": CODEGEN_ARTIFACT_STATUS,
+            "target_performance": CODEGEN_TARGET_PERFORMANCE_STATUS,
+        },
+    ):
+        raise CodegenOptionsError("codegen-option status is not canonical")
+
+    source = _object(
+        root["source_identity"],
+        {"development_layout_semantic_sha256"},
+        "codegen-option source identity",
+    )
+    try:
+        layout_sha256 = require_sha256(
+            source["development_layout_semantic_sha256"],
+            "codegen development layout identity",
+        )
+    except IdentityError as exc:
+        raise CodegenOptionsError(str(exc)) from exc
+    if (
+        expected_development_layout_sha256 is not None
+        and layout_sha256 != expected_development_layout_sha256
+    ):
+        raise CodegenOptionsError("codegen development layout identity differs")
+
+    horizon = _object(
+        root["horizon"],
+        {"N", "release_frequency_hz", "release_period_sec"},
+        "codegen-option horizon",
+    )
+    if not _strict_equal(
+        horizon,
+        {
+            "N": 60,
+            "release_frequency_hz": 30,
+            "release_period_sec": {"numerator": 1, "denominator": 30},
+        },
+    ):
+        raise CodegenOptionsError("codegen-option horizon is not canonical")
+
+    schedule = _object(
+        root["runtime_schedule_contract"],
+        {
+            "schema_version",
+            "integer_snap_tolerance_sec",
+            "duration_tolerance_sec",
+            "actual_schedule_values",
+        },
+        "codegen runtime schedule contract",
+    )
+    if (
+        schedule["schema_version"] != RUNTIME_SCHEDULE_SCHEMA_VERSION
+        or schedule["actual_schedule_values"] != "EXCLUDED_FROM_ARTIFACT_IDENTITY"
+    ):
+        raise CodegenOptionsError("codegen runtime schedule policy drifted")
+    _explicit_tolerance(
+        schedule["integer_snap_tolerance_sec"],
+        "integer_snap_tolerance_sec",
+        1.0 / 60.0,
+    )
+    _explicit_tolerance(
+        schedule["duration_tolerance_sec"],
+        "duration_tolerance_sec",
+        1.0 / 30.0,
+    )
+
+    codegen = _object(
+        root["acados_codegen"],
+        {
+            "backend_contract",
+            "api",
+            "external_functions",
+            "custom_update",
+            "build",
+            "output_directory_policy",
+            "source_root_binding_policy",
+            "git_dirty_policy",
+            "generated_file_inventory_policy",
+            "artifact_identity_policy",
+            "filenames",
+        },
+        "acados codegen policy",
+    )
+    if codegen["backend_contract"] != CODEGEN_BACKEND_CONTRACT:
+        raise CodegenOptionsError("Acados backend contract drifted")
+    if codegen["api"] != CODEGEN_API:
+        raise CodegenOptionsError("Acados codegen API drifted")
+    external = _object(
+        codegen["external_functions"],
+        {
+            "compile_flags",
+            "expand_constraints",
+            "expand_cost",
+            "expand_dynamics",
+            "expand_precompute",
+        },
+        "Acados external-function policy",
+    )
+    if not _strict_equal(
+        external,
+        {
+            "compile_flags": EXT_FUN_COMPILE_FLAGS,
+            "expand_constraints": EXT_FUN_EXPAND_CONSTR,
+            "expand_cost": EXT_FUN_EXPAND_COST,
+            "expand_dynamics": EXT_FUN_EXPAND_DYN,
+            "expand_precompute": EXT_FUN_EXPAND_PRECOMPUTE,
+        },
+    ):
+        raise CodegenOptionsError("Acados external-function policy drifted")
+    custom = _object(
+        codegen["custom_update"],
+        {"filename", "header_filename", "copy", "templates"},
+        "Acados custom-update policy",
+    )
+    if not _strict_equal(
+        custom,
+        {
+            "filename": CUSTOM_UPDATE_FILENAME,
+            "header_filename": CUSTOM_UPDATE_HEADER_FILENAME,
+            "copy": CUSTOM_UPDATE_COPY,
+            "templates": [list(item) for item in CUSTOM_TEMPLATES],
+        },
+    ):
+        raise CodegenOptionsError("Acados custom-update policy drifted")
+
+    build = _object(
+        codegen["build"],
+        {
+            "system",
+            "target",
+            "with_cython",
+            "verbose",
+            "cmake_builder",
+            "compiler_environment_policy",
+            "compiler_environment",
+        },
+        "Acados build policy",
+    )
+    if not _strict_equal(
+        {
+            key: build[key]
+            for key in (
+                "system",
+                "target",
+                "with_cython",
+                "verbose",
+                "cmake_builder",
+                "compiler_environment_policy",
+            )
+        },
+        {
+            "system": BUILD_SYSTEM,
+            "target": BUILD_TARGET,
+            "with_cython": WITH_CYTHON,
+            "verbose": CODEGEN_VERBOSE,
+            "cmake_builder": CMAKE_BUILDER,
+            "compiler_environment_policy": COMPILER_ENVIRONMENT_POLICY,
+        },
+    ):
+        raise CodegenOptionsError("Acados build policy drifted")
+    environment = build["compiler_environment"]
+    if type(environment) is not dict or set(environment) != set(
+        COMPILER_ENVIRONMENT_NAMES
+    ):
+        raise CodegenOptionsError("compiler environment names are not canonical")
+    if any(
+        value is not None and type(value) is not str for value in environment.values()
+    ):
+        raise CodegenOptionsError("compiler environment values must be strings or null")
+
+    if not _strict_equal(
+        {
+            key: codegen[key]
+            for key in (
+                "output_directory_policy",
+                "source_root_binding_policy",
+                "git_dirty_policy",
+                "generated_file_inventory_policy",
+                "artifact_identity_policy",
+            )
+        },
+        {
+            "output_directory_policy": OUTPUT_DIRECTORY_POLICY,
+            "source_root_binding_policy": SOURCE_ROOT_BINDING_POLICY,
+            "git_dirty_policy": GIT_DIRTY_POLICY,
+            "generated_file_inventory_policy": GENERATED_FILE_INVENTORY_POLICY,
+            "artifact_identity_policy": ARTIFACT_IDENTITY_POLICY,
+        },
+    ):
+        raise CodegenOptionsError("codegen output/identity policy drifted")
+    if not _strict_equal(
+        codegen["filenames"],
+        {
+            "acados_json": ACADOS_JSON_FILENAME,
+            "model_contract": MODEL_CONTRACT_FILENAME,
+            "generated_header": GENERATED_HEADER_FILENAME,
+        },
+    ):
+        raise CodegenOptionsError("codegen filenames drifted")
+    if not _strict_equal(
+        root["runtime_identity_exclusions"], list(RUNTIME_IDENTITY_EXCLUSIONS)
+    ):
+        raise CodegenOptionsError("runtime identity exclusions drifted")
+    return root
+
+
+def validate_codegen_options_document(
+    value: Any,
+    *,
+    expected_development_layout_sha256: Any = None,
+) -> dict[str, Any]:
+    """Validate a complete dependency-free serialized codegen document."""
+
+    if type(value) is not dict:
+        raise CodegenOptionsError("codegen-options document must be a JSON object")
+    expected_keys = {
+        "schema_version",
+        "scope",
+        "model_id",
+        "status",
+        "source_identity",
+        "horizon",
+        "runtime_schedule_contract",
+        "acados_codegen",
+        "runtime_identity_exclusions",
+        "semantic_identity",
+    }
+    if set(value) != expected_keys:
+        raise CodegenOptionsError(
+            "codegen-options document keys do not match the v1 schema"
+        )
+    identity = value["semantic_identity"]
+    if type(identity) is not dict or set(identity) != {"sha256", "scope"}:
+        raise CodegenOptionsError("codegen-option semantic identity is malformed")
+    if identity["scope"] != CODEGEN_OPTIONS_SCOPE:
+        raise CodegenOptionsError("codegen-option semantic scope drifted")
+    try:
+        require_sha256(identity["sha256"], "codegen-option semantic identity")
+        payload = {
+            key: item for key, item in value.items() if key != "semantic_identity"
+        }
+        _validate_codegen_options_payload(
+            payload,
+            expected_development_layout_sha256=expected_development_layout_sha256,
+        )
+        if sha256_json(payload) != identity["sha256"]:
+            raise CodegenOptionsError(
+                "codegen-option semantic identity is inconsistent"
+            )
+    except CodegenOptionsError:
+        raise
+    except (IdentityError, KeyError, TypeError, ValueError) as exc:
+        raise CodegenOptionsError("codegen-options document is malformed") from exc
+    return value
+
+
 def _snapshot_payload(snapshot: CodegenOptionsSnapshot) -> dict[str, Any]:
     return {
         "schema_version": snapshot.schema_version,
@@ -372,7 +690,9 @@ def require_codegen_options_snapshot(value: Any) -> CodegenOptionsSnapshot:
         )
     try:
         _validate_codegen_options_structure(value)
-        actual_sha256 = sha256_json(_snapshot_payload(value))
+        payload = _snapshot_payload(value)
+        _validate_codegen_options_payload(payload)
+        actual_sha256 = sha256_json(payload)
     except CodegenOptionsError:
         raise
     except (AttributeError, IdentityError, TypeError, ValueError) as exc:
@@ -476,4 +796,5 @@ __all__ = [
     "require_codegen_compiler_environment",
     "require_codegen_options_snapshot",
     "validate_applied_acados_solver_codegen_options",
+    "validate_codegen_options_document",
 ]

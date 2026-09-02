@@ -27,6 +27,7 @@ from acados.mainline.solver_options import (
     SolverOptionsSnapshot,
     build_solver_options_snapshot,
     require_solver_options_snapshot,
+    validate_solver_options_document,
 )
 
 CAPACITY = (
@@ -114,6 +115,22 @@ class MainlineSolverOptionsTest(unittest.TestCase):
         object.__setattr__(forged, "qp_solver_iter_max", 49)
         with self.assertRaises(SolverOptionsError):
             require_solver_options_snapshot(forged)
+        forged_time_steps = copy.copy(self.snapshot)
+        object.__setattr__(
+            forged_time_steps,
+            "time_steps",
+            (self.snapshot.time_step_sec * 2,) * self.snapshot.horizon_steps,
+        )
+        with self.assertRaises(SolverOptionsError):
+            require_solver_options_snapshot(forged_time_steps)
+        forged_cost_scaling = copy.copy(self.snapshot)
+        object.__setattr__(
+            forged_cost_scaling,
+            "cost_scaling",
+            (2.0,) * (self.snapshot.horizon_steps + 1),
+        )
+        with self.assertRaises(SolverOptionsError):
+            require_solver_options_snapshot(forged_cost_scaling)
         structurally_forged = copy.copy(self.snapshot)
         object.__setattr__(structurally_forged, "status", "FORGED")
         forged_document = structurally_forged.to_dict()
@@ -126,6 +143,28 @@ class MainlineSolverOptionsTest(unittest.TestCase):
         with self.assertRaises(SolverOptionsError):
             require_solver_options_snapshot(structurally_forged)
         self.assertIs(require_solver_options_snapshot(self.snapshot), self.snapshot)
+
+    def test_serialized_document_parser_rejects_resigned_policy_mutations(self) -> None:
+        document = self.snapshot.to_dict()
+        self.assertIs(validate_solver_options_document(document), document)
+
+        forged = copy.deepcopy(document)
+        forged["qp"]["solver"] = "FULL_CONDENSING_QPOASES"
+        payload = {
+            key: value for key, value in forged.items() if key != "semantic_identity"
+        }
+        forged["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(SolverOptionsError):
+            validate_solver_options_document(forged)
+
+        forged = copy.deepcopy(document)
+        forged["horizon"]["unknown"] = True
+        payload = {
+            key: value for key, value in forged.items() if key != "semantic_identity"
+        }
+        forged["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(SolverOptionsError):
+            validate_solver_options_document(forged)
 
     def test_module_has_no_backend_legacy_or_gate_dependency(self) -> None:
         tree = ast.parse(MODULE.read_text(encoding="utf-8"), filename=str(MODULE))

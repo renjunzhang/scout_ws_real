@@ -12,7 +12,7 @@ from fractions import Fraction
 from typing import Any
 
 from .development_layout import DevelopmentLayout
-from .identity import IdentityError, sha256_json
+from .identity import IdentityError, require_sha256, sha256_json
 
 SOLVER_OPTIONS_SCHEMA = "spmpc_mainline_solver_options_v1"
 SOLVER_OPTIONS_STATUS = "DEV_UNVALIDATED"
@@ -108,6 +108,186 @@ def _validate_solver_options_structure(snapshot: SolverOptionsSnapshot) -> None:
         raise SolverOptionsError("solver-option status is not canonical")
     if type(snapshot.semantic_sha256) is not str or len(snapshot.semantic_sha256) != 64:
         raise SolverOptionsError("solver-option semantic identity is invalid")
+    if (
+        type(snapshot.time_steps) is not tuple
+        or len(snapshot.time_steps) != snapshot.horizon_steps
+        or any(
+            type(value) is not Fraction or value != snapshot.time_step_sec
+            for value in snapshot.time_steps
+        )
+    ):
+        raise SolverOptionsError(
+            "solver-option time steps must be the uniform typed release grid"
+        )
+    if (
+        type(snapshot.cost_scaling) is not tuple
+        or len(snapshot.cost_scaling) != snapshot.horizon_steps + 1
+        or any(
+            type(value) is not float or value != 1.0 for value in snapshot.cost_scaling
+        )
+    ):
+        raise SolverOptionsError(
+            "solver-option cost scaling must contain explicit 1.0 floats"
+        )
+
+
+def _strict_equal(left: Any, right: Any) -> bool:
+    """Compare JSON values without Python's bool/int equality aliasing."""
+
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return set(left) == set(right) and all(
+            _strict_equal(left[key], right[key]) for key in left
+        )
+    if type(left) is list:
+        return len(left) == len(right) and all(
+            _strict_equal(item, other) for item, other in zip(left, right)
+        )
+    return bool(left == right)
+
+
+def _canonical_solver_options_payload() -> dict[str, Any]:
+    """Return the complete, serialized D4 solver-options policy.
+
+    This is deliberately independent of ``SolverOptionsSnapshot`` so an
+    offline artifact parser can validate the same policy without constructing
+    a typed authority or importing a numerical backend.
+    """
+
+    return {
+        "schema_version": SOLVER_OPTIONS_SCHEMA,
+        "scope": SOLVER_OPTIONS_SCOPE,
+        "status": {
+            "solver_options": SOLVER_OPTIONS_STATUS,
+            "target_performance": TARGET_PERFORMANCE_STATUS,
+            "artifact": SOLVER_OPTIONS_ARTIFACT_STATUS,
+        },
+        "horizon": {
+            "N": 60,
+            "release_frequency_hz": 30,
+            "time_step_sec": {"numerator": 1, "denominator": 30},
+            "time_horizon_sec": {"numerator": 2, "denominator": 1},
+            "time_steps": {
+                "policy": TIME_STEP_POLICY,
+                "count": 60,
+                "uniform_value_sec": {"numerator": 1, "denominator": 30},
+            },
+            "cost_scaling": {
+                "policy": COST_SCALING_POLICY,
+                "count": 61,
+                "uniform_value": 1.0,
+            },
+        },
+        "discretization": {
+            "integrator_type": "DISCRETE",
+            "cost_discretization": "EULER",
+            "continuous_integrator_options": (CONTINUOUS_INTEGRATOR_OPTIONS_POLICY),
+        },
+        "nlp": {
+            "solver_type": "SQP_RTI",
+            "max_iter": 1,
+            "tolerances": {
+                "stat": 1.0e-6,
+                "eq": 1.0e-6,
+                "ineq": 1.0e-6,
+                "comp": 1.0e-6,
+            },
+            "warm_start_first_qp": False,
+            "warm_start_first_qp_from_nlp": False,
+        },
+        "hessian": {
+            "approximation": "EXACT",
+            "exact_dyn": True,
+            "exact_cost": True,
+            "exact_constr": True,
+            "external_cost_numerical_hessian": 0,
+        },
+        "regularization": {
+            "method": "PROJECT",
+            "epsilon": 1.0e-4,
+            "levenberg_marquardt": 1.0e-3,
+        },
+        "globalization": {
+            "method": "FIXED_STEP",
+            "fixed_step_length": 1.0,
+        },
+        "qp": {
+            "solver": "PARTIAL_CONDENSING_HPIPM",
+            "condensed_horizon": 60,
+            "condensing_riccati_algorithm": 1,
+            "riccati_algorithm": 1,
+            "max_iter": 50,
+            "tolerances": {
+                "stat": 1.0e-6,
+                "eq": 1.0e-6,
+                "ineq": 1.0e-6,
+                "comp": 1.0e-6,
+            },
+            "warm_start_level": 0,
+            "hpipm_mode": "BALANCE",
+        },
+        "diagnostics": {"print_level": 0},
+    }
+
+
+def _validate_solver_options_payload(payload: Any) -> dict[str, Any]:
+    """Validate a serialized payload excluding ``semantic_identity``."""
+
+    if type(payload) is not dict:
+        raise SolverOptionsError("solver-option payload must be a JSON object")
+    expected = _canonical_solver_options_payload()
+    if not _strict_equal(payload, expected):
+        raise SolverOptionsError("solver-option payload is not the canonical D4 policy")
+    return payload
+
+
+def validate_solver_options_document(value: Any) -> dict[str, Any]:
+    """Validate a complete dependency-free serialized solver-options document.
+
+    The returned mapping is the original validated document.  Its semantic
+    identity covers every policy field, making this function suitable for an
+    artifact parser that cannot construct ``SolverOptionsSnapshot``.
+    """
+
+    if type(value) is not dict:
+        raise SolverOptionsError("solver-options document must be a JSON object")
+    expected_keys = {
+        "schema_version",
+        "scope",
+        "status",
+        "horizon",
+        "discretization",
+        "nlp",
+        "hessian",
+        "regularization",
+        "globalization",
+        "qp",
+        "diagnostics",
+        "semantic_identity",
+    }
+    if set(value) != expected_keys:
+        raise SolverOptionsError(
+            "solver-options document keys do not match the v1 schema"
+        )
+    identity = value["semantic_identity"]
+    if type(identity) is not dict or set(identity) != {"sha256", "scope"}:
+        raise SolverOptionsError("solver-options semantic identity is malformed")
+    if identity["scope"] != SOLVER_OPTIONS_SCOPE:
+        raise SolverOptionsError("solver-options semantic scope drifted")
+    try:
+        require_sha256(identity["sha256"], "solver-option semantic identity")
+        payload = {
+            key: item for key, item in value.items() if key != "semantic_identity"
+        }
+        _validate_solver_options_payload(payload)
+        if sha256_json(payload) != identity["sha256"]:
+            raise SolverOptionsError("solver-option semantic identity is inconsistent")
+    except SolverOptionsError:
+        raise
+    except (IdentityError, KeyError, TypeError, ValueError) as exc:
+        raise SolverOptionsError("solver-options document is malformed") from exc
+    return value
 
 
 def _fraction_dict(value: Fraction) -> dict[str, int]:
@@ -285,6 +465,7 @@ def require_solver_options_snapshot(value: Any) -> SolverOptionsSnapshot:
         )
     try:
         _validate_solver_options_structure(value)
+        _validate_solver_options_payload(_snapshot_payload(value))
         semantic_sha256 = sha256_json(_snapshot_payload(value))
     except SolverOptionsError:
         raise
@@ -308,4 +489,5 @@ __all__ = [
     "SolverOptionsSnapshot",
     "build_solver_options_snapshot",
     "require_solver_options_snapshot",
+    "validate_solver_options_document",
 ]

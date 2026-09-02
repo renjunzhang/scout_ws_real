@@ -26,16 +26,14 @@ from acados.mainline.development_capacity import (
     DEVELOPMENT_CAPACITY_SHA256,
     DEVELOPMENT_CAPACITY_STATUS,
     DevelopmentCapacityError,
+    development_capacity_from_dict,
     load_development_capacity,
     require_pinned_development_capacity,
+    validate_development_capacity_document,
 )
 
 CONTRACT = (
-    PACKAGE_ROOT
-    / "config"
-    / "mainline"
-    / "contracts"
-    / "development_capacity_v1.json"
+    PACKAGE_ROOT / "config" / "mainline" / "contracts" / "development_capacity_v1.json"
 )
 MODULE = SCRIPTS_ROOT / "acados" / "mainline" / "development_capacity.py"
 
@@ -84,6 +82,30 @@ class MainlineDevelopmentCapacityTest(unittest.TestCase):
             {"numerator": 24, "denominator": 30},
         )
 
+    def test_embedded_document_parser_requires_pinned_raw_sha(self) -> None:
+        parsed = development_capacity_from_dict(
+            self.document,
+            DEVELOPMENT_CAPACITY_SHA256,
+        )
+        self.assertEqual(parsed, load_development_capacity(CONTRACT))
+        self.assertIsNone(
+            validate_development_capacity_document(
+                self.document,
+                DEVELOPMENT_CAPACITY_SHA256,
+            )
+        )
+
+        for raw_sha256 in ("0" * 64, True, None):
+            with self.subTest(raw_sha256=raw_sha256), self.assertRaises(
+                DevelopmentCapacityError
+            ):
+                development_capacity_from_dict(self.document, raw_sha256)  # type: ignore[arg-type]
+
+        changed = copy.deepcopy(self.document)
+        changed["derived_dimensions"]["NX"] = 49
+        with self.assertRaises(DevelopmentCapacityError):
+            development_capacity_from_dict(changed, DEVELOPMENT_CAPACITY_SHA256)
+
     def test_dimensions_are_recomputed_from_release_intervals(self) -> None:
         dimensions = self.document["derived_dimensions"]
         capacity = self.document["capacity"]
@@ -113,9 +135,7 @@ class MainlineDevelopmentCapacityTest(unittest.TestCase):
         source["source_identity"]["bag_path"] = "/tmp/not-authority.bag"
         mutations.append(source)
         for index, mutated in enumerate(mutations):
-            with self.subTest(index=index), self.assertRaises(
-                DevelopmentCapacityError
-            ):
+            with self.subTest(index=index), self.assertRaises(DevelopmentCapacityError):
                 self.validate(mutated)
 
     def test_boolean_and_float_integer_aliases_are_rejected(self) -> None:
@@ -130,9 +150,7 @@ class MainlineDevelopmentCapacityTest(unittest.TestCase):
             self.changed(("derived_dimensions", "NX"), True),
         )
         for index, mutated in enumerate(mutations):
-            with self.subTest(index=index), self.assertRaises(
-                DevelopmentCapacityError
-            ):
+            with self.subTest(index=index), self.assertRaises(DevelopmentCapacityError):
                 self.validate(mutated)
 
     def test_nonpositive_or_untyped_capacity_values_are_rejected(self) -> None:
@@ -146,9 +164,7 @@ class MainlineDevelopmentCapacityTest(unittest.TestCase):
             self.changed(("derived_dimensions", "NP_exec"), -1),
         )
         for index, mutated in enumerate(mutations):
-            with self.subTest(index=index), self.assertRaises(
-                DevelopmentCapacityError
-            ):
+            with self.subTest(index=index), self.assertRaises(DevelopmentCapacityError):
                 self.validate(mutated)
 
     def test_every_derived_count_and_dimension_fails_closed_on_drift(self) -> None:
@@ -162,9 +178,7 @@ class MainlineDevelopmentCapacityTest(unittest.TestCase):
             self.changed(("derived_dimensions", "NP_exec"), 120),
         )
         for index, mutated in enumerate(mutations):
-            with self.subTest(index=index), self.assertRaises(
-                DevelopmentCapacityError
-            ):
+            with self.subTest(index=index), self.assertRaises(DevelopmentCapacityError):
                 self.validate(mutated)
 
     def test_lmax_must_be_direct_exact_r_over_frequency_rational(self) -> None:

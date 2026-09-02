@@ -46,6 +46,7 @@ from acados.mainline.codegen_options import (
     require_codegen_compiler_environment,
     require_codegen_options_snapshot,
     validate_applied_acados_solver_codegen_options,
+    validate_codegen_options_document,
 )
 from acados.mainline.development_capacity import load_development_capacity
 from acados.mainline.development_layout import build_development_layout
@@ -312,10 +313,9 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
             (1.0e-12, 1.0e-12, "-O3"),
         )
         for snap, duration, flags in bad_values:
-            with (
-                self.subTest(snap=snap, duration=duration, flags=flags),
-                self.assertRaises(CodegenOptionsError),
-            ):
+            with self.subTest(
+                snap=snap, duration=duration, flags=flags
+            ), self.assertRaises(CodegenOptionsError):
                 build_codegen_options_snapshot(
                     self.capacity,
                     self.layout,
@@ -349,6 +349,47 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
         with self.assertRaises(CodegenOptionsError):
             require_codegen_options_snapshot(structurally_forged)
         self.assertIs(require_codegen_options_snapshot(self.options), self.options)
+
+    def test_serialized_document_parser_rejects_resigned_policy_mutations(self) -> None:
+        document = self.options.to_dict()
+        layout_sha256 = document["source_identity"][
+            "development_layout_semantic_sha256"
+        ]
+        self.assertIs(
+            validate_codegen_options_document(
+                document,
+                expected_development_layout_sha256=layout_sha256,
+            ),
+            document,
+        )
+        forged = copy.deepcopy(document)
+        forged["acados_codegen"]["external_functions"]["expand_dynamics"] = True
+        payload = {
+            key: value for key, value in forged.items() if key != "semantic_identity"
+        }
+        forged["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(CodegenOptionsError):
+            validate_codegen_options_document(forged)
+
+        forged = copy.deepcopy(document)
+        environment = forged["acados_codegen"]["build"]["compiler_environment"]
+        setting = environment.pop("CC")
+        environment["CXX"] = setting
+        payload = {
+            key: value for key, value in forged.items() if key != "semantic_identity"
+        }
+        forged["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(CodegenOptionsError):
+            validate_codegen_options_document(forged)
+
+        forged = copy.deepcopy(document)
+        forged["runtime_schedule_contract"]["duration_tolerance_sec"] = 1.0 / 30.0
+        payload = {
+            key: value for key, value in forged.items() if key != "semantic_identity"
+        }
+        forged["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(CodegenOptionsError):
+            validate_codegen_options_document(forged)
 
     def test_module_has_no_backend_evidence_or_legacy_dependency(self) -> None:
         source = SCRIPTS_ROOT / "acados" / "mainline" / "codegen_options.py"

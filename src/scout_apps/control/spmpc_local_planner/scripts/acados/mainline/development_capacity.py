@@ -13,7 +13,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
-from .identity import IdentityError, read_strict_json, sha256_bytes
+from .identity import (
+    IdentityError,
+    read_strict_json,
+    require_sha256,
+    sha256_bytes,
+)
 
 DEVELOPMENT_CAPACITY_SCHEMA_VERSION = "spmpc_mainline_development_capacity_v1"
 DEVELOPMENT_CAPACITY_ID = "SPMPC-MAINLINE-DEVELOPMENT-CAPACITY-20260903"
@@ -43,9 +48,7 @@ NQ_V = R_V + 1
 NQ_OMEGA = R_OMEGA + 1
 NX = BASE_STATE_COUNT + D_V + D_OMEGA
 NU = CONTROL_COUNT
-NP_EXEC = EXECUTION_FIXED_SCALAR_COUNT + EXECUTION_SUBSEGMENT_SLOTS * (
-    NQ_V + NQ_OMEGA
-)
+NP_EXEC = EXECUTION_FIXED_SCALAR_COUNT + EXECUTION_SUBSEGMENT_SLOTS * (NQ_V + NQ_OMEGA)
 
 _CONSTRUCTION_TOKEN = object()
 
@@ -64,9 +67,7 @@ def _object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
 
 def _strict_int(value: Any, label: str, *, minimum: int) -> int:
     if type(value) is not int or value < minimum:
-        raise DevelopmentCapacityError(
-            f"{label} must be an integer >= {minimum}"
-        )
+        raise DevelopmentCapacityError(f"{label} must be an integer >= {minimum}")
     return value
 
 
@@ -154,9 +155,7 @@ def _validate_layout_basis(value: Any) -> tuple[int, int, int, int]:
     for key, expected in labels_and_expected:
         actual = _strict_int(basis[key], f"layout_basis.{key}", minimum=1)
         if actual != expected:
-            raise DevelopmentCapacityError(
-                f"layout_basis.{key} must equal {expected}"
-            )
+            raise DevelopmentCapacityError(f"layout_basis.{key} must equal {expected}")
         parsed.append(actual)
     return parsed[0], parsed[1], parsed[2], parsed[3]
 
@@ -202,9 +201,7 @@ def _validate_channel(
             f"capacity.{channel}.derived.D must equal max(0, R-1)"
         )
     if selector_width != expected_selector_width:
-        raise DevelopmentCapacityError(
-            f"capacity.{channel}.derived.NQ must equal R+1"
-        )
+        raise DevelopmentCapacityError(f"capacity.{channel}.derived.NQ must equal R+1")
     _exact_rational(
         derived["L_max_sec"],
         f"capacity.{channel}.derived.L_max_sec",
@@ -473,6 +470,44 @@ def require_pinned_development_capacity(
     return value
 
 
+def development_capacity_from_dict(
+    value: Any,
+    raw_bytes_sha256: str,
+) -> DevelopmentCapacityContract:
+    """Parse one embedded capacity snapshot against its exact pinned bytes.
+
+    The capacity JSON intentionally does not contain its own digest.  Artifact
+    documents carry that digest beside the embedded snapshot, so callers must
+    provide it explicitly.  The returned object is the same pinned typed
+    authority used by :func:`load_development_capacity`.
+    """
+
+    _validate_development_capacity(value)
+    try:
+        digest = require_sha256(raw_bytes_sha256, "development capacity raw identity")
+    except IdentityError as exc:
+        raise DevelopmentCapacityError(str(exc)) from exc
+    if digest != DEVELOPMENT_CAPACITY_SHA256:
+        raise DevelopmentCapacityError(
+            "development capacity raw identity is not the pinned immutable v1 snapshot"
+        )
+    contract = _new_pinned_contract()
+    if value != contract.to_dict():
+        raise DevelopmentCapacityError(
+            "development capacity does not match its typed representation"
+        )
+    return require_pinned_development_capacity(contract)
+
+
+def validate_development_capacity_document(
+    value: Any,
+    raw_bytes_sha256: str,
+) -> None:
+    """Validate an embedded capacity snapshot and its pinned raw SHA."""
+
+    development_capacity_from_dict(value, raw_bytes_sha256)
+
+
 def load_development_capacity(
     path: Path | str,
 ) -> DevelopmentCapacityContract:
@@ -482,15 +517,35 @@ def load_development_capacity(
         value, payload = read_strict_json(path, label="development capacity")
     except IdentityError as exc:
         raise DevelopmentCapacityError(str(exc)) from exc
-    _validate_development_capacity(value)
     digest = sha256_bytes(payload)
-    if digest != DEVELOPMENT_CAPACITY_SHA256:
-        raise DevelopmentCapacityError(
-            "development capacity is not the pinned immutable v1 snapshot"
-        )
-    contract = _new_pinned_contract()
-    if value != contract.to_dict():
-        raise DevelopmentCapacityError(
-            "development capacity does not match its typed representation"
-        )
-    return require_pinned_development_capacity(contract)
+    return development_capacity_from_dict(value, digest)
+
+
+__all__ = [
+    "BASE_STATE_COUNT",
+    "CONTROL_COUNT",
+    "DEVELOPMENT_ARTIFACT_CLASS",
+    "DEVELOPMENT_CAPACITY_ID",
+    "DEVELOPMENT_CAPACITY_SCHEMA_VERSION",
+    "DEVELOPMENT_CAPACITY_SCOPE",
+    "DEVELOPMENT_CAPACITY_SHA256",
+    "DEVELOPMENT_CAPACITY_STATUS",
+    "D_OMEGA",
+    "D_V",
+    "EXECUTION_FIXED_SCALAR_COUNT",
+    "EXECUTION_SUBSEGMENT_SLOTS",
+    "NP_EXEC",
+    "NQ_OMEGA",
+    "NQ_V",
+    "NU",
+    "NX",
+    "R_OMEGA",
+    "R_V",
+    "ChannelCapacity",
+    "DevelopmentCapacityContract",
+    "DevelopmentCapacityError",
+    "development_capacity_from_dict",
+    "load_development_capacity",
+    "require_pinned_development_capacity",
+    "validate_development_capacity_document",
+]
