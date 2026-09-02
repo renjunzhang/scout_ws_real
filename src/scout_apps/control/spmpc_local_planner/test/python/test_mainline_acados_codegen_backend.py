@@ -19,11 +19,13 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from acados.mainline import acados_codegen_backend as codegen_backend
+from acados.mainline import acados_codegen_validation as codegen_validation
 from acados.mainline.acados_codegen_backend import (
     AcadosCodegenError,
     generate_and_build_acados,
     require_acados_codegen_result,
 )
+from acados.mainline.acados_codegen_validation import AcadosCodegenValidationError
 from acados.mainline.acados_ocp_adapter import assemble_acados_ocp
 from acados.mainline.artifact_files import (
     generated_tree_sha256,
@@ -312,6 +314,76 @@ class MainlineAcadosCodegenBoundaryTest(unittest.TestCase):
                 output,
                 verbose=False,
             )
+
+    def test_atomic_replace_uses_unique_same_directory_temporary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "metadata.json"
+            target.write_bytes(b"old")
+            target.chmod(0o640)
+            created: list[Path] = []
+            real_mkstemp = codegen_validation.tempfile.mkstemp
+
+            def record_temp(*args, **kwargs):
+                descriptor, name = real_mkstemp(*args, **kwargs)
+                created.append(Path(name))
+                return descriptor, name
+
+            with patch.object(
+                codegen_validation.tempfile,
+                "mkstemp",
+                side_effect=record_temp,
+            ):
+                codegen_validation._atomic_replace_regular(target, b"new")
+
+            self.assertEqual(target.read_bytes(), b"new")
+            self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+            self.assertEqual(len(created), 1)
+            self.assertEqual(created[0].parent, root)
+            self.assertNotEqual(created[0].name, ".metadata.json.canonical.tmp")
+            self.assertEqual(set(root.iterdir()), {target})
+
+    def test_atomic_replace_failure_cleans_only_its_own_temporary_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "metadata.json"
+            target.write_bytes(b"old")
+            collision = root / ".metadata.json.canonical.tmp"
+            collision.write_bytes(b"another process")
+            with (
+                patch.object(
+                    codegen_validation.os,
+                    "replace",
+                    side_effect=OSError("replace failed"),
+                ),
+                self.assertRaises(AcadosCodegenValidationError),
+            ):
+                codegen_validation._atomic_replace_regular(target, b"new")
+            self.assertEqual(collision.read_bytes(), b"another process")
+            self.assertEqual(target.read_bytes(), b"old")
+            self.assertEqual(
+                {path.name for path in root.iterdir()},
+                {"metadata.json", ".metadata.json.canonical.tmp"},
+            )
+
+    def test_atomic_replace_open_collision_does_not_delete_preexisting_file(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "metadata.json"
+            target.write_bytes(b"old")
+            collision = root / ".metadata.json.canonical.tmp"
+            collision.write_bytes(b"owned by another process")
+            with (
+                patch.object(
+                    codegen_validation.tempfile,
+                    "mkstemp",
+                    side_effect=FileExistsError("collision"),
+                ),
+                self.assertRaises(AcadosCodegenValidationError),
+            ):
+                codegen_validation._atomic_replace_regular(target, b"new")
+            self.assertEqual(collision.read_bytes(), b"owned by another process")
+            self.assertEqual(target.read_bytes(), b"old")
 
     @unittest.skipUnless(
         CASADI_AVAILABLE and ACADOS_AVAILABLE,

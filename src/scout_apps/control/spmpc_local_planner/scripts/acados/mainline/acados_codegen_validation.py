@@ -5,8 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 import struct
 import subprocess
+import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -404,25 +406,60 @@ def validate_generated_acados_json(
 
 
 def _atomic_replace_regular(path: Path, payload: bytes) -> None:
-    if path.is_symlink() or not path.is_file():
+    try:
+        target_metadata = path.lstat()
+    except OSError as exc:
+        raise AcadosCodegenValidationError(
+            f"cannot inspect generated metadata {path}: {exc}"
+        ) from exc
+    if not stat.S_ISREG(target_metadata.st_mode):
         raise AcadosCodegenValidationError(
             f"generated metadata is not a regular file: {path}"
         )
-    temporary = path.with_name(f".{path.name}.canonical.tmp")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
-    flags |= getattr(os, "O_CLOEXEC", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0)
+    target_mode = stat.S_IMODE(target_metadata.st_mode)
+    temporary: Path | None = None
+    temporary_identity: tuple[int, int] | None = None
+    descriptor: int | None = None
     try:
-        descriptor = os.open(temporary, flags, 0o644)
+        descriptor, temporary_name = tempfile.mkstemp(
+            prefix=f".{path.name}.canonical.",
+            suffix=".tmp",
+            dir=str(path.parent),
+        )
+        temporary = Path(temporary_name)
+        metadata = os.fstat(descriptor)
+        temporary_identity = (metadata.st_dev, metadata.st_ino)
+        os.fchmod(descriptor, target_mode)
         with os.fdopen(descriptor, "wb") as stream:
+            descriptor = None
             stream.write(payload)
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, path)
+        temporary = None
     except OSError as exc:
         raise AcadosCodegenValidationError(
             f"cannot canonicalize generated metadata {path}: {exc}"
         ) from exc
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+        if temporary is not None and temporary_identity is not None:
+            try:
+                current = os.stat(temporary, follow_symlinks=False)
+                current_identity = (current.st_dev, current.st_ino)
+                if (
+                    current_identity == temporary_identity
+                    and stat.S_ISREG(current.st_mode)
+                ):
+                    temporary.unlink()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                pass
 
 
 def canonicalize_generated_output_root(
