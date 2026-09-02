@@ -355,6 +355,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_reference_oracle.py
   )
   add_test(
+    NAME test_mainline_stage3d2c_cost_oracle
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_cost_oracle.py
+  )
+  add_test(
     NAME test_mainline_stage1_development_evidence
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_stage1_development_evidence.py
