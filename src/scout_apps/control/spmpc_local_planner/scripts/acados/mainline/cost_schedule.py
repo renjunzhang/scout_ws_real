@@ -274,6 +274,8 @@ def _strict_typed_equal(left: Any, right: Any) -> bool:
             _strict_typed_equal(left_item, right_item)
             for left_item, right_item in zip(left, right)
         )
+    if type(left) is float and left == 0.0 and right == 0.0:
+        return math.copysign(1.0, left) == math.copysign(1.0, right)
     return bool(left == right)
 
 

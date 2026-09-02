@@ -234,6 +234,13 @@ class MainlineCostScheduleTest(unittest.TestCase):
         with self.assertRaisesRegex(LiquidCostScheduleError, "canonical"):
             require_liquid_cost_schedule(forged)
 
+        negative_zero = copy.copy(schedule)
+        coefficients = list(schedule.liquid_run_coeff)
+        coefficients[-1] = -0.0
+        object.__setattr__(negative_zero, "liquid_run_coeff", tuple(coefficients))
+        with self.assertRaisesRegex(LiquidCostScheduleError, "canonical"):
+            require_liquid_cost_schedule(negative_zero)
+
     def test_module_is_independent_of_old_contracts_and_solver_dependencies(
         self,
     ) -> None:

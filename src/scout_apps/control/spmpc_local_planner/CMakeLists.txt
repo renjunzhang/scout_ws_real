@@ -340,6 +340,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_runtime_schedule.py
   )
   add_test(
+    NAME test_mainline_stage3d2b_runtime_parameter_assembler
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_runtime_parameter_assembler.py
+  )
+  add_test(
     NAME test_mainline_stage1_development_evidence
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_stage1_development_evidence.py
