@@ -16,6 +16,9 @@ from .acados_backend import require_acados_backend as _require_acados_backend
 from .acados_ocp_contract import AcadosOcpAssembly, _build_acados_ocp_assembly
 from .acados_ocp_validation import validate_consistent_ocp
 from .acados_solver_options_adapter import apply_solver_options
+from .acados_solver_options_identity import (
+    acados_ocp_solver_options_baseline_sha256,
+)
 from .casadi_graph_contract import ARTIFACT_STATUS as GRAPH_ARTIFACT_STATUS
 from .casadi_graph_contract import GRAPH_STATUS, CasadiGraphBundle
 from .identity import IdentityError, sha256_json
@@ -163,6 +166,9 @@ def assemble_acados_ocp(
         validate_consistent_ocp(backend, ocp, checked_graph, checked_options)
 
         bounds_snapshot_sha256 = sha256_json(checked_graph.bounds.to_dict())
+        backend_solver_options_baseline_sha256 = (
+            acados_ocp_solver_options_baseline_sha256(ocp)
+        )
         acados_git_commit = str(ocp.code_gen_opts.acados_version or "unknown")
         interface_sha256, backend_binding_status = read_acados_backend_identity(
             backend,
@@ -182,6 +188,9 @@ def assemble_acados_ocp(
             graph_semantic_sha256=checked_graph.graph_semantic_sha256,
             bounds_snapshot_sha256=bounds_snapshot_sha256,
             solver_options_semantic_sha256=checked_options.semantic_sha256,
+            backend_solver_options_baseline_sha256=(
+                backend_solver_options_baseline_sha256
+            ),
             capacity_contract_sha256=checked_graph.capacity_contract_sha256,
             development_layout_sha256=checked_graph.development_layout_sha256,
             solver_parameter_layout_sha256=(

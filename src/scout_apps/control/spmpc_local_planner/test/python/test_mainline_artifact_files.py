@@ -24,7 +24,9 @@ from acados.mainline.artifact_files import (
     GeneratedFileRecord,
     generated_file_records_from_dict,
     generated_tree_sha256,
+    inventory_codegen_tree,
     inventory_generated_tree,
+    prepare_empty_codegen_directory,
     solver_library_record,
     validate_generated_tree,
 )
@@ -44,6 +46,7 @@ class MainlineArtifactFilesTest(unittest.TestCase):
         (self.root / "Makefile").write_bytes(b"ocp_shared_lib:\n\t@true\n")
         (self.root / "model").mkdir()
         (self.root / "model" / "disc_dyn.c").write_bytes(b"int dyn(void){return 0;}\n")
+        (self.root / "model" / "disc_dyn.h").write_bytes(b"int dyn(void);\n")
         (self.root / SOLVER_LIBRARY_BASENAMES[0]).write_bytes(b"ELF-mainline-solver")
 
     def tearDown(self) -> None:
@@ -53,7 +56,7 @@ class MainlineArtifactFilesTest(unittest.TestCase):
         records = inventory_generated_tree(self.root)
         paths = tuple(item.relative_path for item in records)
         self.assertEqual(paths, tuple(sorted(paths)))
-        self.assertEqual(len(records), 4)
+        self.assertEqual(len(records), 5)
         self.assertEqual(sum(item.role == ACADOS_JSON_ROLE for item in records), 1)
         self.assertEqual(sum(item.role == BUILD_RECIPE_ROLE for item in records), 1)
         library = solver_library_record(records)
@@ -78,6 +81,29 @@ class MainlineArtifactFilesTest(unittest.TestCase):
         (self.root / MODEL_CONTRACT_FILENAME).write_bytes(b"manifest")
         (self.root / GENERATED_HEADER_FILENAME).write_bytes(b"header")
         self.assertEqual(inventory_generated_tree(self.root), baseline)
+
+    def test_empty_codegen_directory_is_explicit_and_single_purpose(self) -> None:
+        created = self.root / "empty" / "generated"
+        (self.root / "empty").mkdir()
+        self.assertEqual(prepare_empty_codegen_directory(created), created)
+        self.assertTrue(created.is_dir())
+        self.assertEqual(prepare_empty_codegen_directory(created), created)
+        (created / "sentinel").write_bytes(b"occupied")
+        with self.assertRaises(ArtifactFilesError):
+            prepare_empty_codegen_directory(created)
+        with self.assertRaises(ArtifactFilesError):
+            prepare_empty_codegen_directory(Path("relative/generated"))
+
+    def test_prebuild_inventory_requires_sources_and_forbids_solver_library(
+        self,
+    ) -> None:
+        library = self.root / SOLVER_LIBRARY_BASENAMES[0]
+        library.unlink()
+        records = inventory_codegen_tree(self.root)
+        self.assertFalse(any(item.role == SOLVER_LIBRARY_ROLE for item in records))
+        library.write_bytes(b"ELF-mainline-solver")
+        with self.assertRaises(ArtifactFilesError):
+            inventory_codegen_tree(self.root)
 
     def test_tamper_missing_extra_and_symlink_fail_closed(self) -> None:
         baseline = inventory_generated_tree(self.root)

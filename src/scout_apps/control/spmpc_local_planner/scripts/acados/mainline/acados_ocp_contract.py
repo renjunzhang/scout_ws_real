@@ -5,6 +5,11 @@ from __future__ import annotations
 from dataclasses import InitVar, dataclass
 from typing import Any
 
+from .acados_solver_options_identity import (
+    ACADOS_D4_SOLVER_OPTION_FIELDS,
+    ACADOS_SOLVER_OPTIONS_BASELINE_SCHEMA,
+    ACADOS_SOLVER_OPTIONS_BASELINE_SCOPE,
+)
 from .identity import IdentityError, require_sha256, sha256_json
 from .model_contract import MODEL_ID
 
@@ -29,7 +34,9 @@ NODE_COVERAGE_POLICY = "EXPLICIT_INITIAL_PATH_AND_TERMINAL_FIELDS"
 CONTINUOUS_DYNAMICS_POLICY = "FORBIDDEN_DISCRETE_MAP_ONLY"
 DIAGNOSTIC_RESIDUAL_POLICY = "NOT_CONNECTED_TO_ACADOS_CONSTRAINTS"
 LIQUID_HARD_CONSTRAINT_POLICY = "DISABLED_FOR_B0_AND_BSLOSH"
-UNLISTED_SOLVER_OPTIONS_POLICY = "PINNED_BY_RECORDED_ACADOS_GIT_COMMIT"
+UNLISTED_SOLVER_OPTIONS_POLICY = (
+    "FROZEN_BY_COMPLETE_BACKEND_OPTIONS_IDENTITY_EXCEPT_D4_FIELDS"
+)
 CODEGEN_OPTIONS_POLICY = "OUT_OF_SCOPE_UNTIL_ARTIFACT_GENERATION_STAGE"
 ASSEMBLY_SIDE_EFFECT_POLICY = "READS_BACKEND_METADATA_NO_CODEGEN_OR_OUTPUT_WRITES"
 
@@ -53,6 +60,7 @@ class AcadosOcpAssembly:
     graph_semantic_sha256: str
     bounds_snapshot_sha256: str
     solver_options_semantic_sha256: str
+    backend_solver_options_baseline_sha256: str
     capacity_contract_sha256: str
     development_layout_sha256: str
     solver_parameter_layout_sha256: str
@@ -86,59 +94,7 @@ class AcadosOcpAssembly:
     def __post_init__(self, _construction_token: object) -> None:
         if _construction_token is not _ASSEMBLY_TOKEN:
             raise ValueError("AcadosOcpAssembly requires assemble_acados_ocp")
-        if self.schema_version != ACADOS_OCP_SCHEMA or self.model_id != MODEL_ID:
-            raise ValueError("Acados OCP schema/model identity is not canonical")
-        if (
-            self.ocp_status != OCP_STATUS
-            or self.artifact_status != OCP_ARTIFACT_STATUS
-            or self.promotion_status != OCP_PROMOTION_STATUS
-        ):
-            raise ValueError("Acados OCP status is not canonical")
-        if self.horizon_steps <= 0 or min(self.nx, self.nu, self.np) <= 0:
-            raise ValueError("Acados OCP dimensions must be positive")
-        if self.acados_backend_binding_status not in {
-            "MATCHED_SOURCE_ROOT",
-            "UNRESOLVED_SOURCE_ROOT_MISMATCH",
-        }:
-            raise ValueError("Acados backend binding status is invalid")
-        for order, lower, upper, label in (
-            (
-                self.stage_constraint_order,
-                self.stage_constraint_lower,
-                self.stage_constraint_upper,
-                "stage constraint",
-            ),
-            (
-                self.terminal_constraint_order,
-                self.terminal_constraint_lower,
-                self.terminal_constraint_upper,
-                "terminal constraint",
-            ),
-            (self.control_order, self.control_lower, self.control_upper, "control"),
-        ):
-            if len(order) == 0 or len(order) != len(lower) or len(order) != len(upper):
-                raise ValueError(f"Acados OCP {label} dimensions are inconsistent")
-        if len(self.control_indices) != len(self.control_order):
-            raise ValueError("Acados OCP control indices are inconsistent")
-        for name in (
-            "graph_semantic_sha256",
-            "bounds_snapshot_sha256",
-            "solver_options_semantic_sha256",
-            "capacity_contract_sha256",
-            "development_layout_sha256",
-            "solver_parameter_layout_sha256",
-            "acados_interface_source_sha256",
-            "dynamics_expression_sha256",
-            "stage_cost_expression_sha256",
-            "terminal_cost_expression_sha256",
-            "stage_h_expression_sha256",
-            "terminal_h_expression_sha256",
-            "semantic_sha256",
-        ):
-            try:
-                require_sha256(getattr(self, name), f"Acados OCP {name}")
-            except IdentityError as exc:
-                raise ValueError("Acados OCP identity is invalid") from exc
+        _validate_acados_ocp_assembly_structure(self)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize stable assembly metadata without backend object reprs."""
@@ -149,6 +105,68 @@ class AcadosOcpAssembly:
             "scope": OCP_IDENTITY_SCOPE,
         }
         return payload
+
+
+def _validate_acados_ocp_assembly_structure(assembly: AcadosOcpAssembly) -> None:
+    if assembly.schema_version != ACADOS_OCP_SCHEMA or assembly.model_id != MODEL_ID:
+        raise ValueError("Acados OCP schema/model identity is not canonical")
+    if (
+        assembly.ocp_status != OCP_STATUS
+        or assembly.artifact_status != OCP_ARTIFACT_STATUS
+        or assembly.promotion_status != OCP_PROMOTION_STATUS
+    ):
+        raise ValueError("Acados OCP status is not canonical")
+    if assembly.horizon_steps <= 0 or min(assembly.nx, assembly.nu, assembly.np) <= 0:
+        raise ValueError("Acados OCP dimensions must be positive")
+    if assembly.acados_backend_binding_status not in {
+        "MATCHED_SOURCE_ROOT",
+        "UNRESOLVED_SOURCE_ROOT_MISMATCH",
+    }:
+        raise ValueError("Acados backend binding status is invalid")
+    for order, lower, upper, label in (
+        (
+            assembly.stage_constraint_order,
+            assembly.stage_constraint_lower,
+            assembly.stage_constraint_upper,
+            "stage constraint",
+        ),
+        (
+            assembly.terminal_constraint_order,
+            assembly.terminal_constraint_lower,
+            assembly.terminal_constraint_upper,
+            "terminal constraint",
+        ),
+        (
+            assembly.control_order,
+            assembly.control_lower,
+            assembly.control_upper,
+            "control",
+        ),
+    ):
+        if len(order) == 0 or len(order) != len(lower) or len(order) != len(upper):
+            raise ValueError(f"Acados OCP {label} dimensions are inconsistent")
+    if len(assembly.control_indices) != len(assembly.control_order):
+        raise ValueError("Acados OCP control indices are inconsistent")
+    for name in (
+        "graph_semantic_sha256",
+        "bounds_snapshot_sha256",
+        "solver_options_semantic_sha256",
+        "backend_solver_options_baseline_sha256",
+        "capacity_contract_sha256",
+        "development_layout_sha256",
+        "solver_parameter_layout_sha256",
+        "acados_interface_source_sha256",
+        "dynamics_expression_sha256",
+        "stage_cost_expression_sha256",
+        "terminal_cost_expression_sha256",
+        "stage_h_expression_sha256",
+        "terminal_h_expression_sha256",
+        "semantic_sha256",
+    ):
+        try:
+            require_sha256(getattr(assembly, name), f"Acados OCP {name}")
+        except IdentityError as exc:
+            raise ValueError("Acados OCP identity is invalid") from exc
 
 
 def _assembly_payload(assembly: AcadosOcpAssembly) -> dict[str, Any]:
@@ -177,6 +195,12 @@ def _assembly_payload(assembly: AcadosOcpAssembly) -> dict[str, Any]:
             "graph_semantic_sha256": assembly.graph_semantic_sha256,
             "bounds_snapshot_sha256": assembly.bounds_snapshot_sha256,
             "solver_options_semantic_sha256": (assembly.solver_options_semantic_sha256),
+            "backend_solver_options_baseline": {
+                "schema_version": ACADOS_SOLVER_OPTIONS_BASELINE_SCHEMA,
+                "scope": ACADOS_SOLVER_OPTIONS_BASELINE_SCOPE,
+                "excluded_d4_fields": list(ACADOS_D4_SOLVER_OPTION_FIELDS),
+                "sha256": assembly.backend_solver_options_baseline_sha256,
+            },
             "capacity_contract_raw_bytes_sha256": (assembly.capacity_contract_sha256),
             "development_layout_semantic_sha256": (assembly.development_layout_sha256),
             "solver_parameter_layout_semantic_sha256": (
@@ -284,6 +308,7 @@ def _build_acados_ocp_assembly(
     graph_semantic_sha256: str,
     bounds_snapshot_sha256: str,
     solver_options_semantic_sha256: str,
+    backend_solver_options_baseline_sha256: str,
     capacity_contract_sha256: str,
     development_layout_sha256: str,
     solver_parameter_layout_sha256: str,
@@ -316,6 +341,9 @@ def _build_acados_ocp_assembly(
         "graph_semantic_sha256": graph_semantic_sha256,
         "bounds_snapshot_sha256": bounds_snapshot_sha256,
         "solver_options_semantic_sha256": solver_options_semantic_sha256,
+        "backend_solver_options_baseline_sha256": (
+            backend_solver_options_baseline_sha256
+        ),
         "capacity_contract_sha256": capacity_contract_sha256,
         "development_layout_sha256": development_layout_sha256,
         "solver_parameter_layout_sha256": solver_parameter_layout_sha256,
@@ -352,6 +380,21 @@ def _build_acados_ocp_assembly(
     )
 
 
+def require_acados_ocp_assembly(value: Any) -> AcadosOcpAssembly:
+    """Reject wrong-type or force-mutated OCP assembly metadata."""
+
+    if type(value) is not AcadosOcpAssembly:
+        raise ValueError("assembly must be the exact AcadosOcpAssembly type")
+    try:
+        _validate_acados_ocp_assembly_structure(value)
+        semantic_sha256 = sha256_json(_assembly_payload(value))
+    except (AttributeError, IdentityError, TypeError, ValueError) as exc:
+        raise ValueError("Acados OCP assembly metadata is malformed") from exc
+    if semantic_sha256 != value.semantic_sha256:
+        raise ValueError("Acados OCP assembly semantic identity is inconsistent")
+    return value
+
+
 __all__ = [
     "ACADOS_INTERFACE_CONTRACT",
     "ACADOS_INTERFACE_SOURCE_SCHEMA",
@@ -376,4 +419,5 @@ __all__ = [
     "TERMINAL_H_IDENTITY_FUNCTION",
     "UNLISTED_SOLVER_OPTIONS_POLICY",
     "AcadosOcpAssembly",
+    "require_acados_ocp_assembly",
 ]

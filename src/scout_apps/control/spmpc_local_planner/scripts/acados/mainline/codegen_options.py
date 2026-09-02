@@ -8,6 +8,7 @@ from dataclasses import InitVar, dataclass
 from fractions import Fraction
 from typing import Any
 
+from .acados_solver_options_identity import ACADOS_D4_SOLVER_OPTION_FIELDS
 from .development_capacity import DevelopmentCapacityContract
 from .development_layout import (
     DevelopmentLayout,
@@ -24,7 +25,7 @@ CODEGEN_OPTIONS_STATUS = "DEV_UNVALIDATED"
 CODEGEN_ARTIFACT_STATUS = "NO_ARTIFACT"
 CODEGEN_TARGET_PERFORMANCE_STATUS = "NOT_BENCHMARKED"
 CODEGEN_BACKEND_CONTRACT = "acados_template_v0.5.4_compatible"
-CODEGEN_API = "AcadosOcpSolver.generate+AcadosOcpSolver.build"
+CODEGEN_API = "AcadosOcpSolver.generate+FIXED_ABSOLUTE_MAKE"
 
 EXT_FUN_COMPILE_FLAGS = "-O2"
 EXT_FUN_EXPAND_CONSTR = False
@@ -44,15 +45,36 @@ CMAKE_BUILDER = "NONE"
 OUTPUT_DIRECTORY_POLICY = "EXPLICIT_NEW_OR_EMPTY_DIRECTORY_NO_SYMLINK"
 SOURCE_ROOT_BINDING_POLICY = "REQUIRE_MATCHED_SOURCE_ROOT"
 GIT_DIRTY_POLICY = "RECORDED_NOT_GATED"
-COMPILER_ENVIRONMENT_POLICY = "RECORDED_NOT_GATED"
+COMPILER_ENVIRONMENT_POLICY = "CAPTURED_ONCE_AND_REQUIRED_UNCHANGED_FOR_CODEGEN"
 COMPILER_ENVIRONMENT_NAMES = (
+    "PATH",
     "CC",
     "CXX",
+    "AR",
+    "RANLIB",
+    "LD",
+    "AS",
+    "NM",
+    "STRIP",
     "CFLAGS",
     "CXXFLAGS",
     "CPPFLAGS",
     "LDFLAGS",
     "MAKEFLAGS",
+    "GNUMAKEFLAGS",
+    "MFLAGS",
+    "MAKEFILES",
+    "MAKEOVERRIDES",
+    "LIBRARY_PATH",
+    "CPATH",
+    "C_INCLUDE_PATH",
+    "CPLUS_INCLUDE_PATH",
+    "COMPILER_PATH",
+    "GCC_EXEC_PREFIX",
+    "LD_RUN_PATH",
+    "PKG_CONFIG_PATH",
+    "SOURCE_DATE_EPOCH",
+    "ZERO_AR_DATE",
 )
 GENERATED_FILE_INVENTORY_POLICY = (
     "ALL_REGULAR_FILES_EXCEPT_MODEL_CONTRACT_JSON_AND_GENERATED_HEADER"
@@ -96,12 +118,10 @@ def _explicit_tolerance(value: Any, label: str, upper: float) -> float:
     return result
 
 
-def _compiler_environment() -> tuple[tuple[str, str], ...]:
+def _compiler_environment() -> tuple[tuple[str, str | None], ...]:
     """Capture only inherited build variables that can alter compilation."""
 
-    return tuple(
-        (name, os.environ.get(name, "")) for name in COMPILER_ENVIRONMENT_NAMES
-    )
+    return tuple((name, os.environ.get(name)) for name in COMPILER_ENVIRONMENT_NAMES)
 
 
 @dataclass(frozen=True)
@@ -114,7 +134,7 @@ class CodegenOptionsSnapshot:
     release_period_sec: Fraction
     integer_snap_tolerance_sec: float
     duration_tolerance_sec: float
-    compiler_environment: tuple[tuple[str, str], ...]
+    compiler_environment: tuple[tuple[str, str | None], ...]
     semantic_sha256: str
     _construction_token: InitVar[object] = None
     schema_version: str = CODEGEN_OPTIONS_SCHEMA
@@ -153,29 +173,7 @@ class CodegenOptionsSnapshot:
             raise CodegenOptionsError(
                 "CodegenOptionsSnapshot requires build_codegen_options_snapshot"
             )
-        if (
-            self.schema_version != CODEGEN_OPTIONS_SCHEMA
-            or self.status != CODEGEN_OPTIONS_STATUS
-            or self.artifact_status != CODEGEN_ARTIFACT_STATUS
-            or self.target_performance_status != CODEGEN_TARGET_PERFORMANCE_STATUS
-            or self.model_id != MODEL_ID
-        ):
-            raise CodegenOptionsError("codegen option status or identity drifted")
-        if (
-            tuple(name for name, _ in self.compiler_environment)
-            != COMPILER_ENVIRONMENT_NAMES
-        ):
-            raise CodegenOptionsError("compiler environment keys are not canonical")
-        if any(type(value) is not str for _, value in self.compiler_environment):
-            raise CodegenOptionsError("compiler environment values must be strings")
-        try:
-            require_sha256(
-                self.development_layout_sha256,
-                "codegen development layout identity",
-            )
-            require_sha256(self.semantic_sha256, "codegen option identity")
-        except IdentityError as exc:
-            raise CodegenOptionsError(str(exc)) from exc
+        _validate_codegen_options_structure(self)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the canonical JSON-compatible policy document."""
@@ -186,6 +184,40 @@ class CodegenOptionsSnapshot:
             "scope": CODEGEN_OPTIONS_SCOPE,
         }
         return payload
+
+
+def _validate_codegen_options_structure(snapshot: CodegenOptionsSnapshot) -> None:
+    if (
+        snapshot.schema_version != CODEGEN_OPTIONS_SCHEMA
+        or snapshot.status != CODEGEN_OPTIONS_STATUS
+        or snapshot.artifact_status != CODEGEN_ARTIFACT_STATUS
+        or snapshot.target_performance_status != CODEGEN_TARGET_PERFORMANCE_STATUS
+        or snapshot.model_id != MODEL_ID
+    ):
+        raise CodegenOptionsError("codegen option status or identity drifted")
+    if type(snapshot.compiler_environment) is not tuple or any(
+        type(item) is not tuple or len(item) != 2
+        for item in snapshot.compiler_environment
+    ):
+        raise CodegenOptionsError("compiler environment must be an immutable mapping")
+    if (
+        tuple(name for name, _ in snapshot.compiler_environment)
+        != COMPILER_ENVIRONMENT_NAMES
+    ):
+        raise CodegenOptionsError("compiler environment keys are not canonical")
+    if any(
+        value is not None and type(value) is not str
+        for _, value in snapshot.compiler_environment
+    ):
+        raise CodegenOptionsError("compiler environment values must be strings or null")
+    try:
+        require_sha256(
+            snapshot.development_layout_sha256,
+            "codegen development layout identity",
+        )
+        require_sha256(snapshot.semantic_sha256, "codegen option identity")
+    except IdentityError as exc:
+        raise CodegenOptionsError(str(exc)) from exc
 
 
 def _snapshot_payload(snapshot: CodegenOptionsSnapshot) -> dict[str, Any]:
@@ -339,7 +371,10 @@ def require_codegen_options_snapshot(value: Any) -> CodegenOptionsSnapshot:
             "codegen_options must be the exact CodegenOptionsSnapshot type"
         )
     try:
+        _validate_codegen_options_structure(value)
         actual_sha256 = sha256_json(_snapshot_payload(value))
+    except CodegenOptionsError:
+        raise
     except (AttributeError, IdentityError, TypeError, ValueError) as exc:
         raise CodegenOptionsError("typed codegen option snapshot is malformed") from exc
     if actual_sha256 != value.semantic_sha256:
@@ -347,22 +382,70 @@ def require_codegen_options_snapshot(value: Any) -> CodegenOptionsSnapshot:
     return value
 
 
-def apply_codegen_options(target: Any, snapshot: CodegenOptionsSnapshot) -> None:
-    """Apply every generation-affecting Acados solver option explicitly."""
+def require_codegen_compiler_environment(
+    snapshot: Any,
+) -> tuple[tuple[str, str | None], ...]:
+    """Require the captured build environment immediately before file writes."""
 
     checked = require_codegen_options_snapshot(snapshot)
-    for name in (
-        "ext_fun_compile_flags",
-        "ext_fun_expand_constr",
-        "ext_fun_expand_cost",
-        "ext_fun_expand_dyn",
-        "ext_fun_expand_precompute",
-        "custom_update_filename",
-        "custom_update_header_filename",
-        "custom_update_copy",
-    ):
-        setattr(target, name, getattr(checked, name))
-    target.custom_templates = [tuple(item) for item in checked.custom_templates]
+    actual = _compiler_environment()
+    if actual != checked.compiler_environment:
+        expected = dict(checked.compiler_environment)
+        current = dict(actual)
+        changed = [
+            name
+            for name in COMPILER_ENVIRONMENT_NAMES
+            if expected[name] != current[name]
+        ]
+        raise CodegenOptionsError(
+            "compiler environment changed after the D4 snapshot: " + ", ".join(changed)
+        )
+    return actual
+
+
+def validate_applied_acados_solver_codegen_options(
+    target: Any,
+    snapshot: CodegenOptionsSnapshot,
+) -> None:
+    """Reject a wrong target or a backend setter that changed the policy."""
+
+    checked = require_codegen_options_snapshot(snapshot)
+    for name in ACADOS_D4_SOLVER_OPTION_FIELDS:
+        try:
+            actual = getattr(target, name)
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise CodegenOptionsError(
+                "codegen options target must be an Acados solver-options object"
+            ) from exc
+        expected = (
+            [tuple(item) for item in checked.custom_templates]
+            if name == "custom_templates"
+            else getattr(checked, name)
+        )
+        if type(actual) is not type(expected) or actual != expected:
+            raise CodegenOptionsError(
+                f"Acados solver codegen option {name} differs from the snapshot"
+            )
+
+
+def apply_acados_solver_codegen_options(
+    target: Any,
+    snapshot: CodegenOptionsSnapshot,
+) -> None:
+    """Apply codegen fields only to ``ocp.solver_options`` and verify them."""
+
+    checked = require_codegen_options_snapshot(snapshot)
+    try:
+        for name in ACADOS_D4_SOLVER_OPTION_FIELDS:
+            getattr(target, name)
+        for name in ACADOS_D4_SOLVER_OPTION_FIELDS[:-1]:
+            setattr(target, name, getattr(checked, name))
+        target.custom_templates = [tuple(item) for item in checked.custom_templates]
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise CodegenOptionsError(
+            "codegen options target must be a writable Acados solver-options object"
+        ) from exc
+    validate_applied_acados_solver_codegen_options(target, checked)
 
 
 __all__ = [
@@ -378,6 +461,7 @@ __all__ = [
     "CODEGEN_OPTIONS_STATUS",
     "CODEGEN_TARGET_PERFORMANCE_STATUS",
     "COMPILER_ENVIRONMENT_NAMES",
+    "COMPILER_ENVIRONMENT_POLICY",
     "EXT_FUN_COMPILE_FLAGS",
     "GENERATED_FILE_INVENTORY_POLICY",
     "GENERATED_HEADER_FILENAME",
@@ -387,7 +471,9 @@ __all__ = [
     "SOURCE_ROOT_BINDING_POLICY",
     "CodegenOptionsError",
     "CodegenOptionsSnapshot",
-    "apply_codegen_options",
+    "apply_acados_solver_codegen_options",
     "build_codegen_options_snapshot",
+    "require_codegen_compiler_environment",
     "require_codegen_options_snapshot",
+    "validate_applied_acados_solver_codegen_options",
 ]

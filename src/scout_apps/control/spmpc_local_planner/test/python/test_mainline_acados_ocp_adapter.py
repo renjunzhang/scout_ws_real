@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import importlib.util
 import json
 import os
@@ -31,6 +32,10 @@ from acados.mainline.acados_ocp_contract import (
     INITIAL_STATE_POLICY,
     OCP_IDENTITY_SCOPE,
     PARAMETER_INITIALIZATION_POLICY,
+    require_acados_ocp_assembly,
+)
+from acados.mainline.acados_solver_options_identity import (
+    require_acados_ocp_solver_options_baseline,
 )
 from acados.mainline.casadi_adapter import build_casadi_graph
 from acados.mainline.constraints_oracle import ConstraintBounds
@@ -103,6 +108,7 @@ class MainlineAcadosOcpLazyBoundaryTest(unittest.TestCase):
             "acados_ocp_contract.py",
             "acados_ocp_validation.py",
             "acados_solver_options_adapter.py",
+            "acados_solver_options_identity.py",
         ):
             source = MAINLINE_ROOT / source_name
             tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
@@ -372,6 +378,12 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
             document["source_identity"]["solver_options_semantic_sha256"],
             self.options.semantic_sha256,
         )
+        backend_options = document["source_identity"]["backend_solver_options_baseline"]
+        self.assertEqual(
+            backend_options["sha256"],
+            assembly.backend_solver_options_baseline_sha256,
+        )
+        self.assertEqual(len(backend_options["sha256"]), 64)
         self.assertNotEqual(document["backend"]["acados_git_commit"], "unknown")
         self.assertEqual(
             document["backend"]["python_interface_and_library_binding"],
@@ -457,7 +469,36 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
         first = self._assemble()
         second = self._assemble()
         self.assertEqual(first.semantic_sha256, second.semantic_sha256)
+        self.assertEqual(
+            first.backend_solver_options_baseline_sha256,
+            second.backend_solver_options_baseline_sha256,
+        )
         self.assertEqual(first.to_dict(), second.to_dict())
+
+    def test_unlisted_backend_solver_option_mutation_is_detected(self) -> None:
+        assembly = self._assemble()
+        require_acados_ocp_solver_options_baseline(
+            assembly.ocp,
+            assembly.backend_solver_options_baseline_sha256,
+        )
+        assembly.ocp.solver_options.qp_solver_mu0 = 1.0
+        with self.assertRaises(ValueError):
+            require_acados_ocp_solver_options_baseline(
+                assembly.ocp,
+                assembly.backend_solver_options_baseline_sha256,
+            )
+
+    def test_assembly_require_rechecks_structure_after_synced_hash_forgery(
+        self,
+    ) -> None:
+        assembly = self._assemble()
+        forged = copy.copy(assembly)
+        object.__setattr__(forged, "horizon_steps", 0)
+        forged_document = forged.to_dict()
+        forged_document.pop("semantic_identity")
+        object.__setattr__(forged, "semantic_sha256", sha256_json(forged_document))
+        with self.assertRaises(ValueError):
+            require_acados_ocp_assembly(forged)
 
     def test_wrong_option_type_is_rejected_before_backend_work(self) -> None:
         with (

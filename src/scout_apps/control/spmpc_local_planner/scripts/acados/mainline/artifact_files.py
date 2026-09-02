@@ -184,6 +184,42 @@ def _checked_root(value: Path | str) -> Path:
     return root
 
 
+def prepare_empty_codegen_directory(value: Path | str) -> Path:
+    """Create or accept one explicit empty directory without following links."""
+
+    if not isinstance(value, (str, Path)):
+        raise ArtifactFilesError("codegen directory must be str or Path")
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        raise ArtifactFilesError("codegen directory must be an absolute path")
+    if ".." in candidate.parts:
+        raise ArtifactFilesError("codegen directory cannot contain parent traversal")
+    if candidate.is_symlink():
+        raise ArtifactFilesError("codegen directory cannot be a symbolic link")
+    if not candidate.exists():
+        parent = _checked_root(candidate.parent)
+        try:
+            candidate.mkdir(mode=0o755)
+        except OSError as exc:
+            raise ArtifactFilesError(
+                f"cannot create codegen directory {candidate}: {exc}"
+            ) from exc
+        checked = _checked_root(candidate)
+        if checked.parent != parent:
+            raise ArtifactFilesError("created codegen directory escaped its parent")
+    else:
+        checked = _checked_root(candidate)
+    try:
+        with os.scandir(checked) as entries:
+            if next(entries, None) is not None:
+                raise ArtifactFilesError("codegen directory must be empty")
+    except OSError as exc:
+        raise ArtifactFilesError(
+            f"cannot enumerate codegen directory {checked}: {exc}"
+        ) from exc
+    return checked
+
+
 def _regular_files(root: Path) -> tuple[Path, ...]:
     files: list[Path] = []
     pending = [root]
@@ -219,9 +255,7 @@ def _regular_files(root: Path) -> tuple[Path, ...]:
     return tuple(sorted(files, key=lambda path: path.relative_to(root).as_posix()))
 
 
-def inventory_generated_tree(root: Path | str) -> tuple[GeneratedFileRecord, ...]:
-    """Hash every generated/build file except the non-circular contract outputs."""
-
+def _inventory_records(root: Path | str) -> tuple[GeneratedFileRecord, ...]:
     checked_root = _checked_root(root)
     records: list[GeneratedFileRecord] = []
     for path in _regular_files(checked_root):
@@ -232,6 +266,12 @@ def inventory_generated_tree(root: Path | str) -> tuple[GeneratedFileRecord, ...
     records.sort(key=lambda item: item.relative_path)
     if len({item.relative_path for item in records}) != len(records):
         raise ArtifactFilesError("generated file inventory contains duplicate paths")
+    return tuple(records)
+
+
+def _validate_codegen_files(
+    records: tuple[GeneratedFileRecord, ...],
+) -> None:
     if sum(item.role == ACADOS_JSON_ROLE for item in records) != 1:
         raise ArtifactFilesError(
             "generated tree must contain the canonical Acados JSON"
@@ -240,11 +280,34 @@ def inventory_generated_tree(root: Path | str) -> tuple[GeneratedFileRecord, ...
         raise ArtifactFilesError(
             "generated tree must contain exactly one root Makefile"
         )
+    if not any(item.role == GENERATED_C_SOURCE_ROLE for item in records):
+        raise ArtifactFilesError("generated tree must contain C source files")
+    if not any(item.role == GENERATED_C_HEADER_ROLE for item in records):
+        raise ArtifactFilesError("generated tree must contain C header files")
+
+
+def inventory_codegen_tree(root: Path | str) -> tuple[GeneratedFileRecord, ...]:
+    """Hash and validate the generated source tree before compilation."""
+
+    records = _inventory_records(root)
+    _validate_codegen_files(records)
+    if any(item.role == SOLVER_LIBRARY_ROLE for item in records):
+        raise ArtifactFilesError(
+            "pre-build generated tree must not contain a solver shared library"
+        )
+    return records
+
+
+def inventory_generated_tree(root: Path | str) -> tuple[GeneratedFileRecord, ...]:
+    """Hash every generated/build file except the non-circular contract outputs."""
+
+    records = _inventory_records(root)
+    _validate_codegen_files(records)
     if sum(item.role == SOLVER_LIBRARY_ROLE for item in records) != 1:
         raise ArtifactFilesError(
             "generated tree must contain exactly one canonical solver shared library"
         )
-    return tuple(records)
+    return records
 
 
 def generated_file_records_from_dict(value: Any) -> tuple[GeneratedFileRecord, ...]:
@@ -280,13 +343,11 @@ def generated_file_records_from_dict(value: Any) -> tuple[GeneratedFileRecord, .
         raise ArtifactFilesError("generated file inventory must be path-sorted")
     if len({item.relative_path for item in records}) != len(records):
         raise ArtifactFilesError("generated file inventory contains duplicate paths")
-    if sum(item.role == ACADOS_JSON_ROLE for item in records) != 1:
-        raise ArtifactFilesError("generated inventory has no canonical Acados JSON")
-    if sum(item.role == BUILD_RECIPE_ROLE for item in records) != 1:
-        raise ArtifactFilesError("generated inventory has no canonical Makefile")
+    checked_records = tuple(records)
+    _validate_codegen_files(checked_records)
     if sum(item.role == SOLVER_LIBRARY_ROLE for item in records) != 1:
         raise ArtifactFilesError("generated inventory has no unique solver library")
-    return tuple(records)
+    return checked_records
 
 
 def generated_tree_sha256(records: tuple[GeneratedFileRecord, ...]) -> str:
@@ -344,7 +405,9 @@ __all__ = [
     "GeneratedFileRecord",
     "generated_file_records_from_dict",
     "generated_tree_sha256",
+    "inventory_codegen_tree",
     "inventory_generated_tree",
+    "prepare_empty_codegen_directory",
     "solver_library_record",
     "validate_generated_tree",
 ]

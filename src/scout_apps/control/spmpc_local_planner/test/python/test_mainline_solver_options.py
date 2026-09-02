@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import dataclasses
 import json
 import sys
@@ -25,6 +26,7 @@ from acados.mainline.solver_options import (
     SolverOptionsError,
     SolverOptionsSnapshot,
     build_solver_options_snapshot,
+    require_solver_options_snapshot,
 )
 
 CAPACITY = (
@@ -108,6 +110,22 @@ class MainlineSolverOptionsTest(unittest.TestCase):
             self.snapshot.print_level = 1  # type: ignore[misc]
         with self.assertRaises(SolverOptionsError):
             build_solver_options_snapshot(object())  # type: ignore[arg-type]
+        forged = copy.copy(self.snapshot)
+        object.__setattr__(forged, "qp_solver_iter_max", 49)
+        with self.assertRaises(SolverOptionsError):
+            require_solver_options_snapshot(forged)
+        structurally_forged = copy.copy(self.snapshot)
+        object.__setattr__(structurally_forged, "status", "FORGED")
+        forged_document = structurally_forged.to_dict()
+        forged_document.pop("semantic_identity")
+        object.__setattr__(
+            structurally_forged,
+            "semantic_sha256",
+            sha256_json(forged_document),
+        )
+        with self.assertRaises(SolverOptionsError):
+            require_solver_options_snapshot(structurally_forged)
+        self.assertIs(require_solver_options_snapshot(self.snapshot), self.snapshot)
 
     def test_module_has_no_backend_legacy_or_gate_dependency(self) -> None:
         tree = ast.parse(MODULE.read_text(encoding="utf-8"), filename=str(MODULE))

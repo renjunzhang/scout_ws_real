@@ -19,6 +19,12 @@ SCRIPTS_ROOT = PACKAGE_ROOT / "scripts"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from acados.mainline.acados_solver_options_identity import (
+    ACADOS_D4_SOLVER_OPTION_FIELDS,
+    AcadosSolverOptionsIdentityError,
+    acados_solver_options_baseline_payload,
+    acados_solver_options_baseline_sha256,
+)
 from acados.mainline.codegen_options import (
     ACADOS_JSON_FILENAME,
     ARTIFACT_IDENTITY_POLICY,
@@ -26,6 +32,7 @@ from acados.mainline.codegen_options import (
     CODEGEN_OPTIONS_STATUS,
     CODEGEN_TARGET_PERFORMANCE_STATUS,
     COMPILER_ENVIRONMENT_NAMES,
+    COMPILER_ENVIRONMENT_POLICY,
     EXT_FUN_COMPILE_FLAGS,
     GENERATED_HEADER_FILENAME,
     MODEL_CONTRACT_FILENAME,
@@ -34,9 +41,11 @@ from acados.mainline.codegen_options import (
     SOURCE_ROOT_BINDING_POLICY,
     CodegenOptionsError,
     CodegenOptionsSnapshot,
-    apply_codegen_options,
+    apply_acados_solver_codegen_options,
     build_codegen_options_snapshot,
+    require_codegen_compiler_environment,
     require_codegen_options_snapshot,
+    validate_applied_acados_solver_codegen_options,
 )
 from acados.mainline.development_capacity import load_development_capacity
 from acados.mainline.development_layout import build_development_layout
@@ -123,8 +132,45 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
         self.assertIs(build["with_cython"], False)
         self.assertEqual(build["cmake_builder"], "NONE")
         self.assertEqual(
-            set(build["compiler_environment"]),
-            set(COMPILER_ENVIRONMENT_NAMES),
+            tuple(build["compiler_environment"]),
+            COMPILER_ENVIRONMENT_NAMES,
+        )
+        self.assertEqual(
+            build["compiler_environment_policy"],
+            COMPILER_ENVIRONMENT_POLICY,
+        )
+        self.assertEqual(
+            COMPILER_ENVIRONMENT_NAMES,
+            (
+                "PATH",
+                "CC",
+                "CXX",
+                "AR",
+                "RANLIB",
+                "LD",
+                "AS",
+                "NM",
+                "STRIP",
+                "CFLAGS",
+                "CXXFLAGS",
+                "CPPFLAGS",
+                "LDFLAGS",
+                "MAKEFLAGS",
+                "GNUMAKEFLAGS",
+                "MFLAGS",
+                "MAKEFILES",
+                "MAKEOVERRIDES",
+                "LIBRARY_PATH",
+                "CPATH",
+                "C_INCLUDE_PATH",
+                "CPLUS_INCLUDE_PATH",
+                "COMPILER_PATH",
+                "GCC_EXEC_PREFIX",
+                "LD_RUN_PATH",
+                "PKG_CONFIG_PATH",
+                "SOURCE_DATE_EPOCH",
+                "ZERO_AR_DATE",
+            ),
         )
         self.assertEqual(codegen["output_directory_policy"], OUTPUT_DIRECTORY_POLICY)
         self.assertEqual(
@@ -141,8 +187,18 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
         )
 
     def test_backend_mapping_and_compiler_environment_are_explicit(self) -> None:
-        target = SimpleNamespace()
-        apply_codegen_options(target, self.options)
+        target = SimpleNamespace(
+            ext_fun_compile_flags="",
+            ext_fun_expand_constr=True,
+            ext_fun_expand_cost=True,
+            ext_fun_expand_dyn=True,
+            ext_fun_expand_precompute=True,
+            custom_update_filename="wrong.c",
+            custom_update_header_filename="wrong.h",
+            custom_update_copy=True,
+            custom_templates=[("wrong.in", "wrong.out")],
+        )
+        apply_acados_solver_codegen_options(target, self.options)
         self.assertEqual(target.ext_fun_compile_flags, "-O2")
         self.assertIs(target.ext_fun_expand_constr, False)
         self.assertIs(target.ext_fun_expand_cost, False)
@@ -152,10 +208,20 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
         self.assertEqual(target.custom_update_header_filename, "")
         self.assertIs(target.custom_update_copy, False)
         self.assertEqual(target.custom_templates, [])
+        validate_applied_acados_solver_codegen_options(target, self.options)
 
-        original_cflags = dict(self.options.compiler_environment)["CFLAGS"]
+        with self.assertRaises(CodegenOptionsError):
+            apply_acados_solver_codegen_options(SimpleNamespace(), self.options)
+        target.custom_update_copy = True
+        with self.assertRaises(CodegenOptionsError):
+            validate_applied_acados_solver_codegen_options(target, self.options)
+
+        require_codegen_compiler_environment(self.options)
+        original_cflags = dict(self.options.compiler_environment)["CFLAGS"] or ""
         captured_cflags = original_cflags + " -DSPMPC_TEST_CAPTURE=1"
         with patch.dict(os.environ, {"CFLAGS": captured_cflags}):
+            with self.assertRaises(CodegenOptionsError):
+                require_codegen_compiler_environment(self.options)
             captured = build_codegen_options_snapshot(
                 self.capacity,
                 self.layout,
@@ -163,8 +229,76 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
                 1.0e-12,
                 "-O2",
             )
+            require_codegen_compiler_environment(captured)
         self.assertEqual(dict(captured.compiler_environment)["CFLAGS"], captured_cflags)
         self.assertNotEqual(captured.semantic_sha256, self.options.semantic_sha256)
+
+    def test_complete_backend_option_identity_excludes_only_d4_fields(self) -> None:
+        backend_options = {
+            "N_horizon": 60,
+            "qp_solver_mu0": 0.0,
+            "collocation_type": "GAUSS_LEGENDRE",
+            "time_steps": [1.0 / 30.0] * 60,
+            **{
+                name: (
+                    []
+                    if name == "custom_templates"
+                    else False
+                    if name.startswith("ext_fun_expand")
+                    or name in {"custom_update_copy"}
+                    else "-O2"
+                    if name == "ext_fun_compile_flags"
+                    else ""
+                )
+                for name in ACADOS_D4_SOLVER_OPTION_FIELDS
+            },
+        }
+        baseline = acados_solver_options_baseline_sha256(backend_options)
+        payload = acados_solver_options_baseline_payload(backend_options)
+        self.assertNotIn("qp_solver_mu0", ACADOS_D4_SOLVER_OPTION_FIELDS)
+        self.assertEqual(
+            payload["excluded_d4_fields"],
+            list(ACADOS_D4_SOLVER_OPTION_FIELDS),
+        )
+        for name in ACADOS_D4_SOLVER_OPTION_FIELDS:
+            changed = copy.deepcopy(backend_options)
+            changed[name] = (
+                [("custom.in", "custom.out")]
+                if name == "custom_templates"
+                else not changed[name]
+                if type(changed[name]) is bool
+                else str(changed[name]) + "-changed"
+            )
+            self.assertEqual(
+                acados_solver_options_baseline_sha256(changed),
+                baseline,
+            )
+        for name, value in (
+            ("qp_solver_mu0", 1.0),
+            ("collocation_type", "GAUSS_RADAU_IIA"),
+        ):
+            changed = copy.deepcopy(backend_options)
+            changed[name] = value
+            self.assertNotEqual(
+                acados_solver_options_baseline_sha256(changed),
+                baseline,
+            )
+        added = copy.deepcopy(backend_options)
+        added["future_backend_option"] = 1
+        self.assertNotEqual(
+            acados_solver_options_baseline_sha256(added),
+            baseline,
+        )
+        deleted = copy.deepcopy(backend_options)
+        deleted.pop("qp_solver_mu0")
+        self.assertNotEqual(
+            acados_solver_options_baseline_sha256(deleted),
+            baseline,
+        )
+        missing = copy.deepcopy(backend_options)
+        missing.pop("custom_templates")
+        with self.assertRaises(AcadosSolverOptionsIdentityError):
+            acados_solver_options_baseline_sha256(missing)
 
     def test_tolerances_and_compile_flags_have_no_hidden_defaults(self) -> None:
         bad_values = (
@@ -203,6 +337,17 @@ class MainlineCodegenOptionsTest(unittest.TestCase):
         object.__setattr__(forged, "duration_tolerance_sec", 2.0e-12)
         with self.assertRaises(CodegenOptionsError):
             require_codegen_options_snapshot(forged)
+        structurally_forged = copy.copy(self.options)
+        object.__setattr__(structurally_forged, "compiler_environment", ())
+        forged_document = structurally_forged.to_dict()
+        forged_document.pop("semantic_identity")
+        object.__setattr__(
+            structurally_forged,
+            "semantic_sha256",
+            sha256_json(forged_document),
+        )
+        with self.assertRaises(CodegenOptionsError):
+            require_codegen_options_snapshot(structurally_forged)
         self.assertIs(require_codegen_options_snapshot(self.options), self.options)
 
     def test_module_has_no_backend_evidence_or_legacy_dependency(self) -> None:

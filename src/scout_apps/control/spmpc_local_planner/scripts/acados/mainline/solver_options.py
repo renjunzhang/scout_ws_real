@@ -84,16 +84,7 @@ class SolverOptionsSnapshot:
             raise SolverOptionsError(
                 "SolverOptionsSnapshot requires build_solver_options_snapshot"
             )
-        if self.schema_version != SOLVER_OPTIONS_SCHEMA:
-            raise SolverOptionsError("solver-option schema is not canonical")
-        if (
-            self.status != SOLVER_OPTIONS_STATUS
-            or self.target_performance_status != TARGET_PERFORMANCE_STATUS
-            or self.artifact_status != SOLVER_OPTIONS_ARTIFACT_STATUS
-        ):
-            raise SolverOptionsError("solver-option status is not canonical")
-        if len(self.semantic_sha256) != 64:
-            raise SolverOptionsError("solver-option semantic identity is invalid")
+        _validate_solver_options_structure(self)
 
     def to_dict(self) -> dict[str, Any]:
         """Return the canonical JSON-compatible option snapshot."""
@@ -104,6 +95,19 @@ class SolverOptionsSnapshot:
             "scope": SOLVER_OPTIONS_SCOPE,
         }
         return payload
+
+
+def _validate_solver_options_structure(snapshot: SolverOptionsSnapshot) -> None:
+    if snapshot.schema_version != SOLVER_OPTIONS_SCHEMA:
+        raise SolverOptionsError("solver-option schema is not canonical")
+    if (
+        snapshot.status != SOLVER_OPTIONS_STATUS
+        or snapshot.target_performance_status != TARGET_PERFORMANCE_STATUS
+        or snapshot.artifact_status != SOLVER_OPTIONS_ARTIFACT_STATUS
+    ):
+        raise SolverOptionsError("solver-option status is not canonical")
+    if type(snapshot.semantic_sha256) is not str or len(snapshot.semantic_sha256) != 64:
+        raise SolverOptionsError("solver-option semantic identity is invalid")
 
 
 def _fraction_dict(value: Fraction) -> dict[str, int]:
@@ -272,6 +276,25 @@ def build_solver_options_snapshot(
     )
 
 
+def require_solver_options_snapshot(value: Any) -> SolverOptionsSnapshot:
+    """Reject wrong-type or force-mutated numerical options."""
+
+    if type(value) is not SolverOptionsSnapshot:
+        raise SolverOptionsError(
+            "solver_options must be the exact SolverOptionsSnapshot type"
+        )
+    try:
+        _validate_solver_options_structure(value)
+        semantic_sha256 = sha256_json(_snapshot_payload(value))
+    except SolverOptionsError:
+        raise
+    except (AttributeError, IdentityError, TypeError, ValueError) as exc:
+        raise SolverOptionsError("solver-option snapshot is malformed") from exc
+    if semantic_sha256 != value.semantic_sha256:
+        raise SolverOptionsError("solver-option semantic identity is inconsistent")
+    return value
+
+
 __all__ = [
     "CONTINUOUS_INTEGRATOR_OPTIONS_POLICY",
     "COST_SCALING_POLICY",
@@ -284,4 +307,5 @@ __all__ = [
     "SolverOptionsError",
     "SolverOptionsSnapshot",
     "build_solver_options_snapshot",
+    "require_solver_options_snapshot",
 ]
