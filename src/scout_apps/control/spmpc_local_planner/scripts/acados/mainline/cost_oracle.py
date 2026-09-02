@@ -20,6 +20,7 @@ from .discrete_dynamics import (
     IssuedCommandValues,
     evaluate_discrete_map,
 )
+from .model_contract import COST_SCHEMA
 from .reference_oracle import (
     ReferenceEvaluation,
     ReferenceOracleError,
@@ -51,6 +52,7 @@ class StageCostEvaluation:
 
     def to_dict(self) -> dict[str, Any]:
         return {
+            "cost_schema": COST_SCHEMA,
             "robot_running_cost": self.robot_running_cost,
             "liquid_running_cost": self.liquid_running_cost,
             "liquid_boundary_cost": self.liquid_boundary_cost,
@@ -66,7 +68,11 @@ class TerminalCostEvaluation:
     reference: ReferenceEvaluation
 
     def to_dict(self) -> dict[str, Any]:
-        return {"total_cost": self.total_cost, "reference": self.reference.to_dict()}
+        return {
+            "cost_schema": COST_SCHEMA,
+            "total_cost": self.total_cost,
+            "reference": self.reference.to_dict(),
+        }
 
 
 def _finite(value: Any, label: str) -> float:
@@ -364,6 +370,7 @@ def evaluate_terminal_cost(
 
 
 __all__ = [
+    "COST_SCHEMA",
     "CostOracleError",
     "StageCostEvaluation",
     "TerminalCostEvaluation",

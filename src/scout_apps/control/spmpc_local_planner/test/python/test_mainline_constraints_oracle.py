@@ -18,10 +18,13 @@ from acados.mainline.constraints_oracle import (
     CONSTRAINT_RESIDUAL_ORDER,
     CONSTRAINT_SCHEMA,
     CONSTRAINT_VALUE_STATUS,
+    CONTROL_BOX_ORDER,
+    STAGE_NONLINEAR_H_ORDER,
     ConstraintBounds,
     ConstraintOracleError,
     evaluate_constraint_residuals,
     evaluate_constraints,
+    require_constraint_bounds,
 )
 from acados.mainline.cost_schedule import (
     ExperimentCondition,
@@ -227,6 +230,21 @@ class MainlineConstraintsOracleTest(unittest.TestCase):
         self.assertTrue(all(value <= 0.0 for _, value in result.residuals))
         self.assertEqual(dict(result.residuals)["v_s_lower"], 0.0)
 
+    def test_public_orders_are_the_single_symbolic_assembly_authority(self) -> None:
+        self.assertEqual(
+            STAGE_NONLINEAR_H_ORDER,
+            ("q_issue_v", "q_issue_omega", "a_issue", "alpha_issue"),
+        )
+        self.assertEqual(CONTROL_BOX_ORDER, self.development_layout.control_names)
+        self.assertEqual(
+            CONSTRAINT_RESIDUAL_ORDER,
+            tuple(
+                suffix
+                for name in (*STAGE_NONLINEAR_H_ORDER, *CONTROL_BOX_ORDER)
+                for suffix in (f"{name}_lower", f"{name}_upper")
+            ),
+        )
+
     def test_every_bound_is_required_and_strictly_positive_finite_float(self) -> None:
         with self.assertRaises(TypeError):
             ConstraintBounds(1.0, 1.0, 1.0, 1.0, 1.0, 1.0)  # type: ignore[call-arg]
@@ -245,6 +263,7 @@ class MainlineConstraintsOracleTest(unittest.TestCase):
         self.assertEqual(snapshot["constraint_schema"], CONSTRAINT_SCHEMA)
         self.assertEqual(snapshot["value_status"], CONSTRAINT_VALUE_STATUS)
         self.assertEqual(set(snapshot["values"]), set(vars(self.bounds)))
+        self.assertEqual(require_constraint_bounds(self.bounds), self.bounds)
 
     def test_issued_requires_exact_finite_float_dataclass(self) -> None:
         with self.assertRaises(ConstraintOracleError):

@@ -13,13 +13,12 @@ from typing import Any
 
 from .development_capacity import DevelopmentCapacityContract
 from .development_layout import DevelopmentLayout
+from .model_contract import DISCRETIZATION_SCHEMA
 from .solver_parameter_layout import (
     SolverParameterLayout,
     SolverParameterLayoutError,
     build_solver_parameter_layout,
 )
-
-DISCRETIZATION_SCHEMA = "zoh_fopdt_piecewise_midpoint_pose_rk4_slosh_v1"
 
 
 class DiscreteDynamicsError(ValueError):

@@ -28,6 +28,13 @@ from .discrete_dynamics import (
 
 CONSTRAINT_SCHEMA = "mainline_explicit_hard_constraints_v1"
 CONSTRAINT_VALUE_STATUS = "EXPLICIT_CALLER_SUPPLIED/DEV_UNVALIDATED"
+STAGE_NONLINEAR_H_ORDER = (
+    "q_issue_v",
+    "q_issue_omega",
+    "a_issue",
+    "alpha_issue",
+)
+CONTROL_BOX_ORDER = ("j_issue_v", "j_issue_omega", "v_s")
 CONSTRAINT_RESIDUAL_ORDER = (
     "q_issue_v_lower",
     "q_issue_v_upper",
@@ -137,16 +144,27 @@ def _issued_values(issued: Any) -> IssuedCommandValues:
     return issued
 
 
-def _bounds_values(bounds: Any) -> ConstraintBounds:
-    if type(bounds) is not ConstraintBounds:
+def require_constraint_bounds(value: Any) -> ConstraintBounds:
+    """Return a canonical bounds copy or reject a forged stored object."""
+
+    if type(value) is not ConstraintBounds:
         raise ConstraintOracleError("bounds must be the exact ConstraintBounds type")
-    # Re-run the checks in case a forged instance bypassed __post_init__.
+    expected_names = tuple(field.name for field in fields(ConstraintBounds))
+    if set(vars(value)) != set(expected_names):
+        raise ConstraintOracleError("bounds contain unknown or missing fields")
     try:
-        for field in fields(bounds):
-            _bound(getattr(bounds, field.name), field.name)
-    except (AttributeError, TypeError) as exc:
+        rebuilt = ConstraintBounds(
+            **{name: getattr(value, name) for name in expected_names}
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
         raise ConstraintOracleError("bounds fields are malformed") from exc
-    return bounds
+    if any(
+        type(getattr(value, name)) is not type(getattr(rebuilt, name))
+        or getattr(value, name) != getattr(rebuilt, name)
+        for name in expected_names
+    ):
+        raise ConstraintOracleError("bounds do not match their canonical expansion")
+    return rebuilt
 
 
 def evaluate_constraint_residuals(
@@ -159,7 +177,7 @@ def evaluate_constraint_residuals(
 
     u = _control(control, development_layout)
     issued_values = _issued_values(issued)
-    checked_bounds = _bounds_values(bounds)
+    checked_bounds = require_constraint_bounds(bounds)
     uo = development_layout.control_offsets
     values = (
         ("q_issue_v_lower", -checked_bounds.q_issue_v_max - issued_values.q_issue_v),
@@ -226,7 +244,7 @@ def evaluate_constraints(
             "capacity must be the exact DevelopmentCapacityContract type"
         )
     _control(control, development_layout)
-    _bounds_values(bounds)
+    require_constraint_bounds(bounds)
     try:
         result = evaluate_discrete_map(
             capacity, development_layout, state, control, stage_parameters
@@ -244,9 +262,12 @@ __all__ = [
     "CONSTRAINT_RESIDUAL_ORDER",
     "CONSTRAINT_SCHEMA",
     "CONSTRAINT_VALUE_STATUS",
+    "CONTROL_BOX_ORDER",
+    "STAGE_NONLINEAR_H_ORDER",
     "ConstraintBounds",
     "ConstraintEvaluation",
     "ConstraintOracleError",
     "evaluate_constraint_residuals",
     "evaluate_constraints",
+    "require_constraint_bounds",
 ]

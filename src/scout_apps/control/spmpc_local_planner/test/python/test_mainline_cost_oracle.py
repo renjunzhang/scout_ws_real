@@ -15,6 +15,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from acados.mainline.cost_oracle import (
+    COST_SCHEMA,
     CostOracleError,
     evaluate_boundary_cost,
     evaluate_stage_cost,
@@ -177,6 +178,7 @@ class MainlineCostOracleTest(unittest.TestCase):
         expected = (issued_a / 2.0) ** 2 / self.development_layout.horizon_steps
         self.assertAlmostEqual(result.robot_running_cost, expected)
         self.assertNotAlmostEqual(result.robot_running_cost, expected / 60.0)
+        self.assertEqual(result.to_dict()["cost_schema"], COST_SCHEMA)
 
     def test_running_liquid_uses_map_right_endpoint_without_dt_or_horizon_scale(
         self,
@@ -292,6 +294,7 @@ class MainlineCostOracleTest(unittest.TestCase):
             altered_state, altered_row, self.development_layout, self.parameter_layout
         )
         self.assertEqual(altered.total_cost, baseline.total_cost)
+        self.assertEqual(altered.to_dict()["cost_schema"], COST_SCHEMA)
         with self.assertRaises(TypeError):
             evaluate_terminal_cost(  # type: ignore[call-arg]
                 self.state,

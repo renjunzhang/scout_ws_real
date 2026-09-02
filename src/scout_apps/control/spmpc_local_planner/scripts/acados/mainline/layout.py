@@ -16,6 +16,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
+
 DEFAULT_DT_SEC = 1.0 / 30.0
 DEFAULT_HORIZON_STEPS = 60
 EXECUTION_SUBSEGMENT_SLOTS = 3
@@ -29,9 +31,6 @@ MAX_RETAINED_COMMANDS_PER_CHANNEL = 4096
 
 LAYOUT_SCHEMA_VERSION = "spmpc_mainline_layout_scaffold_v1"
 LAYOUT_SCOPE = "STATE_CONTROL_AND_EXECUTION_PARAMETER_PREFIX_ONLY"
-MODEL_ID = "spmpc_actuator_slosh_discrete_v1"
-DISCRETIZATION_SCHEMA = "zoh_fopdt_piecewise_midpoint_pose_rk4_slosh_v1"
-COST_SCHEMA = "right_endpoint_fixed_liquid_weight_v1"
 
 STATE_ROBOT_PROGRESS = (
     "px",
