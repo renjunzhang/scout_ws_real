@@ -28,6 +28,12 @@ is_number() {
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 TRIAL_CONTRACT="${TRIAL_CONTRACT:-low_speed_identification}"
+HARDWARE_TEST_ID="${HARDWARE_TEST_ID:-}"
+FROZEN_HARDWARE_MAGNITUDE=""
+FROZEN_HARDWARE_STEP_SEC=""
+ANALYZER_MINIMUM_STEP_DURATION=2.0
+ANALYZER_STEADY_SEC=0.6
+REPORT_ACCEPTANCE_MODE=full_identification
 case "${TRIAL_CONTRACT}" in
   low_speed_identification)
     DEFAULT_TEST_AXIS=angular
@@ -38,8 +44,30 @@ case "${TRIAL_CONTRACT}" in
   hardware_accel_limit)
     DEFAULT_TEST_AXIS=linear
     DEFAULT_PRE_SEC=3.0
-    DEFAULT_STEP_SEC=2.5
     DEFAULT_POST_SEC=4.0
+    case "${HARDWARE_TEST_ID}" in
+      H01)
+        FROZEN_HARDWARE_MAGNITUDE=0.80
+        FROZEN_HARDWARE_STEP_SEC=2.0
+        ANALYZER_MINIMUM_STEP_DURATION=1.8
+        ANALYZER_STEADY_SEC=0.4
+        ;;
+      H02)
+        FROZEN_HARDWARE_MAGNITUDE=1.50
+        FROZEN_HARDWARE_STEP_SEC=2.0
+        ANALYZER_MINIMUM_STEP_DURATION=1.8
+        ANALYZER_STEADY_SEC=0.4
+        ;;
+      H03)
+        FROZEN_HARDWARE_MAGNITUDE=3.00
+        FROZEN_HARDWARE_STEP_SEC=1.0
+        ANALYZER_MINIMUM_STEP_DURATION=0.8
+        ANALYZER_STEADY_SEC=0.25
+        ;;
+      *) fail "hardware_accel_limit requires HARDWARE_TEST_ID=H01, H02, or H03" ;;
+    esac
+    DEFAULT_STEP_SEC="${FROZEN_HARDWARE_STEP_SEC}"
+    REPORT_ACCEPTANCE_MODE=acceleration_capability
     ;;
   *) fail "TRIAL_CONTRACT must be low_speed_identification or hardware_accel_limit" ;;
 esac
@@ -55,8 +83,8 @@ case "${TEST_AXIS}" in
   linear)
     DEFAULT_STEP_DIRECTION=forward
     if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
-      DEFAULT_STEP_MAGNITUDE=0.80
-      MAX_STEP_MAGNITUDE=0.80
+      DEFAULT_STEP_MAGNITUDE="${FROZEN_HARDWARE_MAGNITUDE}"
+      MAX_STEP_MAGNITUDE=3.00
     else
       DEFAULT_STEP_MAGNITUDE=0.10
       MAX_STEP_MAGNITUDE=0.15
@@ -110,8 +138,13 @@ awk -v value="${STEP_MAGNITUDE}" -v maximum="${MAX_STEP_MAGNITUDE}" \
   fail "require 0 < STEP_MAGNITUDE <= ${MAX_STEP_MAGNITUDE} ${STEP_UNIT} for ${TEST_AXIS}"
 awk -v value="${PRE_SEC}" 'BEGIN {exit !(value >= 2.0 && value <= 10.0)}' || \
   fail "require 2 <= PRE_SEC <= 10"
-awk -v value="${STEP_SEC}" 'BEGIN {exit !(value >= 2.5 && value <= 6.0)}' || \
-  fail "require 2.5 <= STEP_SEC <= 6"
+if [[ "${TRIAL_CONTRACT}" == low_speed_identification ]]; then
+  awk -v value="${STEP_SEC}" 'BEGIN {exit !(value >= 2.5 && value <= 6.0)}' || \
+    fail "require 2.5 <= STEP_SEC <= 6"
+else
+  awk -v value="${STEP_SEC}" 'BEGIN {exit !(value >= 1.0 && value <= 2.0)}' || \
+    fail "hardware_accel_limit requires 1.0 <= STEP_SEC <= 2.0"
+fi
 awk -v value="${POST_SEC}" 'BEGIN {exit !(value >= 2.0 && value <= 10.0)}' || \
   fail "require 2 <= POST_SEC <= 10"
 awk -v value="${PUBLISH_RATE_HZ}" 'BEGIN {exit !(value >= 20.0 && value <= 100.0)}' || \
@@ -123,18 +156,20 @@ if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
   [[ "${TEST_AXIS}" == linear ]] || fail "hardware_accel_limit requires TEST_AXIS=linear"
   [[ "${STEP_DIRECTION}" == forward ]] || \
     fail "hardware_accel_limit requires STEP_DIRECTION=forward"
-  awk -v value="${STEP_MAGNITUDE}" 'BEGIN {exit !(value == 0.80)}' || \
-    fail "hardware_accel_limit requires STEP_MAGNITUDE=0.80"
+  awk -v value="${STEP_MAGNITUDE}" -v frozen="${FROZEN_HARDWARE_MAGNITUDE}" \
+    'BEGIN {exit !(value == frozen)}' || \
+    fail "hardware_accel_limit ${HARDWARE_TEST_ID} requires STEP_MAGNITUDE=${FROZEN_HARDWARE_MAGNITUDE}"
   awk -v value="${PRE_SEC}" 'BEGIN {exit !(value == 3.0)}' || \
     fail "hardware_accel_limit requires PRE_SEC=3.0"
-  awk -v value="${STEP_SEC}" 'BEGIN {exit !(value == 2.5)}' || \
-    fail "hardware_accel_limit requires STEP_SEC=2.5"
+  awk -v value="${STEP_SEC}" -v frozen="${FROZEN_HARDWARE_STEP_SEC}" \
+    'BEGIN {exit !(value == frozen)}' || \
+    fail "hardware_accel_limit ${HARDWARE_TEST_ID} requires STEP_SEC=${FROZEN_HARDWARE_STEP_SEC}"
   awk -v value="${POST_SEC}" 'BEGIN {exit !(value == 4.0)}' || \
     fail "hardware_accel_limit requires POST_SEC=4.0"
   awk -v value="${PUBLISH_RATE_HZ}" 'BEGIN {exit !(value == 50.0)}' || \
     fail "hardware_accel_limit requires PUBLISH_RATE_HZ=50.0"
   HARDWARE_ACCEL_LIMIT_ARM_TOKEN=MOCAP_HARDWARE_ACCEL_LIMIT_ARMED
-  REPORT_PROTOCOL_ID=MOCAP_HARDWARE_ACCEL_LIMIT_V1
+  REPORT_PROTOCOL_ID=MOCAP_HARDWARE_ACCEL_LIMIT_V2
 fi
 
 case "${TEST_AXIS}:${STEP_DIRECTION}" in
@@ -148,6 +183,9 @@ RAW_MOCAP_TOPIC="/vrpn_client_node/${MOCAP_TRACKER}/pose"
 
 echo "================ stationary velocity step ================"
 echo "  trial contract  = ${TRIAL_CONTRACT}"
+if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
+  echo "  hardware row    = ${HARDWARE_TEST_ID}"
+fi
 echo "  axis/direction  = ${TEST_AXIS} / ${STEP_DIRECTION}"
 echo "  command         = ${SIGNED_COMMAND} ${STEP_UNIT}"
 echo "  phases          = zero ${PRE_SEC}s -> step ${STEP_SEC}s -> zero ${POST_SEC}s"
@@ -253,6 +291,10 @@ done
 sleep 0.5
 
 motion_started=true
+PUBLISHER_HARDWARE_ARGS=()
+if [[ "${TRIAL_CONTRACT}" == hardware_accel_limit ]]; then
+  PUBLISHER_HARDWARE_ARGS+=(--hardware-test-id "${HARDWARE_TEST_ID}")
+fi
 python3 "${PUBLISHER}" \
   --cmd-topic "${CMD_TOPIC}" \
   --stamped-topic "${STAMPED_CMD_TOPIC}" \
@@ -260,6 +302,7 @@ python3 "${PUBLISHER}" \
   --imu-topic "${IMU_TOPIC}" \
   --axis "${TEST_AXIS}" \
   --trial-contract "${TRIAL_CONTRACT}" \
+  "${PUBLISHER_HARDWARE_ARGS[@]}" \
   --hardware-accel-limit-arm-token "${HARDWARE_ACCEL_LIMIT_ARM_TOKEN}" \
   --command-value "${SIGNED_COMMAND}" \
   --pre-sec "${PRE_SEC}" \
@@ -291,6 +334,9 @@ python3 "${ANALYZER}" "${BAG_PATH}" \
   --odom-topic "${ODOM_TOPIC}" \
   --stamped-command-topic "${STAMPED_CMD_TOPIC}" \
   --protocol-id "${REPORT_PROTOCOL_ID}" \
+  --acceptance-mode "${REPORT_ACCEPTANCE_MODE}" \
+  --minimum-step-duration "${ANALYZER_MINIMUM_STEP_DURATION}" \
+  --steady-sec "${ANALYZER_STEADY_SEC}" \
   --run-label "${RUN_LABEL}" \
   --data-split "${DATA_SPLIT}" \
   --matrix-row "${MATRIX_ROW}" \

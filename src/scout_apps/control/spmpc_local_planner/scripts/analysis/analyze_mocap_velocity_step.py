@@ -180,16 +180,23 @@ def attach_fopdt_fit(time, value, command_time, command_value, command_step, res
     fit_command = delay_core.zoh_resample(
         command_time, command_value, uniform_time
     )
-    fit = delay_core.fit_fopdt_grid(
-        uniform_time,
-        fit_command,
-        uniform_value,
-        max_delay_sec=args.fopdt_max_delay_sec,
-        min_tau_sec=args.fopdt_min_tau_sec,
-        max_tau_sec=args.fopdt_max_tau_sec,
-        tau_count=args.fopdt_tau_count,
-        near_optimal_rmse_fraction=args.fopdt_near_optimal_fraction,
-    )
+    try:
+        fit = delay_core.fit_fopdt_grid(
+            uniform_time,
+            fit_command,
+            uniform_value,
+            max_delay_sec=args.fopdt_max_delay_sec,
+            min_tau_sec=args.fopdt_min_tau_sec,
+            max_tau_sec=args.fopdt_max_tau_sec,
+            tau_count=args.fopdt_tau_count,
+            near_optimal_rmse_fraction=args.fopdt_near_optimal_fraction,
+        )
+    except (ValueError, ArithmeticError) as exc:
+        result["fopdt"] = {
+            "valid": False,
+            "reason": "FOPDT fit is unavailable for this pulse: {}".format(exc),
+        }
+        return
     fit["fit_window"] = {
         "definition": (
             "command_on_rise_only"
@@ -983,8 +990,18 @@ def build_parser():
     parser.add_argument("--stamped-command-topic", default=STAMPED_CMD_TOPIC)
     parser.add_argument(
         "--protocol-id",
-        choices=("MOCAP_VELOCITY_STEP_V2", "MOCAP_HARDWARE_ACCEL_LIMIT_V1"),
+        choices=(
+            "MOCAP_VELOCITY_STEP_V2",
+            "MOCAP_HARDWARE_ACCEL_LIMIT_V1",
+            "MOCAP_HARDWARE_ACCEL_LIMIT_V2",
+        ),
         default="MOCAP_VELOCITY_STEP_V2",
+    )
+    parser.add_argument(
+        "--acceptance-mode",
+        choices=("full_identification", "acceleration_capability"),
+        default="full_identification",
+        help="Hardware short pulses require acceleration/braking evidence but not a steady FOPDT fit",
     )
     parser.add_argument("--run-label", default="UNSPECIFIED")
     parser.add_argument(
@@ -1075,6 +1092,40 @@ def validate_analysis_args(args):
             raise ValueError("{} must be at least 1".format(name))
 
 
+def analysis_complete(result, axis, acceptance_mode):
+    required_sensors = (
+        ("mocap", "odom") if axis == "linear" else ("mocap", "imu", "odom")
+    )
+    if acceptance_mode == "full_identification":
+        complete = all(
+            result["sensors"][sensor].get("valid", False)
+            and result["sensors"][sensor].get("braking_valid", False)
+            and result["sensors"][sensor].get("fopdt", {}).get("valid", False)
+            and result["sensors"][sensor]
+            .get("acceleration_capability", {})
+            .get("valid", False)
+            for sensor in required_sensors
+        )
+    else:
+        complete = all(
+            result["sensors"][sensor].get("valid", False)
+            and result["sensors"][sensor].get("braking_valid", False)
+            and result["sensors"][sensor]
+            .get("acceleration_capability", {})
+            .get("valid", False)
+            and result["sensors"][sensor]
+            .get("acceleration_capability", {})
+            .get("braking_valid", False)
+            for sensor in required_sensors
+        )
+    if axis == "linear":
+        imu_result = result["acceleration_crosscheck"].get("imu", {})
+        complete = complete and imu_result.get("valid", False)
+        if acceptance_mode == "acceleration_capability":
+            complete = complete and imu_result.get("braking_valid", False)
+    return bool(complete)
+
+
 def main():
     args = build_parser().parse_args()
     try:
@@ -1118,6 +1169,7 @@ def main():
     delay_cross_validation = build_delay_cross_validation(primary, secondary)
     report = {
         "protocol_id": args.protocol_id,
+        "acceptance_mode": args.acceptance_mode,
         "run_label": args.run_label,
         "data_split": args.data_split,
         "matrix_row": args.matrix_row,
@@ -1136,6 +1188,7 @@ def main():
         "header_time": serializable_timebase(secondary),
         "delay_cross_validation": delay_cross_validation,
         "analysis_config": {
+            "acceptance_mode": args.acceptance_mode,
             "acceleration_window_sec": args.acceleration_window_sec,
             "mocap_velocity_window_sec": args.mocap_velocity_window_sec,
             "acceleration_median_window": args.acceleration_median_window,
@@ -1167,6 +1220,7 @@ def main():
             "fopdt": "rising-edge-only grid fit of y=offset+gain*first_order(command delayed by L); braking is evaluated separately; parameters are accepted only when the quality gate passes",
             "linear_imu": "bias-removed configured forward-axis acceleration is onset-only supporting evidence",
             "warning": "t90 includes gradual response build-up and is not pure dead time",
+            "hardware_short_pulse": "acceleration_capability mode does not require a stable plateau or an accepted FOPDT fit",
         },
     }
     plot_dir = args.plot_dir
@@ -1185,24 +1239,7 @@ def main():
         )
         print("report    : {}".format(args.output_json))
 
-    required_sensors = (
-        ("mocap", "odom")
-        if args.axis == "linear"
-        else ("mocap", "imu", "odom")
-    )
-    complete = all(
-        primary["sensors"][sensor].get("valid", False)
-        and primary["sensors"][sensor].get("braking_valid", False)
-        and primary["sensors"][sensor].get("fopdt", {}).get("valid", False)
-        and primary["sensors"][sensor]
-        .get("acceleration_capability", {})
-        .get("valid", False)
-        for sensor in required_sensors
-    )
-    if args.axis == "linear":
-        complete = complete and primary["acceleration_crosscheck"].get("imu", {}).get(
-            "valid", False
-        )
+    complete = analysis_complete(primary, args.axis, args.acceptance_mode)
     return 0 if complete else 2
 
 

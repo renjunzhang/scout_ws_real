@@ -12,6 +12,11 @@ from pathlib import Path
 REQUIRED_ARM_TOKEN = "MOCAP_VELOCITY_STEP_ARMED"
 HARDWARE_ACCEL_LIMIT_ARM_TOKEN = "MOCAP_HARDWARE_ACCEL_LIMIT_ARMED"
 TRIAL_CONTRACTS = ("low_speed_identification", "hardware_accel_limit")
+HARDWARE_ACCEL_TESTS = {
+    "H01": {"command_value": 0.80, "step_sec": 2.0},
+    "H02": {"command_value": 1.50, "step_sec": 2.0},
+    "H03": {"command_value": 3.00, "step_sec": 1.0},
+}
 
 
 def build_parser():
@@ -25,6 +30,11 @@ def build_parser():
     parser.add_argument("--axis", choices=("linear", "angular"), required=True)
     parser.add_argument(
         "--trial-contract", choices=TRIAL_CONTRACTS, default="low_speed_identification"
+    )
+    parser.add_argument(
+        "--hardware-test-id",
+        choices=tuple(sorted(HARDWARE_ACCEL_TESTS)),
+        help="Frozen hardware acceleration row; required by hardware_accel_limit",
     )
     parser.add_argument("--hardware-accel-limit-arm-token")
     parser.add_argument("--command-value", type=float, required=True)
@@ -70,11 +80,18 @@ def validate_args(args):
             )
         if args.axis != "linear":
             raise ValueError("hardware_accel_limit is frozen to the linear axis")
-        if abs(args.command_value - 0.80) > 1e-9:
-            raise ValueError("hardware_accel_limit is frozen to +0.80 m/s")
+        if args.hardware_test_id not in HARDWARE_ACCEL_TESTS:
+            raise ValueError("hardware_accel_limit requires hardware-test-id H01, H02, or H03")
+        frozen_test = HARDWARE_ACCEL_TESTS[args.hardware_test_id]
+        if abs(args.command_value - frozen_test["command_value"]) > 1e-9:
+            raise ValueError(
+                "hardware_accel_limit {} is frozen to +{:.2f} m/s".format(
+                    args.hardware_test_id, frozen_test["command_value"]
+                )
+            )
         for name, value, frozen in (
             ("pre-sec", args.pre_sec, 3.0),
-            ("step-sec", args.step_sec, 2.5),
+            ("step-sec", args.step_sec, frozen_test["step_sec"]),
             ("post-sec", args.post_sec, 4.0),
             ("rate-hz", args.rate_hz, 50.0),
         ):
@@ -82,16 +99,23 @@ def validate_args(args):
                 raise ValueError(
                     "hardware_accel_limit requires {}={}".format(name, frozen)
                 )
-        limit = 0.80
+        limit = 3.00
     else:
+        if args.hardware_test_id is not None:
+            raise ValueError(
+                "hardware-test-id is only valid with trial-contract hardware_accel_limit"
+            )
         limit = 0.15 if args.axis == "linear" else 0.30
     unit = "m/s" if args.axis == "linear" else "rad/s"
     if abs(args.command_value) > limit:
         raise ValueError("require |command-value| <= {:.2f} {}".format(limit, unit))
     if not 2.0 <= args.pre_sec <= 10.0:
         raise ValueError("require 2 <= pre-sec <= 10")
-    if not 2.5 <= args.step_sec <= 6.0:
-        raise ValueError("require 2.5 <= step-sec <= 6")
+    if args.trial_contract == "low_speed_identification":
+        if not 2.5 <= args.step_sec <= 6.0:
+            raise ValueError("require 2.5 <= step-sec <= 6")
+    elif not 1.0 <= args.step_sec <= 2.0:
+        raise ValueError("hardware_accel_limit requires 1.0 <= step-sec <= 2.0")
     if not 2.0 <= args.post_sec <= 10.0:
         raise ValueError("require 2 <= post-sec <= 10")
     if not 20.0 <= args.rate_hz <= 100.0:
@@ -255,7 +279,7 @@ def main():
     if args.metadata:
         payload = {
             "protocol_id": (
-                "MOCAP_HARDWARE_ACCEL_LIMIT_V1"
+                "MOCAP_HARDWARE_ACCEL_LIMIT_V2"
                 if args.trial_contract == "hardware_accel_limit"
                 else "MOCAP_VELOCITY_STEP_V2"
             ),
@@ -264,6 +288,7 @@ def main():
             "matrix_row": args.matrix_row,
             "attempt": args.attempt,
             "trial_contract": args.trial_contract,
+            "hardware_test_id": args.hardware_test_id,
             "axis": args.axis,
             "cmd_topic": args.cmd_topic,
             "stamped_topic": args.stamped_topic,

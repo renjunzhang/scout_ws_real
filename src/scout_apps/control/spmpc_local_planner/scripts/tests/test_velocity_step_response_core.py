@@ -18,18 +18,18 @@ import publish_mocap_velocity_step as publisher  # noqa: E402
 import summarize_mocap_velocity_step_matrix as matrix_summary  # noqa: E402
 
 
-def make_step(command=0.2, delay=0.07, tau=0.50, noise=0.0005):
+def make_step(command=0.2, delay=0.07, tau=0.50, noise=0.0005, duration=4.0):
     # Keep four seconds after the zero command so stop detection is exercised,
     # rather than testing only the rising edge.
-    time = np.arange(-3.0, 8.0, 0.01)
+    time = np.arange(-3.0, duration + 4.0, 0.01)
     command_values = np.zeros_like(time)
-    command_values[(time >= 0.0) & (time < 4.0)] = command
+    command_values[(time >= 0.0) & (time < duration)] = command
     direction = 1.0 if command > 0.0 else -1.0
     elapsed = np.maximum(0.0, time - delay)
     response = direction * abs(command) * (1.0 - np.exp(-elapsed / tau))
     response[time < delay] = 0.0
-    delayed_stop = 4.0 + delay
-    stop_value = abs(command) * (1.0 - math.exp(-4.0 / tau))
+    delayed_stop = duration + delay
+    stop_value = abs(command) * (1.0 - math.exp(-duration / tau))
     after = time >= delayed_stop
     response[after] = direction * stop_value * np.exp(
         -(time[after] - delayed_stop) / tau
@@ -183,6 +183,7 @@ def publisher_args(arm_token, **overrides):
     values = dict(
         arm_token=arm_token,
         trial_contract="low_speed_identification",
+        hardware_test_id=None,
         hardware_accel_limit_arm_token=None,
         axis="linear",
         command_value=0.10,
@@ -207,33 +208,64 @@ def test_publisher_requires_explicit_arm_token():
 
 
 def test_hardware_accel_limit_publisher_contract_is_frozen():
-    valid = publisher_args(
+    for test_id, command_value, step_sec in (
+        ("H01", 0.80, 2.0),
+        ("H02", 1.50, 2.0),
+        ("H03", 3.00, 1.0),
+    ):
+        valid = publisher_args(
+            publisher.REQUIRED_ARM_TOKEN,
+            trial_contract="hardware_accel_limit",
+            hardware_test_id=test_id,
+            hardware_accel_limit_arm_token=publisher.HARDWARE_ACCEL_LIMIT_ARM_TOKEN,
+            command_value=command_value,
+            step_sec=step_sec,
+            post_sec=4.0,
+        )
+        publisher.validate_args(valid)
+
+        for overrides, expected in (
+            ({"hardware_accel_limit_arm_token": None}, "hardware-accel-limit-arm-token"),
+            ({"command_value": command_value + 0.01}, "is frozen to"),
+            ({"axis": "angular"}, "linear axis"),
+            ({"step_sec": step_sec + 0.5}, "step-sec="),
+        ):
+            candidate = SimpleNamespace(**vars(valid))
+            for name, value in overrides.items():
+                setattr(candidate, name, value)
+            try:
+                publisher.validate_args(candidate)
+            except ValueError as exc:
+                assert expected in str(exc)
+            else:
+                raise AssertionError(
+                    "hardware_accel_limit accepted invalid override {}".format(overrides)
+                )
+
+    missing_id = publisher_args(
         publisher.REQUIRED_ARM_TOKEN,
         trial_contract="hardware_accel_limit",
         hardware_accel_limit_arm_token=publisher.HARDWARE_ACCEL_LIMIT_ARM_TOKEN,
         command_value=0.80,
-        step_sec=2.5,
+        step_sec=2.0,
         post_sec=4.0,
     )
-    publisher.validate_args(valid)
+    try:
+        publisher.validate_args(missing_id)
+    except ValueError as exc:
+        assert "hardware-test-id" in str(exc)
+    else:
+        raise AssertionError("hardware_accel_limit accepted a missing hardware test ID")
 
-    for overrides, expected in (
-        ({"hardware_accel_limit_arm_token": None}, "hardware-accel-limit-arm-token"),
-        ({"command_value": 0.81}, "frozen to +0.80"),
-        ({"axis": "angular"}, "linear axis"),
-        ({"step_sec": 3.0}, "step-sec=2.5"),
-    ):
-        candidate = SimpleNamespace(**vars(valid))
-        for name, value in overrides.items():
-            setattr(candidate, name, value)
-        try:
-            publisher.validate_args(candidate)
-        except ValueError as exc:
-            assert expected in str(exc)
-        else:
-            raise AssertionError(
-                "hardware_accel_limit accepted invalid override {}".format(overrides)
-            )
+    low_speed_with_id = publisher_args(
+        publisher.REQUIRED_ARM_TOKEN, hardware_test_id="H01"
+    )
+    try:
+        publisher.validate_args(low_speed_with_id)
+    except ValueError as exc:
+        assert "only valid" in str(exc)
+    else:
+        raise AssertionError("low-speed contract accepted a hardware test ID")
 
 
 def test_analyzer_parser_accepts_custom_command_and_odom_topics():
@@ -251,7 +283,48 @@ def test_analyzer_parser_accepts_custom_command_and_odom_topics():
     assert args.cmd_topic == "/custom_cmd"
     assert args.odom_topic == "/custom_odom"
     assert args.protocol_id == "MOCAP_VELOCITY_STEP_V2"
+    assert args.acceptance_mode == "full_identification"
     assert args.fopdt_post_sec == 0.0
+
+
+def test_acceleration_capability_acceptance_does_not_require_fopdt():
+    sensor = {
+        "valid": True,
+        "braking_valid": True,
+        "fopdt": {"valid": False},
+        "acceleration_capability": {"valid": True, "braking_valid": True},
+    }
+    result = {
+        "sensors": {"mocap": dict(sensor), "odom": dict(sensor)},
+        "acceleration_crosscheck": {
+            "imu": {"valid": True, "braking_valid": True}
+        },
+    }
+    assert analyzer.analysis_complete(result, "linear", "acceleration_capability")
+    assert not analyzer.analysis_complete(result, "linear", "full_identification")
+
+
+def test_one_second_full_scale_pulse_produces_capability_evidence():
+    time, command, response = make_step(
+        command=3.0, delay=0.08, tau=0.80, noise=0.0, duration=1.0
+    )
+    epoch_time = time + 150.0
+    position = integrate_signal(time, response)
+    acceleration = np.gradient(response, time)
+    zeros = np.zeros_like(response)
+    args = analyzer_args()
+    args.minimum_step_duration = 0.8
+    args.steady_sec = 0.25
+    result = analyzer.analyze_timebase(
+        list(zip(epoch_time, command, zeros)),
+        list(zip(epoch_time, position, zeros, zeros)),
+        list(zip(epoch_time, zeros, acceleration, zeros, 9.8 + zeros)),
+        list(zip(epoch_time, response, zeros)),
+        "linear",
+        args,
+    )
+    assert result["command"]["duration_sec"] >= 0.99
+    assert analyzer.analysis_complete(result, "linear", "acceleration_capability")
 
 
 def test_rise_fopdt_excludes_asymmetric_fast_braking():
