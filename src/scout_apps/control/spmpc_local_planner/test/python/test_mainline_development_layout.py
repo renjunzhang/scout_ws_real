@@ -28,6 +28,7 @@ from acados.mainline.development_layout import (
     DevelopmentLayoutError,
     build_development_layout,
     development_layout_from_dict,
+    validate_development_layout_snapshot,
 )
 
 CAPACITY = (
@@ -163,6 +164,10 @@ class MainlineDevelopmentLayoutTest(unittest.TestCase):
         rebuilt = development_layout_from_dict(self.document, self.capacity)
         self.assertEqual(rebuilt, self.layout)
         self.assertEqual(rebuilt.to_dict(), self.document)
+        self.assertEqual(
+            validate_development_layout_snapshot(self.layout, self.capacity),
+            self.layout,
+        )
 
     def test_unknown_fields_fail_closed_at_top_and_nested_levels(self) -> None:
         top = copy.deepcopy(self.document)
@@ -242,6 +247,11 @@ class MainlineDevelopmentLayoutTest(unittest.TestCase):
             tuple(inspect.signature(build_development_layout).parameters),
             ("capacity",),
         )
+
+        forged = copy.copy(self.layout)
+        object.__setattr__(forged, "nx", 49)
+        with self.assertRaisesRegex(DevelopmentLayoutError, "typed layout snapshot"):
+            validate_development_layout_snapshot(forged, self.capacity)
 
         forged = copy.copy(self.capacity)
         object.__setattr__(

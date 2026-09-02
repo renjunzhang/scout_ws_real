@@ -286,3 +286,25 @@ def development_layout_from_dict(
             "development layout does not exactly match the typed capacity expansion"
         )
     return rebuilt
+
+
+def validate_development_layout_snapshot(
+    layout: DevelopmentLayout,
+    capacity: DevelopmentCapacityContract,
+) -> DevelopmentLayout:
+    """Rebuild and verify every serialized field of one typed layout."""
+
+    if type(layout) is not DevelopmentLayout:
+        raise DevelopmentLayoutError(
+            "layout must be the exact DevelopmentLayout type"
+        )
+    rebuilt = build_development_layout(capacity)
+    try:
+        snapshot = layout.to_dict()
+    except (AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise DevelopmentLayoutError("typed layout snapshot is malformed") from exc
+    if not _strict_equal(snapshot, rebuilt.to_dict()):
+        raise DevelopmentLayoutError(
+            "typed layout snapshot does not match the pinned capacity expansion"
+        )
+    return rebuilt

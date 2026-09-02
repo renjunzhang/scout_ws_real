@@ -320,6 +320,16 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_development_layout.py
   )
   add_test(
+    NAME test_mainline_stage3d2a_solver_parameter_layout
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_solver_parameter_layout.py
+  )
+  add_test(
+    NAME test_mainline_stage3d2a_cost_schedule
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_cost_schedule.py
+  )
+  add_test(
     NAME test_mainline_stage1_development_evidence
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_stage1_development_evidence.py
