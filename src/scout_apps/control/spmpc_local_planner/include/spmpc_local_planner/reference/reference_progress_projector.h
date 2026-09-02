@@ -8,123 +8,12 @@
 #include <limits>
 #include <stdexcept>
 
-#include "spmpc_local_planner/domain/content_identity.h"
-#include "spmpc_local_planner/domain/mainline_types.h"
+#include "spmpc_local_planner/domain/physical_state.h"
 #include "spmpc_local_planner/domain/release_contract.h"
-#include "spmpc_local_planner/execution/piecewise_zoh_plant_integrator.h"
+#include "spmpc_local_planner/reference/reference_progress_contract.h"
 
 namespace spmpc_local_planner {
 namespace mainline {
-
-struct ReferencePathIdentity {
-  std::uint64_t path_id{0};
-  Sha256Digest path_hash;
-  std::uint64_t reset_epoch{0};
-};
-
-inline bool operator==(const ReferencePathIdentity& lhs,
-                       const ReferencePathIdentity& rhs) noexcept {
-  return lhs.path_id == rhs.path_id && lhs.path_hash == rhs.path_hash &&
-         lhs.reset_epoch == rhs.reset_epoch;
-}
-
-inline bool operator!=(const ReferencePathIdentity& lhs,
-                       const ReferencePathIdentity& rhs) noexcept {
-  return !(lhs == rhs);
-}
-
-struct ReferencePathVertex {
-  double x{0.0};
-  double y{0.0};
-  double cumulative_s{0.0};
-};
-
-template <std::size_t VertexCapacity>
-struct ReferencePathSnapshot {
-  static_assert(VertexCapacity >= 2,
-                "reference path needs at least two vertex slots");
-
-  ReferencePathIdentity identity;
-  std::array<ReferencePathVertex, VertexCapacity> vertices{};
-  std::size_t vertex_count{0};
-  double s_path_end{0.0};
-};
-
-struct ReferenceProgressProjectorConfig {
-  double start_s_min{0.0};
-  double start_s_max{0.0};
-  double v_progress_bound{0.0};
-  double forward_guard{0.0};
-  double contour_guard{0.0};
-  double heading_guard{0.0};
-  // Metres of Euclidean candidate-distance difference.  This is deliberately
-  // not a squared-distance tolerance.
-  double ambiguity_tolerance{0.0};
-  double progress_equivalence_tolerance{0.0};
-  double minimum_segment_length{0.0};
-};
-
-enum class ProgressAuthority : std::uint8_t {
-  kNone = 0,
-  kFrozenStartInterval,
-  kNominalLiveRelease,
-};
-
-struct FrozenStartProgressAnchor {
-  ProgressAuthority source{ProgressAuthority::kNone};
-  ReferencePathIdentity identity;
-  CycleRequest cycle;
-  std::uint64_t history_generation{0};
-};
-
-struct NominalProgressCommit {
-  ProgressAuthority source{ProgressAuthority::kNone};
-  double s_commit{0.0};
-  ReferencePathIdentity identity;
-  CycleRequest cycle;
-  std::uint64_t release_generation{0};
-  std::uint64_t history_generation{0};
-};
-
-enum class ReferenceProgressStatus : std::uint8_t {
-  kOk = 0,
-  kInvalidPose,
-  kInvalidPath,
-  kInvalidIdentity,
-  kPathMismatch,
-  kEpochMismatch,
-  kInvalidAuthority,
-  kGenerationMismatch,
-  kTargetCycleMismatch,
-  kTimeRegression,
-  kTimeOverflow,
-  kProgressOverflow,
-  kStartWindowViolation,
-  kBackwardProgress,
-  kForwardWindowViolation,
-  kContourGuardViolation,
-  kHeadingGuardViolation,
-  kNoCandidate,
-  kAmbiguous,
-};
-
-struct ReferenceProgressProjection {
-  double s{0.0};
-  double projected_x{0.0};
-  double projected_y{0.0};
-  double projected_heading{0.0};
-  double distance{0.0};
-  double signed_contour_error{0.0};
-  double heading_error{0.0};
-  double search_lower{0.0};
-  double search_upper{0.0};
-  std::size_t selected_segment{0};
-  std::size_t accepted_candidate_count{0};
-  ReferencePathIdentity identity;
-  ProgressAuthority authority{ProgressAuthority::kNone};
-  std::uint64_t authority_cycle_id{0};
-  std::uint64_t history_generation{0};
-};
 
 // Reconstructs virtual progress from pose only.  It has no command, actual
 // velocity, historical progress velocity, warm-start, or global-search input.
@@ -172,7 +61,7 @@ class ReferenceProgressProjector {
         anchor.history_generation != expected_history_generation) {
       return ReferenceProgressStatus::kGenerationMismatch;
     }
-    if (!sameCycle(anchor.cycle, target_cycle)) {
+    if (!sameCycle(anchor.target_cycle, target_cycle)) {
       return ReferenceProgressStatus::kTargetCycleMismatch;
     }
     if (config_.start_s_min < facts.path_start ||
@@ -182,7 +71,8 @@ class ReferenceProgressProjector {
     return projectWindow(pose, path, facts, config_.start_s_min,
                          config_.start_s_max,
                          ProgressAuthority::kFrozenStartInterval,
-                         anchor.cycle.cycle_id, anchor.history_generation,
+                         anchor.target_cycle.cycle_id,
+                         anchor.history_generation,
                          output);
   }
 
@@ -212,10 +102,10 @@ class ReferenceProgressProjector {
       return ReferenceProgressStatus::kGenerationMismatch;
     }
     if (target_cycle.cycle_id == 0 ||
-        commit.cycle.cycle_id ==
+        commit.release_cycle.cycle_id ==
             std::numeric_limits<std::uint64_t>::max() ||
-        commit.cycle.cycle_id + 1 != target_cycle.cycle_id ||
-        commit.cycle.reset_epoch != target_cycle.reset_epoch) {
+        commit.release_cycle.cycle_id + 1 != target_cycle.cycle_id ||
+        commit.release_cycle.reset_epoch != target_cycle.reset_epoch) {
       return ReferenceProgressStatus::kTargetCycleMismatch;
     }
     if (!std::isfinite(commit.s_commit) ||
@@ -223,19 +113,20 @@ class ReferenceProgressProjector {
         commit.s_commit > facts.path_end) {
       return ReferenceProgressStatus::kInvalidAuthority;
     }
-    if (target_cycle.release_model.value < commit.cycle.release_model.value ||
+    if (target_cycle.release_model.value <
+            commit.release_cycle.release_model.value ||
         target_cycle.release_steady.value <
-            commit.cycle.release_steady.value) {
+            commit.release_cycle.release_steady.value) {
       return ReferenceProgressStatus::kTimeRegression;
     }
 
     std::int64_t duration_ns = 0;
     std::int64_t steady_duration_ns = 0;
     if (!checkedNonnegativeDifference(target_cycle.release_model.value,
-                                      commit.cycle.release_model.value,
+                                      commit.release_cycle.release_model.value,
                                       duration_ns) ||
         !checkedNonnegativeDifference(target_cycle.release_steady.value,
-                                      commit.cycle.release_steady.value,
+                                      commit.release_cycle.release_steady.value,
                                       steady_duration_ns)) {
       return ReferenceProgressStatus::kTimeOverflow;
     }
@@ -244,7 +135,8 @@ class ReferenceProgressProjector {
       const std::int64_t target_offset =
           ReleaseGridContract::boundaryOffsetNs(target_cycle.cycle_id);
       const std::int64_t commit_offset =
-          ReleaseGridContract::boundaryOffsetNs(commit.cycle.cycle_id);
+          ReleaseGridContract::boundaryOffsetNs(
+              commit.release_cycle.cycle_id);
       if (!checkedNonnegativeDifference(target_offset, commit_offset,
                                         expected_duration_ns)) {
         return ReferenceProgressStatus::kTimeOverflow;
@@ -275,7 +167,8 @@ class ReferenceProgressProjector {
 
     return projectWindow(pose, path, facts, commit.s_commit, upper,
                          ProgressAuthority::kNominalLiveRelease,
-                         commit.cycle.cycle_id, commit.history_generation,
+                         commit.release_cycle.cycle_id,
+                         commit.history_generation,
                          output);
   }
 

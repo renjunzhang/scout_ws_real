@@ -125,7 +125,7 @@ NominalProgressCommit nominalCommit(
   result.source = ProgressAuthority::kNominalLiveRelease;
   result.s_commit = s_commit;
   result.identity = path_identity;
-  result.cycle = cycleAt(cycle_id);
+  result.release_cycle = cycleAt(cycle_id);
   result.release_generation = generation;
   result.history_generation = generation;
   return result;
@@ -138,7 +138,7 @@ FrozenStartProgressAnchor frozenAnchor(
   FrozenStartProgressAnchor result;
   result.source = ProgressAuthority::kFrozenStartInterval;
   result.identity = path_identity;
-  result.cycle = cycleAt(target_cycle_id);
+  result.target_cycle = cycleAt(target_cycle_id);
   result.history_generation = generation;
   return result;
 }
@@ -401,13 +401,13 @@ TEST(MainlineReferenceProgressProjector,
   expectFailureAtomic(
       ReferenceProgressStatus::kTimeRegression, [&](auto& output) {
         NominalProgressCommit regressed = nominalCommit();
-        regressed.cycle.release_model = ModelTimeNs(3000000000LL);
+        regressed.release_cycle.release_model = ModelTimeNs(3000000000LL);
         return projector.projectNominalCommit(
             pose(1.0, 0.0, 0.0), targetCycle(), expected, 7, regressed, path,
             output);
       });
   NominalProgressCommit wrong_model_grid = commit;
-  ++wrong_model_grid.cycle.release_model.value;
+  ++wrong_model_grid.release_cycle.release_model.value;
   expectFailureAtomic(
       ReferenceProgressStatus::kTargetCycleMismatch, [&](auto& output) {
         return projector.projectNominalCommit(
@@ -415,7 +415,7 @@ TEST(MainlineReferenceProgressProjector,
             wrong_model_grid, path, output);
       });
   NominalProgressCommit wrong_steady_grid = commit;
-  ++wrong_steady_grid.cycle.release_steady.value;
+  ++wrong_steady_grid.release_cycle.release_steady.value;
   expectFailureAtomic(
       ReferenceProgressStatus::kTargetCycleMismatch, [&](auto& output) {
         return projector.projectNominalCommit(
@@ -447,7 +447,7 @@ TEST(MainlineReferenceProgressProjector,
             path, output);
       });
   wrong_anchor = frozenAnchor();
-  wrong_anchor.cycle.cycle_id = 2;
+  wrong_anchor.target_cycle.cycle_id = 2;
   expectFailureAtomic(
       ReferenceProgressStatus::kTargetCycleMismatch, [&](auto& output) {
         return projector.projectFrozenStart(
@@ -705,7 +705,7 @@ TEST(MainlineReferenceProgressProjector,
   expectFailureAtomic(
       ReferenceProgressStatus::kTimeOverflow, [&](auto& output) {
         NominalProgressCommit overflowing = nominalCommit();
-        overflowing.cycle.release_model =
+        overflowing.release_cycle.release_model =
             ModelTimeNs(std::numeric_limits<std::int64_t>::min());
         return projector.projectNominalCommit(
             pose(1.0, 0.0, 0.0), targetCycle(), expected, 7, overflowing,
@@ -741,7 +741,7 @@ TEST(MainlineReferenceProgressProjector,
       });
 
   anchor = frozenAnchor();
-  anchor.cycle.release_model = ModelTimeNs(2000000001LL);
+  anchor.target_cycle.release_model = ModelTimeNs(2000000001LL);
   expectFailureAtomic(
       ReferenceProgressStatus::kTargetCycleMismatch, [&](auto& output) {
         return projector.projectFrozenStart(
