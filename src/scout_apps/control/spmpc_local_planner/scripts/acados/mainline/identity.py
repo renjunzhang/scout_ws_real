@@ -33,6 +33,20 @@ def read_stable_regular_file(path: Path | str, *, label: str) -> bytes:
     if not isinstance(path, (str, Path)):
         raise IdentityError(f"{label} path must be str or Path")
     candidate = Path(path)
+    if candidate.is_absolute():
+        for parent in candidate.parents:
+            try:
+                metadata = parent.lstat()
+            except OSError as exc:
+                raise IdentityError(
+                    f"cannot inspect {label} directory component {parent}: {exc}"
+                ) from exc
+            if stat.S_ISLNK(metadata.st_mode):
+                raise IdentityError(
+                    f"{label} cannot traverse a symbolic-link directory: {parent}"
+                )
+            if not stat.S_ISDIR(metadata.st_mode):
+                raise IdentityError(f"{label} parent is not a directory: {parent}")
     flags = (
         os.O_RDONLY
         | getattr(os, "O_CLOEXEC", 0)

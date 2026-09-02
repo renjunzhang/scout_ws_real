@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import re
+import stat
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -65,6 +67,39 @@ def canonical_absolute_path(value: Path | str, label: str) -> Path:
     return resolved
 
 
+def require_no_symlink_directory_components(value: Path | str, label: str) -> Path:
+    """Require every directory above ``value`` to be a real directory.
+
+    A final symlink is intentionally not inspected here: callers which have
+    an explicit leaf-link policy (``capture_linked_file``) may record and
+    follow it.  Directory links are never part of that policy and therefore
+    must be rejected before any operation that follows the path.
+    """
+
+    if not isinstance(value, (str, Path)):
+        raise ProvenanceError(f"{label} must be str or Path")
+    candidate = Path(value)
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        raise ProvenanceError(f"{label} must be an absolute path without '..'")
+    normalized = Path(os.path.normpath(str(candidate)))
+    if normalized != candidate:
+        raise ProvenanceError(f"{label} must be a canonical absolute path")
+    for parent in candidate.parents:
+        try:
+            metadata = parent.lstat()
+        except OSError as exc:
+            raise ProvenanceError(
+                f"cannot inspect {label} directory component {parent}: {exc}"
+            ) from exc
+        if stat.S_ISLNK(metadata.st_mode):
+            raise ProvenanceError(
+                f"{label} cannot traverse a symbolic-link directory: {parent}"
+            )
+        if not stat.S_ISDIR(metadata.st_mode):
+            raise ProvenanceError(f"{label} parent is not a directory: {parent}")
+    return candidate
+
+
 def relative_path(value: Any, label: str) -> str:
     text = require_text(value, label)
     if "\\" in text:
@@ -88,5 +123,6 @@ __all__ = [
     "require_absolute_text",
     "require_digest",
     "require_git_sha",
+    "require_no_symlink_directory_components",
     "require_text",
 ]

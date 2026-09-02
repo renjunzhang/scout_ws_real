@@ -122,6 +122,11 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
                 read_stable_regular_file(final_link.resolve(), label="fixture"), payload
             )
 
+            directory_alias = root / "directory-alias"
+            directory_alias.symlink_to(target.parent, target_is_directory=True)
+            with self.assertRaisesRegex(IdentityError, "symbolic-link directory"):
+                read_stable_regular_file(directory_alias / target.name, label="fixture")
+
     def test_read_stable_regular_file_rejects_pathname_replacement_during_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "payload"
@@ -169,6 +174,18 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
                 (str(first), str(second)),
             )
             self.assertEqual(identity.size_bytes, len(b"linked"))
+
+    def test_capture_linked_file_rejects_intermediate_directory_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            real_directory = root / "real"
+            real_directory.mkdir()
+            target = real_directory / "payload"
+            target.write_bytes(b"linked")
+            directory_alias = root / "directory-alias"
+            directory_alias.symlink_to(real_directory, target_is_directory=True)
+            with self.assertRaisesRegex(ProvenanceError, "symbolic-link directory"):
+                capture_linked_file("fixture", directory_alias / "payload")
 
     def test_selected_sources_are_sorted_and_reject_path_ambiguity(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -281,6 +298,23 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
             self.assertEqual(identity.probes[0].output_text, "fixture-tool version 7.2.1")
             self.assertEqual(identity, require_tool_identity(identity))
 
+    def test_tool_probe_rejects_executable_replacement(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            tool_path = root / "fixture-tool"
+            replacement = root / "replacement-tool"
+            _write_executable(
+                replacement,
+                "#!/bin/sh\nprintf '%s\\n' 'replacement version'\n",
+            )
+            _write_executable(
+                tool_path,
+                "#!/bin/sh\nprintf '%s\\n' 'original version'\n"
+                f"cp {replacement} {tool_path}\n",
+            )
+            with self.assertRaisesRegex(ProvenanceError, "changed during probe"):
+                _tool(tool_path)
+
     def test_tool_probe_failure_and_empty_output_fail_closed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -305,8 +339,45 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
             module_path = Path(directory) / "module.py"
             module_path.write_text("# fixture\n", encoding="utf-8")
             self.assertEqual(module_file(SimpleNamespace(__file__=str(module_path)), "fixture"), module_path)
+            module_link = Path(directory) / "module-link.py"
+            module_link.symlink_to(module_path.name)
+            self.assertEqual(
+                module_file(SimpleNamespace(__file__=str(module_link)), "fixture"),
+                module_link,
+            )
+            module_directory = Path(directory) / "module-directory"
+            module_directory.mkdir()
+            module_directory_link = Path(directory) / "module-directory-link"
+            module_directory_link.symlink_to(module_directory, target_is_directory=True)
+            with self.assertRaisesRegex(ProvenanceError, "symbolic-link directory"):
+                module_file(
+                    SimpleNamespace(__file__=str(module_directory_link / "module.py")),
+                    "fixture",
+                )
             with self.assertRaises(ProvenanceError):
                 module_file(SimpleNamespace(), "missing")
+
+    def test_codegen_provenance_requires_the_canonical_28_environment_entries(self) -> None:
+        canonical = tuple((name, None) for name in COMPILER_ENVIRONMENT_NAMES)
+        malformed = canonical[:-1]
+        with self.assertRaisesRegex(ProvenanceError, "canonical 28"):
+            provenance_module.capture_codegen_provenance(
+                Path("/absolute/repository"),
+                ("source.py",),
+                malformed,
+                Path("/absolute/acados"),
+                Path("/absolute/tera"),
+            )
+        reordered = list(canonical)
+        reordered[0], reordered[1] = reordered[1], reordered[0]
+        with self.assertRaisesRegex(ProvenanceError, "exactly match"):
+            provenance_module.capture_codegen_provenance(
+                Path("/absolute/repository"),
+                ("source.py",),
+                tuple(reordered),
+                Path("/absolute/acados"),
+                Path("/absolute/tera"),
+            )
 
     def test_acados_interface_fails_closed_without_touching_optional_imports(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

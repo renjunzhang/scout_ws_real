@@ -20,6 +20,7 @@ from .provenance_common import (
     relative_path,
     require_absolute_text,
     require_digest,
+    require_no_symlink_directory_components,
     require_text,
 )
 
@@ -114,6 +115,10 @@ def capture_linked_file(
     if not requested.is_absolute() or ".." in requested.parts:
         raise ProvenanceError("linked-file path must be absolute without '..'")
     requested = Path(os.path.normpath(str(requested)))
+    # Only the final path component may be a symbolic link.  In particular,
+    # do not let Path.lstat below silently follow a directory link while
+    # looking up the requested leaf.
+    require_no_symlink_directory_components(requested, "linked-file path")
     current = requested
     hops: list[SymlinkHop] = []
     visited: set[str] = set()
@@ -122,6 +127,7 @@ def capture_linked_file(
         if current_text in visited:
             raise ProvenanceError(f"symbolic-link cycle at {current}")
         visited.add(current_text)
+        require_no_symlink_directory_components(current, "linked-file path")
         try:
             metadata = current.lstat()
         except OSError as exc:
@@ -137,6 +143,7 @@ def capture_linked_file(
         current = Path(os.path.normpath(str(next_path)))
     else:
         raise ProvenanceError("symbolic-link chain exceeds 32 hops")
+    require_no_symlink_directory_components(current, "linked-file path")
     try:
         resolved = current.resolve(strict=True)
         payload = read_stable_regular_file(resolved, label=logical_name)
@@ -474,11 +481,39 @@ def _resolve_command(requested_command: str) -> Path:
     return Path(os.path.normpath(str(path)))
 
 
+def _require_tool_executable_unchanged(executable: LinkedFileIdentity) -> None:
+    """Re-capture the executable and its complete leaf-link chain.
+
+    The subprocess is launched using the first capture's resolved path, so a
+    replacement of either the executable bytes or any leaf link must be
+    detected on both sides of the probe.  A directory link is rejected by
+    ``capture_linked_file`` before this comparison.
+    """
+
+    try:
+        current = capture_linked_file(
+            executable.logical_name,
+            executable.requested_path,
+            executable=executable.executable,
+        )
+    except ProvenanceError as exc:
+        raise ProvenanceError(
+            f"tool executable changed or became unavailable during probe: "
+            f"{executable.logical_name}"
+        ) from exc
+    if current != executable:
+        raise ProvenanceError(
+            f"tool executable bytes or symlink chain changed during probe: "
+            f"{executable.logical_name}"
+        )
+
+
 def capture_command_probe(
     executable: LinkedFileIdentity,
     name: str,
     arguments: tuple[str, ...],
 ) -> CommandProbeIdentity:
+    _require_tool_executable_unchanged(executable)
     environment = dict(os.environ)
     environment.update({"LC_ALL": "C", "LANG": "C"})
     try:
@@ -502,6 +537,7 @@ def capture_command_probe(
     except UnicodeDecodeError as exc:
         raise ProvenanceError("tool probe output is not UTF-8") from exc
     require_text(text, "tool probe output")
+    _require_tool_executable_unchanged(executable)
     return CommandProbeIdentity(
         name=name,
         arguments=arguments,
@@ -522,6 +558,11 @@ def capture_tool_identity(
         capture_command_probe(executable, name, arguments)
         for name, arguments in probes
     )
+    # Keep a final boundary check at the caller as well.  This catches a
+    # replacement performed by a probe wrapper or a test double around the
+    # low-level probe function, in addition to the checks surrounding the
+    # real subprocess in capture_command_probe.
+    _require_tool_executable_unchanged(executable)
     values = {
         "role": role,
         "requested_command": requested_command,

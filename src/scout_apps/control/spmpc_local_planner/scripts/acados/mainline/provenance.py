@@ -94,6 +94,33 @@ def _compiler_command(
     return value if value else fallback
 
 
+def _canonical_compiler_environment_names() -> tuple[str, ...]:
+    """Load the single compiler-environment authority only when capturing.
+
+    Keeping this import local preserves the dependency-light/lazy top-level
+    provenance import while ensuring that this layer cannot drift from the
+    D4 codegen-options list.
+    """
+
+    try:
+        from .codegen_options import COMPILER_ENVIRONMENT_NAMES
+    except (ImportError, AttributeError) as exc:
+        raise ProvenanceError(
+            "cannot load the canonical compiler environment authority"
+        ) from exc
+    if (
+        type(COMPILER_ENVIRONMENT_NAMES) is not tuple
+        or len(COMPILER_ENVIRONMENT_NAMES) != 28
+        or any(type(name) is not str or not name for name in COMPILER_ENVIRONMENT_NAMES)
+        or len(set(COMPILER_ENVIRONMENT_NAMES)) != 28
+    ):
+        raise ProvenanceError(
+            "codegen_options compiler environment authority must contain "
+            "28 unique names"
+        )
+    return COMPILER_ENVIRONMENT_NAMES
+
+
 def _capture_tools(
     compiler_environment: tuple[tuple[str, str | None], ...],
     tera_executable: Path | str,
@@ -146,9 +173,13 @@ def _validate_compiler_environment(
     *,
     require_current: bool,
 ) -> None:
-    if type(value) is not tuple or not value:
-        raise ProvenanceError("compiler environment must be a non-empty tuple")
+    expected_names = _canonical_compiler_environment_names()
+    if type(value) is not tuple or len(value) != len(expected_names):
+        raise ProvenanceError(
+            "compiler environment must contain exactly the canonical 28 entries"
+        )
     names: list[str] = []
+    settings: list[str | None] = []
     for item in value:
         if type(item) is not tuple or len(item) != 2:
             raise ProvenanceError("compiler environment entries must be pairs")
@@ -157,10 +188,15 @@ def _validate_compiler_environment(
         if setting is not None and type(setting) is not str:
             raise ProvenanceError("compiler environment values must be strings or null")
         names.append(name)
-        if require_current and os.environ.get(name) != setting:
-            raise ProvenanceError(f"compiler environment changed at {name}")
-    if len(names) != len(set(names)):
-        raise ProvenanceError("compiler environment names must be unique")
+        settings.append(setting)
+    if tuple(names) != expected_names:
+        raise ProvenanceError(
+            "compiler environment names must exactly match codegen_options"
+        )
+    if require_current:
+        for name, setting in zip(names, settings):
+            if os.environ.get(name) != setting:
+                raise ProvenanceError(f"compiler environment changed at {name}")
 
 
 @dataclass(frozen=True)

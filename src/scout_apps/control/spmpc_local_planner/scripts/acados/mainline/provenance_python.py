@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib
 import os
 import platform
+import stat
 import sys
 from dataclasses import InitVar, dataclass
 from pathlib import Path
@@ -15,6 +16,7 @@ from .provenance_common import (
     ProvenanceError,
     require_absolute_text,
     require_digest,
+    require_no_symlink_directory_components,
     require_text,
 )
 from .provenance_files import (
@@ -148,10 +150,21 @@ def module_file(module: Any, label: str) -> Path:
     value = getattr(module, "__file__", None)
     if type(value) is not str:
         raise ProvenanceError(f"{label} module path is unavailable")
+    candidate = Path(value)
+    if not candidate.is_absolute() or ".." in candidate.parts:
+        raise ProvenanceError(f"{label} module path must be absolute without '..'")
+    candidate = Path(os.path.normpath(str(candidate)))
+    require_no_symlink_directory_components(candidate, f"{label} module path")
     try:
-        return Path(value).resolve(strict=True)
+        metadata = candidate.stat()
     except OSError as exc:
         raise ProvenanceError(f"cannot resolve {label} module path: {exc}") from exc
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ProvenanceError(f"{label} module path is not a regular file")
+    # Return the importer's spelling, including a final symlink.  The caller
+    # passes it to capture_linked_file, which is the sole API that records and
+    # permits an explicit leaf symlink chain.
+    return candidate
 
 
 def capture_python_runtime(python_tool: ToolIdentity) -> PythonRuntimeIdentity:
@@ -164,16 +177,15 @@ def capture_python_runtime(python_tool: ToolIdentity) -> PythonRuntimeIdentity:
     except (ImportError, OSError) as exc:
         raise ProvenanceError("CasADi and NumPy are required for provenance") from exc
     casadi_init = module_file(casadi, "CasADi")
-    casadi_root = casadi_init.parent
+    casadi_root = casadi_init.resolve(strict=True).parent
     casadi_files = (
         capture_linked_file("casadi/__init__.py", casadi_init),
         capture_linked_file("casadi/_casadi.so", casadi_root / "_casadi.so"),
         capture_linked_file("casadi/libcasadi.so", casadi_root / "libcasadi.so"),
     )
     numpy_init = module_file(numpy, "NumPy")
-    numpy_extensions = tuple(
-        sorted(numpy_init.parent.glob("core/_multiarray_umath*.so"))
-    )
+    numpy_root = numpy_init.resolve(strict=True).parent
+    numpy_extensions = tuple(sorted(numpy_root.glob("core/_multiarray_umath*.so")))
     if len(numpy_extensions) != 1:
         raise ProvenanceError("NumPy multiarray extension identity is ambiguous")
     numpy_files = (
