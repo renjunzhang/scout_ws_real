@@ -246,6 +246,11 @@ if(CATKIN_ENABLE_TESTING)
       --check
   )
   add_test(
+    NAME test_mainline_stage3a_layout_scaffold
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_layout_scaffold.py
+  )
+  add_test(
     NAME test_mainline_stage0_contract_manifest
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/scripts/tests/test_mainline_stage0_contract.py
