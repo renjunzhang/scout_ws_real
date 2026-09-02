@@ -20,12 +20,16 @@ struct PlanarCommandAcceleration {
 
 enum class EmissionReason : std::uint8_t {
   kNominal = 0,
-  kWarmupZero,
-  kDeadlineZero,
-  kSolverFailureZero,
-  kSafetyOverride,
-  kPublishJitterZero,
-  kClockFaultZero,
+  kWarmupZero = 1,
+  // Values 2 through 5 belonged to retired zero/override reasons.  They stay
+  // unused so persisted numeric audit records cannot be reinterpreted as a
+  // new hard stop or smooth fallback by a newer binary.
+  kClockFaultStop = 6,
+  kHardSafetyStop = 7,
+  kDeadlineFallback = 8,
+  kSolverFailureFallback = 9,
+  kPublishTimingFallback = 10,
+  kInputStaleFallback = 11,
 };
 
 enum class PublicationStatus : std::uint8_t {
@@ -76,33 +80,51 @@ inline bool isKnownEmissionReason(EmissionReason reason) {
   switch (reason) {
     case EmissionReason::kNominal:
     case EmissionReason::kWarmupZero:
-    case EmissionReason::kDeadlineZero:
-    case EmissionReason::kSolverFailureZero:
-    case EmissionReason::kSafetyOverride:
-    case EmissionReason::kPublishJitterZero:
-    case EmissionReason::kClockFaultZero:
+    case EmissionReason::kDeadlineFallback:
+    case EmissionReason::kSolverFailureFallback:
+    case EmissionReason::kHardSafetyStop:
+    case EmissionReason::kPublishTimingFallback:
+    case EmissionReason::kClockFaultStop:
+    case EmissionReason::kInputStaleFallback:
       return true;
   }
   return false;
 }
 
-inline bool resetsPublisherAcceleration(EmissionReason reason) {
-  return isKnownEmissionReason(reason) && reason != EmissionReason::kNominal;
+inline bool isSmoothFallbackReason(EmissionReason reason) {
+  switch (reason) {
+    case EmissionReason::kDeadlineFallback:
+    case EmissionReason::kSolverFailureFallback:
+    case EmissionReason::kPublishTimingFallback:
+    case EmissionReason::kInputStaleFallback:
+      return true;
+    case EmissionReason::kNominal:
+    case EmissionReason::kWarmupZero:
+    case EmissionReason::kHardSafetyStop:
+    case EmissionReason::kClockFaultStop:
+      return false;
+  }
+  return false;
 }
 
 inline bool requiresZeroCommand(EmissionReason reason) {
   switch (reason) {
     case EmissionReason::kWarmupZero:
-    case EmissionReason::kDeadlineZero:
-    case EmissionReason::kSolverFailureZero:
-    case EmissionReason::kPublishJitterZero:
-    case EmissionReason::kClockFaultZero:
+    case EmissionReason::kHardSafetyStop:
+    case EmissionReason::kClockFaultStop:
       return true;
     case EmissionReason::kNominal:
-    case EmissionReason::kSafetyOverride:
+    case EmissionReason::kDeadlineFallback:
+    case EmissionReason::kSolverFailureFallback:
+    case EmissionReason::kPublishTimingFallback:
+    case EmissionReason::kInputStaleFallback:
       return false;
   }
   return false;
+}
+
+inline bool requiresZeroPublisherAcceleration(EmissionReason reason) {
+  return requiresZeroCommand(reason);
 }
 
 }  // namespace mainline

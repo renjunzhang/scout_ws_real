@@ -7,6 +7,7 @@
 #include <limits>
 #include <thread>
 
+#include "spmpc_local_planner/application/release_fallback_policy.h"
 #include "spmpc_local_planner/execution/command_event.h"
 #include "spmpc_local_planner/execution/published_command_history.h"
 
@@ -43,6 +44,17 @@ PlanarCommandAcceleration acceleration(double linear, double angular) {
   PlanarCommandAcceleration result;
   result.linear = linear;
   result.angular = angular;
+  return result;
+}
+
+JerkLimitedFallbackParams fallbackParams() {
+  JerkLimitedFallbackParams result;
+  result.maximum_linear_command = 1.0;
+  result.maximum_angular_command = 1.0;
+  result.maximum_linear_acceleration = 0.6;
+  result.maximum_angular_acceleration = 0.3;
+  result.maximum_linear_jerk = 3.0;
+  result.maximum_angular_jerk = 1.5;
   return result;
 }
 
@@ -197,34 +209,115 @@ TEST(MainlineCommandHistory, CommitsNominalCommandAuthorityAndGeneration) {
 }
 
 TEST(MainlineCommandHistory,
-     ResetsAccelerationForEveryNonNominalEmissionReason) {
-  const std::array<EmissionReason, 6> reasons = {
-      EmissionReason::kWarmupZero, EmissionReason::kDeadlineZero,
-      EmissionReason::kSolverFailureZero, EmissionReason::kSafetyOverride,
-      EmissionReason::kPublishJitterZero, EmissionReason::kClockFaultZero};
+     PreservesExactCommandAndAccelerationForSmoothFallbacks) {
+  const std::array<EmissionReason, 4> reasons = {
+      EmissionReason::kDeadlineFallback,
+      EmissionReason::kSolverFailureFallback,
+      EmissionReason::kInputStaleFallback,
+      EmissionReason::kPublishTimingFallback};
+
+  AuthoritativePublisherState previous;
+  previous.previous_linear_command = 0.4;
+  previous.previous_angular_command = -0.2;
+  previous.previous_linear_acceleration = 0.2;
+  previous.previous_angular_acceleration = -0.1;
+  const JerkLimitedFallbackPolicy policy(fallbackParams());
+  ReleaseFallbackOutput fallback;
+  ASSERT_EQ(ReleaseFallbackStatus::kOk,
+            policy.computeNext(previous, fallback));
+  ASSERT_FALSE(fallback.stopped);
 
   for (const EmissionReason reason : reasons) {
     PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
-    const bool safety_override = reason == EmissionReason::kSafetyOverride;
-    const PlanarCommand issued =
-        safety_override ? command(0.75, -0.25) : command(0.0, 0.0);
-    const PlanarCommandAcceleration reset_acceleration = acceleration(0, 0);
     PublishedCommandEvent committed;
 
-    ASSERT_TRUE(resetsPublisherAcceleration(reason));
-    ASSERT_EQ(safety_override, !requiresZeroCommand(reason));
+    ASSERT_TRUE(isSmoothFallbackReason(reason));
+    ASSERT_FALSE(requiresZeroCommand(reason));
+    ASSERT_FALSE(requiresZeroPublisherAcceleration(reason));
     ASSERT_EQ(HistoryCommitResult::kCommitted,
               history.commitEmitted(
-                  makeCommit(0, 0, issued, reset_acceleration, reason),
+                  makeCommit(0, 0, fallback.command,
+                             fallback.authoritative_acceleration, reason),
                   &committed))
         << static_cast<int>(reason);
     EXPECT_EQ(reason, committed.reason);
+    EXPECT_EQ(fallback.command.linear, committed.command.linear);
+    EXPECT_EQ(fallback.command.angular, committed.command.angular);
+    EXPECT_EQ(fallback.authoritative_acceleration.linear,
+              committed.publisher_state_after.previous_linear_acceleration);
+    EXPECT_EQ(fallback.authoritative_acceleration.angular,
+              committed.publisher_state_after.previous_angular_acceleration);
+
+    CommandHistorySnapshot<4> snapshot;
+    ASSERT_EQ(HistorySnapshotResult::kReady,
+              history.capture(committed.actual_steady,
+                              committed.actual_model, snapshot));
+    ASSERT_EQ(1u, snapshot.size());
+    EXPECT_EQ(fallback.command.linear,
+              snapshot.publisherState().previous_linear_command);
+    EXPECT_EQ(fallback.command.angular,
+              snapshot.publisherState().previous_angular_command);
+    EXPECT_EQ(fallback.authoritative_acceleration.linear,
+              snapshot.publisherState().previous_linear_acceleration);
+    EXPECT_EQ(fallback.authoritative_acceleration.angular,
+              snapshot.publisherState().previous_angular_acceleration);
+  }
+}
+
+TEST(MainlineCommandHistory,
+     ImmediateStopsRequireZeroCommandAndAcceleration) {
+  const std::array<EmissionReason, 3> reasons = {
+      EmissionReason::kWarmupZero, EmissionReason::kHardSafetyStop,
+      EmissionReason::kClockFaultStop};
+
+  for (const EmissionReason reason : reasons) {
+    PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
+    PublishedCommandEvent committed;
+
+    ASSERT_FALSE(isSmoothFallbackReason(reason));
+    ASSERT_TRUE(requiresZeroCommand(reason));
+    ASSERT_TRUE(requiresZeroPublisherAcceleration(reason));
+    ASSERT_EQ(HistoryCommitResult::kCommitted,
+              history.commitEmitted(
+                  makeCommit(0, 0, command(0, 0), acceleration(0, 0),
+                             reason),
+                  &committed))
+        << static_cast<int>(reason);
+    EXPECT_EQ(0.0, committed.command.linear);
+    EXPECT_EQ(0.0, committed.command.angular);
     EXPECT_EQ(0.0,
               committed.publisher_state_after.previous_linear_acceleration);
     EXPECT_EQ(0.0,
               committed.publisher_state_after.previous_angular_acceleration);
-    EXPECT_EQ(issued.linear, committed.command.linear);
-    EXPECT_EQ(issued.angular, committed.command.angular);
+  }
+}
+
+TEST(MainlineCommandHistory,
+     RetiredReasonNumbersCannotBeReinterpreted) {
+  EXPECT_EQ(6u, static_cast<std::uint8_t>(EmissionReason::kClockFaultStop));
+  EXPECT_EQ(7u, static_cast<std::uint8_t>(EmissionReason::kHardSafetyStop));
+  EXPECT_EQ(8u,
+            static_cast<std::uint8_t>(EmissionReason::kDeadlineFallback));
+  EXPECT_EQ(9u,
+            static_cast<std::uint8_t>(
+                EmissionReason::kSolverFailureFallback));
+  EXPECT_EQ(10u,
+            static_cast<std::uint8_t>(
+                EmissionReason::kPublishTimingFallback));
+  EXPECT_EQ(11u,
+            static_cast<std::uint8_t>(EmissionReason::kInputStaleFallback));
+
+  const std::array<std::uint8_t, 4> retired_values = {{2, 3, 4, 5}};
+  for (const std::uint8_t raw_value : retired_values) {
+    PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
+    const EmissionReason retired_reason =
+        static_cast<EmissionReason>(raw_value);
+    ASSERT_FALSE(isKnownEmissionReason(retired_reason));
+    EXPECT_EQ(HistoryCommitResult::kInvalidReason,
+              history.commitEmitted(
+                  makeCommit(0, 0, command(0, 0), acceleration(0, 0),
+                             retired_reason)));
+    EXPECT_TRUE(history.faultLatched());
   }
 }
 
@@ -237,7 +330,7 @@ TEST(MainlineCommandHistory,
     EXPECT_EQ(HistoryCommitResult::kWouldPublish,
               history.commitEmitted(
                   makeCommit(0, 0, command(1, -1), acceleration(2, -2),
-                             EmissionReason::kNominal,
+                             EmissionReason::kDeadlineFallback,
                              PublicationStatus::kWouldPublish),
                   &sentinel));
     EXPECT_EQ(99u, sentinel.cycle.cycle_id);
@@ -378,13 +471,13 @@ TEST(MainlineCommandHistory, RejectsNonFiniteCommandAndAuthority) {
   }
 }
 
-TEST(MainlineCommandHistory, RejectsInvalidSafetyResetValues) {
+TEST(MainlineCommandHistory, RejectsInvalidImmediateStopValues) {
   {
     PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
     EXPECT_EQ(HistoryCommitResult::kInvalidCommand,
               history.commitEmitted(makeCommit(
                   0, 0, command(0.01, 0.0), acceleration(0.0, 0.0),
-                  EmissionReason::kDeadlineZero)));
+                  EmissionReason::kWarmupZero)));
     EXPECT_TRUE(history.faultLatched());
     EXPECT_EQ(0u, history.generation());
   }
@@ -393,8 +486,8 @@ TEST(MainlineCommandHistory, RejectsInvalidSafetyResetValues) {
     PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 0);
     EXPECT_EQ(HistoryCommitResult::kInvalidAuthority,
               history.commitEmitted(makeCommit(
-                  0, 0, command(0.2, -0.1), acceleration(0.01, 0.0),
-                  EmissionReason::kSafetyOverride)));
+                  0, 0, command(0.0, 0.0), acceleration(0.01, 0.0),
+                  EmissionReason::kHardSafetyStop)));
     EXPECT_TRUE(history.faultLatched());
     EXPECT_EQ(0u, history.generation());
   }
@@ -441,28 +534,50 @@ TEST(MainlineCommandHistory, RejectsActualClockRegression) {
   EXPECT_EQ(1u, history.nextCycleIdForWriter());
 }
 
-TEST(MainlineCommandHistory, RejectsLateNominalPublication) {
+TEST(MainlineCommandHistory,
+     RecordsLateNominalFactForNextCycleDegradation) {
   PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 5);
-  EXPECT_EQ(HistoryCommitResult::kLateNominal,
+  PublishedCommandEvent committed;
+
+  ASSERT_EQ(HistoryCommitResult::kCommitted,
             history.commitEmitted(
                 makeCommit(0, 0, command(1, -1), acceleration(2, -2),
                            EmissionReason::kNominal,
-                           PublicationStatus::kPublished, 6, 6)));
-  EXPECT_TRUE(history.faultLatched());
-  EXPECT_EQ(0u, history.generation());
-  EXPECT_EQ(0u, history.nextCycleIdForWriter());
+                           PublicationStatus::kPublished, 6, 6),
+                &committed));
+  EXPECT_TRUE(committed.publish_late);
+  EXPECT_EQ(EmissionReason::kNominal, committed.reason);
+  EXPECT_FALSE(history.faultLatched());
+  EXPECT_EQ(1u, history.generation());
+  EXPECT_EQ(1u, history.nextCycleIdForWriter());
+
+  CommandHistorySnapshot<4> snapshot;
+  ASSERT_EQ(HistorySnapshotResult::kReady,
+            history.capture(committed.actual_steady, committed.actual_model,
+                            snapshot));
+  ASSERT_EQ(1u, snapshot.size());
+  EXPECT_TRUE(snapshot.event(0).publish_late);
+  EXPECT_EQ(1.0, snapshot.publisherState().previous_linear_command);
+  EXPECT_EQ(-1.0, snapshot.publisherState().previous_angular_command);
 }
 
-TEST(MainlineCommandHistory, RecordsLateSafetyZeroOnThePlannedModelGrid) {
+TEST(MainlineCommandHistory, RecordsLateSmoothFallbackOnThePlannedModelGrid) {
   PublishedCommandHistory<4> history(testAnchor(), kResetEpoch, 5);
   PublishedCommandEvent committed;
   ASSERT_EQ(HistoryCommitResult::kCommitted,
             history.commitEmitted(
-                makeCommit(0, 0, command(0, 0), acceleration(0, 0),
-                           EmissionReason::kPublishJitterZero,
+                makeCommit(0, 0, command(0.3, -0.1),
+                           acceleration(-0.6, 0.3),
+                           EmissionReason::kPublishTimingFallback,
                            PublicationStatus::kPublished, 6, 9),
                 &committed));
   EXPECT_TRUE(committed.publish_late);
+  EXPECT_EQ(0.3, committed.command.linear);
+  EXPECT_EQ(-0.1, committed.command.angular);
+  EXPECT_EQ(-0.6,
+            committed.publisher_state_after.previous_linear_acceleration);
+  EXPECT_EQ(0.3,
+            committed.publisher_state_after.previous_angular_acceleration);
   EXPECT_EQ(cycleAt(0).release_model.value,
             committed.cycle.release_model.value);
   EXPECT_EQ(cycleAt(0).release_model.value + 9,

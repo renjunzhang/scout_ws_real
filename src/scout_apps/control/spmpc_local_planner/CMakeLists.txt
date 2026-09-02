@@ -341,6 +341,14 @@ if(CATKIN_ENABLE_TESTING)
       ${catkin_LIBRARIES}
     )
   endif()
+  catkin_add_gtest(test_mainline_release_fallback_policy
+    test/test_mainline_release_fallback_policy.cpp
+  )
+  if(TARGET test_mainline_release_fallback_policy)
+    target_link_libraries(test_mainline_release_fallback_policy
+      ${catkin_LIBRARIES}
+    )
+  endif()
   catkin_add_gtest(test_mainline_delay_fopdt
     test/test_mainline_delay_fopdt.cpp
   )

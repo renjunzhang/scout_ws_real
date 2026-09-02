@@ -30,6 +30,8 @@ enum class HistoryCommitResult : std::uint8_t {
   kInvalidAuthority,
   kPublishedTooEarly,
   kActualClockRegression,
+  // Retained only to preserve numeric audit identity.  A late command that
+  // was actually published is now committed with event.publish_late=true.
   kLateNominal,
   kTimeOverflow,
   kCycleOverflow,
@@ -315,7 +317,7 @@ class PublishedCommandHistory {
     }
     if (!std::isfinite(commit.authoritative_acceleration.linear) ||
         !std::isfinite(commit.authoritative_acceleration.angular) ||
-        (resetsPublisherAcceleration(commit.reason) &&
+        (requiresZeroPublisherAcceleration(commit.reason) &&
          (commit.authoritative_acceleration.linear != 0.0 ||
           commit.authoritative_acceleration.angular != 0.0))) {
       return reject(HistoryCommitResult::kInvalidAuthority);
@@ -343,9 +345,9 @@ class PublishedCommandHistory {
     }
     const bool publish_late =
         lateness_ns > maximum_publish_lateness_ns_;
-    if (publish_late && commit.reason == EmissionReason::kNominal) {
-      return reject(HistoryCommitResult::kLateNominal);
-    }
+    // Lateness is known only after the publisher call.  Once the exact finite
+    // command has crossed that boundary it remains an authoritative fact;
+    // publish_late invalidates the trial and drives the next release decision.
     if (writer_generation_ == kMaximumPublishedGeneration) {
       return reject(HistoryCommitResult::kGenerationOverflow);
     }
