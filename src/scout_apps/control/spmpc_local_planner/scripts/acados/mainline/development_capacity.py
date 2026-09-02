@@ -8,7 +8,7 @@ provenance metadata only and is never opened or queried by this module.
 
 from __future__ import annotations
 
-from dataclasses import InitVar, dataclass
+from dataclasses import InitVar, dataclass, fields, is_dataclass
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -415,23 +415,9 @@ class DevelopmentCapacityContract:
         }
 
 
-def load_development_capacity(
-    path: Path | str,
-) -> DevelopmentCapacityContract:
-    """Load the immutable v1 capacity without inspecting any external data."""
-
-    try:
-        value, payload = read_strict_json(path, label="development capacity")
-    except IdentityError as exc:
-        raise DevelopmentCapacityError(str(exc)) from exc
-    _validate_development_capacity(value)
-    digest = sha256_bytes(payload)
-    if digest != DEVELOPMENT_CAPACITY_SHA256:
-        raise DevelopmentCapacityError(
-            "development capacity is not the pinned immutable v1 snapshot"
-        )
-    contract = DevelopmentCapacityContract(
-        contract_sha256=digest,
+def _new_pinned_contract() -> DevelopmentCapacityContract:
+    return DevelopmentCapacityContract(
+        contract_sha256=DEVELOPMENT_CAPACITY_SHA256,
         release_frequency_hz=RELEASE_FREQUENCY_HZ,
         release_period_sec=RELEASE_PERIOD_SEC,
         v=ChannelCapacity(R_V, D_V, NQ_V, Fraction(R_V, RELEASE_FREQUENCY_HZ)),
@@ -450,8 +436,61 @@ def load_development_capacity(
         np_exec=NP_EXEC,
         _construction_token=_CONSTRUCTION_TOKEN,
     )
+
+
+def _strict_typed_equal(left: Any, right: Any) -> bool:
+    if type(left) is not type(right):
+        return False
+    if is_dataclass(left):
+        return all(
+            _strict_typed_equal(
+                getattr(left, field.name),
+                getattr(right, field.name),
+            )
+            for field in fields(left)
+        )
+    return bool(left == right)
+
+
+def require_pinned_development_capacity(
+    value: Any,
+) -> DevelopmentCapacityContract:
+    """Require complete semantic equality with the loader's pinned snapshot.
+
+    A Python-private construction token is only an API guard, not an authority
+    boundary.  Consumers call this function so a forged or force-mutated
+    dataclass carrying the right digest string cannot alter layout dimensions.
+    """
+
+    if type(value) is not DevelopmentCapacityContract:
+        raise DevelopmentCapacityError(
+            "capacity must come from the pinned development-capacity loader"
+        )
+    if not _strict_typed_equal(value, _new_pinned_contract()):
+        raise DevelopmentCapacityError(
+            "typed development capacity does not match the complete pinned snapshot"
+        )
+    return value
+
+
+def load_development_capacity(
+    path: Path | str,
+) -> DevelopmentCapacityContract:
+    """Load the immutable v1 capacity without inspecting any external data."""
+
+    try:
+        value, payload = read_strict_json(path, label="development capacity")
+    except IdentityError as exc:
+        raise DevelopmentCapacityError(str(exc)) from exc
+    _validate_development_capacity(value)
+    digest = sha256_bytes(payload)
+    if digest != DEVELOPMENT_CAPACITY_SHA256:
+        raise DevelopmentCapacityError(
+            "development capacity is not the pinned immutable v1 snapshot"
+        )
+    contract = _new_pinned_contract()
     if value != contract.to_dict():
         raise DevelopmentCapacityError(
             "development capacity does not match its typed representation"
         )
-    return contract
+    return require_pinned_development_capacity(contract)

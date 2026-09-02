@@ -27,6 +27,7 @@ from acados.mainline.development_capacity import (
     DEVELOPMENT_CAPACITY_STATUS,
     DevelopmentCapacityError,
     load_development_capacity,
+    require_pinned_development_capacity,
 )
 
 CONTRACT = (
@@ -259,6 +260,18 @@ if loaded:
             contract.nx = 49  # type: ignore[misc]
         with self.assertRaisesRegex(DevelopmentCapacityError, "pinned loader"):
             replace(contract, nx=49)
+
+    def test_force_mutated_typed_contract_does_not_retain_authority(self) -> None:
+        contract = load_development_capacity(CONTRACT)
+        for forged_value in (49, 48.0):
+            forged = copy.copy(contract)
+            object.__setattr__(forged, "nx", forged_value)
+            self.assertEqual(forged.contract_sha256, DEVELOPMENT_CAPACITY_SHA256)
+            with self.subTest(forged_value=forged_value), self.assertRaisesRegex(
+                DevelopmentCapacityError,
+                "complete pinned",
+            ):
+                require_pinned_development_capacity(forged)
 
 
 if __name__ == "__main__":
