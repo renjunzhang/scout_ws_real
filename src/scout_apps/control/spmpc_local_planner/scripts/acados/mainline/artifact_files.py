@@ -13,7 +13,13 @@ from .codegen_options import (
     GENERATED_HEADER_FILENAME,
     MODEL_CONTRACT_FILENAME,
 )
-from .identity import IdentityError, require_sha256, sha256_bytes, sha256_json
+from .identity import (
+    IdentityError,
+    read_stable_regular_file,
+    require_sha256,
+    sha256_bytes,
+    sha256_json,
+)
 from .model_contract import MODEL_ID
 
 GENERATED_FILE_RECORD_SCHEMA = "spmpc_mainline_generated_file_record_v1"
@@ -114,33 +120,10 @@ def _role(relative_path: str) -> str:
 
 
 def _read_regular_file(path: Path) -> bytes:
-    flags = os.O_RDONLY
-    flags |= getattr(os, "O_CLOEXEC", 0)
-    flags |= getattr(os, "O_NOFOLLOW", 0)
     try:
-        descriptor = os.open(path, flags)
-    except OSError as exc:
-        raise ArtifactFilesError(f"cannot read generated file {path}: {exc}") from exc
-    try:
-        with os.fdopen(descriptor, "rb") as stream:
-            before = os.fstat(stream.fileno())
-            if not stat.S_ISREG(before.st_mode):
-                raise ArtifactFilesError(
-                    f"generated tree contains a non-regular entry: {path}"
-                )
-            payload = stream.read()
-            after = os.fstat(stream.fileno())
-    except OSError as exc:
-        raise ArtifactFilesError(f"cannot read generated file {path}: {exc}") from exc
-    if (
-        before.st_dev != after.st_dev
-        or before.st_ino != after.st_ino
-        or before.st_size != after.st_size
-        or before.st_mtime_ns != after.st_mtime_ns
-        or after.st_size != len(payload)
-    ):
-        raise ArtifactFilesError(f"generated file changed while hashing: {path}")
-    return payload
+        return read_stable_regular_file(path, label="generated file")
+    except IdentityError as exc:
+        raise ArtifactFilesError(str(exc)) from exc
 
 
 def _record(root: Path, path: Path) -> GeneratedFileRecord:

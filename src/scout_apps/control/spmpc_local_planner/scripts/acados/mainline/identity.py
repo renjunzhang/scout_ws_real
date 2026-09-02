@@ -10,6 +10,8 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
+import stat
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -19,6 +21,56 @@ SHA256_HEX_LENGTH = 64
 
 class IdentityError(ValueError):
     """Raised when a JSON document or content identity is malformed."""
+
+
+def read_stable_regular_file(path: Path | str, *, label: str) -> bytes:
+    """Read one non-symlink regular file and reject a concurrent rewrite.
+
+    Callers that intentionally accept a symbolic-link chain must resolve and
+    record that chain first, then pass the final target to this function.
+    """
+
+    if not isinstance(path, (str, Path)):
+        raise IdentityError(f"{label} path must be str or Path")
+    candidate = Path(path)
+    flags = (
+        os.O_RDONLY
+        | getattr(os, "O_CLOEXEC", 0)
+        | getattr(os, "O_NOFOLLOW", 0)
+    )
+    try:
+        descriptor = os.open(candidate, flags)
+    except OSError as exc:
+        raise IdentityError(f"cannot open {label} {candidate}: {exc}") from exc
+    try:
+        with os.fdopen(descriptor, "rb") as stream:
+            before = os.fstat(stream.fileno())
+            if not stat.S_ISREG(before.st_mode):
+                raise IdentityError(f"{label} is not a regular file: {candidate}")
+            path_before = os.stat(candidate, follow_symlinks=False)
+            if (
+                path_before.st_dev != before.st_dev
+                or path_before.st_ino != before.st_ino
+                or not stat.S_ISREG(path_before.st_mode)
+            ):
+                raise IdentityError(f"{label} path changed before read: {candidate}")
+            payload = stream.read()
+            after = os.fstat(stream.fileno())
+            path_after = os.stat(candidate, follow_symlinks=False)
+    except OSError as exc:
+        raise IdentityError(f"cannot read {label} {candidate}: {exc}") from exc
+    if (
+        before.st_dev != after.st_dev
+        or before.st_ino != after.st_ino
+        or before.st_size != after.st_size
+        or before.st_mtime_ns != after.st_mtime_ns
+        or after.st_size != len(payload)
+        or path_after.st_dev != after.st_dev
+        or path_after.st_ino != after.st_ino
+        or not stat.S_ISREG(path_after.st_mode)
+    ):
+        raise IdentityError(f"{label} changed while being read: {candidate}")
+    return payload
 
 
 def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
