@@ -380,6 +380,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_acados_ocp_adapter.py
   )
   add_test(
+    NAME test_mainline_stage3d4_codegen_options
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_codegen_options.py
+  )
+  add_test(
     NAME test_mainline_stage1_development_evidence
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_stage1_development_evidence.py
