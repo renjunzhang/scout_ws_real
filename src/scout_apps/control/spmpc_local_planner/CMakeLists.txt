@@ -198,6 +198,91 @@ if(SPMPC_WITH_ACADOS_B0_DIRECT_OMEGA_LEGACY)
   endif()
 endif()
 
+# The new mainline solver is opt-in until Stage 6 switches the application.
+# Its artifact path is explicit: legacy generated directories are never
+# inferred as a fallback.
+set(SPMPC_MAINLINE_ARTIFACT_DIR "" CACHE PATH
+  "Absolute path to one published Stage 3-D4 mainline artifact")
+if(SPMPC_MAINLINE_ARTIFACT_DIR)
+  if(NOT IS_ABSOLUTE "${SPMPC_MAINLINE_ARTIFACT_DIR}")
+    message(FATAL_ERROR "[spmpc] SPMPC_MAINLINE_ARTIFACT_DIR must be absolute")
+  endif()
+  if(NOT ACADOS_LIB_DIR)
+    message(FATAL_ERROR
+      "[spmpc] mainline artifact requires ACADOS_SOURCE_DIR with installed libraries")
+  endif()
+  find_program(SPMPC_MAINLINE_PYTHON3_EXECUTABLE NAMES python3)
+  if(NOT SPMPC_MAINLINE_PYTHON3_EXECUTABLE)
+    message(FATAL_ERROR "[spmpc] python3 is required to validate the D4 artifact")
+  endif()
+  set(SPMPC_MAINLINE_ARTIFACT_VALIDATOR
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/acados/validate_mainline_d4.py)
+  add_custom_target(spmpc_mainline_artifact_verify
+    COMMAND ${SPMPC_MAINLINE_PYTHON3_EXECUTABLE}
+      ${SPMPC_MAINLINE_ARTIFACT_VALIDATOR}
+      --artifact-directory ${SPMPC_MAINLINE_ARTIFACT_DIR}
+    COMMENT "Validating the complete Stage 3-D4 artifact"
+    VERBATIM)
+
+  add_library(spmpc_solver_mainline
+    src/solvers/mainline_mpcc_solver_acados.cpp
+  )
+  add_dependencies(spmpc_solver_mainline spmpc_mainline_artifact_verify)
+  target_include_directories(spmpc_solver_mainline PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${SPMPC_MAINLINE_ARTIFACT_DIR}
+  )
+  target_include_directories(spmpc_solver_mainline PRIVATE
+    ${ACADOS_SOURCE_DIR}/include
+    ${ACADOS_SOURCE_DIR}/include/acados
+    ${ACADOS_SOURCE_DIR}/include/blasfeo/include
+    ${ACADOS_SOURCE_DIR}/include/hpipm/include
+  )
+  target_link_libraries(spmpc_solver_mainline
+    spmpc_artifact_identity
+    ${SPMPC_MAINLINE_ARTIFACT_DIR}/libacados_ocp_solver_spmpc_actuator_slosh_discrete_v1.so
+    ${ACADOS_LIB_DIR}/libacados.so
+    ${ACADOS_LIB_DIR}/libhpipm.so
+    ${ACADOS_LIB_DIR}/libblasfeo.so
+  )
+
+  if(CATKIN_ENABLE_TESTING)
+    set(SPMPC_MAINLINE_SOLVER_FIXTURE_GENERATOR
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/mainline/generate_mainline_solver_fixture.py)
+    set(SPMPC_MAINLINE_SOLVER_FIXTURE_DIR
+      ${CMAKE_CURRENT_BINARY_DIR}/mainline_solver_fixture)
+    set(SPMPC_MAINLINE_SOLVER_FIXTURE_HEADER
+      ${SPMPC_MAINLINE_SOLVER_FIXTURE_DIR}/mainline_solver_fixture_generated.h)
+    add_custom_command(
+      OUTPUT ${SPMPC_MAINLINE_SOLVER_FIXTURE_HEADER}
+      COMMAND ${SPMPC_MAINLINE_PYTHON3_EXECUTABLE}
+        ${SPMPC_MAINLINE_SOLVER_FIXTURE_GENERATOR}
+        --output ${SPMPC_MAINLINE_SOLVER_FIXTURE_HEADER}
+      DEPENDS
+        ${SPMPC_MAINLINE_SOLVER_FIXTURE_GENERATOR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/acados/mainline/runtime_parameter_assembler.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/acados/mainline/runtime_schedule.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/acados/mainline/parameter_values.py
+        ${CMAKE_CURRENT_SOURCE_DIR}/scripts/acados/mainline/cost_schedule.py
+      COMMENT "Generating canonical D2b request for the D4 wrapper test"
+      VERBATIM)
+    add_custom_target(spmpc_mainline_solver_fixture
+      DEPENDS ${SPMPC_MAINLINE_SOLVER_FIXTURE_HEADER})
+    catkin_add_gtest(test_mainline_mpcc_solver_acados
+      test/test_mainline_mpcc_solver_acados.cpp)
+    if(TARGET test_mainline_mpcc_solver_acados)
+      add_dependencies(test_mainline_mpcc_solver_acados
+        spmpc_mainline_solver_fixture)
+      target_include_directories(test_mainline_mpcc_solver_acados PRIVATE
+        ${SPMPC_MAINLINE_SOLVER_FIXTURE_DIR})
+      target_compile_definitions(test_mainline_mpcc_solver_acados PRIVATE
+        SPMPC_MAINLINE_TEST_ARTIFACT_DIR="${SPMPC_MAINLINE_ARTIFACT_DIR}")
+      target_link_libraries(test_mainline_mpcc_solver_acados
+        spmpc_solver_mainline)
+    endif()
+  endif()
+endif()
+
 add_executable(spmpc_local_planner_node src/spmpc_local_planner_node.cpp)
 add_dependencies(spmpc_local_planner_node
   ${${PROJECT_NAME}_EXPORTED_TARGETS}
