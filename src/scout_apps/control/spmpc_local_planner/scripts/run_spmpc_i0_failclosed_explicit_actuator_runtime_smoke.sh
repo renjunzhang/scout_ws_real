@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # One independent B_slosh smoke for the explicit-actuator mainline.
-# The default profile preserves the runtime acceptance run; waccel03 changes
-# only w_accel for the first command-smoothing check. Neither is an ABBA sample.
+# The default profile preserves the runtime acceptance run; fixed historical
+# profiles remain reproducible, while weight_tuning accepts explicit cost
+# weights from the short CLI wrapper. None of these is an ABBA sample.
 
 set -euo pipefail
 
@@ -37,6 +38,20 @@ require_dump_line() {
     || fail "launch contract missing: ${line}"
 }
 
+require_dump_number() {
+  local key="$1"
+  local expected="$2"
+  local prefix="${key}: "
+  local actual
+  actual="$(awk -v prefix="${prefix}" \
+    'index($0, prefix) == 1 { print substr($0, length(prefix) + 1); exit }' \
+    <<< "${launch_dump}")"
+  [[ -n "${actual}" ]] || fail "launch contract missing numeric field: ${key}"
+  awk -v actual="${actual}" -v expected="${expected}" \
+    'BEGIN { delta = actual - expected; if (delta < 0) delta = -delta; exit !(delta <= 1.0e-9 * (1.0 + expected)) }' \
+    || fail "launch contract mismatch: ${key}=${actual}, expected ${expected}"
+}
+
 VALIDATE_ONLY="${VALIDATE_ONLY:-true}"
 ARM_MOTION="${ARM_MOTION:-NO}"
 CONFIRM_RUNTIME_SMOKE="${CONFIRM_RUNTIME_SMOKE:-NO}"
@@ -45,6 +60,19 @@ DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-5}"
 SMOKE_PROFILE="${SMOKE_PROFILE:-runtime_baseline}"
+
+VARIANT=B_slosh
+W_SLOSH=5.0
+W_ACCEL=0.0
+V_REF=0.20
+V_SAFE_MAX=0.25
+SPEED_SAFETY_TOLERANCE=0.0001
+W_SMOOTH=0.1
+W_ALPHA=0.1
+W_DU_A=0.1
+W_DU_VS=0.1
+SLOSH_HEIGHT_MAX=0.001
+ALPHA_MAX=1.2
 
 case "${SMOKE_PROFILE}" in
   runtime_baseline)
@@ -55,7 +83,6 @@ case "${SMOKE_PROFILE}" in
     SMOKE_PURPOSE="runtime acceptance only; NOT B0/Bslosh efficacy"
     OPERATOR_NOTE="one B_slosh explicit-actuator runtime smoke; no RGB efficacy claim"
     BLOCK_SEGMENT_ID=I0FC_EXPACT_RUNTIME_SMOKE_V1
-    W_ACCEL=0.0
     ;;
   waccel03)
     PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1
@@ -67,22 +94,39 @@ case "${SMOKE_PROFILE}" in
     BLOCK_SEGMENT_ID=I0FC_EXPACT_WACCEL03_SMOKE_V1
     W_ACCEL=0.3
     ;;
+  weight_tuning)
+    PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WEIGHT_TUNING_SMOKE_DEV_V1
+    OUTPUT_SERIES=spmpc_i0_failclosed_explicit_actuator_weight_tuning_smoke_v1
+    RUN_LABEL_PREFIX=DEV_I0FC_EXPACT_WEIGHT_TUNING_V1
+    SMOKE_SCOPE=development_weight_tuning_smoke_only
+    W_SLOSH="${TUNE_W_SLOSH:-1.0}"
+    W_ACCEL="${TUNE_W_ACCEL:-0.3}"
+    W_DU_A="${TUNE_W_DU_A:-0.1}"
+    W_ALPHA="${TUNE_W_ALPHA:-0.1}"
+    SMOKE_PURPOSE="explicit cost-weight smoke; one bag, no efficacy claim"
+    OPERATOR_NOTE="one B_slosh explicit-actuator weight smoke; RGB disabled"
+    BLOCK_SEGMENT_ID=I0FC_EXPACT_WEIGHT_TUNING_V1
+    ;;
   *)
-    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline or waccel03"
+    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, or weight_tuning"
     ;;
 esac
 
-VARIANT=B_slosh
-W_SLOSH=5.0
-V_REF=0.20
-V_SAFE_MAX=0.25
-SPEED_SAFETY_TOLERANCE=0.0001
-W_SMOOTH=0.1
-W_ALPHA=0.1
-W_DU_A=0.1
-W_DU_VS=0.1
-SLOSH_HEIGHT_MAX=0.001
-ALPHA_MAX=1.2
+require_weight() {
+  local name="$1"
+  local value="$2"
+  local upper="$3"
+  [[ "${value}" =~ ^([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$ ]] \
+    || fail "${name} must be a finite non-negative number, got '${value}'"
+  awk -v value="${value}" -v upper="${upper}" \
+    'BEGIN { exit !(value >= 0.0 && value <= upper) }' \
+    || fail "${name} must be in [0, ${upper}], got '${value}'"
+}
+
+require_weight W_SLOSH "${W_SLOSH}" 20.0
+require_weight W_ACCEL "${W_ACCEL}" 5.0
+require_weight W_DU_A "${W_DU_A}" 100.0
+require_weight W_ALPHA "${W_ALPHA}" 20.0
 
 EXECUTION_MODEL_MODE=explicit_actuator
 ACTUATOR_LINEAR_DELAY_SEC=0.1666666665
@@ -222,12 +266,8 @@ expected_launch_lines=(
   "/spmpc_local_planner/planner_variant: B_slosh"
   "/spmpc_local_planner/solver_backend: continuous_mpcc_acados"
   "/spmpc_local_planner/variants/B_slosh/slosh_enable: true"
-  "/spmpc_local_planner/variants/B_slosh/w_slosh: 5.0"
   "/spmpc_local_planner/variants/B_slosh/v_ref: 0.2"
-  "/spmpc_local_planner/variants/B_slosh/w_accel: ${W_ACCEL}"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
-  "/spmpc_local_planner/variants/B_slosh/w_alpha: 0.1"
-  "/spmpc_local_planner/variants/B_slosh/w_du_a: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
   "/spmpc_local_planner/slosh/slosh_height_max: 0.001"
   "/spmpc_local_planner/odom/subscriber_queue_size: 10"
@@ -251,6 +291,10 @@ expected_launch_lines=(
 for expected_line in "${expected_launch_lines[@]}"; do
   require_dump_line "${expected_line}"
 done
+require_dump_number "/spmpc_local_planner/variants/B_slosh/w_slosh" "${W_SLOSH}"
+require_dump_number "/spmpc_local_planner/variants/B_slosh/w_accel" "${W_ACCEL}"
+require_dump_number "/spmpc_local_planner/variants/B_slosh/w_alpha" "${W_ALPHA}"
+require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
 
 python3 "${MODEL_TEST}"
 python3 "${SMOKE_TEST}"
@@ -260,11 +304,11 @@ echo "================ explicit actuator runtime smoke ================"
 echo "  profile        = ${SMOKE_PROFILE}"
 echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
-echo "  condition      = B_slosh; w_slosh=5.0; w_accel=${W_ACCEL}; one bag only"
+echo "  condition      = B_slosh; w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; one bag only"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
-echo "  frozen weights = w_accel=${W_ACCEL}; w_smooth/w_alpha/w_du_a/w_du_vs=0.1"
+echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
 echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
 echo "  RGB            = disabled; no efficacy conclusion from this bag"
 echo "  output         = ${BAG_PATH}"
@@ -292,6 +336,7 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/src
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_weight_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_i0_failclosed_fixed_abba_bag.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_explicit_actuator_runtime_smoke.py
@@ -430,6 +475,7 @@ env \
 exact_rc=0
 python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
   --condition Bslosh --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
+  --expected-w-slosh "${W_SLOSH}" \
   --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
   --expected-variant B_slosh \
   --expected-slosh-cost-horizon-steps -1 \

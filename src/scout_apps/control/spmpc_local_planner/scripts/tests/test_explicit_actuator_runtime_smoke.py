@@ -2,6 +2,7 @@
 """Contract tests for the one-bag explicit-actuator runtime smoke."""
 
 import importlib.util
+import subprocess
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
@@ -9,7 +10,9 @@ from types import SimpleNamespace
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 WRAPPER = SCRIPTS_DIR / "run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
+SHORT_WRAPPER = SCRIPTS_DIR / "run_spmpc_weight_smoke.sh"
 ANALYZER = SCRIPTS_DIR / "analysis" / "validate_explicit_actuator_runtime_smoke.py"
+EXACT_VALIDATOR = SCRIPTS_DIR / "analysis" / "validate_i0_failclosed_fixed_abba_bag.py"
 
 SPEC = importlib.util.spec_from_file_location("runtime_smoke", ANALYZER)
 runtime_smoke = importlib.util.module_from_spec(SPEC)
@@ -125,6 +128,8 @@ class WrapperContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wrapper = WRAPPER.read_text(encoding="utf-8")
+        cls.short_wrapper = SHORT_WRAPPER.read_text(encoding="utf-8")
+        cls.exact_validator = EXACT_VALIDATOR.read_text(encoding="utf-8")
 
     def test_is_an_independent_one_bslosh_protocol(self):
         for token in (
@@ -183,6 +188,37 @@ class WrapperContractTest(unittest.TestCase):
             '--expected-config "w_accel=${W_ACCEL}"',
         ):
             self.assertIn(token, self.wrapper)
+
+    def test_weight_tuning_profile_exposes_only_cost_knobs(self):
+        for token in (
+            "weight_tuning)",
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WEIGHT_TUNING_SMOKE_DEV_V1",
+            'W_SLOSH="${TUNE_W_SLOSH:-1.0}"',
+            'W_ACCEL="${TUNE_W_ACCEL:-0.3}"',
+            'W_DU_A="${TUNE_W_DU_A:-0.1}"',
+            'W_ALPHA="${TUNE_W_ALPHA:-0.1}"',
+            '--expected-w-slosh "${W_SLOSH}"',
+        ):
+            self.assertIn(token, self.wrapper)
+        self.assertIn('"--expected-w-slosh"', self.exact_validator)
+
+    def test_short_cli_is_validate_only_by_default_and_requires_run_flag(self):
+        subprocess.run(["bash", "-n", str(SHORT_WRAPPER)], check=True)
+        for token in (
+            "--run",
+            "--w-slosh",
+            "--w-accel",
+            "--w-du-a",
+            "--w-alpha",
+            "VALIDATE_ONLY=false",
+            "CONFIRM_PATH_CLEAR=YES",
+            "VALIDATE_ONLY=true",
+        ):
+            self.assertIn(token, self.short_wrapper)
+        self.assertLess(
+            self.short_wrapper.index('run_motion=false'),
+            self.short_wrapper.index('if [[ "${run_motion}" == "true" ]]'),
+        )
 
     def test_rgb_is_disabled_and_both_postflights_are_automatic(self):
         for token in (

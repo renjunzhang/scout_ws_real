@@ -77,6 +77,11 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag")
     parser.add_argument("--condition", choices=("B0", "Bslosh"), required=True)
+    parser.add_argument(
+        "--expected-w-slosh",
+        type=float,
+        help="override the historical Bslosh=5.0/B0=0.0 weight contract",
+    )
     parser.add_argument("--report", required=True)
     parser.add_argument("--protocol", default="SMPCC_I0_FAILCLOSED_FIXED_ABBA_DEV_V1")
     parser.add_argument(
@@ -180,10 +185,18 @@ def validate(args):
         "B0" if args.condition == "B0" else "B_slosh"
     )
     expected_slosh = args.condition == "Bslosh"
-    expected_weight = 5.0 if expected_slosh else 0.0
+    expected_weight = (
+        args.expected_w_slosh
+        if args.expected_w_slosh is not None
+        else 5.0 if expected_slosh else 0.0
+    )
     legacy_delay_expected = args.require_legacy_delay_application == "true"
     explicit_actuator_expected = args.expected_execution_model_code == 1.0
     failures = []
+    if not math.isfinite(expected_weight) or expected_weight < 0.0:
+        failures.append("expected w_slosh must be finite and non-negative")
+    if not expected_slosh and abs(expected_weight) > 1.0e-12:
+        failures.append("B0 requires expected w_slosh=0")
 
     extra_expected_config, expected_config_parse_failures = (
         parse_expected_config_items(args.expected_config)
