@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import copy
 import json
 import math
 import os
@@ -27,6 +28,10 @@ from acados.mainline.casadi_adapter import (
 from acados.mainline.casadi_graph_contract import (
     DIAGNOSTIC_RESIDUAL_ROLE,
     graph_semantic_sha256,
+)
+from acados.mainline.casadi_graph_schema import (
+    CasadiGraphSchemaError,
+    validate_casadi_graph_document,
 )
 from acados.mainline.constraints_oracle import (
     CONSTRAINT_RESIDUAL_ORDER,
@@ -288,6 +293,24 @@ class MainlineCasadiAdapterTest(unittest.TestCase):
         self.assertEqual(graph.model_id, MODEL_ID)
         document = graph.to_dict()
         json.dumps(document, allow_nan=False)
+        self.assertIs(
+            validate_casadi_graph_document(
+                document,
+                expected_capacity_contract_raw_bytes_sha256=self.capacity.contract_sha256,
+                expected_development_layout_semantic_sha256=sha256_json(
+                    self.development_layout.to_dict()
+                ),
+                expected_solver_parameter_layout_semantic_sha256=sha256_json(
+                    self.parameter_layout.to_dict()
+                ),
+                expected_state_order=self.development_layout.state_names,
+                expected_control_order=self.development_layout.control_names,
+                expected_parameter_order=self.parameter_layout.parameter_names,
+                expected_casadi_version=graph.casadi_version,
+                expected_bounds_snapshot_sha256=sha256_json(self.bounds.to_dict()),
+            ),
+            document,
+        )
         self.assertEqual(
             document["dimensions"],
             {"N": 60, "NX": 48, "NU": 3, "NP": 162},
@@ -383,6 +406,25 @@ class MainlineCasadiAdapterTest(unittest.TestCase):
             },
         )
         self.assertEqual(len(graph.execution_slots), 3)
+
+        forged_policy = copy.deepcopy(document)
+        forged_policy["comparison_identity"]["arms"] = ["B0", "forged"]
+        forged_policy["graph_semantic_identity"]["sha256"] = graph_semantic_sha256(
+            capacity_contract_sha256=graph.capacity_contract_sha256,
+            development_layout_sha256=graph.development_layout_sha256,
+            solver_parameter_layout_sha256=graph.solver_parameter_layout_sha256,
+            horizon_steps=graph.horizon_steps,
+            parameter_vector_count=graph.parameter_vector_count,
+            nx=graph.nx,
+            nu=graph.nu,
+            np=graph.np,
+            state_order=graph.state_order,
+            control_order=graph.control_order,
+            parameter_order=graph.parameter_order,
+            control_indices=graph.stage_constraints.control_indices,
+        )
+        with self.assertRaises(CasadiGraphSchemaError):
+            validate_casadi_graph_document(forged_policy)
 
         alternate_bounds = ConstraintBounds(
             9.0,
