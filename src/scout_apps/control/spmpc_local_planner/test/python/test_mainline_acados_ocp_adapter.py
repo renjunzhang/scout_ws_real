@@ -13,6 +13,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +22,7 @@ MAINLINE_ROOT = SCRIPTS_ROOT / "acados" / "mainline"
 if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
+from acados.mainline.acados_backend import read_acados_backend_identity
 from acados.mainline.acados_ocp_adapter import (
     AcadosOcpConstructionError,
     AcadosOcpDependencyError,
@@ -35,6 +37,7 @@ from acados.mainline.acados_ocp_contract import (
     require_acados_ocp_assembly,
     validate_acados_ocp_document,
 )
+from acados.mainline.acados_ocp_schema import ACADOS_INTERFACE_SOURCE_PATHS
 from acados.mainline.acados_solver_options_identity import (
     require_acados_ocp_solver_options_baseline,
 )
@@ -125,6 +128,38 @@ class MainlineAcadosOcpLazyBoundaryTest(unittest.TestCase):
                         for name in imported
                     )
                 )
+
+    def test_backend_identity_rejects_symlinked_selected_interface_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            source_root = Path(directory) / "acados"
+            package = source_root / "interfaces" / "acados_template" / "acados_template"
+            package.mkdir(parents=True)
+            for name in ACADOS_INTERFACE_SOURCE_PATHS:
+                (package / name).write_text(f"# {name}\n", encoding="utf-8")
+            outside = Path(directory) / "outside.py"
+            outside.write_text("# outside\n", encoding="utf-8")
+            selected = package / ACADOS_INTERFACE_SOURCE_PATHS[0]
+            selected.unlink()
+            selected.symlink_to(outside)
+            library = source_root / "lib"
+            library.mkdir()
+            (library / "git_commit_hash").write_text(
+                "fixture\n",
+                encoding="utf-8",
+            )
+            backend = SimpleNamespace(
+                template_module=SimpleNamespace(
+                    __file__=str(package / "__init__.py"),
+                )
+            )
+            ocp = SimpleNamespace(
+                code_gen_opts=SimpleNamespace(acados_lib_path=str(library))
+            )
+            with self.assertRaisesRegex(
+                AcadosOcpConstructionError,
+                "source identity cannot be read",
+            ):
+                read_acados_backend_identity(backend, ocp)
 
 
 @unittest.skipUnless(CASADI_AVAILABLE, "CasADi is not installed")

@@ -21,6 +21,15 @@ from .model_contract import MODEL_ID
 ACADOS_OCP_SCHEMA = "spmpc_mainline_acados_ocp_v1"
 ACADOS_INTERFACE_CONTRACT = "acados_template_v0.5.4_compatible"
 ACADOS_INTERFACE_SOURCE_SCHEMA = "selected_acados_template_python_sources_v1"
+ACADOS_INTERFACE_SOURCE_PATHS = (
+    "__init__.py",
+    "acados_code_gen_opts.py",
+    "acados_model.py",
+    "acados_ocp.py",
+    "acados_ocp_constraints.py",
+    "acados_ocp_cost.py",
+    "acados_ocp_options.py",
+)
 SYMBOLIC_EXPRESSION_IDENTITY_SCHEMA = "casadi_function_serialize_v1"
 DYNAMICS_IDENTITY_FUNCTION = "mainline_identity_discrete_dynamics"
 STAGE_COST_IDENTITY_FUNCTION = "mainline_identity_stage_cost"
@@ -63,6 +72,32 @@ def _document_digest(value: Any, label: str) -> str:
         return require_sha256(value, label)
     except IdentityError as exc:
         raise ValueError(str(exc)) from exc
+
+
+def acados_interface_source_sha256_from_inventory(value: Any) -> str:
+    """Project a full interface inventory onto the OCP-selected source set."""
+
+    if type(value) is not dict or any(type(path) is not str for path in value):
+        raise ValueError("Acados interface source inventory must be a string map")
+    missing = set(ACADOS_INTERFACE_SOURCE_PATHS).difference(value)
+    if missing:
+        raise ValueError("Acados interface source inventory is incomplete")
+    files = []
+    for path in ACADOS_INTERFACE_SOURCE_PATHS:
+        files.append(
+            {
+                "relative_path": path,
+                "raw_bytes_sha256": _document_digest(
+                    value[path], f"Acados interface source {path}"
+                ),
+            }
+        )
+    return sha256_json(
+        {
+            "schema": ACADOS_INTERFACE_SOURCE_SCHEMA,
+            "files": files,
+        }
+    )
 
 
 def _constraint_document(
@@ -395,6 +430,7 @@ def validate_acados_ocp_document(
 
 __all__ = [
     "ACADOS_INTERFACE_CONTRACT",
+    "ACADOS_INTERFACE_SOURCE_PATHS",
     "ACADOS_INTERFACE_SOURCE_SCHEMA",
     "ACADOS_OCP_SCHEMA",
     "ASSEMBLY_SIDE_EFFECT_POLICY",
@@ -416,5 +452,6 @@ __all__ = [
     "TERMINAL_COST_IDENTITY_FUNCTION",
     "TERMINAL_H_IDENTITY_FUNCTION",
     "UNLISTED_SOLVER_OPTIONS_POLICY",
+    "acados_interface_source_sha256_from_inventory",
     "validate_acados_ocp_document",
 ]

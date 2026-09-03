@@ -7,15 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from .acados_ocp_schema import (
-    ACADOS_INTERFACE_SOURCE_SCHEMA,
+    ACADOS_INTERFACE_SOURCE_PATHS,
     DYNAMICS_IDENTITY_FUNCTION,
     STAGE_COST_IDENTITY_FUNCTION,
     STAGE_H_IDENTITY_FUNCTION,
     TERMINAL_COST_IDENTITY_FUNCTION,
     TERMINAL_H_IDENTITY_FUNCTION,
+    acados_interface_source_sha256_from_inventory,
 )
 from .casadi_graph_contract import CasadiGraphBundle
-from .identity import sha256_bytes, sha256_json
+from .identity import IdentityError, read_stable_regular_file, sha256_bytes
 
 
 class AcadosOcpAdapterError(RuntimeError):
@@ -77,38 +78,24 @@ def read_acados_backend_identity(
             "acados_template source location is unavailable"
         )
     package_directory = Path(module_file).resolve().parent
-    selected_sources = (
-        "__init__.py",
-        "acados_code_gen_opts.py",
-        "acados_model.py",
-        "acados_ocp.py",
-        "acados_ocp_constraints.py",
-        "acados_ocp_cost.py",
-        "acados_ocp_options.py",
-    )
-    source_identity = []
+    source_inventory = {}
     try:
-        for name in selected_sources:
-            source_identity.append(
-                {
-                    "relative_path": name,
-                    "raw_bytes_sha256": sha256_bytes(
-                        (package_directory / name).read_bytes()
-                    ),
-                }
+        for name in ACADOS_INTERFACE_SOURCE_PATHS:
+            source_inventory[name] = sha256_bytes(
+                read_stable_regular_file(
+                    package_directory / name,
+                    label=f"Acados interface source {name}",
+                )
             )
-        interface_sha256 = sha256_json(
-            {
-                "schema": ACADOS_INTERFACE_SOURCE_SCHEMA,
-                "files": source_identity,
-            }
+        interface_sha256 = acados_interface_source_sha256_from_inventory(
+            source_inventory
         )
         interface_source_root = package_directory.parents[2]
         library_commit_file = (
             Path(ocp.code_gen_opts.acados_lib_path) / "git_commit_hash"
         ).resolve()
         library_source_root = library_commit_file.parent.parent
-    except (IndexError, OSError) as exc:
+    except (IdentityError, IndexError, OSError) as exc:
         raise AcadosOcpConstructionError(
             "acados backend source identity cannot be read"
         ) from exc
