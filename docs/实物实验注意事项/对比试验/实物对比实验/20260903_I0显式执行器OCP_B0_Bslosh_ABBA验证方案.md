@@ -4,7 +4,11 @@
 
 协议 ID：`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1`
 
-状态：`CODE-IMPLEMENTED / SOFTWARE-VERIFIED / HARDWARE-UNVERIFIED / SOURCE-UNCOMMITTED`
+预注册时状态：`CODE-IMPLEMENTED / SOFTWARE-VERIFIED / HARDWARE-UNVERIFIED / SOURCE-UNCOMMITTED`
+
+执行状态（2026-09-03）：`ROW01 B0 PASS / ROW02 Bslosh RUNTIME FAIL / BLOCK1 STOPPED`
+
+执行分析见 [20260903 I0 + 显式执行器 OCP 的 B0/Bslosh Block 1 分析](../实物对比试验分析/20260903_I0显式执行器OCP_B0_Bslosh_Block1分析.md)。Row02 因共同时间插值失败和 acados `MINSTEP` 触发故障性零速，不进入效果统计；Row03/Row04 不再执行。
 
 ## 目的
 
@@ -101,8 +105,10 @@ Row02 完成后，脚本自动分析 Block 1。只有输出 `PROMOTE_BLOCK2` 才
 
 完整 ABBA 的正向门仍要求两个 block 的 RGB `DeltaP95` 同向、平均改善至少 `0.05 mm`、平均 `DeltaRMS >= 0`，且到点时间比不超过 `1.05`。这些阈值只用于 development 决策；最终仍以实际报告为准。
 
-## 当前边界
+## 预注册边界与执行更新
 
-截至 2026-09-03，四行 `VALIDATE_ONLY`、232 项 catkin 测试和无运动启动检查已通过；实车 bag 尚未录制。若 actual 预测不匹配 NOKOV/odom，先停止并修正执行器参数，不用增大 `w_slosh` 掩盖结构误差。
+方案冻结时，四行 `VALIDATE_ONLY`、232 项 catkin 测试和无运动启动检查已通过，实车 bag 尚未录制。若 actual 预测不匹配 NOKOV/odom，先停止并修正执行器参数，不用增大 `w_slosh` 掩盖结构误差。
+
+随后完成 Row01/Row02。Row01 全部后验通过；Row02 到达终点但主运行时后验失败，已按有效性门停止 Block 1。当前两个 bag 足够定位卡顿机制，但不能据此声明 `B_slosh` 降晃或计算预注册改善量。
 
 实施说明见 [I0 与显式执行器 OCP 最小修复方案](../解决问题的思路/20260903_I0与显式执行器OCP最小修复方案.md)。
