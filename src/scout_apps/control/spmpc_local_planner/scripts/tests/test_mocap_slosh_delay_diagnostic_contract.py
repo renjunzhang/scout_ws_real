@@ -18,8 +18,12 @@ POSTFLIGHT = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(POSTFLIGHT)
 
 
-def row(applied):
-    return SimpleNamespace(applied_to_solver=applied)
+def row(applied, valid=True, status="READY"):
+    return SimpleNamespace(
+        applied_to_solver=applied,
+        valid=valid,
+        status=status,
+    )
 
 
 class AppliedMethodContractTest(unittest.TestCase):
@@ -54,6 +58,35 @@ class AppliedMethodContractTest(unittest.TestCase):
                     method, [row(False), row(False)], "NONE"
                 )
             )
+
+    def test_expected_disabled_l22_accepts_only_explicit_off_rows(self):
+        failures = POSTFLIGHT.disabled_method_contract_failures(
+            "L22",
+            [row(False, valid=False, status="OFF") for _ in range(3)],
+            {"L22"},
+        )
+        self.assertEqual(failures, [])
+
+    def test_expected_disabled_l22_rejects_valid_or_non_off_rows(self):
+        failures = POSTFLIGHT.disabled_method_contract_failures(
+            "L22",
+            [
+                row(False, valid=True, status="READY_PREDICTED"),
+                row(False, valid=False, status="DYNAMICS_FAILURE"),
+            ],
+            {"L22"},
+        )
+        self.assertEqual(len(failures), 2)
+        self.assertIn("expected disabled but valid", failures[0])
+        self.assertIn("expected status OFF", failures[1])
+
+    def test_non_disabled_method_is_not_exempted(self):
+        failures = POSTFLIGHT.disabled_method_contract_failures(
+            "I1",
+            [row(False, valid=False, status="OFF")],
+            {"L22"},
+        )
+        self.assertEqual(failures, [])
 
 
 class RunnerContractTest(unittest.TestCase):

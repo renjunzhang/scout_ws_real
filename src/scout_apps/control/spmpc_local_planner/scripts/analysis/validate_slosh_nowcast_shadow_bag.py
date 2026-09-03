@@ -3,7 +3,9 @@
 
 The default arguments preserve the original B0 shadow protocol.  A
 slosh-enabled caller can explicitly require that the solver consumes liquid
-and that exactly one raw observer method (currently I0) is applied.
+and that exactly one raw observer method (currently I0) is applied.  Callers
+that intentionally disable a diagnostic method can require it to remain OFF
+instead of weakening the coverage threshold for the other methods.
 """
 
 import argparse
@@ -45,6 +47,17 @@ def parse_args():
         choices=("none", "O0", "I0", "I1", "L22"),
         default="none",
         help="The only method allowed and required to be applied in every active row.",
+    )
+    parser.add_argument(
+        "--expected-disabled-method",
+        action="append",
+        choices=("O0", "I0", "I1", "L22"),
+        default=[],
+        help=(
+            "Method required to be invalid with status OFF in every active row. "
+            "Repeat for multiple methods; disabled methods are exempt only from "
+            "the valid-coverage threshold."
+        ),
     )
     parser.add_argument(
         "--protocol",
@@ -104,6 +117,31 @@ def applied_method_contract_failure(method_name, rows, expected_applied_method):
     elif applied:
         return "{} unexpectedly entered the solver {} times".format(name, applied)
     return None
+
+
+def disabled_method_contract_failures(method_name, rows, expected_disabled_methods):
+    """Return failures when a method expected OFF is still active or valid."""
+    name = str(method_name).upper()
+    disabled = {str(method).upper() for method in expected_disabled_methods}
+    if name not in disabled:
+        return []
+
+    valid = sum(bool(row.valid) for row in rows)
+    non_off = sum(str(row.status).upper() != "OFF" for row in rows)
+    failures = []
+    if valid:
+        failures.append(
+            "{} expected disabled but valid in {}/{} active rows".format(
+                name, valid, len(rows)
+            )
+        )
+    if non_off:
+        failures.append(
+            "{} expected status OFF but differed in {}/{} active rows".format(
+                name, non_off, len(rows)
+            )
+        )
+    return failures
 
 
 def target_time(message):
@@ -203,9 +241,16 @@ def validate(args):
         failures.append("fewer than 10 control audits in motion window")
 
     expected_applied_method = args.expected_applied_method.upper()
+    expected_disabled_methods = {
+        method.upper() for method in args.expected_disabled_method
+    }
     if expected_applied_method != "NONE" and not args.expected_solver_consumes_liquid:
         failures.append(
             "an applied liquid method requires --expected-solver-consumes-liquid"
+        )
+    if expected_applied_method in expected_disabled_methods:
+        failures.append(
+            "{} cannot be both applied and disabled".format(expected_applied_method)
         )
 
     method_report = {}
@@ -215,6 +260,7 @@ def validate(args):
         coverage = len(valid) / len(rows) if rows else 0.0
         applied = sum(bool(row.applied_to_solver) for row in rows)
         expected_applied = method.upper() == expected_applied_method
+        expected_disabled = method.upper() in expected_disabled_methods
         statuses = Counter(str(row.status) for row in rows)
         method_report[method.upper()] = {
             "count": len(rows),
@@ -222,9 +268,17 @@ def validate(args):
             "coverage": coverage,
             "applied_to_solver_count": applied,
             "expected_applied": expected_applied,
+            "expected_disabled": expected_disabled,
+            "coverage_required": not expected_disabled,
             "statuses": dict(statuses),
         }
-        if coverage < args.minimum_coverage:
+        if expected_disabled:
+            failures.extend(
+                disabled_method_contract_failures(
+                    method, rows, expected_disabled_methods
+                )
+            )
+        elif coverage < args.minimum_coverage:
             failures.append(
                 "{} valid coverage {:.4f} is below {:.4f}".format(
                     method.upper(), coverage, args.minimum_coverage
@@ -364,6 +418,7 @@ def validate(args):
                 args.expected_solver_consumes_liquid
             ),
             "expected_applied_method": expected_applied_method,
+            "expected_disabled_methods": sorted(expected_disabled_methods),
             "wrong_selected_source_count": wrong_source,
             "fallback_or_wrong_policy_count": fallback,
             "pipeline_not_ready_count": pipeline_not_ready,

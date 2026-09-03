@@ -69,16 +69,22 @@ def state_alignment_contract_ok(message):
     delay composition.  In ``fixed_closed_loop`` the composer can then replace
     both robot and diagnostic liquid states with one command-history rollout;
     the audit consequently reports ``DELAY_PREDICTED_COMMON_EPOCH`` even though
-    B0 still does not consume liquid.  Both statuses are safe only when the
-    runtime also marks the state as aligned.  Unsafe bypass/partial-application
-    statuses remain rejected.
+    B0 still does not consume liquid.  The explicit-actuator profile likewise
+    aligns and advances the robot/actuator state while B0 has no liquid state
+    to consume, reporting ``EXPLICIT_ACTUATOR_PREFIX_ROLLOUT``.  These statuses
+    are safe only when the runtime also marks the state as aligned.  Unsafe
+    bypass/partial-application statuses remain rejected.
     """
     if bool(message.state_alignment_required):
         return bool(message.state_time_aligned)
     return (
         bool(message.state_time_aligned)
         and str(message.state_alignment_status)
-        in {"LIQUID_NOT_CONSUMED", "DELAY_PREDICTED_COMMON_EPOCH"}
+        in {
+            "LIQUID_NOT_CONSUMED",
+            "DELAY_PREDICTED_COMMON_EPOCH",
+            "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+        }
     )
 
 

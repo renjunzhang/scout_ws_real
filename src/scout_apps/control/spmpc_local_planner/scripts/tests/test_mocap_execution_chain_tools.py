@@ -201,6 +201,16 @@ class PostflightMathTest(unittest.TestCase):
             state_time_aligned=True,
             state_alignment_status="DELAY_PREDICTED_COMMON_EPOCH",
         )
+        explicit_actuator_b0 = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=True,
+            state_alignment_status="EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+        )
+        misaligned_explicit_actuator_b0 = SimpleNamespace(
+            state_alignment_required=False,
+            state_time_aligned=False,
+            state_alignment_status="EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+        )
         misaligned_fixed_b0 = SimpleNamespace(
             state_alignment_required=False,
             state_time_aligned=False,
@@ -215,6 +225,14 @@ class PostflightMathTest(unittest.TestCase):
         self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(common_epoch))
         self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(no_liquid))
         self.assertTrue(POSTFLIGHT.state_alignment_contract_ok(fixed_b0))
+        self.assertTrue(
+            POSTFLIGHT.state_alignment_contract_ok(explicit_actuator_b0)
+        )
+        self.assertFalse(
+            POSTFLIGHT.state_alignment_contract_ok(
+                misaligned_explicit_actuator_b0
+            )
+        )
         self.assertFalse(POSTFLIGHT.state_alignment_contract_ok(misaligned_fixed_b0))
         self.assertFalse(POSTFLIGHT.state_alignment_contract_ok(unsafe_bypass))
 

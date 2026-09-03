@@ -578,7 +578,40 @@ runtime_map_sha="$(rosparam get /cartographer_node/frozen_map_expected_sha256 2>
 published_topics="$(timeout 5s rostopic list -p)" || fail "could not query ROS publishers"
 grep -Fxq -- /cmd_vel <<< "${published_topics}" && fail "/cmd_vel already has a publisher"
 
-code_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+current_git_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+code_revision="${current_git_revision}"
+evidence_hotfix_from_revision=""
+if [[ "${PROFILE_ID}" == "explicit_actuator_v1" && -n "${SESSION_MARKER}" \
+      && -s "${SESSION_MARKER}" ]]; then
+  recorded_session_revision="$(awk -F= '$1 == "git_revision" {print $2}' "${SESSION_MARKER}")"
+  [[ "${recorded_session_revision}" =~ ^[0-9a-f]{40}$ ]] \
+    || fail "session marker has an invalid git_revision"
+  if [[ "${recorded_session_revision}" != "${current_git_revision}" ]]; then
+    git -C "${REPO_ROOT}" cat-file -e "${recorded_session_revision}^{commit}" \
+      || fail "recorded session revision is unavailable: ${recorded_session_revision}"
+    while IFS= read -r changed_path; do
+      [[ -n "${changed_path}" ]] || continue
+      case "${changed_path}" in
+        src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_slosh_nowcast_shadow_bag.py|\
+        src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_mocap_execution_chain_bag.py|\
+        src/scout_apps/control/spmpc_local_planner/scripts/lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh|\
+        src/scout_apps/control/spmpc_local_planner/scripts/tests/test_mocap_slosh_delay_diagnostic_contract.py|\
+        src/scout_apps/control/spmpc_local_planner/scripts/tests/test_mocap_execution_chain_tools.py|\
+        src/scout_apps/control/spmpc_local_planner/scripts/tests/test_i0_failclosed_fixed_abba_contract.py)
+          ;;
+        *)
+          fail "session revision changed outside the frozen postflight hotfix: ${changed_path}"
+          ;;
+      esac
+    done < <(
+      git -C "${REPO_ROOT}" diff --name-only \
+        "${recorded_session_revision}" "${current_git_revision}"
+    )
+    code_revision="${recorded_session_revision}"
+    evidence_hotfix_from_revision="${recorded_session_revision}"
+    echo "[${SCRIPT_NAME}] preserving acquisition revision ${code_revision}; evidence tools=${current_git_revision}"
+  fi
+fi
 if [[ "${TREATMENT_VARIANT}" == "B_slosh_short100" ]]; then
   treatment_order_label="Bslosh-short100"
   slosh_cost_stage_label="0..${TREATMENT_COST_HORIZON_STEPS}"
@@ -861,6 +894,9 @@ observer_args=(
   --expected-applied-method "${OBSERVER_APPLIED}"
   --expected-v-safe-max "${V_SAFE_MAX}" --speed-tolerance "${SPEED_SAFETY_TOLERANCE}"
 )
+if [[ "${DELAY_PHASE_MODE}" == "off" ]]; then
+  observer_args+=(--expected-disabled-method L22)
+fi
 if [[ "${SLOSH_ENABLED}" == "true" ]]; then
   observer_args+=(--expected-solver-consumes-liquid)
 fi
@@ -901,6 +937,9 @@ else
     "variant=${VARIANT}" "slosh_cost_horizon_steps=${EXPECTED_COST_HORIZON_STEPS}" \
     "slosh_cost_tail_discount=${EXPECTED_COST_TAIL_DISCOUNT}" \
     "bag=${BAG_PATH}" \
+    "acquisition_git_revision=${code_revision}" \
+    "evidence_git_revision=${current_git_revision}" \
+    "evidence_hotfix_from_revision=${evidence_hotfix_from_revision}" \
     "exact_postflight_sha256=$(sha256sum "${EXACT_REPORT}" | awk '{print $1}')" \
     "observer_postflight_sha256=$(sha256sum "${OBSERVER_REPORT}" | awk '{print $1}')" \
     "chain_postflight_sha256=$(sha256sum "${CHAIN_REPORT}" | awk '{print $1}')" \

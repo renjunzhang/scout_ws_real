@@ -98,6 +98,28 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             ["B0", "B_slosh", "B_slosh", "B0"],
         )
         self.assertEqual(rows[1].observer_applied, "I0")
+        self.assertIn(
+            'if [[ "${DELAY_PHASE_MODE}" == "off" ]]',
+            self.engine,
+        )
+        self.assertIn(
+            "observer_args+=(--expected-disabled-method L22)",
+            self.engine,
+        )
+
+    def test_explicit_postflight_hotfix_preserves_acquisition_revision(self):
+        for token in (
+            'PROFILE_ID}" == "explicit_actuator_v1',
+            'recorded_session_revision="$(awk -F=',
+            'code_revision="${recorded_session_revision}"',
+            'evidence_hotfix_from_revision="${recorded_session_revision}"',
+            "session revision changed outside the frozen postflight hotfix",
+            "validate_slosh_nowcast_shadow_bag.py",
+            "validate_mocap_execution_chain_bag.py",
+            'acquisition_git_revision=${code_revision}',
+            'evidence_git_revision=${current_git_revision}',
+        ):
+            self.assertIn(token, self.engine)
 
     def test_legacy_profile_is_a_golden_copy_of_v1_identity(self):
         profile = profiles.get_profile("legacy_v1")
