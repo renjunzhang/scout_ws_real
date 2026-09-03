@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .acados_ocp_contract import (
+from .acados_ocp_schema import (
     ACADOS_INTERFACE_SOURCE_SCHEMA,
     DYNAMICS_IDENTITY_FUNCTION,
     STAGE_COST_IDENTITY_FUNCTION,

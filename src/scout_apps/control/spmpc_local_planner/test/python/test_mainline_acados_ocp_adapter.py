@@ -33,6 +33,7 @@ from acados.mainline.acados_ocp_contract import (
     OCP_IDENTITY_SCOPE,
     PARAMETER_INITIALIZATION_POLICY,
     require_acados_ocp_assembly,
+    validate_acados_ocp_document,
 )
 from acados.mainline.acados_solver_options_identity import (
     require_acados_ocp_solver_options_baseline,
@@ -89,12 +90,9 @@ class MainlineAcadosOcpLazyBoundaryTest(unittest.TestCase):
             self.assertTrue(ACADOS_AVAILABLE)
 
     def test_invalid_typed_input_fails_before_backend_loading(self) -> None:
-        with (
-            patch(
-                "acados.mainline.acados_ocp_adapter._require_acados_backend"
-            ) as loader,
-            self.assertRaises(AcadosOcpConstructionError),
-        ):
+        with patch(
+            "acados.mainline.acados_ocp_adapter._require_acados_backend"
+        ) as loader, self.assertRaises(AcadosOcpConstructionError):
             assemble_acados_ocp(
                 object(),  # type: ignore[arg-type]
                 self.options,
@@ -151,10 +149,9 @@ class MainlineAcadosOcpDependencyFailureTest(unittest.TestCase):
                 os.chdir(work_directory)
                 before = sorted(work_directory.rglob("*"))
                 raises_dependency = self.assertRaises(AcadosOcpDependencyError)
-                with (
-                    patch.dict(sys.modules, {"acados_template": None}),
-                    raises_dependency,
-                ):
+                with patch.dict(
+                    sys.modules, {"acados_template": None}
+                ), raises_dependency:
                     assemble_acados_ocp(graph, options)
                 after = sorted(work_directory.rglob("*"))
             finally:
@@ -166,10 +163,9 @@ class MainlineAcadosOcpDependencyFailureTest(unittest.TestCase):
     def test_incomplete_acados_template_is_a_typed_dependency_failure(self) -> None:
         graph, options = self._typed_inputs()
         incomplete_template = types.ModuleType("acados_template")
-        with (
-            patch.dict(sys.modules, {"acados_template": incomplete_template}),
-            self.assertRaises(AcadosOcpDependencyError),
-        ):
+        with patch.dict(
+            sys.modules, {"acados_template": incomplete_template}
+        ), self.assertRaises(AcadosOcpDependencyError):
             assemble_acados_ocp(graph, options)
 
 
@@ -435,6 +431,48 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
             },
         )
 
+    def test_serialized_ocp_document_rejects_resigned_policy_drift(self) -> None:
+        document = self._assemble().to_dict()
+        self.assertIs(validate_acados_ocp_document(document), document)
+        mutations = (
+            ("dimensions", "N", 61),
+            ("model_mapping", "continuous_dynamics", "ERK_ALLOWED"),
+            ("assembly_boundary", "unlisted_solver_options", "IGNORED"),
+            ("runtime_parameters", "initialization", "PARTIAL_ROWS_ALLOWED"),
+            ("comparison_identity", "same_ocp", False),
+            (
+                "constraints",
+                "initial_and_path_nonlinear_h",
+                {
+                    "order": [f"forged_{index}" for index in range(5)],
+                    "lower": [-1.0] * 5,
+                    "upper": [1.0] * 5,
+                },
+            ),
+        )
+        for section, field, replacement in mutations:
+            forged = copy.deepcopy(document)
+            forged[section][field] = replacement
+            payload = {
+                key: item for key, item in forged.items() if key != "semantic_identity"
+            }
+            forged["semantic_identity"]["sha256"] = sha256_json(payload)
+            with self.subTest(section=section, field=field), self.assertRaises(
+                ValueError
+            ):
+                validate_acados_ocp_document(forged)
+
+        baseline = copy.deepcopy(document)
+        baseline["source_identity"]["backend_solver_options_baseline"][
+            "excluded_d4_fields"
+        ] = []
+        payload = {
+            key: item for key, item in baseline.items() if key != "semantic_identity"
+        }
+        baseline["semantic_identity"]["sha256"] = sha256_json(payload)
+        with self.assertRaises(ValueError):
+            validate_acados_ocp_document(baseline)
+
     def test_ocp_identity_includes_explicit_bound_snapshot(self) -> None:
         baseline = self._assemble()
         alternate_graph = build_casadi_graph(
@@ -493,7 +531,7 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
     ) -> None:
         assembly = self._assemble()
         forged = copy.copy(assembly)
-        object.__setattr__(forged, "horizon_steps", 0)
+        object.__setattr__(forged, "horizon_steps", 61)
         forged_document = forged.to_dict()
         forged_document.pop("semantic_identity")
         object.__setattr__(forged, "semantic_sha256", sha256_json(forged_document))
@@ -501,12 +539,9 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
             require_acados_ocp_assembly(forged)
 
     def test_wrong_option_type_is_rejected_before_backend_work(self) -> None:
-        with (
-            patch(
-                "acados.mainline.acados_ocp_adapter._require_acados_backend"
-            ) as loader,
-            self.assertRaises(AcadosOcpConstructionError),
-        ):
+        with patch(
+            "acados.mainline.acados_ocp_adapter._require_acados_backend"
+        ) as loader, self.assertRaises(AcadosOcpConstructionError):
             assemble_acados_ocp(
                 self.graph,
                 object(),  # type: ignore[arg-type]

@@ -5,40 +5,36 @@ from __future__ import annotations
 from dataclasses import InitVar, dataclass
 from typing import Any
 
-from .acados_solver_options_identity import (
+from .acados_ocp_schema import (
     ACADOS_D4_SOLVER_OPTION_FIELDS,
+    ACADOS_INTERFACE_CONTRACT,
+    ACADOS_INTERFACE_SOURCE_SCHEMA,
+    ACADOS_OCP_SCHEMA,
     ACADOS_SOLVER_OPTIONS_BASELINE_SCHEMA,
     ACADOS_SOLVER_OPTIONS_BASELINE_SCOPE,
+    ASSEMBLY_SIDE_EFFECT_POLICY,
+    CODEGEN_OPTIONS_POLICY,
+    CONTINUOUS_DYNAMICS_POLICY,
+    DIAGNOSTIC_RESIDUAL_POLICY,
+    DYNAMICS_IDENTITY_FUNCTION,
+    INITIAL_STATE_POLICY,
+    LIQUID_HARD_CONSTRAINT_POLICY,
+    NODE_COVERAGE_POLICY,
+    OCP_ARTIFACT_STATUS,
+    OCP_IDENTITY_SCOPE,
+    OCP_PROMOTION_STATUS,
+    OCP_STATUS,
+    PARAMETER_INITIALIZATION_POLICY,
+    STAGE_COST_IDENTITY_FUNCTION,
+    STAGE_H_IDENTITY_FUNCTION,
+    SYMBOLIC_EXPRESSION_IDENTITY_SCHEMA,
+    TERMINAL_COST_IDENTITY_FUNCTION,
+    TERMINAL_H_IDENTITY_FUNCTION,
+    UNLISTED_SOLVER_OPTIONS_POLICY,
+    validate_acados_ocp_document,
 )
 from .identity import IdentityError, require_sha256, sha256_json
 from .model_contract import MODEL_ID
-
-ACADOS_OCP_SCHEMA = "spmpc_mainline_acados_ocp_v1"
-ACADOS_INTERFACE_CONTRACT = "acados_template_v0.5.4_compatible"
-ACADOS_INTERFACE_SOURCE_SCHEMA = "selected_acados_template_python_sources_v1"
-SYMBOLIC_EXPRESSION_IDENTITY_SCHEMA = "casadi_function_serialize_v1"
-DYNAMICS_IDENTITY_FUNCTION = "mainline_identity_discrete_dynamics"
-STAGE_COST_IDENTITY_FUNCTION = "mainline_identity_stage_cost"
-TERMINAL_COST_IDENTITY_FUNCTION = "mainline_identity_terminal_cost"
-STAGE_H_IDENTITY_FUNCTION = "mainline_identity_stage_h"
-TERMINAL_H_IDENTITY_FUNCTION = "mainline_identity_terminal_h"
-OCP_STATUS = "OCP_ASSEMBLED_AND_CONSISTENT"
-OCP_ARTIFACT_STATUS = "NO_ARTIFACT"
-OCP_PROMOTION_STATUS = "DEV_UNVALIDATED"
-OCP_IDENTITY_SCOPE = "GRAPH_BOUNDS_SOLVER_OPTIONS_NODE_MAPPING_AND_BACKEND"
-INITIAL_STATE_POLICY = "FULL_NX_ZERO_PLACEHOLDER_RUNTIME_REPLACES_LBX_UBX"
-PARAMETER_INITIALIZATION_POLICY = (
-    "ZERO_PLACEHOLDER_RUNTIME_MUST_SET_ALL_N_PLUS_ONE_ROWS"
-)
-NODE_COVERAGE_POLICY = "EXPLICIT_INITIAL_PATH_AND_TERMINAL_FIELDS"
-CONTINUOUS_DYNAMICS_POLICY = "FORBIDDEN_DISCRETE_MAP_ONLY"
-DIAGNOSTIC_RESIDUAL_POLICY = "NOT_CONNECTED_TO_ACADOS_CONSTRAINTS"
-LIQUID_HARD_CONSTRAINT_POLICY = "DISABLED_FOR_B0_AND_BSLOSH"
-UNLISTED_SOLVER_OPTIONS_POLICY = (
-    "FROZEN_BY_COMPLETE_BACKEND_OPTIONS_IDENTITY_EXCEPT_D4_FIELDS"
-)
-CODEGEN_OPTIONS_POLICY = "OUT_OF_SCOPE_UNTIL_ARTIFACT_GENERATION_STAGE"
-ASSEMBLY_SIDE_EFFECT_POLICY = "READS_BACKEND_METADATA_NO_CODEGEN_OR_OUTPUT_WRITES"
 
 _ASSEMBLY_TOKEN = object()
 
@@ -387,7 +383,8 @@ def require_acados_ocp_assembly(value: Any) -> AcadosOcpAssembly:
         raise ValueError("assembly must be the exact AcadosOcpAssembly type")
     try:
         _validate_acados_ocp_assembly_structure(value)
-        semantic_sha256 = sha256_json(_assembly_payload(value))
+        document = validate_acados_ocp_document(value.to_dict())
+        semantic_sha256 = document["semantic_identity"]["sha256"]
     except (AttributeError, IdentityError, TypeError, ValueError) as exc:
         raise ValueError("Acados OCP assembly metadata is malformed") from exc
     if semantic_sha256 != value.semantic_sha256:
@@ -420,4 +417,5 @@ __all__ = [
     "UNLISTED_SOLVER_OPTIONS_POLICY",
     "AcadosOcpAssembly",
     "require_acados_ocp_assembly",
+    "validate_acados_ocp_document",
 ]
