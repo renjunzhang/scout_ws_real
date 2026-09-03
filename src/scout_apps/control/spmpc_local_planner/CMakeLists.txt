@@ -405,6 +405,11 @@ if(CATKIN_ENABLE_TESTING)
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_artifact_contract.py
   )
   add_test(
+    NAME test_mainline_stage3d4_generator
+    COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_d4_generator.py
+  )
+  add_test(
     NAME test_mainline_stage3d4_acados_codegen_backend
     COMMAND ${SPMPC_PYTHON3_EXECUTABLE}
       ${CMAKE_CURRENT_SOURCE_DIR}/test/python/test_mainline_acados_codegen_backend.py

@@ -7,13 +7,11 @@ import platform
 import shutil
 import subprocess
 import sys
-from collections.abc import Iterator
-from contextlib import contextmanager
 from dataclasses import InitVar, dataclass
 from pathlib import Path
 from typing import Any
 
-from .acados_backend import require_acados_backend
+from .acados_backend import explicit_acados_environment, require_acados_backend
 from .acados_codegen_result_schema import (
     ACADOS_CODEGEN_ARTIFACT_CLASS,
     ACADOS_CODEGEN_PERFORMANCE_STATUS,
@@ -410,21 +408,6 @@ def _bind_acados_source_root(ocp: Any, source_root: Path, assembly: Any) -> None
     codegen.acados_lib_path = str(expected_lib)
 
 
-@contextmanager
-def _codegen_environment(source_root: Path, tera_path: Path) -> Iterator[None]:
-    saved = {name: os.environ.get(name) for name in ("ACADOS_SOURCE_DIR", "TERA_PATH")}
-    os.environ["ACADOS_SOURCE_DIR"] = str(source_root)
-    os.environ["TERA_PATH"] = str(tera_path)
-    try:
-        yield
-    finally:
-        for name, value in saved.items():
-            if value is None:
-                os.environ.pop(name, None)
-            else:
-                os.environ[name] = value
-
-
 def _validate_solver_load(
     source_root: Path,
     output_root: Path,
@@ -603,7 +586,7 @@ def generate_and_build_acados(
     ocp.code_gen_opts.json_file = str(json_path)
 
     try:
-        with _codegen_environment(source_root, tera):
+        with explicit_acados_environment(source_root, tera):
             solver_type.generate(
                 ocp,
                 str(json_path),

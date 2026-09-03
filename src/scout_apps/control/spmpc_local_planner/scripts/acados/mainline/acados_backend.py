@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -40,6 +43,37 @@ class AcadosBackend:
     template_module: Any
     model_type: Any
     ocp_type: Any
+
+
+@contextmanager
+def explicit_acados_environment(
+    source_root: Path,
+    tera_executable: Path,
+) -> Iterator[None]:
+    """Bind explicit Acados paths for one synchronous generation scope."""
+
+    if (
+        not isinstance(source_root, Path)
+        or not source_root.is_absolute()
+        or ".." in source_root.parts
+        or not isinstance(tera_executable, Path)
+        or not tera_executable.is_absolute()
+        or ".." in tera_executable.parts
+    ):
+        raise AcadosOcpConstructionError(
+            "explicit Acados environment paths must be canonical absolute Paths"
+        )
+    saved = {name: os.environ.get(name) for name in ("ACADOS_SOURCE_DIR", "TERA_PATH")}
+    os.environ["ACADOS_SOURCE_DIR"] = str(source_root)
+    os.environ["TERA_PATH"] = str(tera_executable)
+    try:
+        yield
+    finally:
+        for name, value in saved.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
 
 
 def require_acados_backend() -> AcadosBackend:
@@ -168,6 +202,7 @@ __all__ = [
     "AcadosOcpConstructionError",
     "AcadosOcpDependencyError",
     "build_symbolic_expression_identity",
+    "explicit_acados_environment",
     "read_acados_backend_identity",
     "require_acados_backend",
 ]
