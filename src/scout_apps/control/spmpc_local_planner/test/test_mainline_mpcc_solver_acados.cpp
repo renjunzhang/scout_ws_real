@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/solvers/mainline_mpcc_solver_acados.h"
+#include "spmpc_local_planner/solvers/mainline_parameter_assembler.h"
 #include "spmpc_local_planner/solvers/mainline_solver_input_builder.h"
 
 #include <gtest/gtest.h>
@@ -14,18 +15,61 @@ namespace spmpc_local_planner {
 namespace mainline {
 namespace {
 
+MainlineRuntimeParameterValues canonicalParameterValues(bool bslosh = false) {
+  MainlineRuntimeParameterValues values;
+  values.dt_sec = 1.0 / 30.0;
+  values.duration_tolerance_sec = 1.0e-12;
+  values.linear_actuator = {0.12, 1.03};
+  values.angular_actuator = {0.45, 0.98};
+  const DelayScheduleStatus schedule_status =
+      makeFractionalDelaySchedule<generated::NQ_V, generated::NQ_OMEGA>(
+          values.dt_sec, 0.4, 0.8, 0.05, 0.07, 1.0e-12,
+          values.delay_schedule, values.duration_tolerance_sec);
+  EXPECT_EQ(DelayScheduleStatus::kOk, schedule_status);
+  values.reference.s_origin = 2.0;
+  values.reference.s_scale = 0.8;
+  values.reference.x_coefficients = {{0.1, 0.8, 0.05, -0.02}};
+  values.reference.y_coefficients = {{-0.2, 0.1, 0.03, 0.01}};
+  for (std::size_t stage = 0; stage <= generated::N; ++stage) {
+    values.reference.speed[stage] =
+        0.2 - 0.1 * static_cast<double>(stage) / 60.0;
+  }
+  values.slosh = {5.0, 0.05, 1.1, 0.9, 0.01, 0.3};
+  values.normalization = {0.1, 0.2, 0.5, 1.0, 0.5,
+                          0.8, 1.2, 2.0, 3.0};
+  values.running_weights = {1.0, 0.2, 0.3, 0.7, 0.4,
+                            0.1, 0.15, 0.05, 0.08};
+  values.terminal_weights = {2.0, 0.4, 1.5, 0.6};
+  values.liquid_cost = {bslosh ? ExperimentCondition::kBslosh
+                                : ExperimentCondition::kB0,
+                        8U, 4.0, 7.0};
+  return values;
+}
+
 MainlineSolveRequest canonicalRequest(bool bslosh = false) {
   MainlineSolveRequest request;
   std::copy(std::begin(fixture::kInitialState),
             std::end(fixture::kInitialState), request.initial_state.begin());
-  for (std::size_t stage = 0; stage <= generated::N; ++stage) {
-    const double* const parameters =
-        bslosh ? fixture::kBsloshStageParameters[stage]
-               : fixture::kB0StageParameters[stage];
-    std::copy(parameters, parameters + generated::NP,
-              request.stage_parameters[stage].begin());
-  }
+  request.stage_parameters =
+      assembleMainlineParameters(canonicalParameterValues(bslosh));
   return request;
+}
+
+TEST(MainlineParameterAssembler, MatchesCanonicalPythonD2bElementByElement) {
+  for (const bool bslosh : {false, true}) {
+    const MainlineParameterHorizon actual =
+        assembleMainlineParameters(canonicalParameterValues(bslosh));
+    for (std::size_t stage = 0; stage <= generated::N; ++stage) {
+      const double* const expected =
+          bslosh ? fixture::kBsloshStageParameters[stage]
+                 : fixture::kB0StageParameters[stage];
+      for (std::size_t offset = 0; offset < generated::NP; ++offset) {
+        EXPECT_DOUBLE_EQ(expected[offset], actual[stage][offset])
+            << "condition=" << (bslosh ? "Bslosh" : "B0")
+            << " stage=" << stage << " offset=" << offset;
+      }
+    }
+  }
 }
 
 TEST(MainlineMpccSolverAcados, UsesOneArtifactForB0AndBsloshWithExplicitWarmStart) {
@@ -129,6 +173,15 @@ TEST(MainlineSolverInputBuilder, RejectsNonfiniteKnownPrefixOrProgress) {
   EXPECT_THROW(buildMainlineInitialState(
                    prefix, std::numeric_limits<double>::infinity()),
                std::invalid_argument);
+}
+
+TEST(MainlineParameterAssembler, RejectsInvalidRuntimeValues) {
+  MainlineRuntimeParameterValues values = canonicalParameterValues();
+  values.normalization.contour = 0.0;
+  EXPECT_THROW(assembleMainlineParameters(values), std::invalid_argument);
+  values = canonicalParameterValues();
+  values.reference.speed[generated::N] = -0.1;
+  EXPECT_THROW(assembleMainlineParameters(values), std::invalid_argument);
 }
 
 }  // namespace
