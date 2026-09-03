@@ -7,8 +7,11 @@ from fractions import Fraction
 from typing import Any
 
 from .constraints_oracle import (
+    CONSTRAINT_RESIDUAL_ORDER,
     CONSTRAINT_SCHEMA,
     CONSTRAINT_VALUE_STATUS,
+    CONTROL_BOX_ORDER,
+    STAGE_NONLINEAR_H_ORDER,
     ConstraintBounds,
 )
 from .development_layout import STAGE_SEMANTICS
@@ -31,6 +34,132 @@ REFERENCE_DOMAIN_UPPER = 1.0
 STAGE_REFERENCE_DOMAIN_ORDER = ("xi_k",)
 TERMINAL_REFERENCE_DOMAIN_ORDER = ("xi_N",)
 _GRAPH_BUNDLE_TOKEN = object()
+
+
+def graph_semantic_payload(
+    *,
+    capacity_contract_sha256: str,
+    development_layout_sha256: str,
+    solver_parameter_layout_sha256: str,
+    horizon_steps: int,
+    parameter_vector_count: int,
+    nx: int,
+    nu: int,
+    np: int,
+    state_order: tuple[str, ...],
+    control_order: tuple[str, ...],
+    parameter_order: tuple[str, ...],
+    control_indices: tuple[int, ...],
+) -> dict[str, Any]:
+    """Return the dependency-light, structure-only graph identity payload.
+
+    This is the single authority for the graph semantic hash.  It accepts
+    plain serialized values so the typed graph builder and an offline artifact
+    parser can execute exactly the same algorithm.  Backend version, bounds,
+    and other runtime metadata deliberately do not belong to this payload;
+    callers must bind those fields through their owning contracts.
+    """
+
+    return {
+        "schema_version": CASADI_GRAPH_SCHEMA,
+        "model_id": MODEL_ID,
+        "source_identity": {
+            "capacity_contract_raw_bytes_sha256": capacity_contract_sha256,
+            "development_layout_semantic_sha256": development_layout_sha256,
+            "solver_parameter_layout_semantic_sha256": solver_parameter_layout_sha256,
+        },
+        "dimensions": {
+            "N": horizon_steps,
+            "parameter_vector_count": parameter_vector_count,
+            "NX": nx,
+            "NU": nu,
+            "NP": np,
+        },
+        "orders": {
+            "state": list(state_order),
+            "control": list(control_order),
+            "parameter": list(parameter_order),
+        },
+        "schemas": {
+            "discretization": DISCRETIZATION_SCHEMA,
+            "reference": REFERENCE_SCHEMA,
+            "cost": COST_SCHEMA,
+            "constraints": CONSTRAINT_SCHEMA,
+        },
+        "runtime_parameter_input_policy": RUNTIME_PARAMETER_INPUT_POLICY,
+        "stage_semantics": STAGE_SEMANTICS,
+        "stage_nonlinear_h_order": list(STAGE_NONLINEAR_H_ORDER),
+        "stage_nonlinear_h_bound_policy": "SYMMETRIC_EXPLICIT_CALLER_VALUES",
+        "stage_reference_domain": {
+            "order": list(STAGE_REFERENCE_DOMAIN_ORDER),
+            "lower": [REFERENCE_DOMAIN_LOWER],
+            "upper": [REFERENCE_DOMAIN_UPPER],
+        },
+        "terminal_reference_domain": {
+            "order": list(TERMINAL_REFERENCE_DOMAIN_ORDER),
+            "lower": [REFERENCE_DOMAIN_LOWER],
+            "upper": [REFERENCE_DOMAIN_UPPER],
+        },
+        "control_box": {
+            "indices": list(control_indices),
+            "order": list(CONTROL_BOX_ORDER),
+            "bound_policy": [
+                "SYMMETRIC_EXPLICIT_JERK_V",
+                "SYMMETRIC_EXPLICIT_JERK_OMEGA",
+                "FIXED_ZERO_LOWER_EXPLICIT_UPPER_V_S",
+            ],
+            "v_s_fixed_lower": 0.0,
+        },
+        "diagnostic_residuals": {
+            "role": DIAGNOSTIC_RESIDUAL_ROLE,
+            "order": list(CONSTRAINT_RESIDUAL_ORDER),
+            "feasible_upper": 0.0,
+        },
+        "terminal_policy": TERMINAL_CONTROL_POLICY,
+        "liquid_hard_constraints": "DISABLED_FOR_B0_AND_BSLOSH",
+        "comparison_identity": {
+            "arms": ["B0", "Bslosh"],
+            "only_parameter_fields_allowed_to_differ": [
+                "liquid_run_coeff",
+                "liquid_boundary_coeff",
+            ],
+        },
+    }
+
+
+def graph_semantic_sha256(
+    *,
+    capacity_contract_sha256: str,
+    development_layout_sha256: str,
+    solver_parameter_layout_sha256: str,
+    horizon_steps: int,
+    parameter_vector_count: int,
+    nx: int,
+    nu: int,
+    np: int,
+    state_order: tuple[str, ...],
+    control_order: tuple[str, ...],
+    parameter_order: tuple[str, ...],
+    control_indices: tuple[int, ...],
+) -> str:
+    """Hash :func:`graph_semantic_payload` without importing CasADi."""
+
+    return sha256_json(
+        graph_semantic_payload(
+            capacity_contract_sha256=capacity_contract_sha256,
+            development_layout_sha256=development_layout_sha256,
+            solver_parameter_layout_sha256=solver_parameter_layout_sha256,
+            horizon_steps=horizon_steps,
+            parameter_vector_count=parameter_vector_count,
+            nx=nx,
+            nu=nu,
+            np=np,
+            state_order=state_order,
+            control_order=control_order,
+            parameter_order=parameter_order,
+            control_indices=control_indices,
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -293,4 +422,6 @@ __all__ = [
     "SymbolicStageConstraints",
     "SymbolicStageCosts",
     "SymbolicTerminalExpressions",
+    "graph_semantic_payload",
+    "graph_semantic_sha256",
 ]

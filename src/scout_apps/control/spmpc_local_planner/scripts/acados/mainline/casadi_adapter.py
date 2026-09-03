@@ -35,6 +35,7 @@ from .casadi_graph_contract import (
     SymbolicStageConstraints,
     SymbolicStageCosts,
     SymbolicTerminalExpressions,
+    graph_semantic_sha256,
 )
 from .casadi_objective import (
     SymbolicObjectiveConstructionError,
@@ -44,10 +45,7 @@ from .casadi_objective import (
 )
 from .casadi_reference import build_symbolic_reference
 from .constraints_oracle import (
-    CONSTRAINT_RESIDUAL_ORDER,
-    CONSTRAINT_SCHEMA,
     CONTROL_BOX_ORDER,
-    STAGE_NONLINEAR_H_ORDER,
     ConstraintBounds,
     ConstraintOracleError,
     require_constraint_bounds,
@@ -55,9 +53,7 @@ from .constraints_oracle import (
 from .development_capacity import DevelopmentCapacityContract
 from .development_layout import DevelopmentLayout
 from .identity import IdentityError, sha256_json
-from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
 from .solver_parameter_layout import (
-    REFERENCE_SCHEMA,
     SolverParameterLayout,
     SolverParameterLayoutError,
     build_solver_parameter_layout,
@@ -118,89 +114,6 @@ def _typed_source_hashes(
         ) from exc
 
 
-def _graph_semantic_sha256(
-    capacity: DevelopmentCapacityContract,
-    development_layout: DevelopmentLayout,
-    parameter_layout: SolverParameterLayout,
-    development_layout_sha256: str,
-    parameter_layout_sha256: str,
-    control_indices: tuple[int, ...],
-) -> str:
-    """Hash graph structure only; bounds and runtime p values are excluded."""
-
-    payload = {
-        "schema_version": CASADI_GRAPH_SCHEMA,
-        "model_id": MODEL_ID,
-        "source_identity": {
-            "capacity_contract_raw_bytes_sha256": capacity.contract_sha256,
-            "development_layout_semantic_sha256": development_layout_sha256,
-            "solver_parameter_layout_semantic_sha256": parameter_layout_sha256,
-        },
-        "dimensions": {
-            "N": development_layout.horizon_steps,
-            "parameter_vector_count": development_layout.horizon_steps + 1,
-            "NX": development_layout.NX,
-            "NU": development_layout.NU,
-            "NP": parameter_layout.NP,
-        },
-        "orders": {
-            "state": list(development_layout.state_names),
-            "control": list(development_layout.control_names),
-            "parameter": list(parameter_layout.parameter_names),
-        },
-        "schemas": {
-            "discretization": DISCRETIZATION_SCHEMA,
-            "reference": REFERENCE_SCHEMA,
-            "cost": COST_SCHEMA,
-            "constraints": CONSTRAINT_SCHEMA,
-        },
-        "runtime_parameter_input_policy": RUNTIME_PARAMETER_INPUT_POLICY,
-        "stage_semantics": STAGE_SEMANTICS,
-        "stage_nonlinear_h_order": list(STAGE_NONLINEAR_H_ORDER),
-        "stage_nonlinear_h_bound_policy": "SYMMETRIC_EXPLICIT_CALLER_VALUES",
-        "stage_reference_domain": {
-            "order": list(STAGE_REFERENCE_DOMAIN_ORDER),
-            "lower": [REFERENCE_DOMAIN_LOWER],
-            "upper": [REFERENCE_DOMAIN_UPPER],
-        },
-        "terminal_reference_domain": {
-            "order": list(TERMINAL_REFERENCE_DOMAIN_ORDER),
-            "lower": [REFERENCE_DOMAIN_LOWER],
-            "upper": [REFERENCE_DOMAIN_UPPER],
-        },
-        "control_box": {
-            "indices": list(control_indices),
-            "order": list(CONTROL_BOX_ORDER),
-            "bound_policy": [
-                "SYMMETRIC_EXPLICIT_JERK_V",
-                "SYMMETRIC_EXPLICIT_JERK_OMEGA",
-                "FIXED_ZERO_LOWER_EXPLICIT_UPPER_V_S",
-            ],
-            "v_s_fixed_lower": 0.0,
-        },
-        "diagnostic_residuals": {
-            "role": DIAGNOSTIC_RESIDUAL_ROLE,
-            "order": list(CONSTRAINT_RESIDUAL_ORDER),
-            "feasible_upper": 0.0,
-        },
-        "terminal_policy": TERMINAL_CONTROL_POLICY,
-        "liquid_hard_constraints": "DISABLED_FOR_B0_AND_BSLOSH",
-        "comparison_identity": {
-            "arms": ["B0", "Bslosh"],
-            "only_parameter_fields_allowed_to_differ": [
-                "liquid_run_coeff",
-                "liquid_boundary_coeff",
-            ],
-        },
-    }
-    try:
-        return sha256_json(payload)
-    except IdentityError as exc:
-        raise CasadiGraphConstructionError(
-            "graph semantic identity cannot be encoded"
-        ) from exc
-
-
 def build_casadi_graph(
     capacity: DevelopmentCapacityContract,
     development_layout: DevelopmentLayout,
@@ -222,13 +135,19 @@ def build_casadi_graph(
     control_indices = tuple(
         development_layout.control_offsets[name] for name in CONTROL_BOX_ORDER
     )
-    graph_semantic_sha256 = _graph_semantic_sha256(
-        capacity,
-        development_layout,
-        parameter_layout,
-        layout_sha256,
-        parameter_sha256,
-        control_indices,
+    graph_semantic_identity = graph_semantic_sha256(
+        capacity_contract_sha256=capacity.contract_sha256,
+        development_layout_sha256=layout_sha256,
+        solver_parameter_layout_sha256=parameter_sha256,
+        horizon_steps=development_layout.horizon_steps,
+        parameter_vector_count=development_layout.horizon_steps + 1,
+        nx=development_layout.NX,
+        nu=development_layout.NU,
+        np=parameter_layout.NP,
+        state_order=development_layout.state_names,
+        control_order=development_layout.control_names,
+        parameter_order=parameter_layout.parameter_names,
+        control_indices=control_indices,
     )
     ca = _require_casadi()
     try:
@@ -312,7 +231,7 @@ def build_casadi_graph(
             solver_parameter_layout_sha256=parameter_sha256,
             bounds=checked_bounds,
             casadi_version=str(getattr(ca, "__version__", "unknown")),
-            graph_semantic_sha256=graph_semantic_sha256,
+            graph_semantic_sha256=graph_semantic_identity,
             parameter_vector_count=development_layout.horizon_steps + 1,
             release_frequency_hz=development_layout.release_frequency_hz,
             release_period_sec=development_layout.release_period_sec,

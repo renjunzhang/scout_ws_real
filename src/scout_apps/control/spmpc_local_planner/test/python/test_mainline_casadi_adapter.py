@@ -24,7 +24,10 @@ from acados.mainline.casadi_adapter import (
     CasadiGraphConstructionError,
     build_casadi_graph,
 )
-from acados.mainline.casadi_graph_contract import DIAGNOSTIC_RESIDUAL_ROLE
+from acados.mainline.casadi_graph_contract import (
+    DIAGNOSTIC_RESIDUAL_ROLE,
+    graph_semantic_sha256,
+)
 from acados.mainline.constraints_oracle import (
     CONSTRAINT_RESIDUAL_ORDER,
     CONSTRAINT_SCHEMA,
@@ -320,6 +323,23 @@ class MainlineCasadiAdapterTest(unittest.TestCase):
         self.assertEqual(len(graph.graph_semantic_sha256), 64)
         self.assertEqual(
             document["graph_semantic_identity"]["sha256"],
+            graph.graph_semantic_sha256,
+        )
+        self.assertEqual(
+            graph_semantic_sha256(
+                capacity_contract_sha256=graph.capacity_contract_sha256,
+                development_layout_sha256=graph.development_layout_sha256,
+                solver_parameter_layout_sha256=(graph.solver_parameter_layout_sha256),
+                horizon_steps=graph.horizon_steps,
+                parameter_vector_count=graph.parameter_vector_count,
+                nx=graph.nx,
+                nu=graph.nu,
+                np=graph.np,
+                state_order=graph.state_order,
+                control_order=graph.control_order,
+                parameter_order=graph.parameter_order,
+                control_indices=graph.stage_constraints.control_indices,
+            ),
             graph.graph_semantic_sha256,
         )
         self.assertEqual(
