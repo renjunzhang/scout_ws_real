@@ -203,6 +203,12 @@ def prepare_empty_codegen_directory(value: Path | str) -> Path:
     return checked
 
 
+def require_artifact_directory(value: Path | str) -> Path:
+    """Return one existing canonical directory with no symbolic-link component."""
+
+    return _checked_root(value)
+
+
 def _regular_files(root: Path) -> tuple[Path, ...]:
     files: list[Path] = []
     pending = [root]
@@ -391,6 +397,7 @@ __all__ = [
     "inventory_codegen_tree",
     "inventory_generated_tree",
     "prepare_empty_codegen_directory",
+    "require_artifact_directory",
     "solver_library_record",
     "validate_generated_tree",
 ]

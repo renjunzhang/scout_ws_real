@@ -939,6 +939,122 @@ class MainlineArtifactContractTest(unittest.TestCase):
                 capture_output=True,
             )
 
+    def test_contract_outputs_are_write_once_and_reload_from_disk(self) -> None:
+        publication = importlib.import_module("acados.mainline.artifact_publication")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contract = self._artifact_contract(root)
+            written = publication.write_artifact_contract_outputs(root, contract)
+            loaded = publication.load_artifact_contract_directory(root)
+            self.assertEqual(written.to_dict(), contract.to_dict())
+            self.assertEqual(loaded.to_dict(), contract.to_dict())
+            self.assertTrue((root / MODEL_CONTRACT_FILENAME).is_file())
+            self.assertTrue((root / GENERATED_HEADER_FILENAME).is_file())
+            with self.assertRaisesRegex(RuntimeError, "already exists"):
+                publication.write_artifact_contract_outputs(root, contract)
+
+    def test_contract_output_reader_rejects_byte_and_path_tampering(self) -> None:
+        publication = importlib.import_module("acados.mainline.artifact_publication")
+        for mutation in ("crlf", "duplicate_json", "header_symlink"):
+            temporary_directory = tempfile.TemporaryDirectory()
+            with self.subTest(mutation=mutation), temporary_directory as directory:
+                root = Path(directory)
+                contract = self._artifact_contract(root)
+                if mutation == "header_symlink":
+                    outside = root.parent / f"{root.name}-outside-header"
+                    outside.write_text("outside\n", encoding="utf-8")
+                    (root / GENERATED_HEADER_FILENAME).symlink_to(outside)
+                    try:
+                        with self.assertRaises(RuntimeError):
+                            publication.write_artifact_contract_outputs(root, contract)
+                        self.assertEqual(
+                            outside.read_text(encoding="utf-8"),
+                            "outside\n",
+                        )
+                    finally:
+                        outside.unlink()
+                    continue
+
+                publication.write_artifact_contract_outputs(root, contract)
+                json_path = root / MODEL_CONTRACT_FILENAME
+                if mutation == "crlf":
+                    payload = json_path.read_bytes()
+                    json_path.write_bytes(payload.replace(b"\n", b"\r\n"))
+                else:
+                    json_path.write_bytes(b'{"duplicate":1,"duplicate":2}\n')
+                with self.assertRaises(RuntimeError):
+                    publication.load_artifact_contract_directory(root)
+
+    def test_staging_publication_is_atomic_and_never_replaces_a_target(self) -> None:
+        from unittest.mock import patch
+
+        publication = importlib.import_module("acados.mainline.artifact_publication")
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "published"
+            staging = publication.create_sibling_staging_directory(target)
+            (staging / "payload").write_text("first\n", encoding="utf-8")
+            published = publication.publish_staging_directory(staging, target)
+            self.assertEqual(published, target)
+            self.assertFalse(staging.exists())
+            self.assertEqual((target / "payload").read_text(), "first\n")
+
+            second_staging = parent / "second-staging"
+            second_staging.mkdir()
+            (second_staging / "payload").write_text("second\n", encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "already exists"):
+                publication.publish_staging_directory(second_staging, target)
+            self.assertEqual((target / "payload").read_text(), "first\n")
+            self.assertEqual(
+                (second_staging / "payload").read_text(),
+                "second\n",
+            )
+
+            race_target = parent / "race-target"
+            race_staging = parent / "race-staging"
+            race_staging.mkdir()
+            (race_staging / "payload").write_text("candidate\n", encoding="utf-8")
+            real_rename = publication._renameat2_noreplace
+
+            def create_competing_target(descriptor, source, destination):
+                race_target.mkdir()
+                (race_target / "owner").write_text("other\n", encoding="utf-8")
+                return real_rename(descriptor, source, destination)
+
+            rename_patch = patch.object(
+                publication,
+                "_renameat2_noreplace",
+                side_effect=create_competing_target,
+            )
+            expected_failure = self.assertRaisesRegex(RuntimeError, "appeared")
+            with rename_patch, expected_failure:
+                publication.publish_staging_directory(race_staging, race_target)
+            self.assertEqual((race_target / "owner").read_text(), "other\n")
+            self.assertEqual((race_staging / "payload").read_text(), "candidate\n")
+
+    def test_post_commit_sync_failure_reports_the_published_target(self) -> None:
+        from unittest.mock import patch
+
+        publication = importlib.import_module("acados.mainline.artifact_publication")
+        with tempfile.TemporaryDirectory() as directory:
+            parent = Path(directory)
+            target = parent / "published"
+            staging = publication.create_sibling_staging_directory(target)
+            (staging / "payload").write_text("committed\n", encoding="utf-8")
+            sync_failure = patch.object(
+                publication.os,
+                "fsync",
+                side_effect=OSError("injected parent sync failure"),
+            )
+            expected_failure = self.assertRaises(
+                publication.ArtifactPublicationCommittedError
+            )
+            with sync_failure, expected_failure as raised:
+                publication.publish_staging_directory(staging, target)
+            self.assertEqual(raised.exception.published_target, target)
+            self.assertFalse(staging.exists())
+            self.assertEqual((target / "payload").read_text(), "committed\n")
+
     def test_artifact_contract_requires_exact_type_and_rejects_hash_mutation(
         self,
     ) -> None:

@@ -263,6 +263,26 @@ class MainlineAcadosCodegenBoundaryTest(unittest.TestCase):
         ):
             codegen_backend._require_tool_binding("make", expected)
 
+    def test_link_library_metadata_uses_a_recorded_leaf_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            library_directory = root / "install" / "lib"
+            library_directory.mkdir(parents=True)
+            metadata = root / "source-link-libraries.json"
+            metadata.write_text('{"openmp":""}\n', encoding="utf-8")
+            (library_directory / "link_libs.json").symlink_to(metadata)
+            self.assertEqual(
+                codegen_validation._read_acados_link_libraries(root / "install"),
+                {"openmp": ""},
+            )
+
+            metadata.write_text(
+                '{"openmp":"","openmp":"tampered"}\n',
+                encoding="utf-8",
+            )
+            with self.assertRaises(AcadosCodegenValidationError):
+                codegen_validation._read_acados_link_libraries(root / "install")
+
     def test_fixed_make_checks_clean_and_build_return_codes(self) -> None:
         make_path = Path("/usr/bin/make")
         output = Path("/absolute/generated")

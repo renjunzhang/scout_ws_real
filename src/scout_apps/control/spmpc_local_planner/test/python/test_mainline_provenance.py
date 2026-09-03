@@ -384,6 +384,11 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
             directory_alias.symlink_to(target.parent, target_is_directory=True)
             with self.assertRaisesRegex(IdentityError, "symbolic-link directory"):
                 read_stable_regular_file(directory_alias / target.name, label="fixture")
+            relative_alias = Path(
+                os.path.relpath(directory_alias / target.name, Path.cwd())
+            )
+            with self.assertRaisesRegex(IdentityError, "symbolic-link directory"):
+                read_stable_regular_file(relative_alias, label="fixture")
 
     def test_read_stable_regular_file_rejects_pathname_replacement_during_read(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

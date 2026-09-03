@@ -38,6 +38,8 @@ from .codegen_options import (
 )
 from .identity import canonical_json, read_strict_json, sha256_bytes
 from .model_contract import MODEL_ID
+from .provenance_common import ProvenanceError
+from .provenance_files import capture_linked_file
 from .solver_options import SolverOptionsSnapshot, require_solver_options_snapshot
 
 ACADOS_JSON_VALIDATION_SCHEMA = "spmpc_mainline_acados_json_validation_v1"
@@ -63,6 +65,31 @@ def _array(value: Any, label: str) -> list[Any]:
 def _same(actual: Any, expected: Any, label: str) -> None:
     if type(actual) is not type(expected) or actual != expected:
         raise AcadosCodegenValidationError(f"generated Acados {label} drifted")
+
+
+def _read_acados_link_libraries(source_root: Path) -> dict[str, Any]:
+    """Read the Acados metadata through one recorded leaf-link identity."""
+
+    requested = source_root / "lib" / "link_libs.json"
+    label = "Acados link-library metadata"
+    try:
+        identity = capture_linked_file(label, requested)
+        value, payload = read_strict_json(
+            Path(identity.resolved_path),
+            label=label,
+        )
+        current = capture_linked_file(label, requested)
+    except (ProvenanceError, ValueError) as exc:
+        raise AcadosCodegenValidationError(str(exc)) from exc
+    if (
+        len(payload) != identity.size_bytes
+        or sha256_bytes(payload) != identity.raw_sha256
+        or current != identity
+    ):
+        raise AcadosCodegenValidationError(
+            "Acados link-library metadata changed while being read"
+        )
+    return _object(value, label)
 
 
 def _finite_zero_array(value: Any, count: int, label: str) -> None:
@@ -353,13 +380,7 @@ def validate_generated_acados_json(
         checked_assembly.acados_git_commit,
         "code_gen_opts.acados_version",
     )
-    try:
-        link_libraries, _ = read_strict_json(
-            source_root / "lib" / "link_libs.json",
-            label="Acados link-library metadata",
-        )
-    except ValueError as exc:
-        raise AcadosCodegenValidationError(str(exc)) from exc
+    link_libraries = _read_acados_link_libraries(source_root)
     _same(
         actual_codegen.get("acados_link_libs"),
         link_libraries,
