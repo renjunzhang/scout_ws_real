@@ -36,6 +36,7 @@ from .casadi_graph_contract import (
     SymbolicStageCosts,
     SymbolicTerminalExpressions,
     graph_semantic_sha256,
+    require_casadi_graph_bundle,
 )
 from .casadi_objective import (
     SymbolicObjectiveConstructionError,
@@ -208,7 +209,7 @@ def build_casadi_graph(
             raise CasadiGraphConstructionError(
                 "symbolic control indices drifted from the typed layout"
             )
-        return CasadiGraphBundle(
+        bundle = CasadiGraphBundle(
             x=x,
             u=u,
             p=p,
@@ -237,6 +238,15 @@ def build_casadi_graph(
             release_period_sec=development_layout.release_period_sec,
             stage_semantics=STAGE_SEMANTICS,
             _construction_token=_GRAPH_BUNDLE_TOKEN,
+        )
+        return require_casadi_graph_bundle(
+            bundle,
+            expected_capacity_contract_raw_bytes_sha256=capacity.contract_sha256,
+            expected_development_layout_semantic_sha256=layout_sha256,
+            expected_solver_parameter_layout_semantic_sha256=parameter_sha256,
+            expected_state_order=development_layout.state_names,
+            expected_control_order=development_layout.control_names,
+            expected_parameter_order=parameter_layout.parameter_names,
         )
     except CasadiAdapterError:
         raise

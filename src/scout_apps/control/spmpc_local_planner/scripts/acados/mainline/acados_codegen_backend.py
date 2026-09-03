@@ -54,7 +54,7 @@ from .artifact_files import (
     solver_library_record,
     validate_generated_tree,
 )
-from .casadi_graph_contract import CasadiGraphBundle
+from .casadi_graph_contract import CasadiGraphBundle, require_casadi_graph_bundle
 from .codegen_options import (
     ACADOS_JSON_FILENAME,
     CodegenOptionsSnapshot,
@@ -325,39 +325,57 @@ def _checked_authorities(
     SolverOptionsSnapshot,
     CodegenOptionsSnapshot,
 ]:
-    if type(graph) is not CasadiGraphBundle:
-        raise AcadosCodegenError("graph must be the exact CasadiGraphBundle type")
     try:
         checked_assembly = require_acados_ocp_assembly(assembly)
         checked_solver = require_solver_options_snapshot(solver_options)
         checked_codegen = require_codegen_options_snapshot(codegen_options)
+        checked_graph = require_casadi_graph_bundle(
+            graph,
+            expected_capacity_contract_raw_bytes_sha256=(
+                checked_assembly.capacity_contract_sha256
+            ),
+            expected_development_layout_semantic_sha256=(
+                checked_assembly.development_layout_sha256
+            ),
+            expected_solver_parameter_layout_semantic_sha256=(
+                checked_assembly.solver_parameter_layout_sha256
+            ),
+        )
     except (TypeError, ValueError) as exc:
         raise AcadosCodegenError("codegen authorities are not canonical") from exc
     if (
-        checked_assembly.graph_semantic_sha256 != graph.graph_semantic_sha256
+        checked_assembly.graph_semantic_sha256 != checked_graph.graph_semantic_sha256
         or checked_assembly.bounds_snapshot_sha256
-        != sha256_json(graph.bounds.to_dict())
+        != sha256_json(checked_graph.bounds.to_dict())
         or checked_assembly.solver_options_semantic_sha256
         != checked_solver.semantic_sha256
-        or checked_assembly.capacity_contract_sha256 != graph.capacity_contract_sha256
-        or checked_assembly.development_layout_sha256 != graph.development_layout_sha256
+        or checked_assembly.capacity_contract_sha256
+        != checked_graph.capacity_contract_sha256
+        or checked_assembly.development_layout_sha256
+        != checked_graph.development_layout_sha256
         or checked_assembly.solver_parameter_layout_sha256
-        != graph.solver_parameter_layout_sha256
-        or checked_codegen.development_layout_sha256 != graph.development_layout_sha256
+        != checked_graph.solver_parameter_layout_sha256
+        or checked_codegen.development_layout_sha256
+        != checked_graph.development_layout_sha256
         or (
             checked_assembly.horizon_steps,
             checked_assembly.nx,
             checked_assembly.nu,
             checked_assembly.np,
         )
-        != (graph.horizon_steps, graph.nx, graph.nu, graph.np)
-        or checked_codegen.horizon_steps != graph.horizon_steps
-        or checked_solver.horizon_steps != graph.horizon_steps
+        != (
+            checked_graph.horizon_steps,
+            checked_graph.nx,
+            checked_graph.nu,
+            checked_graph.np,
+        )
+        or checked_codegen.horizon_steps != checked_graph.horizon_steps
+        or checked_solver.horizon_steps != checked_graph.horizon_steps
     ):
         raise AcadosCodegenError("graph/OCP/options authorities are inconsistent")
     if checked_assembly.acados_backend_binding_status != "MATCHED_SOURCE_ROOT":
         raise AcadosCodegenError("Acados Python interface and library roots differ")
-    return graph, checked_assembly, checked_solver, checked_codegen
+    return checked_graph, checked_assembly, checked_solver, checked_codegen
 
 
 def _require_codegen_backend(backend: Any) -> Any:

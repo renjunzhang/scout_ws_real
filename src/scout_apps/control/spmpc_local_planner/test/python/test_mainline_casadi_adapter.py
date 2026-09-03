@@ -28,6 +28,7 @@ from acados.mainline.casadi_adapter import (
 from acados.mainline.casadi_graph_contract import (
     DIAGNOSTIC_RESIDUAL_ROLE,
     graph_semantic_sha256,
+    require_casadi_graph_bundle,
 )
 from acados.mainline.casadi_graph_schema import (
     CasadiGraphSchemaError,
@@ -293,6 +294,7 @@ class MainlineCasadiAdapterTest(unittest.TestCase):
         self.assertEqual(graph.model_id, MODEL_ID)
         document = graph.to_dict()
         json.dumps(document, allow_nan=False)
+        self.assertIs(require_casadi_graph_bundle(graph), graph)
         self.assertIs(
             validate_casadi_graph_document(
                 document,
@@ -425,6 +427,18 @@ class MainlineCasadiAdapterTest(unittest.TestCase):
         )
         with self.assertRaises(CasadiGraphSchemaError):
             validate_casadi_graph_document(forged_policy)
+
+        forged_bundle = copy.copy(graph)
+        object.__setattr__(forged_bundle, "release_frequency_hz", 31)
+        with self.assertRaises(ValueError):
+            require_casadi_graph_bundle(forged_bundle)
+
+        forged_bundle = copy.copy(graph)
+        object.__setattr__(
+            forged_bundle, "execution_slots", list(graph.execution_slots)
+        )
+        with self.assertRaises(ValueError):
+            require_casadi_graph_bundle(forged_bundle)
 
         alternate_bounds = ConstraintBounds(
             9.0,

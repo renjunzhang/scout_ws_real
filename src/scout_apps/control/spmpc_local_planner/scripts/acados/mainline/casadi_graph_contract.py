@@ -14,8 +14,9 @@ from .constraints_oracle import (
     STAGE_NONLINEAR_H_ORDER,
     ConstraintBounds,
 )
+from .development_capacity import EXECUTION_SUBSEGMENT_SLOTS
 from .development_layout import STAGE_SEMANTICS
-from .identity import sha256_json
+from .identity import IdentityError, sha256_json
 from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
 from .solver_parameter_layout import REFERENCE_SCHEMA
 
@@ -29,10 +30,27 @@ DIAGNOSTIC_RESIDUAL_ROLE = "PARITY_AND_DIAGNOSTICS_ONLY_NOT_ACADOS_H"
 RUNTIME_PARAMETER_INPUT_POLICY = (
     "CALLER_VALIDATES_CANONICAL_RUNTIME_SNAPSHOT_BEFORE_GRAPH_INJECTION"
 )
+RUNTIME_PARAMETER_VALUES_POLICY = "EXCLUDED_FROM_GRAPH_IDENTITY"
+EXECUTION_SCHEDULE_POLICY = "FIXED_WIDTH_RUNTIME_VALUES_ALL_SLOTS_EXPANDED"
 REFERENCE_DOMAIN_LOWER = 0.0
 REFERENCE_DOMAIN_UPPER = 1.0
 STAGE_REFERENCE_DOMAIN_ORDER = ("xi_k",)
 TERMINAL_REFERENCE_DOMAIN_ORDER = ("xi_N",)
+TERMINAL_INPUT_ORDER = ("x_N", "p_N")
+TERMINAL_LIQUID_COST_POLICY = "IDENTICALLY_ZERO"
+COMPARISON_ARMS = ("B0", "Bslosh")
+COMPARISON_PARAMETER_FIELDS = (
+    "liquid_run_coeff",
+    "liquid_boundary_coeff",
+)
+COMPARISON_IDENTICAL_FIELDS = (
+    "dynamics",
+    "reference",
+    "robot_cost",
+    "constraints",
+    "all_other_stage_parameters",
+)
+LIQUID_HARD_CONSTRAINT_POLICY = "DISABLED_FOR_B0_AND_BSLOSH"
 _GRAPH_BUNDLE_TOKEN = object()
 
 
@@ -116,13 +134,12 @@ def graph_semantic_payload(
             "feasible_upper": 0.0,
         },
         "terminal_policy": TERMINAL_CONTROL_POLICY,
-        "liquid_hard_constraints": "DISABLED_FOR_B0_AND_BSLOSH",
+        "liquid_hard_constraints": LIQUID_HARD_CONSTRAINT_POLICY,
         "comparison_identity": {
-            "arms": ["B0", "Bslosh"],
-            "only_parameter_fields_allowed_to_differ": [
-                "liquid_run_coeff",
-                "liquid_boundary_coeff",
-            ],
+            "arms": list(COMPARISON_ARMS),
+            "only_parameter_fields_allowed_to_differ": list(
+                COMPARISON_PARAMETER_FIELDS
+            ),
         },
     }
 
@@ -237,7 +254,7 @@ class SymbolicTerminalExpressions:
     reference_domain_order: tuple[str, ...]
     reference_domain_lower: tuple[float, ...]
     reference_domain_upper: tuple[float, ...]
-    input_order: tuple[str, ...] = ("x_N", "p_N")
+    input_order: tuple[str, ...] = TERMINAL_INPUT_ORDER
     control_policy: str = TERMINAL_CONTROL_POLICY
 
 
@@ -286,6 +303,8 @@ class CasadiGraphBundle:
             raise ValueError("graph/artifact status is not canonical")
         if self.parameter_vector_count != self.horizon_steps + 1:
             raise ValueError("parameter vector count must equal N+1")
+        if len(self.execution_slots) != EXECUTION_SUBSEGMENT_SLOTS:
+            raise ValueError("graph execution slot count is not canonical")
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize graph metadata without unstable CasADi expression reprs."""
@@ -301,7 +320,7 @@ class CasadiGraphBundle:
             "model_id": self.model_id,
             "casadi_version": self.casadi_version,
             "graph_identity_scope": GRAPH_IDENTITY_SCOPE,
-            "runtime_parameter_values": "EXCLUDED_FROM_GRAPH_IDENTITY",
+            "runtime_parameter_values": RUNTIME_PARAMETER_VALUES_POLICY,
             "runtime_parameter_input_policy": RUNTIME_PARAMETER_INPUT_POLICY,
             "graph_semantic_identity": {
                 "sha256": self.graph_semantic_sha256,
@@ -343,7 +362,7 @@ class CasadiGraphBundle:
             },
             "execution": {
                 "slot_count": len(self.execution_slots),
-                "schedule_policy": ("FIXED_WIDTH_RUNTIME_VALUES_ALL_SLOTS_EXPANDED"),
+                "schedule_policy": EXECUTION_SCHEDULE_POLICY,
             },
             "constraints": {
                 "value_status": CONSTRAINT_VALUE_STATUS,
@@ -380,42 +399,105 @@ class CasadiGraphBundle:
             "terminal": {
                 "input_order": list(self.terminal.input_order),
                 "control_policy": self.terminal.control_policy,
-                "liquid_cost_policy": "IDENTICALLY_ZERO",
+                "liquid_cost_policy": TERMINAL_LIQUID_COST_POLICY,
             },
             "comparison_identity": {
-                "arms": ["B0", "Bslosh"],
+                "arms": list(COMPARISON_ARMS),
                 "same_symbolic_graph": True,
-                "only_parameter_fields_allowed_to_differ": [
-                    "liquid_run_coeff",
-                    "liquid_boundary_coeff",
-                ],
-                "must_be_identical": [
-                    "dynamics",
-                    "reference",
-                    "robot_cost",
-                    "constraints",
-                    "all_other_stage_parameters",
-                ],
-                "liquid_hard_constraints": "DISABLED_FOR_B0_AND_BSLOSH",
+                "only_parameter_fields_allowed_to_differ": list(
+                    COMPARISON_PARAMETER_FIELDS
+                ),
+                "must_be_identical": list(COMPARISON_IDENTICAL_FIELDS),
+                "liquid_hard_constraints": LIQUID_HARD_CONSTRAINT_POLICY,
             },
         }
+
+
+class CasadiGraphContractError(ValueError):
+    """A typed graph bundle no longer matches its serialized contract."""
+
+
+def require_casadi_graph_bundle(
+    value: Any,
+    *,
+    expected_capacity_contract_raw_bytes_sha256: str | None = None,
+    expected_development_layout_semantic_sha256: str | None = None,
+    expected_solver_parameter_layout_semantic_sha256: str | None = None,
+    expected_state_order: tuple[str, ...] | None = None,
+    expected_control_order: tuple[str, ...] | None = None,
+    expected_parameter_order: tuple[str, ...] | None = None,
+) -> CasadiGraphBundle:
+    """Validate typed metadata through the dependency-free graph schema."""
+
+    if type(value) is not CasadiGraphBundle:
+        raise CasadiGraphContractError(
+            "graph must have the exact CasadiGraphBundle type"
+        )
+    if (
+        type(value.issued) is not SymbolicIssuedValues
+        or type(value.reference) is not SymbolicReferenceValues
+        or type(value.stage_costs) is not SymbolicStageCosts
+        or type(value.stage_constraints) is not SymbolicStageConstraints
+        or type(value.terminal) is not SymbolicTerminalExpressions
+        or type(value.execution_slots) is not tuple
+        or any(
+            type(item) is not SymbolicExecutionSlot for item in value.execution_slots
+        )
+        or type(value.bounds) is not ConstraintBounds
+        or type(value.release_period_sec) is not Fraction
+    ):
+        raise CasadiGraphContractError("graph typed records are malformed")
+    try:
+        from .casadi_graph_schema import validate_casadi_graph_document
+
+        validate_casadi_graph_document(
+            value.to_dict(),
+            expected_capacity_contract_raw_bytes_sha256=(
+                expected_capacity_contract_raw_bytes_sha256
+            ),
+            expected_development_layout_semantic_sha256=(
+                expected_development_layout_semantic_sha256
+            ),
+            expected_solver_parameter_layout_semantic_sha256=(
+                expected_solver_parameter_layout_semantic_sha256
+            ),
+            expected_state_order=expected_state_order,
+            expected_control_order=expected_control_order,
+            expected_parameter_order=expected_parameter_order,
+            expected_casadi_version=value.casadi_version,
+            expected_bounds_snapshot_sha256=sha256_json(value.bounds.to_dict()),
+        )
+    except (AttributeError, IdentityError, TypeError, ValueError) as exc:
+        raise CasadiGraphContractError(
+            "typed graph does not match the serialized graph contract"
+        ) from exc
+    return value
 
 
 __all__ = [
     "ARTIFACT_STATUS",
     "BOUND_SNAPSHOT_SCOPE",
     "CASADI_GRAPH_SCHEMA",
+    "COMPARISON_ARMS",
+    "COMPARISON_IDENTICAL_FIELDS",
+    "COMPARISON_PARAMETER_FIELDS",
     "DIAGNOSTIC_RESIDUAL_ROLE",
+    "EXECUTION_SCHEDULE_POLICY",
     "GRAPH_IDENTITY_SCOPE",
     "GRAPH_STATUS",
+    "LIQUID_HARD_CONSTRAINT_POLICY",
     "REFERENCE_DOMAIN_LOWER",
     "REFERENCE_DOMAIN_UPPER",
     "RUNTIME_PARAMETER_INPUT_POLICY",
+    "RUNTIME_PARAMETER_VALUES_POLICY",
     "STAGE_REFERENCE_DOMAIN_ORDER",
     "STAGE_SEMANTICS",
     "TERMINAL_CONTROL_POLICY",
+    "TERMINAL_INPUT_ORDER",
+    "TERMINAL_LIQUID_COST_POLICY",
     "TERMINAL_REFERENCE_DOMAIN_ORDER",
     "CasadiGraphBundle",
+    "CasadiGraphContractError",
     "SymbolicExecutionSlot",
     "SymbolicIssuedValues",
     "SymbolicReferenceValues",
@@ -424,4 +506,5 @@ __all__ = [
     "SymbolicTerminalExpressions",
     "graph_semantic_payload",
     "graph_semantic_sha256",
+    "require_casadi_graph_bundle",
 ]

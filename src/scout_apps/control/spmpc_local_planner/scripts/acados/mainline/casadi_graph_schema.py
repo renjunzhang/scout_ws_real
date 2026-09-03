@@ -11,20 +11,28 @@ backend remain the responsibility of their owning contract.
 from __future__ import annotations
 
 import math
-from typing import Any, Sequence
+from typing import Any
 
 from .casadi_graph_contract import (
     ARTIFACT_STATUS,
     BOUND_SNAPSHOT_SCOPE,
     CASADI_GRAPH_SCHEMA,
+    COMPARISON_ARMS,
+    COMPARISON_IDENTICAL_FIELDS,
+    COMPARISON_PARAMETER_FIELDS,
     DIAGNOSTIC_RESIDUAL_ROLE,
+    EXECUTION_SCHEDULE_POLICY,
     GRAPH_IDENTITY_SCOPE,
     GRAPH_STATUS,
+    LIQUID_HARD_CONSTRAINT_POLICY,
     REFERENCE_DOMAIN_LOWER,
     REFERENCE_DOMAIN_UPPER,
     RUNTIME_PARAMETER_INPUT_POLICY,
+    RUNTIME_PARAMETER_VALUES_POLICY,
     STAGE_REFERENCE_DOMAIN_ORDER,
     TERMINAL_CONTROL_POLICY,
+    TERMINAL_INPUT_ORDER,
+    TERMINAL_LIQUID_COST_POLICY,
     TERMINAL_REFERENCE_DOMAIN_ORDER,
     graph_semantic_sha256,
 )
@@ -35,20 +43,29 @@ from .constraints_oracle import (
     CONTROL_BOX_ORDER,
     STAGE_NONLINEAR_H_ORDER,
 )
-from .development_layout import STAGE_SEMANTICS
+from .development_capacity import (
+    EXECUTION_SUBSEGMENT_SLOTS,
+    NU,
+    NX,
+    RELEASE_FREQUENCY_HZ,
+    RELEASE_PERIOD_SEC,
+)
+from .development_layout import HORIZON_STEPS, STAGE_SEMANTICS
 from .identity import IdentityError, require_sha256, sha256_json
 from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
-from .solver_parameter_layout import REFERENCE_SCHEMA
+from .solver_parameter_layout import FULL_STAGE_PARAMETER_COUNT, REFERENCE_SCHEMA
 
-GRAPH_N = 60
-GRAPH_NX = 48
-GRAPH_NU = 3
-GRAPH_NP = 162
+GRAPH_N = HORIZON_STEPS
+GRAPH_NX = NX
+GRAPH_NU = NU
+GRAPH_NP = FULL_STAGE_PARAMETER_COUNT
 GRAPH_PARAMETER_VECTOR_COUNT = GRAPH_N + 1
-GRAPH_RELEASE_FREQUENCY_HZ = 30
-GRAPH_RELEASE_PERIOD = {"numerator": 1, "denominator": 30}
-GRAPH_EXECUTION_SLOT_COUNT = 3
-GRAPH_EXECUTION_POLICY = "FIXED_WIDTH_RUNTIME_VALUES_ALL_SLOTS_EXPANDED"
+GRAPH_RELEASE_FREQUENCY_HZ = RELEASE_FREQUENCY_HZ
+GRAPH_RELEASE_PERIOD = {
+    "numerator": RELEASE_PERIOD_SEC.numerator,
+    "denominator": RELEASE_PERIOD_SEC.denominator,
+}
+GRAPH_EXECUTION_SLOT_COUNT = EXECUTION_SUBSEGMENT_SLOTS
 
 
 class CasadiGraphSchemaError(ValueError):
@@ -123,16 +140,17 @@ def _check_expected_digest(
 
 def _check_expected_order(
     actual: list[str],
-    expected: Sequence[str] | None,
+    expected: list[str] | tuple[str, ...] | None,
     *,
     label: str,
 ) -> None:
     if expected is None:
         return
-    try:
-        expected_tuple = tuple(expected)
-    except TypeError as exc:
-        raise CasadiGraphSchemaError(f"expected {label} is not an order") from exc
+    if type(expected) not in {list, tuple} or any(
+        type(item) is not str or not item for item in expected
+    ):
+        raise CasadiGraphSchemaError(f"expected {label} is not a string order")
+    expected_tuple = tuple(expected)
     if actual != list(expected_tuple):
         raise CasadiGraphSchemaError(
             f"graph {label} differs from the expected authority"
@@ -374,9 +392,9 @@ def validate_casadi_graph_document(
     expected_capacity_contract_raw_bytes_sha256: str | None = None,
     expected_development_layout_semantic_sha256: str | None = None,
     expected_solver_parameter_layout_semantic_sha256: str | None = None,
-    expected_state_order: Sequence[str] | None = None,
-    expected_control_order: Sequence[str] | None = None,
-    expected_parameter_order: Sequence[str] | None = None,
+    expected_state_order: list[str] | tuple[str, ...] | None = None,
+    expected_control_order: list[str] | tuple[str, ...] | None = None,
+    expected_parameter_order: list[str] | tuple[str, ...] | None = None,
     expected_casadi_version: str | None = None,
     expected_bounds_snapshot_sha256: str | None = None,
 ) -> dict[str, Any]:
@@ -426,7 +444,7 @@ def validate_casadi_graph_document(
     )
     if graph["graph_identity_scope"] != GRAPH_IDENTITY_SCOPE:
         raise CasadiGraphSchemaError("graph semantic scope drifted")
-    if graph["runtime_parameter_values"] != "EXCLUDED_FROM_GRAPH_IDENTITY":
+    if graph["runtime_parameter_values"] != RUNTIME_PARAMETER_VALUES_POLICY:
         raise CasadiGraphSchemaError("graph runtime values policy drifted")
     if graph["runtime_parameter_input_policy"] != RUNTIME_PARAMETER_INPUT_POLICY:
         raise CasadiGraphSchemaError("graph parameter input policy drifted")
@@ -547,7 +565,7 @@ def validate_casadi_graph_document(
     _text(execution["schedule_policy"], "graph execution schedule policy")
     if execution != {
         "slot_count": GRAPH_EXECUTION_SLOT_COUNT,
-        "schedule_policy": GRAPH_EXECUTION_POLICY,
+        "schedule_policy": EXECUTION_SCHEDULE_POLICY,
     }:
         raise CasadiGraphSchemaError("graph execution policy drifted")
 
@@ -573,9 +591,9 @@ def validate_casadi_graph_document(
     _text(terminal["control_policy"], "graph terminal control policy")
     _text(terminal["liquid_cost_policy"], "graph terminal liquid-cost policy")
     if terminal != {
-        "input_order": ["x_N", "p_N"],
+        "input_order": list(TERMINAL_INPUT_ORDER),
         "control_policy": TERMINAL_CONTROL_POLICY,
-        "liquid_cost_policy": "IDENTICALLY_ZERO",
+        "liquid_cost_policy": TERMINAL_LIQUID_COST_POLICY,
     }:
         raise CasadiGraphSchemaError("graph terminal policy drifted")
     comparison = _object(
@@ -604,20 +622,11 @@ def validate_casadi_graph_document(
     )
     _text(comparison["liquid_hard_constraints"], "graph liquid hard-constraint policy")
     if comparison != {
-        "arms": ["B0", "Bslosh"],
+        "arms": list(COMPARISON_ARMS),
         "same_symbolic_graph": True,
-        "only_parameter_fields_allowed_to_differ": [
-            "liquid_run_coeff",
-            "liquid_boundary_coeff",
-        ],
-        "must_be_identical": [
-            "dynamics",
-            "reference",
-            "robot_cost",
-            "constraints",
-            "all_other_stage_parameters",
-        ],
-        "liquid_hard_constraints": "DISABLED_FOR_B0_AND_BSLOSH",
+        "only_parameter_fields_allowed_to_differ": list(COMPARISON_PARAMETER_FIELDS),
+        "must_be_identical": list(COMPARISON_IDENTICAL_FIELDS),
+        "liquid_hard_constraints": LIQUID_HARD_CONSTRAINT_POLICY,
     }:
         raise CasadiGraphSchemaError("graph comparison identity drifted")
 

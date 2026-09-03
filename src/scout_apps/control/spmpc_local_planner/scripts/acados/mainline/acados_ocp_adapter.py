@@ -20,7 +20,11 @@ from .acados_solver_options_identity import (
     acados_ocp_solver_options_baseline_sha256,
 )
 from .casadi_graph_contract import ARTIFACT_STATUS as GRAPH_ARTIFACT_STATUS
-from .casadi_graph_contract import GRAPH_STATUS, CasadiGraphBundle
+from .casadi_graph_contract import (
+    GRAPH_STATUS,
+    CasadiGraphBundle,
+    require_casadi_graph_bundle,
+)
 from .identity import IdentityError, sha256_json
 from .model_contract import MODEL_ID
 from .solver_options import SolverOptionsSnapshot
@@ -30,25 +34,25 @@ def _validate_typed_inputs(
     graph: Any,
     solver_options: Any,
 ) -> tuple[CasadiGraphBundle, SolverOptionsSnapshot]:
-    if type(graph) is not CasadiGraphBundle:
-        raise AcadosOcpConstructionError(
-            "graph must be the exact CasadiGraphBundle type"
-        )
     if type(solver_options) is not SolverOptionsSnapshot:
         raise AcadosOcpConstructionError(
             "solver_options must be the exact SolverOptionsSnapshot type"
         )
+    try:
+        checked_graph = require_casadi_graph_bundle(graph)
+    except (TypeError, ValueError) as exc:
+        raise AcadosOcpConstructionError("graph contract is malformed") from exc
     if (
-        graph.graph_status != GRAPH_STATUS
-        or graph.artifact_status != GRAPH_ARTIFACT_STATUS
+        checked_graph.graph_status != GRAPH_STATUS
+        or checked_graph.artifact_status != GRAPH_ARTIFACT_STATUS
     ):
         raise AcadosOcpConstructionError(
             "graph must be GRAPH_BUILT/NO_ARTIFACT before OCP assembly"
         )
     if (
-        graph.horizon_steps != solver_options.horizon_steps
-        or graph.release_frequency_hz != solver_options.release_frequency_hz
-        or graph.release_period_sec != solver_options.time_step_sec
+        checked_graph.horizon_steps != solver_options.horizon_steps
+        or checked_graph.release_frequency_hz != solver_options.release_frequency_hz
+        or checked_graph.release_period_sec != solver_options.time_step_sec
     ):
         raise AcadosOcpConstructionError(
             "graph horizon differs from the solver-option snapshot"
@@ -63,7 +67,7 @@ def _validate_typed_inputs(
         raise AcadosOcpConstructionError(
             "solver-option semantic identity is inconsistent"
         )
-    return graph, solver_options
+    return checked_graph, solver_options
 
 
 def _build_acados_model(
