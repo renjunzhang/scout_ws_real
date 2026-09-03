@@ -1,30 +1,32 @@
-# 20260903 I0 + 显式执行器 OCP 的 Block 1 及后续 smoke 分析
+# 20260903 I0 + 显式执行器 OCP：Block 1、权重 smoke 与 RGB 配对分析
 
 > 日期：2026-09-03
 >
 > 性质：development 实物诊断，不作为正式降晃效果声明
 >
-> 协议：`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1`
+> 协议：`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WEIGHT_TUNING_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2`
 >
 > 初始写入基线：`diag/lt-dwa-collision-tracking @ a2eacb9f30e14b7439714a558b00696481054e85`
 >
-> 本次续写基线：`diag/lt-dwa-collision-tracking @ fee6881eb1bfc689912c8ad841988f9b1de15e12`，续写前工作区 clean
+> smoke 续写基线：`diag/lt-dwa-collision-tracking @ fee6881eb1bfc689912c8ad841988f9b1de15e12`，续写前工作区 clean
+>
+> RGB 配对采集与本次续写基线：`diag/lt-dwa-collision-tracking @ 4e4eaaecec444a8931f33170ca7cddc4e32fce76`，续写前工作区 clean
 >
 > 对应方案：[20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md](../实物对比实验/20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md)
 
 ## 1. 结论
 
-Block 1 和后续两包 smoke 已把“硬停车”和“MPC 主动锯齿”分成两层：
+当前结论已经从“准备降低 `w_slosh`”更新为“同权重 RGB 配对得到有效负结果”：
 
-1. Row01 `B0` 完成路径且主合同、processed-IMU、NOKOV 和 RGB 后验均为 `PASS`，可保留为当前显式执行器主线的有效基线。
-2. Row02 `B_slosh` 虽然到达终点，但运动窗内出现 `47` 拍共同状态时刻插值失败和 `10` 拍 acados `MINSTEP`。这 `57` 拍全部触发 `fail_closed` 零速，因此主后验为真实 `FAIL`。
-3. Row02 的硬停车来自控制求解阻塞默认 callback queue 后造成的 planner 内部 odom 空洞，不是 NOKOV 刚体、原始 `/odom` 断流或 legacy L22 双重补偿。
-4. 提交 `be8f1ef` 解耦 odom callback、缓存 prefix 离散模型并冻结 `qp_solver_cond_N=10` 后，`190310` runtime smoke 的 common-epoch failure、solver failure 和故障零速均为 `0`，完整控制回调 P95 为 `16.529 ms`。因此第一层运行时硬停车已由实物 smoke 验证消除。
-5. 只把 `w_accel` 从 `0.0` 提高到 `0.3` 后，`192948` smoke 的运行时仍为 `PASS`，有效求解拍的线加速度饱和占比由约 `73.8%` 降至 `56.4%`；说明全时域加速度幅值代价有效，但没有解决主动翻转。
-6. 转弯有效拍的饱和占比仍约 `59.3%`，强正负翻转只由 `60` 次降至 `53` 次，主频仍约 `5.13 Hz`，接近液体固有频率 `4.97 Hz`。转弯 slosh 代价占比中位数仍约 `87.0%`、P95 约 `90.9%`。
-7. 当前证据支持：`w_slosh=5 + 2 s 完整液体时域` 相对其他代价仍过强，优化器主动规划了接近液体模态频率的加减速。下一包保持 `w_accel=0.3`，只把 `w_slosh` 降至 `1.0`；这是一项待验证的 development 调参，不是已证明的降晃修复。
+1. 最新 V2 配对的 `B0` 与 `Bslosh` 均完成路径；主合同、processed-IMU observer、NOKOV 链和 RGB 标量后验全部通过，common-epoch failure、solver failure 与故障零速均为 `0`。此前的运行时硬停车没有复现。
+2. 在两包共同使用 `w_accel=0.3` 时，`Bslosh(w_slosh=1.0)` 的 RGB `H_vis` P95/RMS 分别为 `1.5423/0.7214 mm`，高于 `B0` 的 `0.9231/0.4410 mm`。按预注册的 `B0-Bslosh` 定义，差值为 `-0.6192/-0.2804 mm`，方向明确不利于 `Bslosh`。
+3. `Bslosh/B0` 到点时间比为 `1.0323`，低于 `1.05` 的减速混杂门。因此不能用明显降速解释本次 RGB 负结果。
+4. 机器判定为 `BLOCK1_RAPID_SCREEN / STOP / STOP_BLOCK1_FUTILITY`。这是协议停止门正常生效，不是分析程序故障；不得绕过门继续录 Row03/Row04。
+5. 同口径控制诊断显示，`Bslosh` 的 `|a_0|` P95、`|Δa_0|` P95 和转弯约 `5 Hz` 分量均明显高于 `B0`；processed-IMU 内部模态高度 P95 也由 `1.6788 mm` 升至 `2.9871 mm`。RGB 与 I0 的方向一致，支持“当前液体代价仍在引入残余模态频率控制”这一机制判断。
+6. `w_slosh=1.0` 相比先前 `w_slosh=5.0` smoke 已显著减轻锯齿，但与同为 `w_accel=0.3` 的公平 `B0` 相比仍没有形成降晃收益。当前最直接有效的运行配置是 `explicit actuator + B0 + w_accel=0.3`；现有 `Bslosh` 液体代价配置不再继续做无边界降权扫描。
+7. 该结果只是一组 development Block1 的停止结论，不是正式普遍性效能声明，也不否定 command/actual 分离和显式执行器 OCP 的结构修复。它否定的是“当前液体代价形式与参数已能在实物上产生净收益”。
 
-Block 1 仍停在 Row02，不补跑 Row03/Row04。Row02 只保留为历史运行时故障证据；两包后续 smoke 均关闭 RGB，只能支持运行时和命令连续性判断，不能进入真实液面改善量或正式 B0/Bslosh 效果统计。
+历史上，V1 Row02 的 `B_slosh(w_slosh=5)` 曾因 callback 阻塞产生 `47` 拍共同状态失败和 `10` 拍 acados `MINSTEP`，只能作为运行时故障证据。提交 `be8f1ef` 及后续 smoke 已消除这层硬停车；最新 V2 配对则是在运行时有效后，对液体代价本身给出的独立负结果。
 
 ## 2. 版本、配置与数据
 
@@ -197,25 +199,25 @@ Row02 的液体代价占比中位数约 `40.8%`，P95 约 `91.4%`。结合 `w_sl
 
 - 固定 `L/tau/K` 是否已足够准确地覆盖本次全部运动幅值。
 - Block 1 的 `10` 个 `MINSTEP` 是否全部由同一恢复链造成；`190310/192948` 两包均为 `0`，只能证明它们在这两次修复后运行中没有复现。
-- 去除故障拍后，当前完整时域液体代价能否降低 RGB 晃动。
-- `w_slosh`、液体代价窗口或平滑项各自对主动速度翻转的独立贡献。
+- 最新 V2 的负结果能否跨日期、重复 block 和更高速度复现。
+- 液体代价形式、完整时域窗口、权重和平滑项各自对残余约 `5 Hz` 控制的独立贡献。
 
-因此，Block 1 不否定 command/actual 分离和显式执行器 OCP 的结构方向；它当时否定的是“该 revision 的 `B_slosh` runtime 已可直接进入效果比较”。后续 smoke 已解除运行时阻塞，但命令连续性仍未达到重新开展 RGB 效果比较的条件。
+因此，V1 Block 1 不否定 command/actual 分离和显式执行器 OCP 的结构方向；它当时否定的是“该 revision 的 `B_slosh` runtime 已可直接进入效果比较”。后续 smoke 解除了运行时阻塞，V2 又在有效配对中进一步否定了“当前 `w_slosh=1.0` 液体代价已有净降晃收益”。
 
-## 8. 最小修复与验收顺序
+## 8. 最小修复与验收执行记录
 
-1. 将 odom 接收从求解 timer 的单线程回调队列中解耦，使用独立 callback queue/spinner，并为 `last_odom`、odom history 和相关快照补齐同步保护。
-2. 降低显式执行器 prefix rollout 的前处理开销。当前 10 ms 子步会反复重配液体离散模型；应缓存固定子步矩阵，并避免运行期重复 INFO 输出。
-3. 保持 `max_interpolation_gap_sec=0.05`。不通过放宽门限掩盖 planner 内部丢样本。
-4. 先只录一包低风险 `B_slosh` smoke，要求运动窗内：
+1. 已将 odom 接收从求解 timer 的单线程回调队列中解耦，使用独立 callback queue/spinner，并为 odom history 和相关快照补齐同步保护。
+2. 已缓存显式执行器 prefix rollout 的固定离散模型，并冻结 `qp_solver_cond_N=10`，降低运行时前处理和求解开销。
+3. `max_interpolation_gap_sec=0.05` 保持不变，没有通过放宽门限掩盖 planner 内部丢样本。
+4. `190310` 低风险 `B_slosh` smoke 已满足：
    - common-epoch failure 为 0；
    - solver failure 为 0；
    - 无故障性零速；
    - planner odom 不再出现超过 50 ms 的内部空洞；
    - 控制回调 P95 低于 33.3 ms，超周期不形成连续积压。
-5. 运行时门通过后，先以 `w_accel=0.3` 检查无故障区间的加速度饱和和正负翻转；该步现已完成，结果为部分改善。
-6. 因转弯 slosh 代价仍占约 `87%` 且约 `5 Hz` 翻转保留，下一包只把 `w_slosh` 降至 `1.0`。若仍明显翻转，再加入完整时域 `Delta a_cmd/Delta alpha_cmd` 或 jerk 平滑。
-7. 只有新的 `B_slosh` smoke 同时通过运行时和命令连续性门，才重新开始带 RGB 的 B0/Bslosh 配对；不复用本次 Row02 计算效果量。
+5. `192948` 以 `w_accel=0.3` 检查无故障区间的加速度饱和和正负翻转，结果为“部分改善、未解决”。
+6. 随后把 `w_slosh` 从 `5.0` 降至 `1.0`，锯齿显著收敛，具备开展低速配对的最低条件。
+7. 最新 V2 以相同 `w_accel=0.3` 完成 `B0 -> Bslosh` RGB 标量配对，运行时有效但效果门失败，按预注册规则停止于 Row02，不录 Row03/Row04。
 
 ## 9. 运行时修复后的 Bslosh smoke
 
@@ -282,28 +284,122 @@ DEV_I0FC_EXPACT_WACCEL03_SMOKE_V1_192948_Bslosh.bag
 
 两包均关闭 RGB。processed-IMU 内部状态和 solver 预测量只能用于机制诊断，不能代替真实液面指标。
 
-## 11. 下一包决策与参数化入口
+## 11. `w_slosh=1.0, w_accel=0.3` 的 smoke 与 RGB 标量配对
 
-下一包保持 `w_accel=0.3`、`w_du_a=0.1`、`w_alpha=0.1`，只把 `w_slosh` 从 `5.0` 降至 `1.0`。按 `192948` 已求解轨迹的现有 cost 分量做静态重标估算，`w_slosh=1.0` 时 slosh 占比中位数约为全部有效拍 `44%`、转弯 `57%`；这只是固定轨迹上的方向性估算，不能替代新权重下重新求解的实物结果。
+配对前先录制了不带 RGB 的单包 smoke：
 
-提交 `fee6881` 已增加通用短入口，权重会进入 launch 展开检查、prereg、bag 元数据和 postflight 合同：
-
-```bash
-cd /home/geist/scout_ws
-
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_weight_smoke.sh \
-  --run \
-  --w-slosh 1.0 \
-  --w-accel 0.3
+```text
+/home/geist/slosh_bags/real/
+20260903_spmpc_i0_failclosed_explicit_actuator_weight_tuning_smoke_v1/H0/
+DEV_I0FC_EXPACT_WEIGHT_TUNING_V1_204315_Bslosh.bag
 ```
 
-可选参数为 `--w-du-a` 和 `--w-alpha`；本轮不传时均保持 `0.1`。不加 `--run` 时只做 validate-only，不启动底盘。执行器 `L/tau/K`、速度安全上限、冻结路径、common epoch、fail-closed 和 legacy L22 关闭状态不对操作者开放，避免调权重时顺带改变结构与安全边界。
+该包采集于 `67babe7`，主合同与 runtime 后验均为 `PASS`：common-epoch failure、solver failure、故障零速和 planner odom 超 50 ms 间隔均为 `0`；控制回调 P95/max 为 `14.574/35.125 ms`，只有 `1` 个孤立超周期且未形成积压。它只用于确认 `w_slosh=1.0, w_accel=0.3` 已达到低速配对的运行条件，不提供 RGB 效能结论。
 
-新包首先必须继续满足运行时零故障；随后比较饱和占比、强翻转和约 `5 Hz` 主频是否实质下降。若降低 `w_slosh` 后仍存在明显模态频率翻转，下一步应实现完整时域的 `Delta a_cmd`/jerk 代价，不继续无边界降低液体权重。只有命令连续性稳定后，才录带 RGB 的配对包判断真实液面是否改善。
+### 11.1 冻结条件与数据
+
+采集 revision 为：
+
+```text
+4e4eaaecec444a8931f33170ca7cddc4e32fce76
+```
+
+协议和数据目录：
+
+```text
+SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2
+
+/home/geist/slosh_bags/real/
+20260903_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_v2/H0/
+```
+
+本次有效 bag：
+
+```text
+DEV_I0FC_EXPACT_WS1_WA03_V2_01_B0_b01_p01_a01.bag
+DEV_I0FC_EXPACT_WS1_WA03_V2_02_Bslosh_b01_p02_a01.bag
+```
+
+两包共同冻结 `processed-IMU I0 + fail_closed + common_epoch + explicit_actuator`、legacy L22 关闭、`v_ref=0.20 m/s`、`v_safe_max=0.25 m/s`、`w_accel=0.3`、`w_du_a=0.1`、`w_alpha=0.1`。唯一控制变量是：
+
+| 条件 | 液体代价 | `w_slosh` |
+|---|---|---:|
+| `B0` | 不进入 solver | 0.0 |
+| `Bslosh` | I0 进入 27D solver，完整 `0..60` 状态节点 | 1.0 |
+
+bag 记录的是在线 RGB 液面标量 `/liquid/measurement` 和相机信息，没有录入原始图像流；因此这里的“RGB 配对”专指冻结 detector 生成的在线标量证据，不能从这两包重新处理原始 RGB 图像。
+
+### 11.2 有效性
+
+| 检查项 | B0 | Bslosh |
+|---|---:|---:|
+| 主合同后验 | `PASS` | `PASS` |
+| observer 后验 | `PASS` | `PASS` |
+| NOKOV 链 | `pass=true` | `pass=true` |
+| RGB 标量后验 | `PASS` | `PASS` |
+| common-epoch bad | 0 | 0 |
+| solver failure | 0 | 0 |
+| 故障/安全零速 | 0 | 0 |
+| processed-IMU READY/source coverage | 1.0 / 1.0 | 1.0 / 1.0 |
+| 到达终点 | 是 | 是 |
+
+两包起步前 5 s 的 RGB 稳定性检查均完整且通过。由此，本节的负结果不是 fail-closed 停车、observer fallback、NOKOV 失效或分析输入不完整造成的。
+
+### 11.3 RGB 结果与停止门
+
+主指标窗口为运动开始至首次 `GOAL_REACHED`，再加 5 s tail；`H_vis` 使用因果 5 点中值滤波。
+
+| 指标 | B0 | Bslosh | `B0-Bslosh` |
+|---|---:|---:|---:|
+| `H_vis` P95 | 0.9231 mm | 1.5423 mm | -0.6192 mm |
+| `H_vis` RMS | 0.4410 mm | 0.7214 mm | -0.2804 mm |
+| `H_vis` Peak | 1.6923 mm | 2.3789 mm | -0.6866 mm |
+| 到点时间 | 29.0876 s | 30.0265 s | 比值 1.0323 |
+
+协议定义差值为 `B0-Bslosh`，正值才有利于 `Bslosh`。P95 和 RMS 均为负；到点时间比 `1.0323` 又低于 `1.05` 的减速风险门，因此机器决策为：
+
+```text
+phase    = BLOCK1_RAPID_SCREEN
+status   = STOP
+decision = STOP_BLOCK1_FUTILITY
+```
+
+此前 Row03 启动时出现的 `expected=['PROMOTE_BLOCK2']` 正是该停止门在阻止无效续跑，不是 runner 故障。不得绕过，也不补录 Row03/Row04。
+
+### 11.4 内部 slosh 高度与控制诊断
+
+同一 RGB 后验窗口内，内部高度也不支持 `Bslosh`：
+
+| 内部指标 P95 | B0 | Bslosh | `Bslosh-B0` |
+|---|---:|---:|---:|
+| processed-IMU 模态高度 | 1.6788 mm | 2.9871 mm | +1.3083 mm（+77.9%） |
+| 预测/solver-input debug 模态高度 | 1.7507 mm | 2.9473 mm | +1.1966 mm（+68.4%） |
+
+`B0` 的液体状态只作为 shadow/debug 证据，并未进入 23D solver；`Bslosh` 才实际消费 I0。所以上表可用于判断 observer 与 RGB 的方向是否一致，不能把内部模型量替代为真实液面真值。本次两者方向一致：`Bslosh` 都更高。
+
+沿用有效求解运动窗的同口径诊断：
+
+| 控制指标 | B0 | Bslosh |
+|---|---:|---:|
+| `|a_0|` P95 | 0.0387 m/s² | 0.1674 m/s² |
+| `|Δa_0|` P95 | 0.0187 m/s² | 0.1570 m/s² |
+| 转弯 `a_0` 约 5 Hz 幅值 | 0.00775 | 0.07821 |
+| `|Δv_cmd|` P95 | 0.00122 m/s | 0.00553 m/s |
+| `|Δω_cmd|` P95 | 0.00730 rad/s | 0.00987 rad/s |
+| 强正负翻转 | 0 | 0 |
+
+降低到 `w_slosh=1.0` 后，先前接近饱和的强翻转已经消失，但 `Bslosh` 仍保留明显高于 `B0` 的约 5 Hz 加速度分量和命令变化。这与 RGB/I0 同向，支持“当前液体代价仍引入残余模态频率控制”的解释；单个 block 尚不足以证明唯一因果机制。
+
+### 11.5 当前决策
+
+- 当前最直接有效的实物配置保留为 `explicit actuator + B0 + w_accel=0.3`。
+- `w_slosh=1.0` 不进入下一 block，也不继续靠更低 `w_slosh` 做无边界扫描；趋近 0 只会退化回 B0。
+- 若继续研究 `Bslosh`，应作为新 development 协议先修改液体目标或加入完整时域 `Δa_cmd/jerk` 连续性约束，再从 smoke 开始，不能把本次 Row03/04 当作补录任务。
+- 上述决策只适用于当前 C02、低速、固定执行器参数和单个 Block1；正式效能结论仍需新的预注册重复实验。
 
 ## 12. 权威证据
 
-主后验：
+V1 主后验：
 
 ```text
 /home/geist/slosh_bags/real/20260903_spmpc_i0_failclosed_explicit_actuator_abba_v1/H0/
@@ -333,4 +429,27 @@ DEV_I0FC_EXPACT_RUNTIME_SMOKE_V1_190310_Bslosh_runtime_postflight.json
 /home/geist/slosh_bags/real/20260903_spmpc_i0_failclosed_explicit_actuator_waccel03_smoke_v1/H0/
 DEV_I0FC_EXPACT_WACCEL03_SMOKE_V1_192948_Bslosh_i0_explicit_actuator_contract_postflight.json
 DEV_I0FC_EXPACT_WACCEL03_SMOKE_V1_192948_Bslosh_runtime_postflight.json
+
+/home/geist/slosh_bags/real/20260903_spmpc_i0_failclosed_explicit_actuator_weight_tuning_smoke_v1/H0/
+DEV_I0FC_EXPACT_WEIGHT_TUNING_V1_204315_Bslosh_i0_explicit_actuator_contract_postflight.json
+DEV_I0FC_EXPACT_WEIGHT_TUNING_V1_204315_Bslosh_runtime_postflight.json
 ```
+
+最新 V2 RGB 标量配对总报告：
+
+```text
+/home/geist/slosh_bags/real/20260903_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_v2/H0/
+I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_RGB_ANALYSIS.json
+```
+
+V2 每包主合同与 RGB 后验：
+
+```text
+DEV_I0FC_EXPACT_WS1_WA03_V2_01_B0_b01_p01_a01_i0_explicit_actuator_ws1_wa03_v2_postflight.json
+DEV_I0FC_EXPACT_WS1_WA03_V2_01_B0_b01_p01_a01_i0_explicit_actuator_ws1_wa03_v2_rgb_postflight.json
+
+DEV_I0FC_EXPACT_WS1_WA03_V2_02_Bslosh_b01_p02_a01_i0_explicit_actuator_ws1_wa03_v2_postflight.json
+DEV_I0FC_EXPACT_WS1_WA03_V2_02_Bslosh_b01_p02_a01_i0_explicit_actuator_ws1_wa03_v2_rgb_postflight.json
+```
+
+同目录下的 `*_observer_postflight.json` 与 `*_mocap_chain_postflight.json` 分别约束 processed-IMU observer 和 NOKOV 执行链；两包均无 failure。
