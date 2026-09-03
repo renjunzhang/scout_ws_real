@@ -856,6 +856,35 @@ class MainlineArtifactContractTest(unittest.TestCase):
         self.assertNotIn("#include <json", header)
         self.assertIn(contract.semantic_sha256, header)
         self.assertIn(contract.artifact_sha256, header)
+        document = contract.to_dict()
+        solver_library = document["artifact"]["solver_library"]
+        expected_json_sha256 = hashlib.sha256(
+            importlib.import_module(
+                "acados.mainline.artifact_contract"
+            ).render_model_contract_json(contract)
+        ).hexdigest()
+        self.assertIn(
+            f'kModelContractJsonRawSha256[] = "{expected_json_sha256}"',
+            header,
+        )
+        self.assertIn(
+            f'kModelContractFilename[] = "{MODEL_CONTRACT_FILENAME}"',
+            header,
+        )
+        self.assertIn(
+            f'kModelContractHeaderFilename[] = "{GENERATED_HEADER_FILENAME}"',
+            header,
+        )
+        self.assertIn(
+            "kSolverLibraryRelativePath[] = "
+            f'"{solver_library["relative_path"]}"',
+            header,
+        )
+        self.assertIn(solver_library["raw_sha256"], header)
+        self.assertIn(
+            f'kSolverLibrarySizeBytes = {solver_library["size_bytes"]}U',
+            header,
+        )
         self.assertIn("kParameterLiquidRunCoeff", header)
         with self.assertRaises((TypeError, ValueError)):
             renderer()  # type: ignore[call-arg]

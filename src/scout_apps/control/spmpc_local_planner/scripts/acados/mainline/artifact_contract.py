@@ -66,7 +66,7 @@ from .development_layout import (
     DevelopmentLayout,
     validate_development_layout_snapshot,
 )
-from .identity import IdentityError, canonical_json, sha256_json
+from .identity import IdentityError, canonical_json, sha256_bytes, sha256_json
 from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
 from .provenance import CodegenProvenance, require_codegen_provenance
 from .provenance_common import ProvenanceError
@@ -642,6 +642,12 @@ def render_model_contract_json(value: ArtifactContract) -> bytes:
     ).encode("utf-8")
 
 
+def model_contract_json_raw_sha256(value: ArtifactContract) -> str:
+    """Return the identity of the exact ``model_contract.json`` output bytes."""
+
+    return sha256_bytes(render_model_contract_json(value))
+
+
 def validate_model_contract_json(
     value: ArtifactContract,
     rendered: Any,
@@ -672,6 +678,7 @@ __all__ = [
     "ArtifactContractError",
     "artifact_contract_from_dict",
     "build_artifact_contract",
+    "model_contract_json_raw_sha256",
     "render_model_contract_json",
     "require_artifact_contract",
     "validate_model_contract_json",

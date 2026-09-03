@@ -6,7 +6,11 @@ import json
 import re
 from typing import Any
 
-from .artifact_contract import ArtifactContract, require_artifact_contract
+from .artifact_contract import (
+    ArtifactContract,
+    model_contract_json_raw_sha256,
+    require_artifact_contract,
+)
 
 HEADER_GUARD = "SPMPC_LOCAL_PLANNER_MODEL_CONTRACT_GENERATED_H_"
 HEADER_NAMESPACE = ("spmpc_local_planner", "mainline", "generated")
@@ -83,6 +87,9 @@ def _checked_document(value: ArtifactContract) -> dict[str, Any]:
         dimensions = document["dimensions"]
         layouts = document["layouts"]
         capacity = document["development_capacity"]
+        outputs = document["contract_outputs"]
+        artifact = document["artifact"]
+        solver_library = artifact["solver_library"]
         identities = (document["semantic_identity"], document["artifact_identity"])
     except (
         KeyError,
@@ -92,16 +99,29 @@ def _checked_document(value: ArtifactContract) -> dict[str, Any]:
             "model contract projection fields are missing"
         ) from exc
     if any(
-        type(item) is not dict for item in (dimensions, layouts, capacity, *identities)
+        type(item) is not dict
+        for item in (
+            dimensions,
+            layouts,
+            capacity,
+            outputs,
+            artifact,
+            solver_library,
+            *identities,
+        )
     ):
         raise ModelContractHeaderError("model contract projection fields are malformed")
     return document
 
 
-def _render_document(document: dict[str, Any]) -> str:
+def _render_document(
+    document: dict[str, Any], model_contract_json_raw_sha256_value: str
+) -> str:
     dimensions = document["dimensions"]
     layouts = document["layouts"]
     capacity = document["development_capacity"]
+    outputs = document["contract_outputs"]
+    solver_library = document["artifact"]["solver_library"]
     state = _enumerators(
         "State",
         layouts["state"]["ordered"],
@@ -158,6 +178,30 @@ def _render_document(document: dict[str, Any]) -> str:
             (
                 "constexpr char kArtifactSha256[] = "
                 f"{_cpp_string(document['artifact_identity']['sha256'], 'artifact identity')};"
+            ),
+            (
+                "constexpr char kModelContractJsonRawSha256[] = "
+                f"{_cpp_string(model_contract_json_raw_sha256_value, 'model contract raw identity')};"
+            ),
+            (
+                "constexpr char kModelContractFilename[] = "
+                f"{_cpp_string(outputs['model_contract_json'], 'model contract filename')};"
+            ),
+            (
+                "constexpr char kModelContractHeaderFilename[] = "
+                f"{_cpp_string(outputs['generated_cpp_header'], 'generated header filename')};"
+            ),
+            (
+                "constexpr char kSolverLibraryRelativePath[] = "
+                f"{_cpp_string(solver_library['relative_path'], 'solver library path')};"
+            ),
+            (
+                "constexpr char kSolverLibraryRawSha256[] = "
+                f"{_cpp_string(solver_library['raw_sha256'], 'solver library identity')};"
+            ),
+            (
+                "constexpr std::size_t kSolverLibrarySizeBytes = "
+                f"{solver_library['size_bytes']}U;"
             ),
             "",
             f"constexpr std::size_t N = {dimensions['N']}U;",
@@ -230,6 +274,9 @@ def _render_document(document: dict[str, Any]) -> str:
             'static_assert(sizeof(PARAMETER_NAMES) / sizeof(PARAMETER_NAMES[0]) == NP, "parameter names drifted");',
             'static_assert(sizeof(kModelContractSemanticSha256) == 65U, "semantic SHA-256 drifted");',
             'static_assert(sizeof(kArtifactSha256) == 65U, "artifact SHA-256 drifted");',
+            'static_assert(sizeof(kModelContractJsonRawSha256) == 65U, "model contract raw SHA-256 drifted");',
+            'static_assert(sizeof(kSolverLibraryRawSha256) == 65U, "solver library SHA-256 drifted");',
+            'static_assert(kSolverLibrarySizeBytes > 0U, "solver library must not be empty");',
             "",
         )
     )
@@ -242,7 +289,10 @@ def _render_document(document: dict[str, Any]) -> str:
 def render_model_contract_header(value: ArtifactContract) -> str:
     """Render a standalone header from the exact serialized JSON authority."""
 
-    return _render_document(_checked_document(value))
+    return _render_document(
+        _checked_document(value),
+        model_contract_json_raw_sha256(value),
+    )
 
 
 def validate_model_contract_header(
