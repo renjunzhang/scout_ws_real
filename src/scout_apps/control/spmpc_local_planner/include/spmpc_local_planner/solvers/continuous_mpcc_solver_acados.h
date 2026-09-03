@@ -8,7 +8,7 @@
 
 namespace spmpc_local_planner {
 
-// 连续 MPCC（acados 后端，alpha-state 主线：B0 6D / slosh 10D MPCC）。
+// 连续 MPCC（acados 后端，显式执行器主线：B0 23D / slosh 27D MPCC）。
 //
 // 编译期分两种形态：
 //   - 定义了 SPMPC_WITH_ACADOS（CMake 探测到 acados 与生成的 spmpc_b0 求解器）：
@@ -29,7 +29,7 @@ private:
     SolverParams params_;
     VariantConfig variant_;
     SloshDynamics slosh_dyn_;             // 与 primitive 共用的液体物理核（注入 slosh 模型参数，§4.3）
-    bool use_slosh_model_ = false;        // 由 variant.slosh_enable 决定接 b0(6维) 还是 slosh(10维)
+    bool use_slosh_model_ = false;        // 由 variant.slosh_enable 决定接 b0(23维) 还是 slosh(27维)
 
     void* capsule_ = nullptr;             // 不透明 acados capsule（仅 SPMPC_WITH_ACADOS 下有效）
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;

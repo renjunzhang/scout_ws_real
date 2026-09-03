@@ -9,6 +9,24 @@ publish_cmd_vel: true
 #   primitive: fallback/debug rollout sampling + cost ranking, not MPCC/mainline
 solver_backend: continuous_mpcc_acados
 
+# Mainline command/actual execution model.  The fixed FIFO lengths are part of
+# the generated acados state dimension: 5 linear steps and 10 angular steps at
+# 30 Hz.  Parameters are the 2026-09-02 NOKOV FOPDT candidates nearest the
+# primary tested working point (0.15 m/s, 0.30 rad/s).  This MVP intentionally
+# does not schedule parameters by command amplitude.
+execution_model:
+  mode: explicit_actuator       # explicit_actuator | legacy_instantaneous
+  linear_delay_sec: 0.1666666665
+  angular_delay_sec: 0.3333333330
+  linear_tau_sec: 0.112
+  angular_tau_sec: 0.119
+  linear_gain: 1.018
+  angular_gain: 1.096
+  cmd_timeout_sec: 0.5
+  max_prefix_prediction_sec: 0.20
+  max_integration_step_sec: 0.01
+  require_complete_history: true
+
 topics:
   odom: /odom
   imu: /imu/data

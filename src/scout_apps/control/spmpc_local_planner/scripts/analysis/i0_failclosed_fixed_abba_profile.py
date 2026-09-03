@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single source of truth for the legacy-v1 and short100-v2 ABBA profiles.
+"""Single source of truth for I0/fail-closed B0/Bslosh ABBA profiles.
 
 The hardware runner consumes this module through its ``shell`` output, while
 the Python analyzer/tests import the same profile objects.  Keeping identity,
@@ -88,6 +88,23 @@ class AbbaProfile:
     legacy_source_commit: str
     operator_note: str
     strict_runtime_contract: Optional[StrictRuntimeContract]
+    execution_model_mode: str
+    actuator_linear_delay_sec: float
+    actuator_angular_delay_sec: float
+    actuator_linear_tau_sec: float
+    actuator_angular_tau_sec: float
+    actuator_linear_gain: float
+    actuator_angular_gain: float
+    delay_phase_mode: str
+    delay_phase_linear_delay_sec: float
+    delay_phase_angular_delay_sec: float
+    expected_delay_mode_code: int
+    require_legacy_delay_application: bool
+    expected_execution_model_code: int
+    expected_b0_state_width: int
+    expected_slosh_state_width: int
+    minimum_solver_schema_version: int
+    final_liquid_method: str
 
 
 @dataclass(frozen=True)
@@ -185,6 +202,23 @@ PROFILES: Dict[str, AbbaProfile] = {
             "I0 source then legacy L22 fixed rollout"
         ),
         strict_runtime_contract=None,
+        execution_model_mode="legacy_instantaneous",
+        actuator_linear_delay_sec=0.1666666665,
+        actuator_angular_delay_sec=0.3333333330,
+        actuator_linear_tau_sec=0.112,
+        actuator_angular_tau_sec=0.119,
+        actuator_linear_gain=1.018,
+        actuator_angular_gain=1.096,
+        delay_phase_mode="fixed_closed_loop",
+        delay_phase_linear_delay_sec=0.15,
+        delay_phase_angular_delay_sec=0.22,
+        expected_delay_mode_code=3,
+        require_legacy_delay_application=True,
+        expected_execution_model_code=0,
+        expected_b0_state_width=6,
+        expected_slosh_state_width=10,
+        minimum_solver_schema_version=2,
+        final_liquid_method="L22",
     ),
     "short100_v2": AbbaProfile(
         profile_id="short100_v2",
@@ -227,6 +261,79 @@ PROFILES: Dict[str, AbbaProfile] = {
             "0..3 only; I0 source then legacy L22 fixed rollout"
         ),
         strict_runtime_contract=SHORT100_STRICT_RUNTIME,
+        execution_model_mode="legacy_instantaneous",
+        actuator_linear_delay_sec=0.1666666665,
+        actuator_angular_delay_sec=0.3333333330,
+        actuator_linear_tau_sec=0.112,
+        actuator_angular_tau_sec=0.119,
+        actuator_linear_gain=1.018,
+        actuator_angular_gain=1.096,
+        delay_phase_mode="fixed_closed_loop",
+        delay_phase_linear_delay_sec=0.15,
+        delay_phase_angular_delay_sec=0.22,
+        expected_delay_mode_code=3,
+        require_legacy_delay_application=True,
+        expected_execution_model_code=0,
+        expected_b0_state_width=6,
+        expected_slosh_state_width=10,
+        minimum_solver_schema_version=2,
+        final_liquid_method="L22",
+    ),
+    "explicit_actuator_v1": AbbaProfile(
+        profile_id="explicit_actuator_v1",
+        protocol_id="SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1",
+        version_label="i0_failclosed_explicit_actuator_abba_dev_v1",
+        output_tag="spmpc_i0_failclosed_explicit_actuator_abba_v1",
+        run_label_prefix="DEV_I0FC_EXPACT_V1",
+        runner_selector_mode="direct_variant",
+        treatment_variant="B_slosh",
+        treatment_cost_horizon_steps=-1,
+        treatment_cost_tail_discount=1.0,
+        exact_report_suffix="_i0_explicit_actuator_v1_postflight.json",
+        observer_report_suffix="_explicit_actuator_v1_observer_postflight.json",
+        chain_report_suffix="_explicit_actuator_v1_mocap_chain_postflight.json",
+        rgb_report_suffix="_i0_explicit_actuator_v1_rgb_postflight.json",
+        unit_pass_suffix="_explicit_actuator_v1_unit_pass.env",
+        rgb_analysis_report_name=(
+            "I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_RGB_ANALYSIS.json"
+        ),
+        rgb_analysis_report_type=(
+            "I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_RGB_ANALYSIS"
+        ),
+        exact_report_schema=(
+            "spmpc_i0_failclosed_explicit_actuator_abba_postflight_v1"
+        ),
+        minimum_p95_improvement_mm=0.05,
+        minimum_rms_improvement_mm=0.0,
+        maximum_slowdown_ratio=1.05,
+        require_fresh_session=True,
+        session_marker_name=(
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1_session.env"
+        ),
+        supersedes_protocol="SMPCC_I0_FAILCLOSED_FIXED_SHORT100_ABBA_DEV_V2",
+        legacy_source_commit=LEGACY_SOURCE_COMMIT,
+        operator_note=(
+            "explicit actuator v1; literal B0/B_slosh; processed-IMU I0; "
+            "legacy L22 off; command/actual separated in OCP"
+        ),
+        strict_runtime_contract=SHORT100_STRICT_RUNTIME,
+        execution_model_mode="explicit_actuator",
+        actuator_linear_delay_sec=0.1666666665,
+        actuator_angular_delay_sec=0.3333333330,
+        actuator_linear_tau_sec=0.112,
+        actuator_angular_tau_sec=0.119,
+        actuator_linear_gain=1.018,
+        actuator_angular_gain=1.096,
+        delay_phase_mode="off",
+        delay_phase_linear_delay_sec=0.15,
+        delay_phase_angular_delay_sec=0.22,
+        expected_delay_mode_code=0,
+        require_legacy_delay_application=False,
+        expected_execution_model_code=1,
+        expected_b0_state_width=23,
+        expected_slosh_state_width=27,
+        minimum_solver_schema_version=3,
+        final_liquid_method="I0",
     ),
 }
 
@@ -276,7 +383,7 @@ def resolve_row(profile: AbbaProfile, row: str) -> AbbaRow:
         )
 
     pilot_method = "W5" if profile.runner_selector_mode == "pilot_method" else ""
-    short = profile.profile_id == "short100_v2"
+    short = profile.treatment_variant == "B_slosh_short100"
     return AbbaRow(
         row=row,
         block=block,
@@ -288,7 +395,7 @@ def resolve_row(profile: AbbaProfile, row: str) -> AbbaRow:
         variant=profile.treatment_variant,
         w_slosh=5.0,
         slosh_enabled=True,
-        observer_applied="L22",
+        observer_applied=profile.final_liquid_method,
         cost_horizon_steps=profile.treatment_cost_horizon_steps,
         cost_tail_discount=profile.treatment_cost_tail_discount,
     )
@@ -358,6 +465,35 @@ def shell_values(profile: AbbaProfile, row: Optional[AbbaRow]) -> Dict[str, str]
         "STRICT_RUNTIME_CONTRACT": _bool_text(
             profile.strict_runtime_contract is not None
         ),
+        "EXECUTION_MODEL_MODE": profile.execution_model_mode,
+        "ACTUATOR_LINEAR_DELAY_SEC": str(profile.actuator_linear_delay_sec),
+        "ACTUATOR_ANGULAR_DELAY_SEC": str(profile.actuator_angular_delay_sec),
+        "ACTUATOR_LINEAR_TAU_SEC": str(profile.actuator_linear_tau_sec),
+        "ACTUATOR_ANGULAR_TAU_SEC": str(profile.actuator_angular_tau_sec),
+        "ACTUATOR_LINEAR_GAIN": str(profile.actuator_linear_gain),
+        "ACTUATOR_ANGULAR_GAIN": str(profile.actuator_angular_gain),
+        "DELAY_PHASE_MODE": profile.delay_phase_mode,
+        "DELAY_PHASE_LINEAR_DELAY_SEC": str(
+            profile.delay_phase_linear_delay_sec
+        ),
+        "DELAY_PHASE_ANGULAR_DELAY_SEC": str(
+            profile.delay_phase_angular_delay_sec
+        ),
+        "EXPECTED_DELAY_MODE_CODE": str(profile.expected_delay_mode_code),
+        "REQUIRE_LEGACY_DELAY_APPLICATION": _bool_text(
+            profile.require_legacy_delay_application
+        ),
+        "EXPECTED_EXECUTION_MODEL_CODE": str(
+            profile.expected_execution_model_code
+        ),
+        "EXPECTED_B0_STATE_WIDTH": str(profile.expected_b0_state_width),
+        "EXPECTED_SLOSH_STATE_WIDTH": str(
+            profile.expected_slosh_state_width
+        ),
+        "MINIMUM_SOLVER_SCHEMA_VERSION": str(
+            profile.minimum_solver_schema_version
+        ),
+        "FINAL_LIQUID_METHOD": profile.final_liquid_method,
     }
     runtime = profile.strict_runtime_contract
     if runtime is not None:

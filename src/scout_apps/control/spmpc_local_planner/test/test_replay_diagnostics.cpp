@@ -69,6 +69,7 @@ SolverInput makeInput() {
     input.has_v_ref_current = true;
     input.v_ref_current = 0.20;
     input.v_ref_status = "TEST_OVERRIDE";
+    input.actuator.valid = true;
     return input;
 }
 
@@ -86,16 +87,23 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ASSERT_TRUE(first.predicted_horizon.valid);
     EXPECT_EQ(first.predicted_horizon.states.size(), 61u);
     EXPECT_EQ(first.predicted_horizon.controls.size(), 60u);
-    EXPECT_EQ(first.predicted_horizon.control_semantics, "alpha");
+    EXPECT_EQ(first.predicted_horizon.control_semantics, "a_cmd_alpha_cmd");
+    ASSERT_GT(first.predicted_horizon.states.size(), 1u);
+    EXPECT_NEAR(
+        first.cmd_v, first.predicted_horizon.states[1].v_cmd, 1.0e-9);
+    EXPECT_NEAR(
+        first.cmd_omega,
+        first.predicted_horizon.states[1].omega_cmd,
+        1.0e-9);
 
     ASSERT_TRUE(first.pre_solve_snapshot.valid);
     EXPECT_TRUE(first.pre_solve_snapshot.primal_guess_only);
     EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, 60);
-    EXPECT_EQ(first.pre_solve_snapshot.state_width, 10);
+    EXPECT_EQ(first.pre_solve_snapshot.state_width, 23);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 23);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 23u);
-    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 23u);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 28);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 28u);
+    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 28u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), 61u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), 60u);
     EXPECT_FALSE(first.pre_solve_snapshot.have_previous_solution);
@@ -107,6 +115,20 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     second_input.robot.yaw = first.predicted_horizon.states[1].yaw;
     second_input.robot.v = first.predicted_horizon.states[1].v;
     second_input.robot.omega = first.predicted_horizon.states[1].omega;
+    second_input.actuator.v_cmd = first.predicted_horizon.states[1].v_cmd;
+    second_input.actuator.omega_cmd =
+        first.predicted_horizon.states[1].omega_cmd;
+    const auto& model_state = first.predicted_horizon.states[1].model_state;
+    ASSERT_EQ(model_state.size(), 23u);
+    for (int i = 0; i < kExplicitLinearDelaySteps; ++i) {
+        second_input.actuator.linear_delay_queue[static_cast<size_t>(i)] =
+            model_state[static_cast<size_t>(8 + i)];
+    }
+    for (int i = 0; i < kExplicitAngularDelaySteps; ++i) {
+        second_input.actuator.angular_delay_queue[static_cast<size_t>(i)] =
+            model_state[static_cast<size_t>(
+                8 + kExplicitLinearDelaySteps + i)];
+    }
 
     SolverOutput second;
     ASSERT_TRUE(solver.solve(second_input, reference, second)) << second.status;

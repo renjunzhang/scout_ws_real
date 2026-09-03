@@ -198,6 +198,19 @@ struct ExecutionStatePrediction {
     std::string status = "OFF";
 };
 
+struct ExplicitActuatorPrediction {
+    bool valid = false;
+    RobotState raw_robot;
+    SloshState raw_slosh;
+    RobotState predicted_robot;
+    SloshState predicted_slosh;
+    ActuatorState actuator;
+    double prefix_duration_sec = 0.0;
+    double history_span_sec = 0.0;
+    bool history_complete = false;
+    std::string status = "NOT_RUN";
+};
+
 struct DelayPhaseApplication {
     SolverInput solver_input;
     bool robot_applied = false;

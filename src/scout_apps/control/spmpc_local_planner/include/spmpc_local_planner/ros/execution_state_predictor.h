@@ -17,6 +17,16 @@ public:
                                      const ros::Time& now,
                                      const DelayPhaseParams& params) const;
 
+    // Propagate a common-epoch measured state to the OCP start using the same
+    // FOPDT model and emitted-command history consumed by the explicit OCP.
+    ExplicitActuatorPrediction predictExplicitActuator(
+        const RobotState& raw_robot,
+        const SloshState& raw_slosh,
+        const CommandHistoryBuffer& history,
+        const ros::Time& state_epoch,
+        const ros::Time& target_epoch,
+        const ActuatorModelParams& params) const;
+
 private:
     static double normalizeYaw(double yaw);
 

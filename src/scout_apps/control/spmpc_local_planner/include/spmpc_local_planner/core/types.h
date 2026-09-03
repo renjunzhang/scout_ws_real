@@ -2,6 +2,7 @@
 
 #include "spmpc_local_planner/core/costmap_grid.h"
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
+#include "spmpc_local_planner/dynamics/actuator_model.h"
 #include "spmpc_local_planner/warm_start/warm_start_diagnostics.h"
 #include <cstdint>
 #include <string>
@@ -178,6 +179,17 @@ struct EffectiveConfigDebug {
     double v_safe_max = 0.0;
     double effective_v_max = 0.0;
     double speed_safety_tolerance = 0.0;
+    // Explicit actuator model identity.  Appended to preserve all historical
+    // effective_config indices used by existing bag readers.
+    double execution_model_mode_code = 0.0;
+    double actuator_linear_delay_sec = 0.0;
+    double actuator_angular_delay_sec = 0.0;
+    double actuator_linear_tau_sec = 0.0;
+    double actuator_angular_tau_sec = 0.0;
+    double actuator_linear_gain = 0.0;
+    double actuator_angular_gain = 0.0;
+    double actuator_linear_delay_steps = 0.0;
+    double actuator_angular_delay_steps = 0.0;
 };
 
 // ROS-independent timestamps for one authoritative control cycle.  All stamps
@@ -229,6 +241,15 @@ struct HorizonStateDebug {
     double eta_y = 0.0;
     double eta_y_dot = 0.0;
     double h_modal = 0.0;
+    double v_cmd = 0.0;
+    double omega_cmd = 0.0;
+    double delayed_v_cmd = 0.0;
+    double delayed_omega_cmd = 0.0;
+    double a_actual = 0.0;
+    double alpha_actual = 0.0;
+    // Exact generated-model row.  This is populated for replay snapshots;
+    // named fields above remain the stable semantic diagnostics.
+    std::vector<double> model_state;
 };
 
 struct HorizonControlDebug {
@@ -262,13 +283,14 @@ struct PreSolveSnapshotDebug {
     std::string control_semantics = "alpha";
     double dt = 0.0;
     int horizon_steps = 0;
-    int state_width = 10;
+    int state_width = 0;
     int control_width = 3;
     int parameter_width = 0;
     int slosh_cost_horizon_steps = -1;
     double slosh_cost_tail_discount = 1.0;
     RobotState robot;
     SloshState slosh;
+    ActuatorState actuator;
     double min_progress_s = 0.0;
     double reference_length = 0.0;
     double s0 = 0.0;
@@ -417,6 +439,7 @@ struct StartLockRecoveryDiagnostics {
 struct SolverInput {
     RobotState robot;
     SloshState slosh;
+    ActuatorState actuator;
     const CostmapGrid* costmap = nullptr;
     double dt = 1.0 / 30.0;
     int horizon_steps = 60;

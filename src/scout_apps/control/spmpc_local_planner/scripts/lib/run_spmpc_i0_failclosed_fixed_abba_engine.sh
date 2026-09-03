@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Shared engine for the frozen legacy-v1 and short100-v2 I0/fixed ABBA profiles.
+# Shared engine for I0/fail-closed B0/Bslosh ABBA profiles.
 #
 # This is a new 0.20/0.25 m/s development profile.  It reuses the frozen C02
 # path/map/RGB artifacts, but it is NOT the released C02 0.10/0.15 profile and
@@ -28,6 +28,7 @@ CONTRACT_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_abba_contract.py"
 SHORT_HORIZON_TEST="${SCRIPT_DIR}/tests/test_short_horizon_matched_release.py"
 RUNTIME_GATE_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_short100_runtime_gate.py"
 RGB_ANALYZER_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_abba_rgb_analysis.py"
+EXPLICIT_ACTUATOR_MODEL_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_model.py"
 ONLINE_LIQUID_LAUNCH="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch"
 ONLINE_LIQUID_NODE="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py"
 ONLINE_LIQUID_DETECTOR="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py"
@@ -186,6 +187,23 @@ SUPERSEDES_PROTOCOL="${I0FC_SUPERSEDES_PROTOCOL}"
 LEGACY_SOURCE_COMMIT="${I0FC_LEGACY_SOURCE_COMMIT}"
 OPERATOR_NOTE_FROZEN="${I0FC_OPERATOR_NOTE_FROZEN}"
 STRICT_RUNTIME_CONTRACT="${I0FC_STRICT_RUNTIME_CONTRACT}"
+EXECUTION_MODEL_MODE="${I0FC_EXECUTION_MODEL_MODE}"
+ACTUATOR_LINEAR_DELAY_SEC="${I0FC_ACTUATOR_LINEAR_DELAY_SEC}"
+ACTUATOR_ANGULAR_DELAY_SEC="${I0FC_ACTUATOR_ANGULAR_DELAY_SEC}"
+ACTUATOR_LINEAR_TAU_SEC="${I0FC_ACTUATOR_LINEAR_TAU_SEC}"
+ACTUATOR_ANGULAR_TAU_SEC="${I0FC_ACTUATOR_ANGULAR_TAU_SEC}"
+ACTUATOR_LINEAR_GAIN="${I0FC_ACTUATOR_LINEAR_GAIN}"
+ACTUATOR_ANGULAR_GAIN="${I0FC_ACTUATOR_ANGULAR_GAIN}"
+DELAY_PHASE_MODE="${I0FC_DELAY_PHASE_MODE}"
+DELAY_PHASE_LINEAR_DELAY_SEC="${I0FC_DELAY_PHASE_LINEAR_DELAY_SEC}"
+DELAY_PHASE_ANGULAR_DELAY_SEC="${I0FC_DELAY_PHASE_ANGULAR_DELAY_SEC}"
+EXPECTED_DELAY_MODE_CODE="${I0FC_EXPECTED_DELAY_MODE_CODE}"
+REQUIRE_LEGACY_DELAY_APPLICATION="${I0FC_REQUIRE_LEGACY_DELAY_APPLICATION}"
+EXPECTED_EXECUTION_MODEL_CODE="${I0FC_EXPECTED_EXECUTION_MODEL_CODE}"
+EXPECTED_B0_STATE_WIDTH="${I0FC_EXPECTED_B0_STATE_WIDTH}"
+EXPECTED_SLOSH_STATE_WIDTH="${I0FC_EXPECTED_SLOSH_STATE_WIDTH}"
+MINIMUM_SOLVER_SCHEMA_VERSION="${I0FC_MINIMUM_SOLVER_SCHEMA_VERSION}"
+FINAL_LIQUID_METHOD="${I0FC_FINAL_LIQUID_METHOD}"
 BLOCK="${I0FC_BLOCK}"
 POSITION="${I0FC_POSITION}"
 CONDITION="${I0FC_CONDITION}"
@@ -199,6 +217,11 @@ EXPECTED_COST_HORIZON_STEPS="${I0FC_EXPECTED_COST_HORIZON_STEPS}"
 EXPECTED_COST_TAIL_DISCOUNT="${I0FC_EXPECTED_COST_TAIL_DISCOUNT}"
 CANONICAL_RUN_LABEL="${I0FC_CANONICAL_RUN_LABEL}"
 PREVIOUS_LABEL="${I0FC_PREVIOUS_RUN_LABEL}"
+if truthy "${SLOSH_ENABLED}"; then
+  EXPECTED_STATE_WIDTH="${EXPECTED_SLOSH_STATE_WIDTH}"
+else
+  EXPECTED_STATE_WIDTH="${EXPECTED_B0_STATE_WIDTH}"
+fi
 SCRIPT_NAME="run_spmpc_i0_failclosed_fixed_abba_engine:${PROFILE_ID}"
 
 [[ "${ATTEMPT}" == "01" ]] || fail "development ABBA permits first attempt only (ATTEMPT=01)"
@@ -208,9 +231,6 @@ V_REF=0.20
 # same +0.05 m/s hard margin while raising the RGB-effect run to v_ref=0.20.
 V_SAFE_MAX=0.25
 SPEED_SAFETY_TOLERANCE=0.0001
-DELAY_PHASE_MODE=fixed_closed_loop
-DELAY_PHASE_LINEAR_DELAY_SEC=0.15
-DELAY_PHASE_ANGULAR_DELAY_SEC=0.22
 RECORD_SEC=70
 MIN_FREE_GIB="${MIN_FREE_GIB:-5}"
 START_GATE_TIMEOUT_SEC=120
@@ -285,10 +305,13 @@ required_files=(
   "${ONLINE_LIQUID_DETECTOR}" "${ONLINE_LIQUID_MSG}" "${PATH_FILE}"
   "${FIELD_MAP_FILE}" "${RGB_CALIBRATION_FILE}"
 )
-if truthy "${STRICT_RUNTIME_CONTRACT}"; then
+if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
   required_files+=(
     "${SHORT_HORIZON_TEST}" "${RUNTIME_GATE_TEST}" "${RGB_ANALYZER_TEST}"
   )
+fi
+if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+  required_files+=("${EXPLICIT_ACTUATOR_MODEL_TEST}")
 fi
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
@@ -311,6 +334,19 @@ source /opt/ros/noetic/setup.bash
 # shellcheck disable=SC1090
 source "${REPO_ROOT}/devel/setup.bash"
 
+launch_profile_contract_args=(
+  "execution_model_mode:=${EXECUTION_MODEL_MODE}"
+  "execution_model_linear_delay_sec:=${ACTUATOR_LINEAR_DELAY_SEC}"
+  "execution_model_angular_delay_sec:=${ACTUATOR_ANGULAR_DELAY_SEC}"
+  "execution_model_linear_tau_sec:=${ACTUATOR_LINEAR_TAU_SEC}"
+  "execution_model_angular_tau_sec:=${ACTUATOR_ANGULAR_TAU_SEC}"
+  "execution_model_linear_gain:=${ACTUATOR_LINEAR_GAIN}"
+  "execution_model_angular_gain:=${ACTUATOR_ANGULAR_GAIN}"
+  "execution_model_cmd_timeout_sec:=0.5"
+  "execution_model_max_prefix_prediction_sec:=0.20"
+  "execution_model_max_integration_step_sec:=0.01"
+  "execution_model_require_complete_history:=true"
+)
 launch_runtime_contract_args=()
 if truthy "${STRICT_RUNTIME_CONTRACT}"; then
   launch_runtime_contract_args=(
@@ -347,17 +383,24 @@ validate_launch_variant() {
   local cost_horizon_steps="$4"
   local cost_tail_discount="$5"
   local dump
+  local dump_delay_mode="${DELAY_PHASE_MODE}"
+  if [[ "${dump_delay_mode}" == "off" ]]; then
+    dump_delay_mode="'off'"
+  fi
   dump="$(roslaunch --dump-params spmpc_local_planner spmpc_fixed_path.launch \
     planner_variant:="${variant}" solver_backend:=continuous_mpcc_acados \
     imu_shadow_enable:=true observer_source:=processed_imu \
     observer_fallback_policy:=fail_closed observer_latch_fallback:=false \
-    delay_phase_mode:=fixed_closed_loop delay_phase_linear_delay_sec:=0.15 \
-    delay_phase_angular_delay_sec:=0.22 state_timing_require_common_epoch:=true \
+    delay_phase_mode:="${DELAY_PHASE_MODE}" \
+    delay_phase_linear_delay_sec:="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
+    delay_phase_angular_delay_sec:="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+    state_timing_require_common_epoch:=true \
     liquid_nowcast_enable:=true liquid_nowcast_publish_comparison:=true \
     shared_linear_accel_limit_enable:=false shared_angular_limit_enable:=false \
     execution_contract_fail_closed_on_post_limit_change:=true \
     speed_safety_enable:=true v_safe_max:=0.25 speed_safety_tolerance:=0.0001 \
     v_ref:=0.20 w_slosh:="${weight}" \
+    "${launch_profile_contract_args[@]}" \
     "${launch_runtime_contract_args[@]}")" || fail "could not dump ${variant} launch parameters"
   local expected_lines=(
     "/spmpc_local_planner/planner_variant: ${variant}"
@@ -370,9 +413,16 @@ validate_launch_variant() {
     "/spmpc_local_planner/slosh_observer/source: processed_imu"
     "/spmpc_local_planner/slosh_observer/fallback_policy: fail_closed"
     "/spmpc_local_planner/slosh_observer/latch_fallback: false"
-    "/spmpc_local_planner/delay_phase/mode: fixed_closed_loop"
-    "/spmpc_local_planner/delay_phase/linear_delay_sec: 0.15"
-    "/spmpc_local_planner/delay_phase/angular_delay_sec: 0.22"
+    "/spmpc_local_planner/execution_model/mode: ${EXECUTION_MODEL_MODE}"
+    "/spmpc_local_planner/execution_model/linear_delay_sec: ${ACTUATOR_LINEAR_DELAY_SEC}"
+    "/spmpc_local_planner/execution_model/angular_delay_sec: ${ACTUATOR_ANGULAR_DELAY_SEC}"
+    "/spmpc_local_planner/execution_model/linear_tau_sec: ${ACTUATOR_LINEAR_TAU_SEC}"
+    "/spmpc_local_planner/execution_model/angular_tau_sec: ${ACTUATOR_ANGULAR_TAU_SEC}"
+    "/spmpc_local_planner/execution_model/linear_gain: ${ACTUATOR_LINEAR_GAIN}"
+    "/spmpc_local_planner/execution_model/angular_gain: ${ACTUATOR_ANGULAR_GAIN}"
+    "/spmpc_local_planner/delay_phase/mode: ${dump_delay_mode}"
+    "/spmpc_local_planner/delay_phase/linear_delay_sec: ${DELAY_PHASE_LINEAR_DELAY_SEC}"
+    "/spmpc_local_planner/delay_phase/angular_delay_sec: ${DELAY_PHASE_ANGULAR_DELAY_SEC}"
     "/spmpc_local_planner/state_timing/require_common_epoch: true"
     "/spmpc_local_planner/platform/shared_constraints/linear_accel_limit_enable: false"
     "/spmpc_local_planner/platform/shared_constraints/angular_limit_enable: false"
@@ -409,22 +459,26 @@ validate_launch_variant B0 0.0 false -1 1.0
 validate_launch_variant "${TREATMENT_VARIANT}" 5.0 true \
   "${TREATMENT_COST_HORIZON_STEPS}" "${TREATMENT_COST_TAIL_DISCOUNT}"
 python3 "${CONTRACT_TEST}"
-if truthy "${STRICT_RUNTIME_CONTRACT}"; then
+if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
   python3 "${SHORT_HORIZON_TEST}"
   python3 "${RUNTIME_GATE_TEST}"
   python3 "${RGB_ANALYZER_TEST}"
 fi
+if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+  python3 "${EXPLICIT_ACTUATOR_MODEL_TEST}"
+fi
 VALIDATE_ONLY=true bash "${CAMERA_PREP}" >/dev/null
 
-echo "================ I0 fail-closed fixed ABBA ================"
+echo "================ I0 fail-closed ABBA ================"
 echo "  profile        = ${PROFILE_ID}; protocol=${PROTOCOL_ID}"
 echo "  row/order      = ${PAIR_ROW}/04; B0,Bslosh,Bslosh,B0"
 echo "  condition      = ${CONDITION_LABEL}; ${VARIANT}; w_slosh=${W_SLOSH}"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  solver liquid  = ${OBSERVER_APPLIED}; cost steps=${EXPECTED_COST_HORIZON_STEPS}, tail=${EXPECTED_COST_TAIL_DISCOUNT}"
-echo "  legacy delay   = fixed_closed_loop 0.15/0.22 s"
+echo "  execution      = ${EXECUTION_MODEL_MODE}; L=${ACTUATOR_LINEAR_DELAY_SEC}/${ACTUATOR_ANGULAR_DELAY_SEC} s; tau=${ACTUATOR_LINEAR_TAU_SEC}/${ACTUATOR_ANGULAR_TAU_SEC} s"
+echo "  legacy delay   = ${DELAY_PHASE_MODE}; applied=${REQUIRE_LEGACY_DELAY_APPLICATION}"
 echo "  speed profile  = NEW DEVELOPMENT v_ref=0.20, hard v_safe=0.25 m/s"
-echo "  evidence       = online RGB scalar + NOKOV + O0/I0/I1/L22 + solver audits"
+echo "  evidence       = online RGB scalar + NOKOV + I0/actuator + solver audits"
 echo "  output         = ${BAG_PATH}"
 echo "============================================================="
 
@@ -448,6 +502,7 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_abba_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/i0_failclosed_fixed_abba_profile.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/liquid_cost_window_contract.py
@@ -461,9 +516,10 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py
   src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_i0_failclosed_fixed_abba_contract.py
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_model.py
   src/scout_apps/sensors/realsense_liquid_measurement
 )
-if truthy "${STRICT_RUNTIME_CONTRACT}"; then
+if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
   runtime_paths+=(
     src/scout_apps/control/spmpc_local_planner/scripts/tests/test_short_horizon_matched_release.py
     src/scout_apps/control/spmpc_local_planner/scripts/tests/test_i0_failclosed_fixed_short100_runtime_gate.py
@@ -523,6 +579,13 @@ published_topics="$(timeout 5s rostopic list -p)" || fail "could not query ROS p
 grep -Fxq -- /cmd_vel <<< "${published_topics}" && fail "/cmd_vel already has a publisher"
 
 code_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
+if [[ "${TREATMENT_VARIANT}" == "B_slosh_short100" ]]; then
+  treatment_order_label="Bslosh-short100"
+  slosh_cost_stage_label="0..${TREATMENT_COST_HORIZON_STEPS}"
+else
+  treatment_order_label="Bslosh"
+  slosh_cost_stage_label="full_0..60"
+fi
 order_contents="$(printf '%s\n' \
   'row,block,position,condition,variant,w_slosh' \
   '01,01,01,B0,B0,0.0' \
@@ -534,7 +597,8 @@ if [[ "${PROFILE_ID}" == "legacy_v1" ]]; then
     "protocol=${PROTOCOL_ID}" "scope=development_only" "not_c02_release=true" \
     "row_order=B0,Bslosh,Bslosh,B0" "v_ref=${V_REF}" "v_safe_max=${V_SAFE_MAX}" \
     "observer=processed_imu" "fallback=fail_closed" "common_epoch=true" \
-    "delay=fixed_closed_loop:${DELAY_PHASE_LINEAR_DELAY_SEC},${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+    "execution_model=${EXECUTION_MODEL_MODE}" \
+    "legacy_delay=${DELAY_PHASE_MODE}:${DELAY_PHASE_LINEAR_DELAY_SEC},${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
     "path_sha256=${FROZEN_PATH_SHA256}" "map_sha256=${FROZEN_MAP_SHA256}" \
     "rgb_calibration_sha256=${FROZEN_RGB_CALIBRATION_SHA256}" "git_revision=${code_revision}")"
 else
@@ -543,9 +607,9 @@ else
     "scope=development_only" "not_c02_release=true" \
     "supersedes_protocol=${SUPERSEDES_PROTOCOL}" \
     "legacy_source_commit=${LEGACY_SOURCE_COMMIT}" \
-    "row_order=B0,Bslosh-short100,Bslosh-short100,B0" \
+    "row_order=B0,${treatment_order_label},${treatment_order_label},B0" \
     "baseline_variant=B0" "treatment_variant=${TREATMENT_VARIANT}" \
-    "slosh_cost_state_stages=0..${TREATMENT_COST_HORIZON_STEPS}" \
+    "slosh_cost_state_stages=${slosh_cost_stage_label}" \
     "slosh_cost_tail_discount=${TREATMENT_COST_TAIL_DISCOUNT}" \
     "robot_horizon_steps=60" "dt_sec=0.0333333333333333" "robot_horizon_sec=2.0" \
     "solver_backend=${I0FC_RUNTIME_SOLVER_BACKEND}" \
@@ -556,7 +620,13 @@ else
     "alpha_max=${I0FC_RUNTIME_ALPHA_MAX}" \
     "v_ref=${V_REF}" "v_safe_max=${V_SAFE_MAX}" \
     "observer=processed_imu" "fallback=fail_closed" "common_epoch=true" \
-    "delay=fixed_closed_loop:${DELAY_PHASE_LINEAR_DELAY_SEC},${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+    "execution_model=${EXECUTION_MODEL_MODE}" \
+    "actuator_delay_sec=${ACTUATOR_LINEAR_DELAY_SEC},${ACTUATOR_ANGULAR_DELAY_SEC}" \
+    "actuator_tau_sec=${ACTUATOR_LINEAR_TAU_SEC},${ACTUATOR_ANGULAR_TAU_SEC}" \
+    "actuator_gain=${ACTUATOR_LINEAR_GAIN},${ACTUATOR_ANGULAR_GAIN}" \
+    "legacy_delay=${DELAY_PHASE_MODE}:${DELAY_PHASE_LINEAR_DELAY_SEC},${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+    "legacy_delay_application=${REQUIRE_LEGACY_DELAY_APPLICATION}" \
+    "solver_state_width=${EXPECTED_B0_STATE_WIDTH},${EXPECTED_SLOSH_STATE_WIDTH}" \
     "minimum_p95_improvement_mm=${MINIMUM_P95_IMPROVEMENT_MM}" \
     "minimum_rms_improvement_mm=${MINIMUM_RMS_IMPROVEMENT_MM}" \
     "maximum_slowdown_ratio=${MAXIMUM_SLOWDOWN_RATIO}" \
@@ -692,6 +762,8 @@ if truthy "${STRICT_RUNTIME_CONTRACT}"; then
 fi
 if [[ "${PROFILE_ID}" == "legacy_v1" ]]; then
   BLOCK_SEGMENT_ID_VALUE="I0FC_FIXED_b${BLOCK}"
+elif [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+  BLOCK_SEGMENT_ID_VALUE="I0FC_EXPACT_V1_b${BLOCK}"
 else
   BLOCK_SEGMENT_ID_VALUE="I0FC_FIXED_S100_V2_b${BLOCK}"
 fi
@@ -706,6 +778,17 @@ START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC}" V_REF="${V_REF}" W_SLOSH="${W
 DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
 DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
 DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
+EXECUTION_MODEL_MODE="${EXECUTION_MODEL_MODE}" \
+EXECUTION_MODEL_LINEAR_DELAY_SEC="${ACTUATOR_LINEAR_DELAY_SEC}" \
+EXECUTION_MODEL_ANGULAR_DELAY_SEC="${ACTUATOR_ANGULAR_DELAY_SEC}" \
+EXECUTION_MODEL_LINEAR_TAU_SEC="${ACTUATOR_LINEAR_TAU_SEC}" \
+EXECUTION_MODEL_ANGULAR_TAU_SEC="${ACTUATOR_ANGULAR_TAU_SEC}" \
+EXECUTION_MODEL_LINEAR_GAIN="${ACTUATOR_LINEAR_GAIN}" \
+EXECUTION_MODEL_ANGULAR_GAIN="${ACTUATOR_ANGULAR_GAIN}" \
+EXECUTION_MODEL_CMD_TIMEOUT_SEC=0.5 \
+EXECUTION_MODEL_MAX_PREFIX_PREDICTION_SEC=0.20 \
+EXECUTION_MODEL_MAX_INTEGRATION_STEP_SEC=0.01 \
+EXECUTION_MODEL_REQUIRE_COMPLETE_HISTORY=true \
 IMU_SHADOW_ENABLE=true IMU_TOPIC="${IMU_TOPIC}" IMU_SUBSCRIBER_QUEUE_SIZE=10 \
 IMU_SHADOW_READY_TIMEOUT_SEC="${IMU_SHADOW_READY_TIMEOUT_SEC}" CURRENT_OBSERVER_SOURCE=processed_imu \
 OBSERVER_FALLBACK_POLICY=fail_closed OBSERVER_LATCH_FALLBACK=false \
@@ -738,8 +821,13 @@ exact_postflight_args=(
   --report-schema "${EXACT_REPORT_SCHEMA}"
   --expected-v-ref "${V_REF}" --expected-v-safe-max "${V_SAFE_MAX}"
   --minimum-application-fraction 1.0
+  --expected-delay-mode-code "${EXPECTED_DELAY_MODE_CODE}"
+  --require-legacy-delay-application "${REQUIRE_LEGACY_DELAY_APPLICATION}"
+  --expected-execution-model-code "${EXPECTED_EXECUTION_MODEL_CODE}"
+  --expected-state-width "${EXPECTED_STATE_WIDTH}"
+  --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}"
 )
-if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
+if truthy "${STRICT_RUNTIME_CONTRACT}"; then
   exact_postflight_args+=(
     --expected-variant "${VARIANT}"
     --expected-slosh-cost-horizon-steps "${EXPECTED_COST_HORIZON_STEPS}"
@@ -754,6 +842,15 @@ if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
     --expected-config "w_du_vs=${I0FC_RUNTIME_W_DU_VS}"
     --expected-config "slosh_height_max=${I0FC_RUNTIME_SLOSH_HEIGHT_MAX}"
     --expected-config "alpha_max=${I0FC_RUNTIME_ALPHA_MAX}"
+    --expected-config "execution_model_mode_code=${EXPECTED_EXECUTION_MODEL_CODE}"
+    --expected-config "actuator_linear_delay_sec=${ACTUATOR_LINEAR_DELAY_SEC}"
+    --expected-config "actuator_angular_delay_sec=${ACTUATOR_ANGULAR_DELAY_SEC}"
+    --expected-config "actuator_linear_tau_sec=${ACTUATOR_LINEAR_TAU_SEC}"
+    --expected-config "actuator_angular_tau_sec=${ACTUATOR_ANGULAR_TAU_SEC}"
+    --expected-config "actuator_linear_gain=${ACTUATOR_LINEAR_GAIN}"
+    --expected-config "actuator_angular_gain=${ACTUATOR_ANGULAR_GAIN}"
+    --expected-config "actuator_linear_delay_steps=5"
+    --expected-config "actuator_angular_delay_steps=10"
   )
 fi
 python3 "${EXACT_POSTFLIGHT}" "${exact_postflight_args[@]}"
@@ -777,10 +874,12 @@ python3 "${RGB_POSTFLIGHT}" --bag "${BAG_PATH}" --condition "${CONDITION}" \
   --slosh-enabled "${SLOSH_ENABLED}" --smooth-priority-enabled false \
   --protocol "${PROTOCOL_ID}" --report-suffix "${RGB_REPORT_SUFFIX}" \
   --row "${PAIR_ROW}" --block "${BLOCK}" --position "${POSITION}" \
-  --expected-weight "${W_SLOSH}" --expected-delay-mode-code 3 \
-  --expected-solver-source-code 2 --require-delay-compensation-applied true \
-  --require-robot-delay-compensation-applied true \
-  --require-liquid-delay-compensation-applied true --require-state-diagnostics \
+  --expected-weight "${W_SLOSH}" --expected-delay-mode-code "${EXPECTED_DELAY_MODE_CODE}" \
+  --expected-solver-source-code 2 \
+  --require-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}" \
+  --require-robot-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}" \
+  --require-liquid-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}" \
+  --require-state-diagnostics \
   --expected-v-ref "${V_REF}" --min-duration-sec 65 --min-source-fraction 0.99 \
   --min-ready-fraction 0.99 --min-online-valid-fraction 0.98 \
   --max-zero-window-spread-mm 0.25 --initial-stability-sec 5.0 \

@@ -22,6 +22,17 @@
   <arg name="publish_cmd_vel" default="true"/>
   <arg name="reference_target_frame" default="" doc="可选: 将收到的 reference path 转到该 frame 后再求解"/>
   <arg name="solver_backend" default="continuous_mpcc_acados" doc="continuous_mpcc_acados(mainline)|continuous_mpcc_direct_omega_legacy(RouteB diagnostic)|primitive(debug fallback)"/>
+  <arg name="execution_model_mode" default="explicit_actuator"/>
+  <arg name="execution_model_linear_delay_sec" default="0.1666666665"/>
+  <arg name="execution_model_angular_delay_sec" default="0.3333333330"/>
+  <arg name="execution_model_linear_tau_sec" default="0.112"/>
+  <arg name="execution_model_angular_tau_sec" default="0.119"/>
+  <arg name="execution_model_linear_gain" default="1.018"/>
+  <arg name="execution_model_angular_gain" default="1.096"/>
+  <arg name="execution_model_cmd_timeout_sec" default="0.5"/>
+  <arg name="execution_model_max_prefix_prediction_sec" default="0.20"/>
+  <arg name="execution_model_max_integration_step_sec" default="0.01"/>
+  <arg name="execution_model_require_complete_history" default="true"/>
   <arg name="w_slosh" default="-1.0" doc="覆盖 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
@@ -76,6 +87,17 @@
     <arg name="publish_cmd_vel" value="$(arg publish_cmd_vel)"/>
     <arg name="reference_target_frame" value="$(arg reference_target_frame)"/>
     <arg name="solver_backend" value="$(arg solver_backend)"/>
+    <arg name="execution_model_mode" value="$(arg execution_model_mode)"/>
+    <arg name="execution_model_linear_delay_sec" value="$(arg execution_model_linear_delay_sec)"/>
+    <arg name="execution_model_angular_delay_sec" value="$(arg execution_model_angular_delay_sec)"/>
+    <arg name="execution_model_linear_tau_sec" value="$(arg execution_model_linear_tau_sec)"/>
+    <arg name="execution_model_angular_tau_sec" value="$(arg execution_model_angular_tau_sec)"/>
+    <arg name="execution_model_linear_gain" value="$(arg execution_model_linear_gain)"/>
+    <arg name="execution_model_angular_gain" value="$(arg execution_model_angular_gain)"/>
+    <arg name="execution_model_cmd_timeout_sec" value="$(arg execution_model_cmd_timeout_sec)"/>
+    <arg name="execution_model_max_prefix_prediction_sec" value="$(arg execution_model_max_prefix_prediction_sec)"/>
+    <arg name="execution_model_max_integration_step_sec" value="$(arg execution_model_max_integration_step_sec)"/>
+    <arg name="execution_model_require_complete_history" value="$(arg execution_model_require_complete_history)"/>
     <arg name="w_slosh" value="$(arg w_slosh)"/>
     <arg name="v_ref" value="$(arg v_ref)"/>
     <arg name="slosh_height_max" value="$(arg slosh_height_max)"/>

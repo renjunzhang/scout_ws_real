@@ -40,6 +40,22 @@ ExecutionStatePredictor makePredictor() {
     return predictor;
 }
 
+ActuatorModelParams actuatorParams() {
+    ActuatorModelParams p;
+    p.mode = ExecutionModelMode::ExplicitActuator;
+    p.dt = 1.0 / 30.0;
+    p.linear_delay_sec = kExplicitLinearDelaySteps * p.dt;
+    p.angular_delay_sec = kExplicitAngularDelaySteps * p.dt;
+    p.linear_tau_sec = 0.112;
+    p.angular_tau_sec = 0.119;
+    p.linear_gain = 1.018;
+    p.angular_gain = 1.096;
+    p.max_prefix_prediction_sec = 0.20;
+    p.max_integration_step_sec = 0.01;
+    p.require_complete_history = true;
+    return p;
+}
+
 }  // namespace
 
 TEST(DelayPhaseTypes, ParsesFixedClosedLoopAliases) {
@@ -257,6 +273,83 @@ TEST(ExecutionStatePredictor, DoesNotMutateInputSloshState) {
     EXPECT_DOUBLE_EQ(slosh.eta_y, -0.05);
     EXPECT_DOUBLE_EQ(prediction.raw_slosh.eta_x, 0.10);
     EXPECT_DOUBLE_EQ(prediction.raw_slosh.eta_y, -0.05);
+}
+
+TEST(ExecutionStatePredictor, ExplicitActuatorBuildsIndependentFifos) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    const double dt = 1.0 / 30.0;
+    for (int i = 0; i <= 36; ++i) {
+        history.push(sample(8.8 + i * dt, 0.01 * i, -0.02 * i));
+    }
+
+    RobotState robot;
+    SloshState slosh;
+    const auto prediction = makePredictor().predictExplicitActuator(
+        robot, slosh, history, stamp(10.0), stamp(10.0), actuatorParams());
+
+    ASSERT_TRUE(prediction.valid) << prediction.status;
+    ASSERT_TRUE(prediction.actuator.valid);
+    EXPECT_TRUE(prediction.history_complete);
+    EXPECT_NEAR(prediction.actuator.v_cmd, 0.36, 1.0e-9);
+    EXPECT_NEAR(prediction.actuator.omega_cmd, -0.72, 1.0e-9);
+    for (int i = 0; i < kExplicitLinearDelaySteps; ++i) {
+        EXPECT_NEAR(
+            prediction.actuator.linear_delay_queue[static_cast<size_t>(i)],
+            0.01 * (31 + i),
+            1.0e-9);
+    }
+    for (int i = 0; i < kExplicitAngularDelaySteps; ++i) {
+        EXPECT_NEAR(
+            prediction.actuator.angular_delay_queue[static_cast<size_t>(i)],
+            -0.02 * (26 + i),
+            1.0e-9);
+    }
+}
+
+TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesKnownPrefixWithFopdt) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.0, 0.20, 0.30));
+    history.push(sample(10.0, 0.20, 0.30));
+
+    RobotState robot;
+    SloshState slosh;
+    const auto p = actuatorParams();
+    const auto prediction = makePredictor().predictExplicitActuator(
+        robot, slosh, history, stamp(9.9), stamp(10.0), p);
+
+    ASSERT_TRUE(prediction.valid) << prediction.status;
+    const double expected_v =
+        p.linear_gain * 0.20 * (1.0 - std::exp(-0.10 / p.linear_tau_sec));
+    const double expected_omega =
+        p.angular_gain * 0.30 *
+        (1.0 - std::exp(-0.10 / p.angular_tau_sec));
+    EXPECT_NEAR(prediction.predicted_robot.v, expected_v, 1.0e-9);
+    EXPECT_NEAR(prediction.predicted_robot.omega, expected_omega, 1.0e-9);
+    EXPECT_NEAR(
+        prediction.actuator.a_actual,
+        (p.linear_gain * 0.20 - expected_v) / p.linear_tau_sec,
+        1.0e-9);
+    EXPECT_NEAR(
+        prediction.actuator.alpha_actual,
+        (p.angular_gain * 0.30 - expected_omega) / p.angular_tau_sec,
+        1.0e-9);
+}
+
+TEST(ExecutionStatePredictor, ExplicitActuatorFailsClosedOnIncompleteFifo) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.8, 0.20, 0.30));
+
+    RobotState robot;
+    SloshState slosh;
+    const auto prediction = makePredictor().predictExplicitActuator(
+        robot, slosh, history, stamp(10.0), stamp(10.0), actuatorParams());
+
+    EXPECT_FALSE(prediction.valid);
+    EXPECT_FALSE(prediction.actuator.valid);
+    EXPECT_EQ(prediction.status, "INCOMPLETE_ANGULAR_DELAY_QUEUE");
 }
 
 }  // namespace spmpc_local_planner

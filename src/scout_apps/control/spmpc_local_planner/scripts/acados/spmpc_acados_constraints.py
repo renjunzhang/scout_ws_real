@@ -30,7 +30,7 @@ def set_constraints_direct_omega_legacy(ocp, cfg):
 
 
 
-def set_constraints(ocp, cfg):
+def set_constraints(ocp, cfg, explicit_actuator=False):
     a_max = cfg["a_max"]
     omega_max = cfg["omega_max"]
     vs_max = cfg["vs_max"]
@@ -42,10 +42,15 @@ def set_constraints(ocp, cfg):
     ocp.constraints.lbu = np.array([-a_max, -alpha_max, 0.0])
     ocp.constraints.ubu = np.array([a_max, alpha_max, vs_max])
 
-    # 状态 bound: v 是 x[3] ∈ [0, v_max]；omega 是 x[5] ∈ [-omega_max, omega_max]。
-    ocp.constraints.idxbx = np.array([3, 5])
-    ocp.constraints.lbx = np.array([0.0, -omega_max])
-    ocp.constraints.ubx = np.array([v_max, omega_max])
+    if explicit_actuator:
+        # actual 与 command 分别受限；command bounds directly protect /cmd_vel.
+        ocp.constraints.idxbx = np.array([3, 5, 6, 7])
+        ocp.constraints.lbx = np.array([0.0, -omega_max, 0.0, -omega_max])
+        ocp.constraints.ubx = np.array([v_max, omega_max, v_max, omega_max])
+    else:
+        ocp.constraints.idxbx = np.array([3, 5])
+        ocp.constraints.lbx = np.array([0.0, -omega_max])
+        ocp.constraints.ubx = np.array([v_max, omega_max])
 
     # 初始状态由 wrapper 每周期通过 set("x0", ...) 设定；
     # 这里给出占位 x0，维度需匹配 nx。
@@ -53,19 +58,20 @@ def set_constraints(ocp, cfg):
 
 
 
-def set_constraints_slosh(ocp, cfg, pidx):
+def set_constraints_slosh(ocp, cfg, pidx, eta_base=6,
+                          explicit_actuator=False):
     """Mainline alpha-state slosh: box bounds + predicted slosh-height hard cap.
 
     约束写成 eta_x^2 + eta_y^2 - eta_max_sq <= 0，其中 eta_max_sq 是参数，
     运行时由 C++ 用 slosh_height_max / heightCoeff() 注入；非 hard variant 用大阈值禁用。
     stage 0 使用同一表达式但放宽上界，避免当前实测/估计液面已超阈值时立即不可行。
     """
-    set_constraints(ocp, cfg)
+    set_constraints(ocp, cfg, explicit_actuator=explicit_actuator)
 
     x = ocp.model.x
     p = ocp.model.p
-    eta_x = x[6]
-    eta_y = x[8]
+    eta_x = x[eta_base]
+    eta_y = x[eta_base + 2]
     eta_max_sq = p[pidx["eta_max_sq"]]
     h_slosh = ca.vertcat(eta_x * eta_x + eta_y * eta_y - eta_max_sq)
 

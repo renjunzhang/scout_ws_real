@@ -346,6 +346,55 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("control_frequency", control_frequency_, control_frequency_);
     pnh_.param("dt", dt_, dt_);
     pnh_.param("horizon_steps", horizon_steps_, horizon_steps_);
+    std::string execution_model_mode =
+        executionModelModeName(actuator_model_params_.mode);
+    pnh_.param("execution_model/mode", execution_model_mode,
+               execution_model_mode);
+    if (!parseExecutionModelMode(
+            execution_model_mode, actuator_model_params_.mode)) {
+        ROS_FATAL("[spmpc_local_planner] unknown execution_model/mode='%s'; "
+                  "valid values: explicit_actuator, legacy_instantaneous",
+                  execution_model_mode.c_str());
+        return false;
+    }
+    actuator_model_params_.dt = dt_;
+    pnh_.param("execution_model/linear_delay_sec",
+               actuator_model_params_.linear_delay_sec,
+               actuator_model_params_.linear_delay_sec);
+    pnh_.param("execution_model/angular_delay_sec",
+               actuator_model_params_.angular_delay_sec,
+               actuator_model_params_.angular_delay_sec);
+    pnh_.param("execution_model/linear_tau_sec",
+               actuator_model_params_.linear_tau_sec,
+               actuator_model_params_.linear_tau_sec);
+    pnh_.param("execution_model/angular_tau_sec",
+               actuator_model_params_.angular_tau_sec,
+               actuator_model_params_.angular_tau_sec);
+    pnh_.param("execution_model/linear_gain",
+               actuator_model_params_.linear_gain,
+               actuator_model_params_.linear_gain);
+    pnh_.param("execution_model/angular_gain",
+               actuator_model_params_.angular_gain,
+               actuator_model_params_.angular_gain);
+    pnh_.param("execution_model/cmd_timeout_sec",
+               actuator_model_params_.cmd_timeout_sec,
+               actuator_model_params_.cmd_timeout_sec);
+    pnh_.param("execution_model/max_prefix_prediction_sec",
+               actuator_model_params_.max_prefix_prediction_sec,
+               actuator_model_params_.max_prefix_prediction_sec);
+    pnh_.param("execution_model/max_integration_step_sec",
+               actuator_model_params_.max_integration_step_sec,
+               actuator_model_params_.max_integration_step_sec);
+    pnh_.param("execution_model/require_complete_history",
+               actuator_model_params_.require_complete_history,
+               actuator_model_params_.require_complete_history);
+    std::string actuator_params_error;
+    if (!validateActuatorModelParams(
+            actuator_model_params_, &actuator_params_error)) {
+        ROS_FATAL("[spmpc_local_planner] invalid execution_model parameters: %s",
+                  actuator_params_error.c_str());
+        return false;
+    }
     std::string delay_phase_mode = delayPhaseModeName(delay_phase_params_.mode);
     pnh_.param("delay_phase/mode", delay_phase_mode, delay_phase_mode);
     delay_phase_params_.mode = parseDelayPhaseMode(delay_phase_mode);
@@ -580,6 +629,19 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                   kSolverBackendPrimitive);
         return false;
     }
+    solver_params.actuator = actuator_model_params_;
+    if (actuator_model_params_.mode == ExecutionModelMode::ExplicitActuator &&
+        delayPhaseClosedLoopEnabled()) {
+        ROS_FATAL("[spmpc_local_planner] explicit_actuator and legacy "
+                  "fixed_closed_loop/fixed_robot_only cannot be enabled together");
+        return false;
+    }
+    if (solver_params.solver_backend == kSolverBackendContinuousMpccAcados &&
+        actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator) {
+        ROS_FATAL("[spmpc_local_planner] continuous_mpcc_acados was generated "
+                  "for explicit_actuator; legacy_instantaneous is historical-only");
+        return false;
+    }
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
     const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
@@ -780,6 +842,24 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.effective_v_max = speed_safety_contract_.effectiveVMax();
     effective_config_.speed_safety_tolerance =
         speed_safety_contract_.params().tolerance;
+    effective_config_.execution_model_mode_code =
+        static_cast<double>(static_cast<int>(actuator_model_params_.mode));
+    effective_config_.actuator_linear_delay_sec =
+        actuator_model_params_.linear_delay_sec;
+    effective_config_.actuator_angular_delay_sec =
+        actuator_model_params_.angular_delay_sec;
+    effective_config_.actuator_linear_tau_sec =
+        actuator_model_params_.linear_tau_sec;
+    effective_config_.actuator_angular_tau_sec =
+        actuator_model_params_.angular_tau_sec;
+    effective_config_.actuator_linear_gain =
+        actuator_model_params_.linear_gain;
+    effective_config_.actuator_angular_gain =
+        actuator_model_params_.angular_gain;
+    effective_config_.actuator_linear_delay_steps =
+        static_cast<double>(kExplicitLinearDelaySteps);
+    effective_config_.actuator_angular_delay_steps =
+        static_cast<double>(kExplicitAngularDelaySteps);
 
     problem_.configure(solver_params, variant_);
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
@@ -1081,7 +1161,9 @@ void SpmpcLocalPlannerROS::applySloshRiskGovernor(SolverInput& input) {
 }
 
 bool SpmpcLocalPlannerROS::delayPhaseActive() const {
-    return delay_phase_params_.publish_diagnostics && delay_phase_params_.mode != DelayPhaseMode::Off;
+    // "off" disables legacy rollout, not its audit trail.  Publishing the
+    // mode/application flags lets postflight prove that L22 stayed disabled.
+    return delay_phase_params_.publish_diagnostics;
 }
 
 bool SpmpcLocalPlannerROS::delayPhasePredictionEnabled() const {
@@ -1934,7 +2016,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     diagnostics_.publishEffectiveConfig(effective_config_);
 
     const ros::Time delay_phase_now = ros::Time::now();
-    DelayPhaseStatusCode delay_phase_status = DelayPhaseStatusCode::MonitorOk;
+    DelayPhaseStatusCode delay_phase_status =
+        delay_phase_params_.mode == DelayPhaseMode::Off
+            ? DelayPhaseStatusCode::Off
+            : DelayPhaseStatusCode::MonitorOk;
     ExecutionStatePrediction shadow_prediction;
     ExecutionStatePrediction* shadow_prediction_ptr = nullptr;
     if (delayPhasePredictionEnabled()) {
@@ -1949,7 +2034,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         shadow_prediction.predicted_slosh = input.slosh;
         shadow_prediction.status_code = DelayPhaseStatusCode::Off;
     }
-    diagnostics_.publishPredictedState(shadow_prediction, slosh_height_coeff);
+    if (actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator) {
+        diagnostics_.publishPredictedState(shadow_prediction, slosh_height_coeff);
+    }
 
     SolverInput solve_input = input;
     bool robot_delay_compensation_applied = false;
@@ -1991,6 +2078,70 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         if (!odom_fresh) {
             delay_phase_status = DelayPhaseStatusCode::OdomStale;
         }
+    }
+    if (actuator_model_params_.mode == ExecutionModelMode::ExplicitActuator) {
+        const ros::Time state_epoch = rosTimeFromNanoseconds(
+            cycle_audit.timing.solver_input_epoch_ns);
+        const ros::Time actuator_target_epoch = ros::Time::now();
+        const ExplicitActuatorPrediction actuator_prediction =
+            execution_predictor_.predictExplicitActuator(
+                input.robot,
+                input.slosh,
+                command_history_,
+                state_epoch,
+                actuator_target_epoch,
+                actuator_model_params_);
+        if (!actuator_prediction.valid ||
+            !actuator_prediction.actuator.valid) {
+            diagnostics_.publishPredictedState(
+                shadow_prediction, slosh_height_coeff);
+            resetTerminalSpinFailGate();
+            resetTrackingSafetyGate();
+            cycle_audit.status =
+                "EXPLICIT_ACTUATOR_INITIALIZATION_FAILED_" +
+                actuator_prediction.status;
+            cycle_audit.timing.state_alignment_status =
+                actuator_prediction.status;
+            diagnostics_.publishStatus(cycle_audit.status);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_command_contract = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
+        solve_input.robot = actuator_prediction.predicted_robot;
+        solve_input.slosh = actuator_prediction.predicted_slosh;
+        solve_input.actuator = actuator_prediction.actuator;
+        ExecutionStatePrediction actuator_prediction_debug;
+        actuator_prediction_debug.valid = true;
+        actuator_prediction_debug.raw_robot = input.robot;
+        actuator_prediction_debug.raw_slosh = input.slosh;
+        actuator_prediction_debug.predicted_robot =
+            actuator_prediction.predicted_robot;
+        actuator_prediction_debug.predicted_slosh =
+            actuator_prediction.predicted_slosh;
+        actuator_prediction_debug.linear_delay_sec =
+            actuator_model_params_.linear_delay_sec;
+        actuator_prediction_debug.angular_delay_sec =
+            actuator_model_params_.angular_delay_sec;
+        actuator_prediction_debug.integrated_duration_sec =
+            actuator_prediction.prefix_duration_sec;
+        actuator_prediction_debug.covered_history_sec =
+            actuator_prediction.history_span_sec;
+        actuator_prediction_debug.history_complete =
+            actuator_prediction.history_complete;
+        actuator_prediction_debug.status_code = DelayPhaseStatusCode::Off;
+        actuator_prediction_debug.status = actuator_prediction.status;
+        diagnostics_.publishPredictedState(
+            actuator_prediction_debug, slosh_height_coeff);
+        const std::int64_t target_ns = static_cast<std::int64_t>(
+            actuator_target_epoch.toNSec());
+        cycle_audit.timing.robot_state_stamp_ns = target_ns;
+        cycle_audit.timing.liquid_state_stamp_ns = target_ns;
+        cycle_audit.timing.solver_input_epoch_ns = target_ns;
+        cycle_audit.timing.aligned_state_skew_sec = 0.0;
+        cycle_audit.timing.state_time_aligned = true;
+        cycle_audit.timing.state_alignment_status =
+            "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT";
     }
     solve_input.cycle_timing = cycle_audit.timing;
 
@@ -2052,7 +2203,11 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.status = output.status;
     cycle_audit.solver_u0_a = output.first_shot_debug.u0_a;
     cycle_audit.solver_u0_alpha = output.first_shot_debug.u0_alpha;
-    cycle_audit.planned_ax = output.first_shot_debug.u0_a;
+    cycle_audit.planned_ax =
+        output.predicted_horizon.valid &&
+        !output.predicted_horizon.states.empty()
+            ? output.predicted_horizon.states.front().a_actual
+            : solve_input.actuator.a_actual;
     cycle_audit.planned_ay = solve_input.robot.v * solve_input.robot.omega;
     if (cycle_audit.previous_shifted_plan_available) {
         cycle_audit.replanned_minus_shifted_a =

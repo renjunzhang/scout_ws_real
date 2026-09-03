@@ -13,6 +13,10 @@ double modalHeightMm(const SloshState& state, double height_coeff) {
 }
 
 void appendStateRow(const HorizonStateDebug& state, std::vector<double>& flat) {
+    if (!state.model_state.empty()) {
+        flat.insert(flat.end(), state.model_state.begin(), state.model_state.end());
+        return;
+    }
     flat.push_back(state.x);
     flat.push_back(state.y);
     flat.push_back(state.yaw);
@@ -147,10 +151,10 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs,platform_v_max,speed_safety_enable,v_safe_max,effective_v_max,speed_safety_tolerance";
-    msg.layout.dim[0].size = 56;
-    msg.layout.dim[0].stride = 56;
-    msg.data.resize(56, 0.0f);
+        "solver_backend_code,control_frequency,dt,horizon_steps,slosh_enable,slosh_constraint_enable,smooth_priority_enable,primitive_mode_code,v_ref,w_slosh,w_control,w_smooth,w_accel,w_alpha,w_du_a,w_du_vs,v_max,omega_max,a_max,alpha_max,shared_linear_accel_limit_enable,shared_linear_accel_max,shared_linear_accel_max_dt,shared_angular_limit_enable,shared_angular_rate_max,shared_angular_accel_max,shared_angular_accel_max_dt,container_radius,liquid_height,damping_ratio,slosh_height_ref,slosh_height_max,slosh_eta_dot_ratio,use_parabola_term,delay_phase_mode_code,delay_linear_sec,delay_angular_sec,delay_cmd_timeout_sec,delay_odom_timeout_sec,delay_history_window_sec,delay_require_complete_history,slosh_cost_horizon_steps,slosh_cost_horizon_sec,slosh_cost_tail_discount,state_timing_require_common_epoch,state_timing_max_raw_skew_sec,w_contour,w_lag,w_progress,w_v,w_vs,platform_v_max,speed_safety_enable,v_safe_max,effective_v_max,speed_safety_tolerance,execution_model_mode_code,actuator_linear_delay_sec,actuator_angular_delay_sec,actuator_linear_tau_sec,actuator_angular_tau_sec,actuator_linear_gain,actuator_angular_gain,actuator_linear_delay_steps,actuator_angular_delay_steps";
+    msg.layout.dim[0].size = 65;
+    msg.layout.dim[0].stride = 65;
+    msg.data.resize(65, 0.0f);
     msg.data[0] = static_cast<float>(config.solver_backend_code);
     msg.data[1] = static_cast<float>(config.control_frequency);
     msg.data[2] = static_cast<float>(config.dt);
@@ -207,6 +211,15 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[53] = static_cast<float>(config.v_safe_max);
     msg.data[54] = static_cast<float>(config.effective_v_max);
     msg.data[55] = static_cast<float>(config.speed_safety_tolerance);
+    msg.data[56] = static_cast<float>(config.execution_model_mode_code);
+    msg.data[57] = static_cast<float>(config.actuator_linear_delay_sec);
+    msg.data[58] = static_cast<float>(config.actuator_angular_delay_sec);
+    msg.data[59] = static_cast<float>(config.actuator_linear_tau_sec);
+    msg.data[60] = static_cast<float>(config.actuator_angular_tau_sec);
+    msg.data[61] = static_cast<float>(config.actuator_linear_gain);
+    msg.data[62] = static_cast<float>(config.actuator_angular_gain);
+    msg.data[63] = static_cast<float>(config.actuator_linear_delay_steps);
+    msg.data[64] = static_cast<float>(config.actuator_angular_delay_steps);
     effective_config_pub_.publish(msg);
 }
 
@@ -265,10 +278,10 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,robot_delay_compensation_applied,liquid_delay_compensation_applied";
-    msg.layout.dim[0].size = 14;
-    msg.layout.dim[0].stride = 14;
-    msg.data.resize(14, 0.0f);
+        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,robot_delay_compensation_applied,liquid_delay_compensation_applied,actuator_state_valid,v_cmd,omega_cmd,delayed_v_cmd,delayed_omega_cmd,a_actual,alpha_actual";
+    msg.layout.dim[0].size = 21;
+    msg.layout.dim[0].stride = 21;
+    msg.data.resize(21, 0.0f);
     msg.data[0] = static_cast<float>(source_code);
     // Keep the legacy aggregate field and all historical state indices stable.
     msg.data[1] = (robot_delay_compensation_applied || liquid_delay_compensation_applied)
@@ -286,6 +299,13 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     msg.data[11] = static_cast<float>(modalHeightMm(input.slosh, height_coeff));
     msg.data[12] = robot_delay_compensation_applied ? 1.0f : 0.0f;
     msg.data[13] = liquid_delay_compensation_applied ? 1.0f : 0.0f;
+    msg.data[14] = input.actuator.valid ? 1.0f : 0.0f;
+    msg.data[15] = static_cast<float>(input.actuator.v_cmd);
+    msg.data[16] = static_cast<float>(input.actuator.omega_cmd);
+    msg.data[17] = static_cast<float>(input.actuator.delayed_v_cmd);
+    msg.data[18] = static_cast<float>(input.actuator.delayed_omega_cmd);
+    msg.data[19] = static_cast<float>(input.actuator.a_actual);
+    msg.data[20] = static_cast<float>(input.actuator.alpha_actual);
     solver_input_state_pub_.publish(msg);
 }
 
@@ -1086,7 +1106,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 2;
+    msg.schema_version = 3;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
     msg.valid = horizon.valid;
@@ -1116,6 +1136,12 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.eta_y.reserve(state_count);
     msg.eta_y_dot.reserve(state_count);
     msg.h_modal.reserve(state_count);
+    msg.v_cmd.reserve(state_count);
+    msg.omega_cmd.reserve(state_count);
+    msg.delayed_v_cmd.reserve(state_count);
+    msg.delayed_omega_cmd.reserve(state_count);
+    msg.a_actual.reserve(state_count);
+    msg.alpha_actual.reserve(state_count);
     for (size_t k = 0; k < state_count; ++k) {
         const auto& state = horizon.states[k];
         msg.t.push_back(static_cast<double>(k) * horizon.dt);
@@ -1130,6 +1156,12 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
         msg.eta_y.push_back(state.eta_y);
         msg.eta_y_dot.push_back(state.eta_y_dot);
         msg.h_modal.push_back(state.h_modal);
+        msg.v_cmd.push_back(state.v_cmd);
+        msg.omega_cmd.push_back(state.omega_cmd);
+        msg.delayed_v_cmd.push_back(state.delayed_v_cmd);
+        msg.delayed_omega_cmd.push_back(state.delayed_omega_cmd);
+        msg.a_actual.push_back(state.a_actual);
+        msg.alpha_actual.push_back(state.alpha_actual);
     }
     msg.a.reserve(horizon.controls.size());
     msg.alpha_or_omega.reserve(horizon.controls.size());
@@ -1149,7 +1181,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 2;
+    msg.schema_version = 3;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
     msg.valid = snapshot.valid;
@@ -1178,6 +1210,19 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.eta_x_dot = snapshot.slosh.eta_x_dot;
     msg.eta_y = snapshot.slosh.eta_y;
     msg.eta_y_dot = snapshot.slosh.eta_y_dot;
+    msg.actuator_state_valid = snapshot.actuator.valid;
+    msg.actuator_v_cmd = snapshot.actuator.v_cmd;
+    msg.actuator_omega_cmd = snapshot.actuator.omega_cmd;
+    msg.actuator_delayed_v_cmd = snapshot.actuator.delayed_v_cmd;
+    msg.actuator_delayed_omega_cmd = snapshot.actuator.delayed_omega_cmd;
+    msg.actuator_a_actual = snapshot.actuator.a_actual;
+    msg.actuator_alpha_actual = snapshot.actuator.alpha_actual;
+    msg.actuator_linear_delay_queue.assign(
+        snapshot.actuator.linear_delay_queue.begin(),
+        snapshot.actuator.linear_delay_queue.end());
+    msg.actuator_angular_delay_queue.assign(
+        snapshot.actuator.angular_delay_queue.begin(),
+        snapshot.actuator.angular_delay_queue.end());
     msg.min_progress_s = snapshot.min_progress_s;
     msg.reference_length = snapshot.reference_length;
     msg.s0 = snapshot.s0;
@@ -1212,9 +1257,13 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.parameter_names = snapshot.parameter_names;
     msg.stage_parameters = snapshot.stage_parameters;
 
-    msg.initial_guess_states.reserve(snapshot.initial_guess_states.size() * 10);
+    msg.initial_guess_states.reserve(
+        snapshot.initial_guess_states.size() *
+        static_cast<size_t>(std::max(0, snapshot.state_width)));
     msg.initial_guess_controls.reserve(snapshot.initial_guess_controls.size() * 3);
-    msg.previous_solution_states.reserve(snapshot.previous_solution_states.size() * 10);
+    msg.previous_solution_states.reserve(
+        snapshot.previous_solution_states.size() *
+        static_cast<size_t>(std::max(0, snapshot.state_width)));
     msg.previous_solution_controls.reserve(snapshot.previous_solution_controls.size() * 3);
     for (const auto& state : snapshot.initial_guess_states) {
         appendStateRow(state, msg.initial_guess_states);

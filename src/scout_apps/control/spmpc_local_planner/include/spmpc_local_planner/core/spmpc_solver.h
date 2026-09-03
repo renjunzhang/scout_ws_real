@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/core/start_lock_recovery.h"  // SolverParams.start_lock_recovery 需要完整参数
 #include "spmpc_local_planner/core/terminal_controller.h"  // SolverParams.terminal 需要完整 TerminalControllerParams
 #include "spmpc_local_planner/core/variant_config.h"
+#include "spmpc_local_planner/dynamics/actuator_model.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
 #include "spmpc_local_planner/warm_start/warm_start_input.h"
@@ -30,6 +31,7 @@ struct SolverParams {
     StartLockRecoveryParams start_lock_recovery;
     WarmStartConfig warm_start;
     PlatformParams platform;
+    ActuatorModelParams actuator;
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable
     // continuous_mpcc_acados: SPMPC mainline MPCC; direct_omega: RouteB diagnostic; primitive: debug rollout fallback only.
     std::string solver_backend = "continuous_mpcc_acados";

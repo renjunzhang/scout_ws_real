@@ -103,7 +103,7 @@ def _slosh_cost(x, p, pidx_slosh=PIDX_SLOSH, eta_base=6):
     """液体模态代价：η/η̇ 无量纲化（§4.4）。
 
     eta_base 指定 eta 在状态向量里的起始下标：
-      omega-state(10 维) -> 6；direct-omega(9 维) -> 5。
+      explicit-actuator mainline -> sym["eta_base"]；direct-omega(9 维) -> 5。
     """
     eta_x, eta_x_dot = x[eta_base], x[eta_base + 1]
     eta_y, eta_y_dot = x[eta_base + 2], x[eta_base + 3]
@@ -175,7 +175,7 @@ def stage_cost_expr(sym, cfg):
     u = sym["u"]
     p = sym["p"]
     a, alpha, v_s = u[0], u[1], u[2]
-    omega = x[5]   # omega 现在是状态
+    omega = x[5]   # actual omega 状态
 
     a_max = cfg["a_max"]
     omega_max = cfg["omega_max"]
@@ -203,7 +203,8 @@ def stage_cost_expr(sym, cfg):
         + p[PIDX["w_du_vs"]] * du_vs ** 2
     )
 
-    j_slosh = _slosh_cost(x, p) if sym.get("with_slosh") else 0.0
+    j_slosh = _slosh_cost(
+        x, p, PIDX_SLOSH, sym.get("eta_base", 6)) if sym.get("with_slosh") else 0.0
     return (j_track + j_path_speed + j_control + j_smooth + j_slosh) / n_steps
 
 
@@ -215,5 +216,5 @@ def terminal_cost_expr(sym, cfg):
     p = sym["p"]
     j = _tracking_cost(x, p)
     if sym.get("with_slosh"):
-        j = j + _slosh_cost(x, p)
+        j = j + _slosh_cost(x, p, PIDX_SLOSH, sym.get("eta_base", 6))
     return j

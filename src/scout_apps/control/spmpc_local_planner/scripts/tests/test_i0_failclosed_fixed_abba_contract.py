@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Contracts for the shared I0/fail-closed/fixed ABBA engine and profiles."""
+"""Contracts for the shared I0/fail-closed ABBA engine and profiles."""
 
 import py_compile
 import subprocess
@@ -15,6 +15,10 @@ ANALYSIS_DIR = PLANNER_SCRIPTS / "analysis"
 LEGACY_WRAPPER = PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_abba_trial.sh"
 SHORT100_WRAPPER = (
     PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh"
+)
+EXPLICIT_WRAPPER = (
+    PLANNER_SCRIPTS
+    / "run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh"
 )
 ENGINE = (
     PLANNER_SCRIPTS
@@ -37,11 +41,17 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
     def setUpClass(cls):
         cls.legacy_wrapper = LEGACY_WRAPPER.read_text(encoding="utf-8")
         cls.short100_wrapper = SHORT100_WRAPPER.read_text(encoding="utf-8")
+        cls.explicit_wrapper = EXPLICIT_WRAPPER.read_text(encoding="utf-8")
         cls.engine = ENGINE.read_text(encoding="utf-8")
         cls.validator = VALIDATOR.read_text(encoding="utf-8")
 
     def test_shell_and_python_syntax(self):
-        for script in (LEGACY_WRAPPER, SHORT100_WRAPPER, ENGINE):
+        for script in (
+            LEGACY_WRAPPER,
+            SHORT100_WRAPPER,
+            EXPLICIT_WRAPPER,
+            ENGINE,
+        ):
             subprocess.run(["bash", "-n", str(script)], check=True)
         for script in (
             PROFILE_TOOL,
@@ -55,11 +65,39 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
     def test_thin_wrappers_select_frozen_profiles(self):
         self.assertIn("I0FC_ABBA_PROFILE=legacy_v1", self.legacy_wrapper)
         self.assertIn("I0FC_ABBA_PROFILE=short100_v2", self.short100_wrapper)
+        self.assertIn(
+            "I0FC_ABBA_PROFILE=explicit_actuator_v1",
+            self.explicit_wrapper,
+        )
         shared_engine = "lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh"
         self.assertIn(shared_engine, self.legacy_wrapper)
         self.assertIn(shared_engine, self.short100_wrapper)
+        self.assertIn(shared_engine, self.explicit_wrapper)
         self.assertLess(len(self.legacy_wrapper.splitlines()), 20)
         self.assertLess(len(self.short100_wrapper.splitlines()), 20)
+        self.assertLess(len(self.explicit_wrapper.splitlines()), 20)
+
+    def test_explicit_actuator_profile_is_isolated_and_disables_l22(self):
+        profile = profiles.get_profile("explicit_actuator_v1")
+        self.assertEqual(
+            profile.protocol_id,
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1",
+        )
+        self.assertEqual(profile.treatment_variant, "B_slosh")
+        self.assertEqual(profile.execution_model_mode, "explicit_actuator")
+        self.assertEqual(profile.delay_phase_mode, "off")
+        self.assertFalse(profile.require_legacy_delay_application)
+        self.assertEqual(profile.expected_execution_model_code, 1)
+        self.assertEqual(
+            (profile.expected_b0_state_width, profile.expected_slosh_state_width),
+            (23, 27),
+        )
+        rows = list(profiles.iter_rows(profile))
+        self.assertEqual(
+            [row.variant for row in rows],
+            ["B0", "B_slosh", "B_slosh", "B0"],
+        )
+        self.assertEqual(rows[1].observer_applied, "I0")
 
     def test_legacy_profile_is_a_golden_copy_of_v1_identity(self):
         profile = profiles.get_profile("legacy_v1")
@@ -115,9 +153,8 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             'CONFIRM_NEW_SPEED_PROFILE="${CONFIRM_NEW_SPEED_PROFILE:-NO}"',
             "V_REF=0.20",
             "V_SAFE_MAX=0.25",
-            "DELAY_PHASE_MODE=fixed_closed_loop",
-            "DELAY_PHASE_LINEAR_DELAY_SEC=0.15",
-            "DELAY_PHASE_ANGULAR_DELAY_SEC=0.22",
+            'DELAY_PHASE_MODE="${I0FC_DELAY_PHASE_MODE}"',
+            'EXECUTION_MODEL_MODE="${I0FC_EXECUTION_MODEL_MODE}"',
             "CURRENT_OBSERVER_SOURCE=processed_imu",
             "OBSERVER_FALLBACK_POLICY=fail_closed",
             "STATE_TIMING_REQUIRE_COMMON_EPOCH=true",
@@ -158,10 +195,11 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
         ):
             self.assertIn(token, self.engine)
 
-    def test_i0_to_l22_semantics_and_postflight_chain_are_preserved(self):
+    def test_i0_l22_and_explicit_semantics_have_postflight_contracts(self):
         for token in (
             'observer_applied="none"',
-            'observer_applied="L22"',
+            'final_liquid_method="L22"',
+            'final_liquid_method="I0"',
         ):
             self.assertIn(token, PROFILE_TOOL.read_text(encoding="utf-8"))
         for token in (
@@ -178,10 +216,12 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "analyze_i0_failclosed_fixed_abba_rgb.py",
             "validate_mocap_execution_chain_bag.py",
             "summarize_spmpc_real_trial.py",
-            "--require-robot-delay-compensation-applied true",
-            "--require-liquid-delay-compensation-applied true",
+            '--require-robot-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}"',
+            '--require-liquid-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}"',
             "--require-state-diagnostics",
             "--minimum-application-fraction 1.0",
+            '--expected-execution-model-code "${EXPECTED_EXECUTION_MODEL_CODE}"',
+            '--expected-state-width "${EXPECTED_STATE_WIDTH}"',
         ):
             self.assertIn(token, self.engine)
 

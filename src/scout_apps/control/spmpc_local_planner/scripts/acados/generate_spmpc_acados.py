@@ -110,6 +110,11 @@ def load_config():
         "w_du_vs": float(b0.get("w_du_vs", b0["w_smooth"])),
         # slosh codegen 默认值（运行时由 C++ 包装层从同一套 slosh_dynamics 覆盖，§4.3）。
         "w_slosh": float(b_slosh.get("w_slosh", 5.0)),
+        "actuator_dt": dt,
+        "actuator_tau_v": float(common["execution_model"]["linear_tau_sec"]),
+        "actuator_tau_omega": float(common["execution_model"]["angular_tau_sec"]),
+        "actuator_gain_v": float(common["execution_model"]["linear_gain"]),
+        "actuator_gain_omega": float(common["execution_model"]["angular_gain"]),
     }
     return cfg
 
@@ -137,6 +142,12 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
     else:
         p[idx["w_alpha"]] = cfg["w_alpha"]   # 转向角加速度权重(抗 chatter，所有 stage 生效)
     p[idx["v_ref"]] = cfg["v_ref"]
+    if "actuator_dt" in idx:
+        p[idx["actuator_dt"]] = cfg["actuator_dt"]
+        p[idx["actuator_tau_v"]] = cfg["actuator_tau_v"]
+        p[idx["actuator_tau_omega"]] = cfg["actuator_tau_omega"]
+        p[idx["actuator_gain_v"]] = cfg["actuator_gain_v"]
+        p[idx["actuator_gain_omega"]] = cfg["actuator_gain_omega"]
     p[idx["w_du_a"]] = cfg["w_du_a"]
     p[idx["w_du_vs"]] = cfg["w_du_vs"]
     p[idx["e_c_ref"]] = cfg["e_c_ref"]
@@ -172,7 +183,8 @@ def build_check(cfg, model_key):
 
     print(f"[check] 模型 '{model_key}' ({sym['name']}) 装配成功")
     print(f"  nx={sym['nx']} nu={sym['nu']} np={sym['np']} (= len(param_default)={len(p_default)})")
-    print(f"  f_expl shape = {sym['f_expl'].shape}")
+    dynamics = sym["disc_dyn"] if sym.get("discrete") else sym["f_expl"]
+    print(f"  {'disc_dyn' if sym.get('discrete') else 'f_expl'} shape = {dynamics.shape}")
     print(f"  stage_cost   shape = {ca.SX(stage).shape}")
     print(f"  terminal_cost shape = {ca.SX(terminal).shape}")
     print(f"  N={cfg['N']} dt={cfg['dt']} Tf={cfg['Tf']}")
@@ -201,9 +213,12 @@ def generate(cfg, output_root, model_key):
     model.x = sym["x"]
     model.u = sym["u"]
     model.p = sym["p"]
-    model.xdot = sym["xdot"]
-    model.f_expl_expr = sym["f_expl"]
-    model.f_impl_expr = sym["f_impl"]
+    if sym.get("discrete"):
+        model.disc_dyn_expr = sym["disc_dyn"]
+    else:
+        model.xdot = sym["xdot"]
+        model.f_expl_expr = sym["f_expl"]
+        model.f_impl_expr = sym["f_impl"]
 
     ocp = AcadosOcp()
     ocp.model = model
@@ -219,13 +234,19 @@ def generate(cfg, output_root, model_key):
     if direct_omega_legacy:
         set_constraints_direct_omega_legacy(ocp, cfg)
     elif with_slosh:
-        set_constraints_slosh(ocp, cfg, PIDX_SLOSH)
+        set_constraints_slosh(
+            ocp, cfg, PIDX_SLOSH,
+            eta_base=sym.get("eta_base", 6),
+            explicit_actuator=sym.get("discrete", False))
     else:
-        set_constraints(ocp, cfg)
+        set_constraints(ocp, cfg, explicit_actuator=sym.get("discrete", False))
 
-    ocp.solver_options.integrator_type = "ERK"
-    ocp.solver_options.sim_method_num_stages = 4
-    ocp.solver_options.sim_method_num_steps = 1
+    if sym.get("discrete"):
+        ocp.solver_options.integrator_type = "DISCRETE"
+    else:
+        ocp.solver_options.integrator_type = "ERK"
+        ocp.solver_options.sim_method_num_stages = 4
+        ocp.solver_options.sim_method_num_steps = 1
     ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
     ocp.solver_options.hessian_approx = "EXACT"
     ocp.solver_options.regularize_method = "PROJECT"
@@ -245,7 +266,7 @@ def generate(cfg, output_root, model_key):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=list(MODELS.keys()), default="b0",
-                        help="生成哪个模型：b0（6维alpha-state）| slosh（10维alpha-state）| "
+                        help="生成哪个模型：b0（23维explicit-actuator）| slosh（27维explicit-actuator）| "
                              "b0_direct_omega_legacy（5维诊断）| slosh_direct_omega（9维诊断）")
     parser.add_argument("--check", action="store_true",
                         help="不依赖 acados，仅校验 CasADi 模型/代价装配")

@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
-"""Fail-closed postflight for one literal B0/B_slosh I0+L22 ABBA unit.
+"""Fail-closed postflight for one I0 B0/Bslosh ABBA unit.
 
 This validator deliberately separates two facts which are easy to conflate:
 
 * the selected/raw liquid observer is processed-IMU (I0), with fail-closed
   policy and no fallback; and
-* ``fixed_closed_loop`` replaces the final solver input with the legacy L22
-  command-history rollout.
+* the configured execution model and legacy delay phase match the registered
+  profile; and
+* command/actual diagnostics are complete for explicit-actuator profiles.
 
-For B0 the selected liquid state is diagnostic only.  The delay composer still
-sets its liquid-application flag, but the six-state B0 solver does not consume
-that field.  B_slosh must consume liquid and must satisfy the common-epoch
-contract on every active solve.
+For B0 the selected liquid state is diagnostic only.  B_slosh must consume
+liquid and satisfy the common-epoch contract on every active solve.
 """
 
 import argparse
@@ -102,6 +101,15 @@ def parse_args():
     parser.add_argument("--expected-v-safe-max", type=float, default=0.25)
     parser.add_argument("--expected-linear-delay-sec", type=float, default=0.15)
     parser.add_argument("--expected-angular-delay-sec", type=float, default=0.22)
+    parser.add_argument("--expected-delay-mode-code", type=float, default=3.0)
+    parser.add_argument(
+        "--require-legacy-delay-application",
+        choices=("true", "false"),
+        default="true",
+    )
+    parser.add_argument("--expected-execution-model-code", type=float)
+    parser.add_argument("--expected-state-width", type=int)
+    parser.add_argument("--minimum-solver-schema-version", type=int, default=2)
     parser.add_argument("--minimum-application-fraction", type=float, default=1.0)
     parser.add_argument("--minimum-samples", type=int, default=10)
     parser.add_argument("--linear-motion-threshold", type=float, default=0.03)
@@ -173,6 +181,8 @@ def validate(args):
     )
     expected_slosh = args.condition == "Bslosh"
     expected_weight = 5.0 if expected_slosh else 0.0
+    legacy_delay_expected = args.require_legacy_delay_application == "true"
+    explicit_actuator_expected = args.expected_execution_model_code == 1.0
     failures = []
 
     extra_expected_config, expected_config_parse_failures = (
@@ -297,9 +307,7 @@ def validate(args):
     config = motion_configs[-1][1] if motion_configs else {}
     expected_config = {
         "solver_backend_code": 1.0,
-        "delay_phase_mode_code": 3.0,
-        "delay_linear_sec": args.expected_linear_delay_sec,
-        "delay_angular_sec": args.expected_angular_delay_sec,
+        "delay_phase_mode_code": args.expected_delay_mode_code,
         "slosh_enable": 1.0 if expected_slosh else 0.0,
         "slosh_constraint_enable": 0.0,
         "smooth_priority_enable": 0.0,
@@ -311,6 +319,17 @@ def validate(args):
         "speed_safety_enable": 1.0,
         "v_safe_max": args.expected_v_safe_max,
     }
+    if legacy_delay_expected:
+        expected_config.update(
+            {
+                "delay_linear_sec": args.expected_linear_delay_sec,
+                "delay_angular_sec": args.expected_angular_delay_sec,
+            }
+        )
+    if args.expected_execution_model_code is not None:
+        expected_config["execution_model_mode_code"] = (
+            args.expected_execution_model_code
+        )
     config_field_failures = []
     if deep_cost_contract:
         for field, expected in extra_expected_config.items():
@@ -444,8 +463,6 @@ def validate(args):
         )
 
     application_series = {
-        "history_complete": (motion_alignments, "history_complete"),
-        "shadow_valid": (motion_alignments, "shadow_valid"),
         "fixed_closed_loop_configured": (
             motion_alignments,
             "fixed_closed_loop_configured",
@@ -475,8 +492,41 @@ def validate(args):
             failures.append(
                 "{} has unreadable motion samples count={}".format(label, unreadable)
             )
+        if legacy_delay_expected:
+            require_fraction(
+                failures, label, observed, args.minimum_application_fraction
+            )
+        elif observed is None:
+            failures.append("{} has no readable samples".format(label))
+        elif observed > 1.0 - args.minimum_application_fraction + 1.0e-12:
+            failures.append(
+                "{} true fraction {:.6f} exceeds {:.6f}".format(
+                    label,
+                    observed,
+                    1.0 - args.minimum_application_fraction,
+                )
+            )
+
+    if legacy_delay_expected:
+        for label, field in (
+            ("history_complete", "history_complete"),
+            ("shadow_valid", "shadow_valid"),
+        ):
+            observed = true_fraction(motion_alignments, field)
+            application_fractions[label] = observed
+            require_fraction(
+                failures, label, observed, args.minimum_application_fraction
+            )
+
+    actuator_valid_fraction = true_fraction(
+        motion_solver_inputs, "actuator_state_valid"
+    )
+    if explicit_actuator_expected:
         require_fraction(
-            failures, label, observed, args.minimum_application_fraction
+            failures,
+            "actuator_state_valid",
+            actuator_valid_fraction,
+            args.minimum_application_fraction,
         )
 
     warm_start_unreadable_count = sum(
@@ -499,18 +549,26 @@ def validate(args):
             )
         )
     alignment_mode_bad = sum(
-        not close(row.get("mode_code"), 3.0) for _, row in motion_alignments
+        not close(row.get("mode_code"), args.expected_delay_mode_code)
+        for _, row in motion_alignments
     )
     solver_source_bad = sum(
         not close(row.get("source_code"), 2.0) for _, row in motion_solver_inputs
     )
     if alignment_mode_bad:
-        failures.append("delay alignment mode is not fixed_closed_loop count={}".format(alignment_mode_bad))
+        failures.append(
+            "delay alignment mode mismatch count={}".format(alignment_mode_bad)
+        )
     if solver_source_bad:
         failures.append("solver-input source is not processed_imu count={}".format(solver_source_bad))
 
     audit_failures = collections.Counter()
     common_epoch_bad = 0
+    expected_alignment_status = (
+        "DELAY_PREDICTED_COMMON_EPOCH"
+        if legacy_delay_expected
+        else "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
+    )
     for _, message in motion_audits:
         if str(message.variant) != expected_variant:
             audit_failures["wrong_variant"] += 1
@@ -537,7 +595,7 @@ def validate(args):
         liquid_stamp = stamp_sec(message.liquid_state_stamp)
         solver_epoch = stamp_sec(message.solver_input_epoch)
         if (
-            str(message.state_alignment_status) != "DELAY_PREDICTED_COMMON_EPOCH"
+            str(message.state_alignment_status) != expected_alignment_status
             or robot_stamp <= 0.0
             or max(abs(robot_stamp - liquid_stamp), abs(robot_stamp - solver_epoch)) > 1.0e-6
         ):
@@ -545,7 +603,7 @@ def validate(args):
     if audit_failures:
         failures.append("control-audit failures: {}".format(dict(audit_failures)))
     if common_epoch_bad:
-        failures.append("fixed common-epoch mismatch count={}".format(common_epoch_bad))
+        failures.append("common-epoch mismatch count={}".format(common_epoch_bad))
 
     liquid_artifact_failures = (
         snapshot_coverage_failures + horizon_coverage_failures
@@ -574,13 +632,91 @@ def validate(args):
                         args.expected_slosh_eta_dot_ratio,
                         args.expected_slosh_cost_horizon_steps,
                         args.expected_slosh_cost_tail_discount,
+                )
+            )
+            if int(message.schema_version) < args.minimum_solver_schema_version:
+                liquid_artifact_failures.append(
+                    "{}: schema_version={} < {}".format(
+                        label,
+                        message.schema_version,
+                        args.minimum_solver_schema_version,
                     )
                 )
+            if args.expected_state_width is not None:
+                state_width = int(message.state_width)
+                if state_width != args.expected_state_width:
+                    liquid_artifact_failures.append(
+                        "{}: state_width={} expected {}".format(
+                            label, state_width, args.expected_state_width
+                        )
+                    )
+                expected_rows = int(message.horizon_steps) + 1
+                if len(message.initial_guess_states) != expected_rows * state_width:
+                    liquid_artifact_failures.append(
+                        "{}: initial_guess_states length={} expected {}".format(
+                            label,
+                            len(message.initial_guess_states),
+                            expected_rows * state_width,
+                        )
+                    )
+                previous_len = len(message.previous_solution_states)
+                if previous_len not in (0, expected_rows * state_width):
+                    liquid_artifact_failures.append(
+                        "{}: previous_solution_states length={} is not 0 or {}".format(
+                            label, previous_len, expected_rows * state_width
+                        )
+                    )
+            if explicit_actuator_expected:
+                if str(message.backend) != "continuous_mpcc_acados_explicit_actuator":
+                    liquid_artifact_failures.append(
+                        "{}: wrong explicit-actuator backend {!r}".format(
+                            label, message.backend
+                        )
+                    )
+                if str(message.control_semantics) != "a_cmd_alpha_cmd":
+                    liquid_artifact_failures.append(
+                        "{}: wrong control semantics {!r}".format(
+                            label, message.control_semantics
+                        )
+                    )
+                if not bool(message.actuator_state_valid):
+                    liquid_artifact_failures.append(
+                        "{}: actuator state is invalid".format(label)
+                    )
+                if len(message.actuator_linear_delay_queue) != 5:
+                    liquid_artifact_failures.append(
+                        "{}: linear FIFO width={} expected 5".format(
+                            label, len(message.actuator_linear_delay_queue)
+                        )
+                    )
+                if len(message.actuator_angular_delay_queue) != 10:
+                    liquid_artifact_failures.append(
+                        "{}: angular FIFO width={} expected 10".format(
+                            label, len(message.actuator_angular_delay_queue)
+                        )
+                    )
+                required_parameters = {
+                    "actuator_dt",
+                    "actuator_tau_v",
+                    "actuator_tau_omega",
+                    "actuator_gain_v",
+                    "actuator_gain_omega",
+                }
+                missing_parameters = required_parameters.difference(
+                    str(name) for name in message.parameter_names
+                )
+                if missing_parameters:
+                    liquid_artifact_failures.append(
+                        "{}: missing actuator parameters {}".format(
+                            label, sorted(missing_parameters)
+                        )
+                    )
         for message in valid_horizons:
+            label = "horizon cycle {}".format(message.cycle_id)
             liquid_artifact_failures.extend(
                 validate_liquid_metadata(
                     message,
-                    "horizon cycle {}".format(message.cycle_id),
+                    label,
                     expected_variant,
                     expected_slosh,
                     args.expected_slosh_cost_horizon_steps,
@@ -589,6 +725,79 @@ def validate(args):
                     args.expected_dt_sec,
                 )
             )
+            if int(message.schema_version) < args.minimum_solver_schema_version:
+                liquid_artifact_failures.append(
+                    "{}: schema_version={} < {}".format(
+                        label,
+                        message.schema_version,
+                        args.minimum_solver_schema_version,
+                    )
+                )
+            if explicit_actuator_expected:
+                expected_rows = int(message.horizon_steps) + 1
+                for field in (
+                    "v_cmd",
+                    "omega_cmd",
+                    "delayed_v_cmd",
+                    "delayed_omega_cmd",
+                    "a_actual",
+                    "alpha_actual",
+                ):
+                    values = list(getattr(message, field, []))
+                    if len(values) != expected_rows:
+                        liquid_artifact_failures.append(
+                            "{}: {} length={} expected {}".format(
+                                label, field, len(values), expected_rows
+                            )
+                        )
+                    elif not all(finite(value) for value in values):
+                        liquid_artifact_failures.append(
+                            "{}: {} contains non-finite values".format(
+                                label, field
+                            )
+                        )
+                if str(message.backend) != "continuous_mpcc_acados_explicit_actuator":
+                    liquid_artifact_failures.append(
+                        "{}: wrong explicit-actuator backend {!r}".format(
+                            label, message.backend
+                        )
+                    )
+                if str(message.control_semantics) != "a_cmd_alpha_cmd":
+                    liquid_artifact_failures.append(
+                        "{}: wrong control semantics {!r}".format(
+                            label, message.control_semantics
+                        )
+                    )
+
+        if explicit_actuator_expected:
+            audits_by_cycle = {
+                int(message.cycle_id): message
+                for _, message in motion_audits
+                if bool(message.solve_attempted) and bool(message.solve_success)
+            }
+            for message in valid_horizons:
+                cycle_id = int(message.cycle_id)
+                audit = audits_by_cycle.get(cycle_id)
+                if audit is None:
+                    continue
+                if len(message.v_cmd) < 2 or len(message.omega_cmd) < 2:
+                    continue
+                if not close(audit.solver_cmd_v, message.v_cmd[1], 2.0e-5):
+                    liquid_artifact_failures.append(
+                        "cycle {}: solver_cmd_v={} != horizon x1.v_cmd={}".format(
+                            cycle_id, audit.solver_cmd_v, message.v_cmd[1]
+                        )
+                    )
+                if not close(
+                    audit.solver_cmd_omega, message.omega_cmd[1], 2.0e-5
+                ):
+                    liquid_artifact_failures.append(
+                        "cycle {}: solver_cmd_omega={} != horizon x1.omega_cmd={}".format(
+                            cycle_id,
+                            audit.solver_cmd_omega,
+                            message.omega_cmd[1],
+                        )
+                    )
         failures.extend(liquid_artifact_failures)
 
     zero_counts = {
@@ -638,9 +847,20 @@ def validate(args):
             "selected_observer": "processed_imu_I0",
             "fallback_policy": "fail_closed",
             "solver_consumes_liquid": expected_slosh,
-            "final_liquid_input_when_consumed": "L22_command_history_rollout" if expected_slosh else "not_consumed",
-            "delay_mode": "fixed_closed_loop",
+            "final_liquid_input_when_consumed": (
+                "L22_command_history_rollout"
+                if expected_slosh and legacy_delay_expected
+                else "I0_explicit_actuator_epoch"
+                if expected_slosh
+                else "not_consumed"
+            ),
+            "delay_mode_code": args.expected_delay_mode_code,
             "delay_sec": [args.expected_linear_delay_sec, args.expected_angular_delay_sec],
+            "legacy_delay_application_required": legacy_delay_expected,
+            "execution_model_code": args.expected_execution_model_code,
+            "actuator_valid_fraction": actuator_valid_fraction,
+            "expected_state_width": args.expected_state_width,
+            "minimum_solver_schema_version": args.minimum_solver_schema_version,
             "selection_bad_count": selection_bad,
             "selection_consumption_bad_count": consumption_bad,
             "selection_cycle_failure_count": len(deep_selection_failures),

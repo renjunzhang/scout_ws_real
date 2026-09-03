@@ -157,6 +157,7 @@ private:
     SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
     ExecutionStatePredictor execution_predictor_;
+    ActuatorModelParams actuator_model_params_;
     DelayPhaseParams delay_phase_params_;
     StateTimingParams state_timing_params_;
     CommandExecutionContractParams command_contract_params_;

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Summarize the literal B0/B_slosh I0+fixed development ABBA.
+"""Summarize an I0/fail-closed B0/Bslosh development ABBA.
 
 The input files are the image-free RGB postflights produced by
 ``validate_g3_online_rgb_trial.py``.  That validator defines the outcome as a
@@ -31,7 +31,6 @@ REPORT_SUFFIX = "_i0_fixed_rgb_postflight.json"
 UNIT_PASS_SUFFIX = "_unit_pass.env"
 DEFAULT_REPORT_NAME = "I0_FAILCLOSED_FIXED_ABBA_RGB_ANALYSIS.json"
 DEFAULT_REPORT_TYPE = "I0_FAILCLOSED_FIXED_ABBA_RGB_ANALYSIS"
-SHORT100_PROFILE_ID = "short100_v2"
 EXPECTED_ROWS = {
     "01": {"row": "01", "block": "01", "position": "01", "condition": "B0"},
     "02": {"row": "02", "block": "01", "position": "02", "condition": "Bslosh"},
@@ -99,8 +98,8 @@ def sha256_file(path):
 def load_evidence_contract(args):
     """Bind CLI identity to one frozen profile and enable its evidence gate.
 
-    Both profiles are resolved here so a v2 protocol cannot be analyzed while
-    claiming the legacy profile.  Legacy-v1 still returns no deep contract,
+    Profiles are resolved here so one protocol cannot be analyzed while
+    claiming another profile. Legacy-v1 still returns no deep contract,
     preserving its established marker semantics.
     """
     analysis_dir = Path(__file__).resolve().parent
@@ -131,7 +130,7 @@ def load_evidence_contract(args):
                 )
             )
 
-    if profile.profile_id != SHORT100_PROFILE_ID:
+    if profile.strict_runtime_contract is None:
         return None, failures
 
     artifact_suffixes = (
@@ -690,7 +689,13 @@ def build_output(args, root, paths, evaluation):
         "postflight_glob": "*{}".format(args.postflight_suffix),
         "unit_pass_suffix": args.unit_pass_suffix,
     }
-    if args.profile_id == SHORT100_PROFILE_ID:
+    try:
+        from i0_failclosed_fixed_abba_profile import get_profile
+
+        deep_evidence = get_profile(args.profile_id).strict_runtime_contract is not None
+    except (ImportError, OSError, ValueError):
+        deep_evidence = False
+    if deep_evidence:
         input_contract.update(
             {
                 "deep_evidence_gate": True,

@@ -31,7 +31,9 @@ enum Param {
     A_PREV, VS_PREV,
     E_C_REF, E_L_REF,
     V_REF,
-    // 以下仅 slosh 模型（接在 B0 的 23 个之后）
+    ACTUATOR_DT, ACTUATOR_TAU_V, ACTUATOR_TAU_OMEGA,
+    ACTUATOR_GAIN_V, ACTUATOR_GAIN_OMEGA,
+    // 以下仅 slosh 模型（接在 explicit-actuator B0 参数之后）
     TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
     ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
     ETA_MAX_SQ,
@@ -39,7 +41,8 @@ enum Param {
 };
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
-static_assert(V_REF + 1 == SPMPC_B0_NP, "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+static_assert(ACTUATOR_GAIN_OMEGA + 1 == SPMPC_B0_NP,
+              "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
 static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
@@ -47,7 +50,7 @@ static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constr
 
 constexpr double kDisabledEtaMaxSq = 1e12;
 
-// 统一封装两个生成求解器（b0 6维 / slosh 10维），把前缀相关调用收敛到一处。
+// 统一封装两个生成求解器（B0 23 维 / slosh 27 维），把前缀相关调用收敛到一处。
 struct GenSolver {
     enum Kind { B0, SLOSH } kind = B0;
     void* capsule = nullptr;
@@ -204,8 +207,12 @@ void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds, double
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubu", ubu);
     }
 
-    double lbx[2] = {bounds.v_min, bounds.omega_min};
-    double ubx[2] = {bounds.v_max, bounds.omega_max};
+    // Generated explicit-actuator models constrain actual v/omega and command
+    // v/omega independently.  The latter are the values published to /cmd_vel.
+    double lbx[4] = {bounds.v_min, bounds.omega_min,
+                     bounds.v_min, bounds.omega_min};
+    double ubx[4] = {bounds.v_max, bounds.omega_max,
+                     bounds.v_max, bounds.omega_max};
     for (int stage = 1; stage <= gen.n_horizon; ++stage) {
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbx", lbx);
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubx", ubx);
@@ -239,8 +246,20 @@ WarmStartState makeWarmStartState(const double* x, bool slosh) {
     WarmStartState state;
     state.px = x[0]; state.py = x[1]; state.theta = x[2]; state.v = x[3]; state.s = x[4];
     state.omega = x[5];
+    state.v_cmd = x[6];
+    state.omega_cmd = x[7];
+    for (int i = 0; i < kExplicitLinearDelaySteps; ++i) {
+        state.linear_delay_queue[static_cast<size_t>(i)] = x[8 + i];
+    }
+    for (int i = 0; i < kExplicitAngularDelaySteps; ++i) {
+        state.angular_delay_queue[static_cast<size_t>(i)] =
+            x[8 + kExplicitLinearDelaySteps + i];
+    }
     if (slosh) {
-        state.eta_x = x[6]; state.eta_x_dot = x[7]; state.eta_y = x[8]; state.eta_y_dot = x[9];
+        state.eta_x = x[kExplicitActuatorSloshStateOffset];
+        state.eta_x_dot = x[kExplicitActuatorSloshStateOffset + 1];
+        state.eta_y = x[kExplicitActuatorSloshStateOffset + 2];
+        state.eta_y_dot = x[kExplicitActuatorSloshStateOffset + 3];
     }
     return state;
 }
@@ -251,7 +270,10 @@ WarmStartControl makeWarmStartControl(const double* u) {
     return control;
 }
 
-HorizonStateDebug makeHorizonState(const WarmStartState& state, double h_modal = 0.0) {
+HorizonStateDebug makeHorizonState(const WarmStartState& state,
+                                   const ActuatorModelParams& actuator,
+                                   bool slosh,
+                                   double h_modal = 0.0) {
     HorizonStateDebug out;
     out.x = state.px;
     out.y = state.py;
@@ -264,6 +286,34 @@ HorizonStateDebug makeHorizonState(const WarmStartState& state, double h_modal =
     out.eta_y = state.eta_y;
     out.eta_y_dot = state.eta_y_dot;
     out.h_modal = h_modal;
+    out.v_cmd = state.v_cmd;
+    out.omega_cmd = state.omega_cmd;
+    out.delayed_v_cmd = state.linear_delay_queue.front();
+    out.delayed_omega_cmd = state.angular_delay_queue.front();
+    out.a_actual =
+        (actuator.linear_gain * out.delayed_v_cmd - state.v) /
+        actuator.linear_tau_sec;
+    out.alpha_actual =
+        (actuator.angular_gain * out.delayed_omega_cmd - state.omega) /
+        actuator.angular_tau_sec;
+    out.model_state.reserve(static_cast<size_t>(
+        slosh ? kExplicitActuatorSloshStateSize
+              : kExplicitActuatorB0StateSize));
+    out.model_state = {
+        state.px, state.py, state.theta, state.v, state.s, state.omega,
+        state.v_cmd, state.omega_cmd};
+    out.model_state.insert(out.model_state.end(),
+                           state.linear_delay_queue.begin(),
+                           state.linear_delay_queue.end());
+    out.model_state.insert(out.model_state.end(),
+                           state.angular_delay_queue.begin(),
+                           state.angular_delay_queue.end());
+    if (slosh) {
+        out.model_state.push_back(state.eta_x);
+        out.model_state.push_back(state.eta_x_dot);
+        out.model_state.push_back(state.eta_y);
+        out.model_state.push_back(state.eta_y_dot);
+    }
     return out;
 }
 
@@ -276,6 +326,8 @@ HorizonControlDebug makeHorizonControl(const WarmStartControl& control) {
 }
 
 void copyWarmStartForSnapshot(const WarmStartOutput& warm_start,
+                              const ActuatorModelParams& actuator,
+                              bool slosh,
                               double height_coeff,
                               std::vector<HorizonStateDebug>& states,
                               std::vector<HorizonControlDebug>& controls) {
@@ -285,7 +337,7 @@ void copyWarmStartForSnapshot(const WarmStartOutput& warm_start,
     controls.reserve(warm_start.controls.size());
     for (const auto& state : warm_start.states) {
         const double h_modal = height_coeff * std::hypot(state.eta_x, state.eta_y);
-        states.push_back(makeHorizonState(state, h_modal));
+        states.push_back(makeHorizonState(state, actuator, slosh, h_modal));
     }
     for (const auto& control : warm_start.controls) {
         controls.push_back(makeHorizonControl(control));
@@ -294,6 +346,7 @@ void copyWarmStartForSnapshot(const WarmStartOutput& warm_start,
 
 void capturePrimalGuess(GenSolver& gen,
                         bool slosh,
+                        const ActuatorModelParams& actuator,
                         double height_coeff,
                         std::vector<HorizonStateDebug>& states,
                         std::vector<HorizonControlDebug>& controls) {
@@ -304,14 +357,14 @@ void capturePrimalGuess(GenSolver& gen,
     ocp_nlp_config* cfg = gen.config();
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_out* nlp_out = gen.out();
-    double x[10] = {0.0};
+    double x[kExplicitActuatorSloshStateSize] = {0.0};
     double u[3] = {0.0};
     for (int k = 0; k <= gen.n_horizon; ++k) {
-        std::fill(x, x + 10, 0.0);
+        std::fill(x, x + kExplicitActuatorSloshStateSize, 0.0);
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", x);
         const WarmStartState state = makeWarmStartState(x, slosh);
         const double h_modal = height_coeff * std::hypot(state.eta_x, state.eta_y);
-        states.push_back(makeHorizonState(state, h_modal));
+        states.push_back(makeHorizonState(state, actuator, slosh, h_modal));
         if (k < gen.n_horizon) {
             ocp_nlp_out_get(cfg, dims, nlp_out, k, "u", u);
             controls.push_back(makeHorizonControl(makeWarmStartControl(u)));
@@ -327,6 +380,8 @@ std::vector<std::string> parameterNames(int width) {
         "w_a", "w_omega", "w_v", "w_vs", "w_alpha",
         "w_du_a", "w_du_vs", "a_prev", "vs_prev",
         "e_c_ref", "e_l_ref", "v_ref",
+        "actuator_dt", "actuator_tau_v", "actuator_tau_omega",
+        "actuator_gain_v", "actuator_gain_omega",
         "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
         "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
         "eta_max_sq",
@@ -344,10 +399,21 @@ std::vector<std::string> parameterNames(int width) {
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
     x[0] = state.px; x[1] = state.py; x[2] = state.theta; x[3] = state.v; x[4] = state.s;
     x[5] = state.omega;
-    x[6] = slosh ? state.eta_x : 0.0;
-    x[7] = slosh ? state.eta_x_dot : 0.0;
-    x[8] = slosh ? state.eta_y : 0.0;
-    x[9] = slosh ? state.eta_y_dot : 0.0;
+    x[6] = state.v_cmd;
+    x[7] = state.omega_cmd;
+    for (int i = 0; i < kExplicitLinearDelaySteps; ++i) {
+        x[8 + i] = state.linear_delay_queue[static_cast<size_t>(i)];
+    }
+    for (int i = 0; i < kExplicitAngularDelaySteps; ++i) {
+        x[8 + kExplicitLinearDelaySteps + i] =
+            state.angular_delay_queue[static_cast<size_t>(i)];
+    }
+    if (slosh) {
+        x[kExplicitActuatorSloshStateOffset] = state.eta_x;
+        x[kExplicitActuatorSloshStateOffset + 1] = state.eta_x_dot;
+        x[kExplicitActuatorSloshStateOffset + 2] = state.eta_y;
+        x[kExplicitActuatorSloshStateOffset + 3] = state.eta_y_dot;
+    }
 }
 
 void fillAcadosControl(const WarmStartControl& control, double* u) {
@@ -365,7 +431,7 @@ void setAcadosWarmStart(GenSolver& gen, const WarmStartOutput& warm_start, bool 
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_in* nlp_in = gen.in();
     ocp_nlp_out* nlp_out = gen.out();
-    double x_guess[10];
+    double x_guess[kExplicitActuatorSloshStateSize] = {0.0};
     double u_guess[3];
     for (int k = 0; k <= gen.n_horizon; ++k) {
         fillAcadosState(warm_start.states[k], slosh, x_guess);
@@ -419,9 +485,16 @@ bool isWarmStartFinite(const WarmStartOutput& warm_start) {
     for (const auto& state : warm_start.states) {
         if (!std::isfinite(state.px) || !std::isfinite(state.py) || !std::isfinite(state.theta) ||
             !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.omega) ||
+            !std::isfinite(state.v_cmd) || !std::isfinite(state.omega_cmd) ||
             !std::isfinite(state.eta_x) || !std::isfinite(state.eta_x_dot) ||
             !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
             return false;
+        }
+        for (double value : state.linear_delay_queue) {
+            if (!std::isfinite(value)) return false;
+        }
+        for (double value : state.angular_delay_queue) {
+            if (!std::isfinite(value)) return false;
         }
     }
     for (const auto& control : warm_start.controls) {
@@ -430,6 +503,106 @@ bool isWarmStartFinite(const WarmStartOutput& warm_start) {
         }
     }
     return true;
+}
+
+void copyActuatorState(const ActuatorState& actuator, WarmStartState& state) {
+    state.v_cmd = actuator.v_cmd;
+    state.omega_cmd = actuator.omega_cmd;
+    state.linear_delay_queue = actuator.linear_delay_queue;
+    state.angular_delay_queue = actuator.angular_delay_queue;
+}
+
+void rolloutExplicitActuatorWarmStart(WarmStartOutput& warm_start,
+                                      const SolverInput& input,
+                                      const SolverParams& params,
+                                      const SloshDynamics& slosh_dyn,
+                                      bool slosh) {
+    if (!warm_start.valid || warm_start.states.empty() ||
+        warm_start.controls.size() + 1 != warm_start.states.size() ||
+        !input.actuator.valid) {
+        warm_start.valid = false;
+        warm_start.fallback_reason = "EXPLICIT_ACTUATOR_WARM_START_INVALID_INPUT";
+        warm_start.diagnostics.failure_reason = warm_start.fallback_reason;
+        warm_start.diagnostics.warm_start_valid = false;
+        return;
+    }
+
+    WarmStartState state;
+    state.px = input.robot.x;
+    state.py = input.robot.y;
+    state.theta = input.robot.yaw;
+    state.v = clampValue(input.robot.v, 0.0, params.v_max);
+    state.s = warm_start.states.front().s;
+    state.omega = clampValue(
+        input.robot.omega, -params.omega_max, params.omega_max);
+    state.eta_x = input.slosh.eta_x;
+    state.eta_x_dot = input.slosh.eta_x_dot;
+    state.eta_y = input.slosh.eta_y;
+    state.eta_y_dot = input.slosh.eta_y_dot;
+    copyActuatorState(input.actuator, state);
+    warm_start.states.front() = state;
+
+    const double dt = std::max(1e-6, input.dt);
+    for (size_t k = 0; k < warm_start.controls.size(); ++k) {
+        const WarmStartControl& control = warm_start.controls[k];
+        WarmStartState next = state;
+        const double v_target = params.actuator.linear_gain *
+            state.linear_delay_queue.front();
+        const double omega_target = params.actuator.angular_gain *
+            state.angular_delay_queue.front();
+        const double v_decay = std::exp(-dt / params.actuator.linear_tau_sec);
+        const double omega_decay = std::exp(-dt / params.actuator.angular_tau_sec);
+        next.v = v_target + (state.v - v_target) * v_decay;
+        next.omega = omega_target + (state.omega - omega_target) * omega_decay;
+        const double v_mid = 0.5 * (state.v + next.v);
+        const double omega_mid = 0.5 * (state.omega + next.omega);
+        const double yaw_mid = state.theta + 0.5 * omega_mid * dt;
+        next.px = state.px + v_mid * std::cos(yaw_mid) * dt;
+        next.py = state.py + v_mid * std::sin(yaw_mid) * dt;
+        next.theta = wrapAngle(state.theta + omega_mid * dt);
+        next.s = state.s +
+            clampValue(control.v_s, 0.0, params.v_max) * dt;
+
+        next.v_cmd = clampValue(
+            state.v_cmd + control.a * dt, 0.0, params.v_max);
+        next.omega_cmd = clampValue(
+            state.omega_cmd + control.alpha * dt,
+            -params.omega_max, params.omega_max);
+        for (int i = 0; i + 1 < kExplicitLinearDelaySteps; ++i) {
+            next.linear_delay_queue[static_cast<size_t>(i)] =
+                state.linear_delay_queue[static_cast<size_t>(i + 1)];
+        }
+        next.linear_delay_queue.back() = next.v_cmd;
+        for (int i = 0; i + 1 < kExplicitAngularDelaySteps; ++i) {
+            next.angular_delay_queue[static_cast<size_t>(i)] =
+                state.angular_delay_queue[static_cast<size_t>(i + 1)];
+        }
+        next.angular_delay_queue.back() = next.omega_cmd;
+
+        if (slosh && slosh_dyn.configured()) {
+            SloshState liquid;
+            liquid.eta_x = state.eta_x;
+            liquid.eta_x_dot = state.eta_x_dot;
+            liquid.eta_y = state.eta_y;
+            liquid.eta_y_dot = state.eta_y_dot;
+            const double a_actual = (next.v - state.v) / dt;
+            liquid = slosh_dyn.step(
+                liquid, a_actual, v_mid * omega_mid, omega_mid);
+            next.eta_x = liquid.eta_x;
+            next.eta_x_dot = liquid.eta_x_dot;
+            next.eta_y = liquid.eta_y;
+            next.eta_y_dot = liquid.eta_y_dot;
+        }
+        warm_start.states[k + 1] = next;
+        state = next;
+    }
+
+    warm_start.valid = isWarmStartFinite(warm_start);
+    warm_start.diagnostics.warm_start_valid = warm_start.valid;
+    if (!warm_start.valid) {
+        warm_start.fallback_reason = "EXPLICIT_ACTUATOR_WARM_START_NONFINITE";
+        warm_start.diagnostics.failure_reason = warm_start.fallback_reason;
+    }
 }
 
 void stampWarmStartMetrics(WarmStartOutput& warm_start,
@@ -503,6 +676,7 @@ WarmStartOutput makeShiftedPreviousWarmStart(const WarmStartOutput& previous,
     out.states[0].v = clampValue(input.robot.v, 0.0, params.v_max);
     out.states[0].s = s0;
     out.states[0].omega = input.robot.omega;
+    copyActuatorState(input.actuator, out.states[0]);
     if (slosh) {
         out.states[0].eta_x = input.slosh.eta_x;
         out.states[0].eta_x_dot = input.slosh.eta_x_dot;
@@ -609,6 +783,11 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         delete old;
         capsule_ = nullptr;
     }
+    std::string actuator_error;
+    if (params_.actuator.mode != ExecutionModelMode::ExplicitActuator ||
+        !validateActuatorModelParams(params_.actuator, &actuator_error)) {
+        return;
+    }
     auto* gen = new GenSolver();
     if (!gen->create(use_slosh_model_ ? GenSolver::SLOSH : GenSolver::B0)) {
         delete gen;
@@ -630,6 +809,11 @@ bool ContinuousMpccSolverAcados::solve(
     }
     if (reference.empty()) {
         output.status = "NO_REFERENCE_PATH";
+        return false;
+    }
+    if (params_.actuator.mode != ExecutionModelMode::ExplicitActuator ||
+        !input.actuator.valid) {
+        output.status = "EXPLICIT_ACTUATOR_STATE_INVALID";
         return false;
     }
 
@@ -709,20 +893,21 @@ bool ContinuousMpccSolverAcados::solve(
 
     auto& snapshot = output.pre_solve_snapshot;
     snapshot.valid = true;
-    snapshot.backend = "continuous_mpcc_acados";
+    snapshot.backend = "continuous_mpcc_acados_explicit_actuator";
     snapshot.variant = variant_.name;
     snapshot.slosh_enabled = slosh;
     snapshot.primal_guess_only = true;
-    snapshot.control_semantics = "alpha";
+    snapshot.control_semantics = "a_cmd_alpha_cmd";
     snapshot.dt = input.dt;
     snapshot.horizon_steps = n;
-    snapshot.state_width = 10;
+    snapshot.state_width = gen->nx;
     snapshot.control_width = 3;
     snapshot.parameter_width = gen->np;
     snapshot.slosh_cost_horizon_steps = variant_.slosh_cost_horizon_steps;
     snapshot.slosh_cost_tail_discount = variant_.slosh_cost_tail_discount;
     snapshot.robot = input.robot;
     snapshot.slosh = input.slosh;
+    snapshot.actuator = input.actuator;
     snapshot.min_progress_s = input.min_progress_s;
     snapshot.reference_length = len;
     snapshot.s0 = s0;
@@ -805,6 +990,11 @@ bool ContinuousMpccSolverAcados::solve(
     p[E_C_REF] = e_c_ref;
     p[E_L_REF] = e_l_ref;
     p[V_REF] = v_ref;
+    p[ACTUATOR_DT] = input.dt;
+    p[ACTUATOR_TAU_V] = params_.actuator.linear_tau_sec;
+    p[ACTUATOR_TAU_OMEGA] = params_.actuator.angular_tau_sec;
+    p[ACTUATOR_GAIN_V] = params_.actuator.linear_gain;
+    p[ACTUATOR_GAIN_OMEGA] = params_.actuator.angular_gain;
     if (slosh) {
         p[TWO_ZETA_OMEGA_N] = two_zeta_omega_n;
         p[OMEGA_N_SQ] = omega_n_sq;
@@ -837,14 +1027,20 @@ bool ContinuousMpccSolverAcados::solve(
         gen->update_params(stage, p);
     }
 
-    double x0[10] = {input.robot.x, input.robot.y, input.robot.yaw, input.robot.v, s0,
-                     input.robot.omega, 0, 0, 0, 0};
-    if (slosh) {
-        x0[6] = input.slosh.eta_x;
-        x0[7] = input.slosh.eta_x_dot;
-        x0[8] = input.slosh.eta_y;
-        x0[9] = input.slosh.eta_y_dot;
-    }
+    WarmStartState initial_state;
+    initial_state.px = input.robot.x;
+    initial_state.py = input.robot.y;
+    initial_state.theta = input.robot.yaw;
+    initial_state.v = input.robot.v;
+    initial_state.s = s0;
+    initial_state.omega = input.robot.omega;
+    initial_state.eta_x = input.slosh.eta_x;
+    initial_state.eta_x_dot = input.slosh.eta_x_dot;
+    initial_state.eta_y = input.slosh.eta_y;
+    initial_state.eta_y_dot = input.slosh.eta_y_dot;
+    copyActuatorState(input.actuator, initial_state);
+    double x0[kExplicitActuatorSloshStateSize] = {0.0};
+    fillAcadosState(initial_state, slosh, x0);
     output.runtime_bounds = makeRuntimeBounds(params_);
     snapshot.runtime_bounds = output.runtime_bounds;
     output.generated_bounds = makeGeneratedBounds();
@@ -867,7 +1063,7 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.warm_start_source = "CAPSULE_REUSE";
     if (have_previous_solution_) {
         copyWarmStartForSnapshot(
-            previous_warm_start_solution_, c_h,
+            previous_warm_start_solution_, params_.actuator, slosh, c_h,
             snapshot.previous_solution_states,
             snapshot.previous_solution_controls);
     }
@@ -877,6 +1073,10 @@ bool ContinuousMpccSolverAcados::solve(
         WarmStartDiagnostics diagnostics;
         warm_start_generator_->generate(warm_input, warm_start, diagnostics);
         warm_start.diagnostics = diagnostics;
+        if (warm_start.valid) {
+            rolloutExplicitActuatorWarmStart(
+                warm_start, input, params_, slosh_dyn_, slosh);
+        }
         if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
@@ -888,6 +1088,10 @@ bool ContinuousMpccSolverAcados::solve(
         warm_start = makeShiftedPreviousWarmStart(
             previous_warm_start_solution_, input, s0, n, slosh, params_, slosh_dyn_);
         if (warm_start.valid) {
+            rolloutExplicitActuatorWarmStart(
+                warm_start, input, params_, slosh_dyn_, slosh);
+        }
+        if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
             snapshot.warm_start_source = "SHIFTED_PREVIOUS_SOLUTION";
@@ -895,6 +1099,10 @@ bool ContinuousMpccSolverAcados::solve(
     }
     if (warm_start_requested && !warm_start_applied && params_.warm_start.fallback_to_primitive) {
         warm_start = makeConservativeWarmStart(warm_input, params_, slosh_dyn_, slosh);
+        if (warm_start.valid) {
+            rolloutExplicitActuatorWarmStart(
+                warm_start, input, params_, slosh_dyn_, slosh);
+        }
         if (warm_start.valid) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
@@ -919,7 +1127,7 @@ bool ContinuousMpccSolverAcados::solve(
     // Dual variables and internal SQP memory are intentionally not claimed by schema v1;
     // actual replay must still pass the frozen numerical reproduction gate.
     capturePrimalGuess(
-        *gen, slosh, c_h,
+        *gen, slosh, params_.actuator, c_h,
         snapshot.initial_guess_states,
         snapshot.initial_guess_controls);
 
@@ -941,10 +1149,10 @@ bool ContinuousMpccSolverAcados::solve(
     // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
     const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
     output.trajectory.reserve(n + 1);
-    output.predicted_horizon.backend = "continuous_mpcc_acados";
+    output.predicted_horizon.backend = "continuous_mpcc_acados_explicit_actuator";
     output.predicted_horizon.variant = variant_.name;
     output.predicted_horizon.slosh_enabled = slosh;
-    output.predicted_horizon.control_semantics = "alpha";
+    output.predicted_horizon.control_semantics = "a_cmd_alpha_cmd";
     output.predicted_horizon.dt = input.dt;
     output.predicted_horizon.slosh_cost_horizon_steps =
         variant_.slosh_cost_horizon_steps;
@@ -956,7 +1164,7 @@ bool ContinuousMpccSolverAcados::solve(
     solved_states.reserve(n + 1);
     std::vector<double> heights;
     heights.reserve(n + 1);
-    double xk[10];
+    double xk[kExplicitActuatorSloshStateSize] = {0.0};
     for (int k = 0; k <= n; ++k) {
         ocp_nlp_out_get(cfg, dims, nlp_out, k, "x", xk);
         TrajectoryPoint pt;
@@ -965,7 +1173,9 @@ bool ContinuousMpccSolverAcados::solve(
         const WarmStartState solved_state = makeWarmStartState(xk, slosh);
         solved_states.push_back(solved_state);
         const double solved_h_modal = slosh ? c_h * std::hypot(solved_state.eta_x, solved_state.eta_y) : 0.0;
-        output.predicted_horizon.states.push_back(makeHorizonState(solved_state, solved_h_modal));
+        output.predicted_horizon.states.push_back(
+            makeHorizonState(solved_state, params_.actuator, slosh,
+                             solved_h_modal));
 
         const double xref = polyEval(cx, pt.s);
         const double yref = polyEval(cy, pt.s);
@@ -976,7 +1186,10 @@ bool ContinuousMpccSolverAcados::solve(
         output.cost.J_lag += variant_.w_lag * (e_l / e_l_ref) * (e_l / e_l_ref) * inv_n;
 
         if (slosh) {
-            const double ex = xk[6], exd = xk[7], ey = xk[8], eyd = xk[9];
+            const double ex = xk[kExplicitActuatorSloshStateOffset];
+            const double exd = xk[kExplicitActuatorSloshStateOffset + 1];
+            const double ey = xk[kExplicitActuatorSloshStateOffset + 2];
+            const double eyd = xk[kExplicitActuatorSloshStateOffset + 3];
             const double eta_norm = std::hypot(ex, ey);
             const double eta_dot_norm = std::hypot(exd, eyd);
             // Solver 预测高度保持 modal-only: h_modal = c_h·||eta||。
@@ -1087,10 +1300,14 @@ bool ContinuousMpccSolverAcados::solve(
     output.slosh_cost_monitor.pct_eta_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta) / slosh_abs : 0.0;
     output.slosh_cost_monitor.pct_eta_dot_in_slosh = slosh_abs > 1e-9 ? 100.0 * std::abs(output.cost.J_slosh_eta_dot) / slosh_abs : 0.0;
 
-    // u = [a, alpha, v_s]; v_s 是虚拟路径进度速度，不直接作为 /cmd_vel.linear.x。
-    // omega 是状态：下发角速度 = 实测 omega + alpha_0*dt（与 cmd_v 同口径单步积分）。
-    const double cmd_v_pre = input.robot.v + u0[0] * input.dt;
-    const double cmd_omega_pre = input.robot.omega + u0[1] * input.dt;
+    // Publish the next command state.  Never rebuild a command from measured
+    // actual velocity: actual and command are deliberately separate states.
+    const double cmd_v_pre = solved_states.size() > 1
+        ? solved_states[1].v_cmd
+        : input.actuator.v_cmd + u0[0] * input.dt;
+    const double cmd_omega_pre = solved_states.size() > 1
+        ? solved_states[1].omega_cmd
+        : input.actuator.omega_cmd + u0[1] * input.dt;
     output.cmd_v = clampValue(cmd_v_pre, 0.0, params_.v_max);
     output.cmd_omega = clampValue(cmd_omega_pre, -params_.omega_max, params_.omega_max);
 
