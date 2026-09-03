@@ -9,7 +9,7 @@ offsets come exclusively from :mod:`solver_parameter_layout`.
 from __future__ import annotations
 
 import math
-from dataclasses import InitVar, dataclass, fields, is_dataclass
+from dataclasses import InitVar, dataclass
 from typing import Any
 
 from .cost_schedule import (
@@ -20,7 +20,7 @@ from .cost_schedule import (
 )
 from .development_capacity import DevelopmentCapacityContract
 from .development_layout import DevelopmentLayout
-from .identity import IdentityError, sha256_json
+from .identity import IdentityError, sha256_json, strict_json_equal
 from .parameter_values import (
     CommonStageParameterValues,
     ParameterValueError,
@@ -59,31 +59,6 @@ _PAIR_TOKEN = object()
 
 class RuntimeParameterAssemblyError(ValueError):
     """Raised when a typed input or complete parameter snapshot is invalid."""
-
-
-def _strict_equal(left: Any, right: Any) -> bool:
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) in (list, tuple):
-        return len(left) == len(right) and all(
-            _strict_equal(left_item, right_item)
-            for left_item, right_item in zip(left, right)
-        )
-    if is_dataclass(left):
-        return all(
-            _strict_equal(
-                getattr(left, field.name),
-                getattr(right, field.name),
-            )
-            for field in fields(left)
-        )
-    if type(left) is float and left == 0.0 and right == 0.0:
-        return math.copysign(1.0, left) == math.copysign(1.0, right)
-    return bool(left == right)
 
 
 def _semantic_sha256(value: Any, label: str) -> str:
@@ -450,7 +425,7 @@ def runtime_parameter_snapshot_from_dict(
         parameter_values,
         liquid_schedule,
     )
-    if not _strict_equal(value, rebuilt.to_dict()):
+    if not strict_json_equal(value, rebuilt.to_dict()):
         raise RuntimeParameterAssemblyError(
             "runtime parameter snapshot does not match its typed sources"
         )
@@ -478,7 +453,7 @@ def require_runtime_parameter_snapshot(
         parameter_values,
         liquid_schedule,
     )
-    if not _strict_equal(value, rebuilt):
+    if not strict_json_equal(value, rebuilt):
         raise RuntimeParameterAssemblyError(
             "typed runtime parameter snapshot is not canonical"
         )
@@ -546,7 +521,7 @@ def build_matched_runtime_parameter_pair(
         zip(b0.stage_parameters, bslosh.stage_parameters)
     ):
         for offset, (b0_value, bslosh_value) in enumerate(zip(b0_row, bslosh_row)):
-            if not _strict_equal(b0_value, bslosh_value):
+            if not strict_json_equal(b0_value, bslosh_value):
                 if offset not in allowed_offsets:
                     raise RuntimeParameterAssemblyError(
                         "matched pair differs outside the liquid coefficient whitelist"
@@ -585,7 +560,7 @@ def require_matched_runtime_parameter_pair(
         b0_liquid_schedule,
         bslosh_liquid_schedule,
     )
-    if not _strict_equal(value, rebuilt):
+    if not strict_json_equal(value, rebuilt):
         raise RuntimeParameterAssemblyError(
             "typed matched runtime parameter pair is not canonical"
         )

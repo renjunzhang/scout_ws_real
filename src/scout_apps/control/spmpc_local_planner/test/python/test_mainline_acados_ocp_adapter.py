@@ -471,10 +471,14 @@ class MainlineAcadosOcpBackendTest(unittest.TestCase):
         self.assertIs(validate_acados_ocp_document(document), document)
         mutations = (
             ("dimensions", "N", 61),
+            ("dimensions", "N", True),
             ("model_mapping", "continuous_dynamics", "ERK_ALLOWED"),
             ("assembly_boundary", "unlisted_solver_options", "IGNORED"),
+            ("assembly_boundary", "make_consistent", 1),
             ("runtime_parameters", "initialization", "PARTIAL_ROWS_ALLOWED"),
+            ("runtime_parameters", "required_stage_range_inclusive", [False, 60]),
             ("comparison_identity", "same_ocp", False),
+            ("comparison_identity", "same_ocp", 1),
             (
                 "constraints",
                 "initial_and_path_nonlinear_h",

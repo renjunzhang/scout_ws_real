@@ -12,7 +12,7 @@ from fractions import Fraction
 from typing import Any
 
 from .development_layout import DevelopmentLayout
-from .identity import IdentityError, require_sha256, sha256_json
+from .identity import IdentityError, require_sha256, sha256_json, strict_json_equal
 
 SOLVER_OPTIONS_SCHEMA = "spmpc_mainline_solver_options_v1"
 SOLVER_OPTIONS_STATUS = "DEV_UNVALIDATED"
@@ -131,22 +131,6 @@ def _validate_solver_options_structure(snapshot: SolverOptionsSnapshot) -> None:
         )
 
 
-def _strict_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool/int equality aliasing."""
-
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(item, other) for item, other in zip(left, right)
-        )
-    return bool(left == right)
-
-
 def _canonical_solver_options_payload() -> dict[str, Any]:
     """Return the complete, serialized D4 solver-options policy.
 
@@ -237,7 +221,7 @@ def _validate_solver_options_payload(payload: Any) -> dict[str, Any]:
     if type(payload) is not dict:
         raise SolverOptionsError("solver-option payload must be a JSON object")
     expected = _canonical_solver_options_payload()
-    if not _strict_equal(payload, expected):
+    if not strict_json_equal(payload, expected):
         raise SolverOptionsError("solver-option payload is not the canonical D4 policy")
     return payload
 

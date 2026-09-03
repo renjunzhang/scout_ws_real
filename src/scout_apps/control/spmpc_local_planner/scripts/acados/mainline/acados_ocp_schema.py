@@ -15,7 +15,7 @@ from .casadi_graph_contract import (
     TERMINAL_REFERENCE_DOMAIN_ORDER,
 )
 from .constraints_oracle import CONTROL_BOX_ORDER, STAGE_NONLINEAR_H_ORDER
-from .identity import IdentityError, require_sha256, sha256_json
+from .identity import IdentityError, require_sha256, sha256_json, strict_json_equal
 from .model_contract import MODEL_ID
 
 ACADOS_OCP_SCHEMA = "spmpc_mainline_acados_ocp_v1"
@@ -180,17 +180,20 @@ def validate_acados_ocp_document(
         },
         "Acados OCP document",
     )
-    if document["schema_version"] != ACADOS_OCP_SCHEMA:
+    if not strict_json_equal(document["schema_version"], ACADOS_OCP_SCHEMA):
         raise ValueError("Acados OCP document schema drifted")
-    if document["model_id"] != MODEL_ID:
+    if not strict_json_equal(document["model_id"], MODEL_ID):
         raise ValueError("Acados OCP document model identity drifted")
-    if document["status"] != {
-        "ocp": OCP_STATUS,
-        "artifact": OCP_ARTIFACT_STATUS,
-        "promotion": OCP_PROMOTION_STATUS,
-    }:
+    if not strict_json_equal(
+        document["status"],
+        {
+            "ocp": OCP_STATUS,
+            "artifact": OCP_ARTIFACT_STATUS,
+            "promotion": OCP_PROMOTION_STATUS,
+        },
+    ):
         raise ValueError("Acados OCP document status drifted")
-    if document["identity_scope"] != OCP_IDENTITY_SCOPE:
+    if not strict_json_equal(document["identity_scope"], OCP_IDENTITY_SCOPE):
         raise ValueError("Acados OCP document identity scope drifted")
 
     backend = _document_object(
@@ -204,7 +207,7 @@ def validate_acados_ocp_document(
         },
         "Acados OCP backend",
     )
-    if backend["interface_contract"] != ACADOS_INTERFACE_CONTRACT:
+    if not strict_json_equal(backend["interface_contract"], ACADOS_INTERFACE_CONTRACT):
         raise ValueError("Acados interface contract drifted")
     commit = _document_text(backend["acados_git_commit"], "Acados Git marker")
     if (
@@ -218,7 +221,9 @@ def validate_acados_ocp_document(
         {"schema", "sha256"},
         "Acados interface source identity",
     )
-    if interface_source["schema"] != ACADOS_INTERFACE_SOURCE_SCHEMA:
+    if not strict_json_equal(
+        interface_source["schema"], ACADOS_INTERFACE_SOURCE_SCHEMA
+    ):
         raise ValueError("Acados interface source schema drifted")
     _document_digest(interface_source["sha256"], "Acados interface source identity")
     binding = backend["python_interface_and_library_binding"]
@@ -256,9 +261,15 @@ def validate_acados_ocp_document(
         "Acados backend solver-options baseline",
     )
     if (
-        baseline["schema_version"] != ACADOS_SOLVER_OPTIONS_BASELINE_SCHEMA
-        or baseline["scope"] != ACADOS_SOLVER_OPTIONS_BASELINE_SCOPE
-        or baseline["excluded_d4_fields"] != list(ACADOS_D4_SOLVER_OPTION_FIELDS)
+        not strict_json_equal(
+            baseline["schema_version"], ACADOS_SOLVER_OPTIONS_BASELINE_SCHEMA
+        )
+        or not strict_json_equal(
+            baseline["scope"], ACADOS_SOLVER_OPTIONS_BASELINE_SCOPE
+        )
+        or not strict_json_equal(
+            baseline["excluded_d4_fields"], list(ACADOS_D4_SOLVER_OPTION_FIELDS)
+        )
     ):
         raise ValueError("Acados backend solver-options baseline policy drifted")
     _document_digest(baseline["sha256"], "Acados backend solver-options baseline")
@@ -268,32 +279,38 @@ def validate_acados_ocp_document(
         {"N", "NX", "NU", "NP", "parameter_vector_count"},
         "Acados OCP dimensions",
     )
-    if dimensions != {
-        "N": 60,
-        "NX": 48,
-        "NU": 3,
-        "NP": 162,
-        "parameter_vector_count": 61,
-    }:
+    if not strict_json_equal(
+        dimensions,
+        {
+            "N": 60,
+            "NX": 48,
+            "NU": 3,
+            "NP": 162,
+            "parameter_vector_count": 61,
+        },
+    ):
         raise ValueError("Acados OCP dimensions drifted from the D4 model")
 
-    if document["model_mapping"] != {
-        "dynamics": "model.disc_dyn_expr",
-        "continuous_dynamics": CONTINUOUS_DYNAMICS_POLICY,
-        "cost": {
-            "initial": "model.cost_expr_ext_cost_0",
-            "path": "model.cost_expr_ext_cost",
-            "terminal": "model.cost_expr_ext_cost_e",
-            "type": "EXTERNAL",
+    if not strict_json_equal(
+        document["model_mapping"],
+        {
+            "dynamics": "model.disc_dyn_expr",
+            "continuous_dynamics": CONTINUOUS_DYNAMICS_POLICY,
+            "cost": {
+                "initial": "model.cost_expr_ext_cost_0",
+                "path": "model.cost_expr_ext_cost",
+                "terminal": "model.cost_expr_ext_cost_e",
+                "type": "EXTERNAL",
+            },
+            "constraints": {
+                "initial": "model.con_h_expr_0",
+                "path": "model.con_h_expr",
+                "terminal": "model.con_h_expr_e",
+                "type": "BGH",
+            },
+            "node_coverage": NODE_COVERAGE_POLICY,
         },
-        "constraints": {
-            "initial": "model.con_h_expr_0",
-            "path": "model.con_h_expr",
-            "terminal": "model.con_h_expr_e",
-            "type": "BGH",
-        },
-        "node_coverage": NODE_COVERAGE_POLICY,
-    }:
+    ):
         raise ValueError("Acados OCP model mapping drifted")
 
     expressions = _document_object(
@@ -308,7 +325,9 @@ def validate_acados_ocp_document(
         },
         "Acados symbolic expression identity",
     )
-    if expressions["serialization"] != SYMBOLIC_EXPRESSION_IDENTITY_SCHEMA:
+    if not strict_json_equal(
+        expressions["serialization"], SYMBOLIC_EXPRESSION_IDENTITY_SCHEMA
+    ):
         raise ValueError("Acados expression serialization policy drifted")
     for key, function_name in (
         ("dynamics", DYNAMICS_IDENTITY_FUNCTION),
@@ -322,16 +341,19 @@ def validate_acados_ocp_document(
             {"function_name", "sha256"},
             f"Acados {key} expression identity",
         )
-        if identity["function_name"] != function_name:
+        if not strict_json_equal(identity["function_name"], function_name):
             raise ValueError(f"Acados {key} identity function drifted")
         _document_digest(identity["sha256"], f"Acados {key} expression identity")
 
-    if document["assembly_boundary"] != {
-        "make_consistent": True,
-        "side_effects": ASSEMBLY_SIDE_EFFECT_POLICY,
-        "unlisted_solver_options": UNLISTED_SOLVER_OPTIONS_POLICY,
-        "codegen_options": CODEGEN_OPTIONS_POLICY,
-    }:
+    if not strict_json_equal(
+        document["assembly_boundary"],
+        {
+            "make_consistent": True,
+            "side_effects": ASSEMBLY_SIDE_EFFECT_POLICY,
+            "unlisted_solver_options": UNLISTED_SOLVER_OPTIONS_POLICY,
+            "codegen_options": CODEGEN_OPTIONS_POLICY,
+        },
+    ):
         raise ValueError("Acados OCP assembly boundary drifted")
 
     constraints = _document_object(
@@ -362,50 +384,62 @@ def validate_acados_ocp_document(
         with_indices=True,
     )
     if (
-        stage_order
-        != list(STAGE_NONLINEAR_H_ORDER) + list(STAGE_REFERENCE_DOMAIN_ORDER)
+        not strict_json_equal(
+            stage_order,
+            list(STAGE_NONLINEAR_H_ORDER) + list(STAGE_REFERENCE_DOMAIN_ORDER),
+        )
         or len(stage_lower) != 5
         or any(
             lower != -upper or upper <= 0.0
             for lower, upper in zip(stage_lower[:4], stage_upper[:4])
         )
-        or stage_lower[4:] != [0.0]
-        or stage_upper[4:] != [1.0]
-        or terminal_order != list(TERMINAL_REFERENCE_DOMAIN_ORDER)
-        or terminal_lower != [0.0]
-        or terminal_upper != [1.0]
-        or control_order != list(CONTROL_BOX_ORDER)
-        or control_indices != [0, 1, 2]
+        or not strict_json_equal(stage_lower[4:], [0.0])
+        or not strict_json_equal(stage_upper[4:], [1.0])
+        or not strict_json_equal(terminal_order, list(TERMINAL_REFERENCE_DOMAIN_ORDER))
+        or not strict_json_equal(terminal_lower, [0.0])
+        or not strict_json_equal(terminal_upper, [1.0])
+        or not strict_json_equal(control_order, list(CONTROL_BOX_ORDER))
+        or not strict_json_equal(control_indices, [0, 1, 2])
         or any(
             lower != -upper or upper <= 0.0
             for lower, upper in zip(control_lower[:2], control_upper[:2])
         )
-        or control_lower[2:] != [0.0]
+        or not strict_json_equal(control_lower[2:], [0.0])
         or control_upper[2] <= 0.0
     ):
         raise ValueError("Acados OCP constraint layout or bound policy drifted")
     if (
-        constraints["initial_state"] != INITIAL_STATE_POLICY
-        or constraints["diagnostic_residuals"] != DIAGNOSTIC_RESIDUAL_POLICY
-        or constraints["liquid_hard_constraints"] != LIQUID_HARD_CONSTRAINT_POLICY
+        not strict_json_equal(constraints["initial_state"], INITIAL_STATE_POLICY)
+        or not strict_json_equal(
+            constraints["diagnostic_residuals"], DIAGNOSTIC_RESIDUAL_POLICY
+        )
+        or not strict_json_equal(
+            constraints["liquid_hard_constraints"], LIQUID_HARD_CONSTRAINT_POLICY
+        )
     ):
         raise ValueError("Acados OCP constraint policy drifted")
 
-    if document["runtime_parameters"] != {
-        "initialization": PARAMETER_INITIALIZATION_POLICY,
-        "required_stage_range_inclusive": [0, dimensions["N"]],
-        "row_width": dimensions["NP"],
-    }:
+    if not strict_json_equal(
+        document["runtime_parameters"],
+        {
+            "initialization": PARAMETER_INITIALIZATION_POLICY,
+            "required_stage_range_inclusive": [0, dimensions["N"]],
+            "row_width": dimensions["NP"],
+        },
+    ):
         raise ValueError("Acados runtime parameter policy drifted")
-    if document["comparison_identity"] != {
-        "arms": ["B0", "Bslosh"],
-        "same_ocp": True,
-        "future_artifact_policy": "ONE_SHARED_ARTIFACT_REQUIRED",
-        "runtime_only_difference": [
-            "liquid_run_coeff",
-            "liquid_boundary_coeff",
-        ],
-    }:
+    if not strict_json_equal(
+        document["comparison_identity"],
+        {
+            "arms": ["B0", "Bslosh"],
+            "same_ocp": True,
+            "future_artifact_policy": "ONE_SHARED_ARTIFACT_REQUIRED",
+            "runtime_only_difference": [
+                "liquid_run_coeff",
+                "liquid_boundary_coeff",
+            ],
+        },
+    ):
         raise ValueError("Acados B0/Bslosh comparison identity drifted")
 
     semantic = _document_object(
@@ -413,7 +447,7 @@ def validate_acados_ocp_document(
         {"sha256", "scope"},
         "Acados OCP semantic identity",
     )
-    if semantic["scope"] != OCP_IDENTITY_SCOPE:
+    if not strict_json_equal(semantic["scope"], OCP_IDENTITY_SCOPE):
         raise ValueError("Acados OCP semantic scope drifted")
     _document_digest(semantic["sha256"], "Acados OCP semantic identity")
     payload = {

@@ -13,6 +13,7 @@ from .development_capacity import (
     DevelopmentCapacityError,
     require_pinned_development_capacity,
 )
+from .identity import strict_json_equal
 
 DEVELOPMENT_LAYOUT_SCHEMA_VERSION = "spmpc_mainline_development_layout_v1"
 DEVELOPMENT_LAYOUT_SCOPE = "DEVELOPMENT_STATE_CONTROL_EXECUTION_PREFIX_ONLY"
@@ -45,23 +46,6 @@ class DevelopmentLayoutError(ValueError):
 
 def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
     return MappingProxyType(dict(value))
-
-
-def _strict_equal(left: Any, right: Any) -> bool:
-    """Compare serialized values without Python bool/int numeric aliases."""
-
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(left_item, right_item)
-            for left_item, right_item in zip(left, right)
-        )
-    return bool(left == right)
 
 
 def _require_pinned_capacity(
@@ -182,21 +166,15 @@ def build_development_layout(
 
     state_names = list(STATE_ROBOT_PROGRESS) + list(STATE_PUBLISHER)
     state_names.extend(f"older_v[{index}]" for index in range(checked.D_v))
-    state_names.extend(
-        f"older_omega[{index}]" for index in range(checked.D_omega)
-    )
+    state_names.extend(f"older_omega[{index}]" for index in range(checked.D_omega))
     state_names.extend(STATE_LIQUID)
     if len(state_names) != checked.NX or len(set(state_names)) != checked.NX:
-        raise DevelopmentLayoutError(
-            "state expansion does not match the capacity NX"
-        )
+        raise DevelopmentLayoutError("state expansion does not match the capacity NX")
     state_offsets = {name: index for index, name in enumerate(state_names)}
 
     control_names = list(CONTROL_ORDER)
     if len(control_names) != checked.NU or len(set(control_names)) != checked.NU:
-        raise DevelopmentLayoutError(
-            "control expansion does not match the capacity NU"
-        )
+        raise DevelopmentLayoutError("control expansion does not match the capacity NU")
     control_offsets = {name: index for index, name in enumerate(control_names)}
 
     parameter_names = [
@@ -206,8 +184,7 @@ def build_development_layout(
         "act_gain_omega",
     ]
     parameter_names.extend(
-        f"act_seg_dt[{slot}]"
-        for slot in range(checked.execution_subsegment_slots)
+        f"act_seg_dt[{slot}]" for slot in range(checked.execution_subsegment_slots)
     )
     selector_offsets: dict[str, tuple[tuple[int, ...], ...]] = {}
     for channel, width in (("v", checked.NQ_v), ("omega", checked.NQ_omega)):
@@ -216,9 +193,7 @@ def build_development_layout(
             indices: list[int] = []
             for selector in range(width):
                 indices.append(len(parameter_names))
-                parameter_names.append(
-                    f"act_sel_{channel}[{slot}][{selector}]"
-                )
+                parameter_names.append(f"act_sel_{channel}[{slot}][{selector}]")
             channel_slots.append(tuple(indices))
         selector_offsets[channel] = tuple(channel_slots)
 
@@ -229,9 +204,7 @@ def build_development_layout(
         raise DevelopmentLayoutError(
             "execution prefix expansion does not match the capacity NP_exec"
         )
-    parameter_offsets = {
-        name: index for index, name in enumerate(parameter_names)
-    }
+    parameter_offsets = {name: index for index, name in enumerate(parameter_names)}
 
     return DevelopmentLayout(
         capacity_contract_sha256=checked.contract_sha256,
@@ -281,7 +254,7 @@ def development_layout_from_dict(
             "development layout keys do not match the v1 schema"
         )
     rebuilt = build_development_layout(capacity)
-    if not _strict_equal(value, rebuilt.to_dict()):
+    if not strict_json_equal(value, rebuilt.to_dict()):
         raise DevelopmentLayoutError(
             "development layout does not exactly match the typed capacity expansion"
         )
@@ -295,15 +268,13 @@ def validate_development_layout_snapshot(
     """Rebuild and verify every serialized field of one typed layout."""
 
     if type(layout) is not DevelopmentLayout:
-        raise DevelopmentLayoutError(
-            "layout must be the exact DevelopmentLayout type"
-        )
+        raise DevelopmentLayoutError("layout must be the exact DevelopmentLayout type")
     rebuilt = build_development_layout(capacity)
     try:
         snapshot = layout.to_dict()
     except (AttributeError, KeyError, TypeError, ValueError) as exc:
         raise DevelopmentLayoutError("typed layout snapshot is malformed") from exc
-    if not _strict_equal(snapshot, rebuilt.to_dict()):
+    if not strict_json_equal(snapshot, rebuilt.to_dict()):
         raise DevelopmentLayoutError(
             "typed layout snapshot does not match the pinned capacity expansion"
         )

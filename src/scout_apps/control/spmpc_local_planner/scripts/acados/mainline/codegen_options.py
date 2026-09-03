@@ -15,7 +15,7 @@ from .development_layout import (
     DevelopmentLayoutError,
     validate_development_layout_snapshot,
 )
-from .identity import IdentityError, require_sha256, sha256_json
+from .identity import IdentityError, require_sha256, sha256_json, strict_json_equal
 from .model_contract import MODEL_ID
 from .runtime_schedule import RUNTIME_SCHEDULE_SCHEMA_VERSION
 
@@ -220,22 +220,6 @@ def _validate_codegen_options_structure(snapshot: CodegenOptionsSnapshot) -> Non
         raise CodegenOptionsError(str(exc)) from exc
 
 
-def _strict_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool/int equality aliasing."""
-
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(item, other) for item, other in zip(left, right)
-        )
-    return bool(left == right)
-
-
 def _object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
     if type(value) is not dict or set(value) != keys:
         raise CodegenOptionsError(f"{label} keys do not match the v1 schema")
@@ -279,7 +263,7 @@ def _validate_codegen_options_payload(
         {"codegen_options", "artifact", "target_performance"},
         "codegen-option status",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         status,
         {
             "codegen_options": CODEGEN_OPTIONS_STATUS,
@@ -312,7 +296,7 @@ def _validate_codegen_options_payload(
         {"N", "release_frequency_hz", "release_period_sec"},
         "codegen-option horizon",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         horizon,
         {
             "N": 60,
@@ -380,7 +364,7 @@ def _validate_codegen_options_payload(
         },
         "Acados external-function policy",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         external,
         {
             "compile_flags": EXT_FUN_COMPILE_FLAGS,
@@ -396,7 +380,7 @@ def _validate_codegen_options_payload(
         {"filename", "header_filename", "copy", "templates"},
         "Acados custom-update policy",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         custom,
         {
             "filename": CUSTOM_UPDATE_FILENAME,
@@ -420,7 +404,7 @@ def _validate_codegen_options_payload(
         },
         "Acados build policy",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         {
             key: build[key]
             for key in (
@@ -452,7 +436,7 @@ def _validate_codegen_options_payload(
     ):
         raise CodegenOptionsError("compiler environment values must be strings or null")
 
-    if not _strict_equal(
+    if not strict_json_equal(
         {
             key: codegen[key]
             for key in (
@@ -472,7 +456,7 @@ def _validate_codegen_options_payload(
         },
     ):
         raise CodegenOptionsError("codegen output/identity policy drifted")
-    if not _strict_equal(
+    if not strict_json_equal(
         codegen["filenames"],
         {
             "acados_json": ACADOS_JSON_FILENAME,
@@ -481,7 +465,7 @@ def _validate_codegen_options_payload(
         },
     ):
         raise CodegenOptionsError("codegen filenames drifted")
-    if not _strict_equal(
+    if not strict_json_equal(
         root["runtime_identity_exclusions"], list(RUNTIME_IDENTITY_EXCLUSIONS)
     ):
         raise CodegenOptionsError("runtime identity exclusions drifted")

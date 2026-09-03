@@ -13,6 +13,7 @@ import math
 import os
 import stat
 from collections.abc import Mapping
+from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,39 @@ SHA256_HEX_LENGTH = 64
 
 class IdentityError(ValueError):
     """Raised when a JSON document or content identity is malformed."""
+
+
+def strict_json_equal(left: Any, right: Any) -> bool:
+    """Compare serialized values without Python's numeric type aliases.
+
+    The recursive comparison accepts the tuple and dataclass containers used
+    by typed mainline snapshots in addition to JSON list/object containers.
+    Exact type checks keep ``True`` distinct from ``1`` and ``1.0``; signed
+    zero is likewise preserved for typed canonical snapshots.
+    """
+
+    if type(left) is not type(right):
+        return False
+    if type(left) is dict:
+        return set(left) == set(right) and all(
+            strict_json_equal(left[key], right[key]) for key in left
+        )
+    if type(left) in (list, tuple):
+        return len(left) == len(right) and all(
+            strict_json_equal(left_item, right_item)
+            for left_item, right_item in zip(left, right)
+        )
+    if is_dataclass(left):
+        return all(
+            strict_json_equal(
+                getattr(left, field.name),
+                getattr(right, field.name),
+            )
+            for field in fields(left)
+        )
+    if type(left) is float and left == 0.0 and right == 0.0:
+        return math.copysign(1.0, left) == math.copysign(1.0, right)
+    return bool(left == right)
 
 
 def read_stable_regular_file(path: Path | str, *, label: str) -> bytes:
@@ -47,11 +81,7 @@ def read_stable_regular_file(path: Path | str, *, label: str) -> bytes:
                 )
             if not stat.S_ISDIR(metadata.st_mode):
                 raise IdentityError(f"{label} parent is not a directory: {parent}")
-    flags = (
-        os.O_RDONLY
-        | getattr(os, "O_CLOEXEC", 0)
-        | getattr(os, "O_NOFOLLOW", 0)
-    )
+    flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(candidate, flags)
     except OSError as exc:

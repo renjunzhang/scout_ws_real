@@ -19,11 +19,9 @@ from .development_layout import (
     DevelopmentLayoutError,
     validate_development_layout_snapshot,
 )
-from .identity import IdentityError, sha256_json
+from .identity import IdentityError, sha256_json, strict_json_equal
 
-SOLVER_PARAMETER_LAYOUT_SCHEMA_VERSION = (
-    "spmpc_mainline_solver_parameter_layout_v1"
-)
+SOLVER_PARAMETER_LAYOUT_SCHEMA_VERSION = "spmpc_mainline_solver_parameter_layout_v1"
 SOLVER_PARAMETER_LAYOUT_SCOPE = "FULL_STAGE_PARAMETER_ORDER"
 GRAPH_STATUS = "NO_GRAPH"
 ARTIFACT_STATUS = "NO_ARTIFACT"
@@ -34,9 +32,7 @@ TERMINAL_ASSIGNMENT_POLICY = (
 REFERENCE_COORDINATE_FORMULA = "xi=(s-ref_s_origin)/ref_s_scale"
 REFERENCE_POLYNOMIAL_BASIS = ("1", "xi", "xi^2", "xi^3")
 REFERENCE_POSITION_FORMULA = "coord_ref=c0+c1*xi+c2*xi^2+c3*xi^3"
-REFERENCE_TANGENT_FORMULA = (
-    "dcoord_ref/ds=(c1+2*c2*xi+3*c3*xi^2)/ref_s_scale"
-)
+REFERENCE_TANGENT_FORMULA = "dcoord_ref/ds=(c1+2*c2*xi+3*c3*xi^2)/ref_s_scale"
 REFERENCE_HEADING_FORMULA = "atan2(dy_ref/ds,dx_ref/ds)"
 REFERENCE_DOMAIN_POLICY = "REJECT_NO_CLAMP_NO_EXTRAPOLATION"
 REFERENCE_SCALE_POLICY = "STRICTLY_POSITIVE"
@@ -130,21 +126,6 @@ _CONSTRUCTION_TOKEN = object()
 
 class SolverParameterLayoutError(ValueError):
     """Raised when a source snapshot or full parameter ordering drifts."""
-
-
-def _strict_equal(left: Any, right: Any) -> bool:
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(left_item, right_item)
-            for left_item, right_item in zip(left, right)
-        )
-    return bool(left == right)
 
 
 def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -294,15 +275,9 @@ class SolverParameterLayout:
                     "running_state_policy": LIQUID_RUNNING_STATE_POLICY,
                     "boundary_policy": LIQUID_BOUNDARY_POLICY,
                     "boundary_state_policy": LIQUID_BOUNDARY_STATE_POLICY,
-                    "running_eta_dot_ratio_policy": (
-                        LIQUID_RUNNING_RATIO_POLICY
-                    ),
-                    "running_eta_dot_ratio_parameter": (
-                        SLOSH_RUNNING_RATIO_PARAMETER
-                    ),
-                    "boundary_eta_dot_ratio_policy": (
-                        LIQUID_BOUNDARY_RATIO_POLICY
-                    ),
+                    "running_eta_dot_ratio_policy": (LIQUID_RUNNING_RATIO_POLICY),
+                    "running_eta_dot_ratio_parameter": (SLOSH_RUNNING_RATIO_PARAMETER),
+                    "boundary_eta_dot_ratio_policy": (LIQUID_BOUNDARY_RATIO_POLICY),
                 },
                 "comparison_identity": {
                     "arms": ["B0", "Bslosh"],
@@ -362,9 +337,7 @@ def build_solver_parameter_layout(
         )
     if len(set(parameter_names)) != FULL_STAGE_PARAMETER_COUNT:
         raise SolverParameterLayoutError("full parameter names must be unique")
-    parameter_offsets = {
-        name: index for index, name in enumerate(parameter_names)
-    }
+    parameter_offsets = {name: index for index, name in enumerate(parameter_names)}
     if tuple(block_ranges) != PARAMETER_BLOCK_ORDER:
         raise SolverParameterLayoutError("parameter block order drifted")
     previous_end = 0
@@ -418,7 +391,7 @@ def solver_parameter_layout_from_dict(
             "solver parameter layout keys do not match the v1 schema"
         )
     rebuilt = build_solver_parameter_layout(capacity, development_layout)
-    if not _strict_equal(value, rebuilt.to_dict()):
+    if not strict_json_equal(value, rebuilt.to_dict()):
         raise SolverParameterLayoutError(
             "solver parameter layout does not exactly match its typed sources"
         )

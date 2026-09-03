@@ -16,6 +16,7 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from .identity import strict_json_equal
 from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
 
 DEFAULT_DT_SEC = 1.0 / 30.0
@@ -116,23 +117,6 @@ def _retained_command_count(maximum: float, dt_sec: float, label: str) -> int:
 
 def _freeze_mapping(value: Mapping[str, Any]) -> Mapping[str, Any]:
     return MappingProxyType(dict(value))
-
-
-def _strict_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool/int or int/float aliases."""
-
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(left_item, right_item)
-            for left_item, right_item in zip(left, right)
-        )
-    return bool(left == right)
 
 
 @dataclass(frozen=True)
@@ -456,6 +440,6 @@ def layout_from_dict(value: Any) -> MainlineLayoutScaffold:
             horizon_steps=horizon["N"],
         )
     )
-    if not _strict_equal(value, rebuilt.to_dict()):
+    if not strict_json_equal(value, rebuilt.to_dict()):
         raise LayoutError("layout document does not match expanded formulae")
     return rebuilt

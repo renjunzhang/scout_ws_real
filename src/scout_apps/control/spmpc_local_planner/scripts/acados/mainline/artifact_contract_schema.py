@@ -38,7 +38,13 @@ from .development_capacity import (
     development_capacity_from_dict,
 )
 from .development_layout import STAGE_SEMANTICS, development_layout_from_dict
-from .identity import IdentityError, canonical_json, require_sha256, sha256_json
+from .identity import (
+    IdentityError,
+    canonical_json,
+    require_sha256,
+    sha256_json,
+    strict_json_equal,
+)
 from .model_contract import COST_SCHEMA, DISCRETIZATION_SCHEMA, MODEL_ID
 from .provenance_common import ProvenanceError
 from .provenance_schema import (
@@ -84,22 +90,6 @@ def _require_object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
     if type(value) is not dict or set(value) != keys:
         raise ArtifactContractError(f"{label} keys do not match the v1 schema")
     return value
-
-
-def _strict_equal(left: Any, right: Any) -> bool:
-    """Compare JSON values without Python's bool/int equivalence."""
-
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(item, other) for item, other in zip(left, right)
-        )
-    return bool(left == right)
 
 
 def _require_order_and_offsets(
@@ -159,25 +149,25 @@ def _validate_graph_ocp_binding(
     stage_width = len(graph_stage["order"])
     if not all(
         (
-            _strict_equal(
+            strict_json_equal(
                 ocp_stage["order"],
                 graph_stage["order"] + graph_stage_domain["order"],
             ),
-            _strict_equal(graph_stage["lower"], ocp_stage["lower"][:stage_width]),
-            _strict_equal(graph_stage["upper"], ocp_stage["upper"][:stage_width]),
-            _strict_equal(
+            strict_json_equal(graph_stage["lower"], ocp_stage["lower"][:stage_width]),
+            strict_json_equal(graph_stage["upper"], ocp_stage["upper"][:stage_width]),
+            strict_json_equal(
                 graph_stage_domain["lower"], ocp_stage["lower"][stage_width:]
             ),
-            _strict_equal(
+            strict_json_equal(
                 graph_stage_domain["upper"], ocp_stage["upper"][stage_width:]
             ),
-            _strict_equal(graph_terminal_domain["order"], ocp_terminal["order"]),
-            _strict_equal(graph_terminal_domain["lower"], ocp_terminal["lower"]),
-            _strict_equal(graph_terminal_domain["upper"], ocp_terminal["upper"]),
-            _strict_equal(graph_control["order"], ocp_control["order"]),
-            _strict_equal(graph_control["indices"], ocp_control["indices"]),
-            _strict_equal(graph_control["lower"], ocp_control["lower"]),
-            _strict_equal(graph_control["upper"], ocp_control["upper"]),
+            strict_json_equal(graph_terminal_domain["order"], ocp_terminal["order"]),
+            strict_json_equal(graph_terminal_domain["lower"], ocp_terminal["lower"]),
+            strict_json_equal(graph_terminal_domain["upper"], ocp_terminal["upper"]),
+            strict_json_equal(graph_control["order"], ocp_control["order"]),
+            strict_json_equal(graph_control["indices"], ocp_control["indices"]),
+            strict_json_equal(graph_control["lower"], ocp_control["lower"]),
+            strict_json_equal(graph_control["upper"], ocp_control["upper"]),
         )
     ):
         raise ArtifactContractError("embedded graph constraints differ from OCP")
@@ -204,7 +194,7 @@ def _validate_provenance_bindings(
     if (
         casadi_package["version"] != ocp["backend"]["casadi_version"]
         or provenance["acados"]["commit_marker"] != ocp["backend"]["acados_git_commit"]
-        or not _strict_equal(
+        or not strict_json_equal(
             provenance["compiler_environment"],
             codegen_options["acados_codegen"]["build"]["compiler_environment"],
         )
@@ -280,7 +270,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         {"artifact", "artifact_class", "promotion", "target_performance"},
         "status",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         status,
         {
             "artifact": ARTIFACT_STATUS,
@@ -301,7 +291,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         },
         "contract_outputs",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         outputs,
         {
             "policy": CONTRACT_OUTPUT_POLICY,
@@ -318,7 +308,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         {"N", "NX", "NU", "NP", "NP_exec", "parameter_vector_count"},
         "dimensions",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         dimensions,
         {
             "N": 60,
@@ -335,7 +325,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         {"frequency_hz", "period_sec", "stage_semantics"},
         "release_grid",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         release_grid,
         {
             "frequency_hz": 30,
@@ -358,10 +348,10 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         "development_capacity",
     )
     if (
-        not _strict_equal(capacity["release_intervals"], {"v": 12, "omega": 24})
-        or not _strict_equal(capacity["delay_state_count"], {"v": 11, "omega": 23})
-        or not _strict_equal(capacity["selector_width"], {"v": 13, "omega": 25})
-        or not _strict_equal(
+        not strict_json_equal(capacity["release_intervals"], {"v": 12, "omega": 24})
+        or not strict_json_equal(capacity["delay_state_count"], {"v": 11, "omega": 23})
+        or not strict_json_equal(capacity["selector_width"], {"v": 13, "omega": 25})
+        or not strict_json_equal(
             capacity["maximum_delay_sec"],
             {
                 "v": {"numerator": 2, "denominator": 5},
@@ -403,7 +393,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         "terminal_weight": {"begin": 156, "end_exclusive": 160},
         "stage_cost": {"begin": 160, "end_exclusive": 162},
     }
-    if not _strict_equal(blocks, expected_blocks):
+    if not strict_json_equal(blocks, expected_blocks):
         raise ArtifactContractError("parameter block layout drifted")
 
     schemas = _require_object(
@@ -417,7 +407,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         },
         "schemas",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         schemas,
         {
             "discretization": DISCRETIZATION_SCHEMA,
@@ -485,7 +475,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         "actual_schedule_values": "EXCLUDED_FROM_ARTIFACT_IDENTITY",
     }
     if any(
-        not _strict_equal(runtime_schedule[key], expected)
+        not strict_json_equal(runtime_schedule[key], expected)
         for key, expected in expected_schedule_structure.items()
     ):
         raise ArtifactContractError("runtime schedule values entered artifact identity")
@@ -519,7 +509,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         },
         "runtime_parameter_contract",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         runtime_parameters,
         {
             "assignment": RUNTIME_PARAMETER_ASSIGNMENT_POLICY,
@@ -539,7 +529,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
         },
         "comparison_contract",
     )
-    if not _strict_equal(
+    if not strict_json_equal(
         comparison,
         {
             "arms": list(COMPARISON_ARMS),
@@ -668,7 +658,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
     except (KeyError, TypeError, ValueError) as exc:
         raise ArtifactContractError("embedded CasADi graph is malformed") from exc
     _validate_graph_ocp_binding(graph, ocp)
-    if not _strict_equal(
+    if not strict_json_equal(
         ocp["dimensions"],
         {
             "N": dimensions["N"],
@@ -698,7 +688,7 @@ def _validate_payload(value: Any) -> dict[str, Any]:
     if options["runtime_identity_exclusions"] != list(RUNTIME_IDENTITY_EXCLUSIONS):
         raise ArtifactContractError("embedded codegen runtime exclusions drifted")
     codegen_schedule = options["runtime_schedule_contract"]
-    if not _strict_equal(
+    if not strict_json_equal(
         runtime_schedule["tolerances"],
         {
             "integer_snap_tolerance_sec": codegen_schedule[

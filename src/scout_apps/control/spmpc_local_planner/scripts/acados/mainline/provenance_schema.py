@@ -14,7 +14,7 @@ import shlex
 from pathlib import PurePosixPath
 from typing import Any
 
-from .identity import IdentityError, require_sha256, sha256_json
+from .identity import IdentityError, require_sha256, sha256_json, strict_json_equal
 from .provenance_acados import (
     ACADOS_COMMIT_MARKER_LOGICAL_NAME,
     ACADOS_IDENTITY_SCHEMA,
@@ -112,20 +112,6 @@ def _object(value: Any, keys: set[str], label: str) -> dict[str, Any]:
     return value
 
 
-def _strict_equal(left: Any, right: Any) -> bool:
-    if type(left) is not type(right):
-        return False
-    if type(left) is dict:
-        return set(left) == set(right) and all(
-            _strict_equal(left[key], right[key]) for key in left
-        )
-    if type(left) is list:
-        return len(left) == len(right) and all(
-            _strict_equal(item, other) for item, other in zip(left, right)
-        )
-    return bool(left == right)
-
-
 def _digest(value: Any, label: str) -> str:
     try:
         return require_sha256(value, label)
@@ -171,9 +157,7 @@ def _semantic_document(
     _digest(identity["sha256"], f"{label} semantic identity")
     if scope is not None and identity["scope"] != scope:
         raise ProvenanceError(f"{label} semantic scope drifted")
-    payload = {
-        key: item for key, item in value.items() if key != "semantic_identity"
-    }
+    payload = {key: item for key, item in value.items() if key != "semantic_identity"}
     _check_hash(payload, identity["sha256"], f"{label} semantic identity")
     return value
 
@@ -375,7 +359,9 @@ def _validate_tool(
     if len(names) != len(set(names)):
         raise ProvenanceError(f"{label} probe names are duplicated")
     payload = {key: item for key, item in tool.items() if key != "semantic_identity"}
-    _check_hash(payload, tool["semantic_identity"]["sha256"], f"{label} semantic identity")
+    _check_hash(
+        payload, tool["semantic_identity"]["sha256"], f"{label} semantic identity"
+    )
     return tool
 
 
@@ -403,8 +389,10 @@ def _validate_python_runtime(value: Any) -> dict[str, Any]:
     _text(runtime["implementation"], "Python implementation")
     _text(runtime["version"], "Python version")
     version_info = runtime["version_info"]
-    if type(version_info) is not list or len(version_info) != 3 or any(
-        type(item) is not int or item < 0 for item in version_info
+    if (
+        type(version_info) is not list
+        or len(version_info) != 3
+        or any(type(item) is not int or item < 0 for item in version_info)
     ):
         raise ProvenanceError("Python version_info must contain three integers")
     _digest(runtime["executable_tool_sha256"], "Python executable tool identity")
@@ -418,9 +406,12 @@ def _validate_python_runtime(value: Any) -> dict[str, Any]:
     if runtime["PYTHONPATH"] is not None:
         _text(runtime["PYTHONPATH"], "PYTHONPATH", nonempty=False)
     packages = runtime["packages"]
-    if type(packages) is not list or len(packages) != 2 or any(
-        type(item) is not dict for item in packages
-    ) or [item.get("name") for item in packages] != ["casadi", "numpy"]:
+    if (
+        type(packages) is not list
+        or len(packages) != 2
+        or any(type(item) is not dict for item in packages)
+        or [item.get("name") for item in packages] != ["casadi", "numpy"]
+    ):
         raise ProvenanceError("Python package identities must be CasADi then NumPy")
     expected_package_files = {
         "casadi": CASADI_PACKAGE_FILE_LOGICAL_NAMES,
@@ -441,7 +432,11 @@ def _validate_python_runtime(value: Any) -> dict[str, Any]:
         if tuple(logical_names) != expected_names:
             raise ProvenanceError("Python package file logical names drifted")
     payload = {key: item for key, item in runtime.items() if key != "semantic_identity"}
-    _check_hash(payload, runtime["semantic_identity"]["sha256"], "Python runtime semantic identity")
+    _check_hash(
+        payload,
+        runtime["semantic_identity"]["sha256"],
+        "Python runtime semantic identity",
+    )
     return runtime
 
 
@@ -475,20 +470,32 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
 
     source = _object(
         acados["source_repository"],
-        {"root", "head_sha", "exact_tag", "worktree_clean", "dirty_policy", "status_porcelain_sha256"},
+        {
+            "root",
+            "head_sha",
+            "exact_tag",
+            "worktree_clean",
+            "dirty_policy",
+            "status_porcelain_sha256",
+        },
         "Acados source repository",
     )
     _absolute(source["root"], "Acados source root")
     _git_sha(source["head_sha"], "Acados source HEAD")
     if source["exact_tag"] != ACADOS_REQUIRED_TAG:
         raise ProvenanceError("Acados exact source tag is not v0.5.4")
-    if type(source["worktree_clean"]) is not bool or source["dirty_policy"] != GIT_DIRTY_POLICY:
+    if (
+        type(source["worktree_clean"]) is not bool
+        or source["dirty_policy"] != GIT_DIRTY_POLICY
+    ):
         raise ProvenanceError("Acados source worktree policy drifted")
     _digest(source["status_porcelain_sha256"], "Acados source status identity")
 
     marker = _text(acados["commit_marker"], "Acados commit marker")
-    if len(marker) < 7 or len(marker) > 40 or any(
-        character not in "0123456789abcdef" for character in marker
+    if (
+        len(marker) < 7
+        or len(marker) > 40
+        or any(character not in "0123456789abcdef" for character in marker)
     ):
         raise ProvenanceError("Acados commit marker must be lowercase hexadecimal")
     if not source["head_sha"].startswith(marker):
@@ -511,9 +518,7 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
         {"file", "canonical_json_sha256"},
         "Acados link-libs identity",
     )
-    link_libs_file = _validate_linked_file(
-        link_libs["file"], "Acados link-libs file"
-    )
+    link_libs_file = _validate_linked_file(link_libs["file"], "Acados link-libs file")
     if link_libs_file["logical_name"] != ACADOS_LINK_LIBS_LOGICAL_NAME:
         raise ProvenanceError("Acados link-libs logical name drifted")
     expected_link_libs_path = str(
@@ -523,7 +528,9 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
         raise ProvenanceError("Acados link-libs path does not bind install root")
     _digest(link_libs["canonical_json_sha256"], "Acados link-libs identity")
     if acados["interface_source_binding_status"] != "MATCHED_SOURCE_ROOT":
-        raise ProvenanceError("Acados interface and installed libraries are not source-bound")
+        raise ProvenanceError(
+            "Acados interface and installed libraries are not source-bound"
+        )
     if acados["tera_source_binding_status"] != TERA_SOURCE_BINDING_STATUS:
         raise ProvenanceError("Tera binary/source binding status drifted")
     _validate_source_tree(
@@ -552,27 +559,51 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
             raise ProvenanceError("Acados submodules must be uniquely sorted")
         paths.append(path)
         _git_sha(item["commit_sha"], "Acados submodule commit")
-        if type(item["initialized"]) is not bool or type(item["worktree_matches_index"]) is not bool:
+        if (
+            type(item["initialized"]) is not bool
+            or type(item["worktree_matches_index"]) is not bool
+        ):
             raise ProvenanceError("Acados submodule states must be bool")
     by_path = {item["path"]: item for item in submodules}
     for required in REQUIRED_ACADOS_SUBMODULES:
         item = by_path.get(required)
-        if item is None or item["initialized"] is not True or item["worktree_matches_index"] is not True:
-            raise ProvenanceError(f"required Acados submodule is not pinned: {required}")
+        if (
+            item is None
+            or item["initialized"] is not True
+            or item["worktree_matches_index"] is not True
+        ):
+            raise ProvenanceError(
+                f"required Acados submodule is not pinned: {required}"
+            )
 
     libraries = acados["libraries"]
-    if type(libraries) is not list or len(libraries) != len(ACADOS_LIBRARY_NAMES) or any(
-        type(item) is not dict for item in libraries
-    ) or [item.get("logical_name") for item in libraries] != list(ACADOS_LIBRARY_NAMES):
+    if (
+        type(libraries) is not list
+        or len(libraries) != len(ACADOS_LIBRARY_NAMES)
+        or any(type(item) is not dict for item in libraries)
+        or [item.get("logical_name") for item in libraries]
+        != list(ACADOS_LIBRARY_NAMES)
+    ):
         raise ProvenanceError("Acados library identities are incomplete or unordered")
     for item in libraries:
         item = _object(
             item,
-            {"logical_name", "file", "soname", "needed", "rpath", "runpath", "dynamic_section_sha256"},
+            {
+                "logical_name",
+                "file",
+                "soname",
+                "needed",
+                "rpath",
+                "runpath",
+                "dynamic_section_sha256",
+            },
             "Acados dynamic library",
         )
         name = item["logical_name"]
-        if name not in ACADOS_LIBRARY_NAMES or item["soname"] != ACADOS_LIBRARY_SONAMES[name]:
+        if (
+            name not in ACADOS_LIBRARY_NAMES
+            or item["soname"] != ACADOS_LIBRARY_SONAMES[name]
+        ):
             raise ProvenanceError("Acados dynamic library SONAME drifted")
         library_file = _validate_linked_file(
             item["file"], "Acados dynamic library file"
@@ -583,9 +614,13 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
             PurePosixPath(acados["install_root"]) / "lib" / name
         )
         if library_file["requested_path"] != expected_library_path:
-            raise ProvenanceError("Acados dynamic library path does not bind install root")
+            raise ProvenanceError(
+                "Acados dynamic library path does not bind install root"
+            )
         needed = item["needed"]
-        if type(needed) is not list or any(type(entry) is not str or not entry for entry in needed):
+        if type(needed) is not list or any(
+            type(entry) is not str or not entry for entry in needed
+        ):
             raise ProvenanceError("Acados NEEDED entries must be strings")
         for key in ("rpath", "runpath"):
             if item[key] is not None:
@@ -593,7 +628,9 @@ def _validate_acados_install(value: Any) -> dict[str, Any]:
         _digest(item["dynamic_section_sha256"], "Acados dynamic-section identity")
 
     payload = {key: item for key, item in acados.items() if key != "semantic_identity"}
-    _check_hash(payload, acados["semantic_identity"]["sha256"], "Acados semantic identity")
+    _check_hash(
+        payload, acados["semantic_identity"]["sha256"], "Acados semantic identity"
+    )
     return acados
 
 
@@ -642,8 +679,14 @@ def _validate_repository(value: Any) -> dict[str, Any]:
         "repository source inventory",
         logical_root=REPOSITORY_SOURCE_LOGICAL_ROOT,
     )
-    payload = {key: item for key, item in repository.items() if key != "semantic_identity"}
-    _check_hash(payload, repository["semantic_identity"]["sha256"], "repository semantic identity")
+    payload = {
+        key: item for key, item in repository.items() if key != "semantic_identity"
+    }
+    _check_hash(
+        payload,
+        repository["semantic_identity"]["sha256"],
+        "repository semantic identity",
+    )
     return repository
 
 
@@ -658,14 +701,18 @@ def _compiler_environment_names() -> tuple[str, ...]:
         or any(type(item) is not str or not item for item in COMPILER_ENVIRONMENT_NAMES)
         or len(set(COMPILER_ENVIRONMENT_NAMES)) != 28
     ):
-        raise ProvenanceError("compiler environment authority must contain 28 unique names")
+        raise ProvenanceError(
+            "compiler environment authority must contain 28 unique names"
+        )
     return COMPILER_ENVIRONMENT_NAMES
 
 
 def _validate_compiler_environment(value: Any) -> dict[str, Any]:
     names = _compiler_environment_names()
     if type(value) is not dict or set(value) != set(names):
-        raise ProvenanceError("compiler environment must contain exactly the canonical 28 entries")
+        raise ProvenanceError(
+            "compiler environment must contain exactly the canonical 28 entries"
+        )
     if any(item is not None and type(item) is not str for item in value.values()):
         raise ProvenanceError("compiler environment values must be strings or null")
     return value
@@ -683,7 +730,7 @@ def _validate_logical_commands(value: Any) -> dict[str, Any]:
         "build_commands": [list(item) for item in BUILD_COMMANDS],
         "staging_location": STAGING_LOCATION_POLICY,
     }
-    if not _strict_equal(commands, expected):
+    if not strict_json_equal(commands, expected):
         raise ProvenanceError("logical codegen command policy drifted")
     return commands
 
@@ -720,7 +767,10 @@ def validate_codegen_provenance_document(value: Any) -> dict[str, Any]:
         },
         "codegen provenance",
     )
-    if document["schema_version"] != PROVENANCE_SCHEMA or document["scope"] != PROVENANCE_SCOPE:
+    if (
+        document["schema_version"] != PROVENANCE_SCHEMA
+        or document["scope"] != PROVENANCE_SCOPE
+    ):
         raise ProvenanceError("codegen provenance schema/scope drifted")
     if document["status"] != {
         "provenance": PROVENANCE_STATUS,
@@ -735,11 +785,13 @@ def validate_codegen_provenance_document(value: Any) -> dict[str, Any]:
     if type(tools) is not list or len(tools) != len(TOOL_ROLES):
         raise ProvenanceError("codegen provenance tool set is incomplete")
     checked_tools = [
-        _validate_tool(item, index, environment)
-        for index, item in enumerate(tools)
+        _validate_tool(item, index, environment) for index, item in enumerate(tools)
     ]
     runtime = _validate_python_runtime(document["python_runtime"])
-    if runtime["executable_tool_sha256"] != checked_tools[1]["semantic_identity"]["sha256"]:
+    if (
+        runtime["executable_tool_sha256"]
+        != checked_tools[1]["semantic_identity"]["sha256"]
+    ):
         raise ProvenanceError("Python runtime does not bind the captured interpreter")
     _validate_acados_install(document["acados"])
     host = _object(
