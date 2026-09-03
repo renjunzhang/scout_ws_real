@@ -14,9 +14,24 @@ from pathlib import Path
 from typing import Any
 
 from .acados_backend import require_acados_backend
-from .acados_codegen_validation import (
+from .acados_codegen_result_schema import (
+    ACADOS_CODEGEN_ARTIFACT_CLASS,
+    ACADOS_CODEGEN_PERFORMANCE_STATUS,
+    ACADOS_CODEGEN_PROMOTION_STATUS,
+    ACADOS_CODEGEN_RESULT_SCHEMA,
+    ACADOS_CODEGEN_RESULT_SCOPE,
+    ACADOS_CODEGEN_STATUS,
+    CODEGEN_FAILURE_OUTPUT_POLICY,
     ELF_MACHINE_BY_PLATFORM,
+    OUTPUT_ROOT_IDENTITY_POLICY,
     REQUIRED_SOLVER_SYMBOL_SUFFIXES,
+    REQUIRED_SOLVER_SYMBOLS,
+    SOLVER_LIBRARY_FORMAT,
+    SOLVER_LOAD_CHECK_POLICY,
+    SUPPORTED_ELF_IDENTITIES,
+    validate_acados_codegen_result_document,
+)
+from .acados_codegen_validation import (
     AcadosCodegenValidationError,
     canonicalize_generated_output_root,
     validate_generated_acados_json,
@@ -52,14 +67,6 @@ from .identity import IdentityError, require_sha256, sha256_json
 from .model_contract import MODEL_ID
 from .solver_options import SolverOptionsSnapshot, require_solver_options_snapshot
 
-ACADOS_CODEGEN_RESULT_SCHEMA = "spmpc_mainline_acados_codegen_result_v1"
-ACADOS_CODEGEN_RESULT_SCOPE = "CANONICAL_GENERATED_TREE_AND_LOADABLE_SOLVER"
-ACADOS_CODEGEN_STATUS = "GENERATED_AND_BUILT"
-ACADOS_CODEGEN_ARTIFACT_CLASS = "DEV_UNVALIDATED"
-ACADOS_CODEGEN_PROMOTION_STATUS = "NOT_PROMOTED"
-ACADOS_CODEGEN_PERFORMANCE_STATUS = "NOT_BENCHMARKED"
-CODEGEN_FAILURE_OUTPUT_POLICY = "PARTIAL_STAGING_RETAINED_NEVER_PROMOTED"
-OUTPUT_ROOT_IDENTITY_POLICY = "ABSOLUTE_STAGING_ROOT_EXCLUDED_FROM_ARTIFACT_BYTES"
 MAKE_CLEAN_TARGET = "clean_ocp_shared_lib"
 MAKE_BUILD_TARGET = "ocp_shared_lib"
 
@@ -126,6 +133,14 @@ def _validate_codegen_result_structure(result: AcadosCodegenResult) -> None:
         result.output_directory.is_absolute()
     ):
         raise AcadosCodegenError("codegen result directory must be absolute")
+    try:
+        resolved_output = result.output_directory.resolve(strict=True)
+    except OSError as exc:
+        raise AcadosCodegenError("codegen result directory cannot be resolved") from exc
+    if resolved_output != result.output_directory or not resolved_output.is_dir():
+        raise AcadosCodegenError(
+            "codegen result directory must be an existing canonical directory"
+        )
     if type(result.files) is not tuple:
         raise AcadosCodegenError("codegen result files must be an immutable tuple")
     try:
@@ -138,6 +153,12 @@ def _validate_codegen_result_structure(result: AcadosCodegenResult) -> None:
         raise AcadosCodegenError("codegen result file inventory drifted")
     if generated_tree_sha256(checked_files) != result.generated_tree_sha256:
         raise AcadosCodegenError("generated tree identity is inconsistent")
+    try:
+        validate_generated_tree(result.output_directory, checked_files)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise AcadosCodegenError(
+            "codegen result directory differs from its recorded inventory"
+        ) from exc
     library = solver_library_record(checked_files)
     if (
         result.solver_library_relative_path != library.relative_path
@@ -147,15 +168,11 @@ def _validate_codegen_result_structure(result: AcadosCodegenResult) -> None:
         raise AcadosCodegenError("solver library identity is inconsistent")
     if (
         type(result.elf_class) is not int
-        or result.elf_class not in {32, 64}
         or type(result.elf_machine) is not int
-        or result.elf_machine <= 0
+        or (result.elf_class, result.elf_machine) not in SUPPORTED_ELF_IDENTITIES
     ):
         raise AcadosCodegenError("solver ELF identity is invalid")
-    expected_symbols = tuple(
-        sorted(f"{MODEL_ID}_{suffix}" for suffix in REQUIRED_SOLVER_SYMBOL_SUFFIXES)
-    )
-    if result.required_exported_symbols != expected_symbols:
+    if result.required_exported_symbols != REQUIRED_SOLVER_SYMBOLS:
         raise AcadosCodegenError("solver exported-symbol set is inconsistent")
     try:
         require_sha256(result.generated_tree_sha256, "generated tree identity")
@@ -186,11 +203,11 @@ def _result_payload(result: AcadosCodegenResult) -> dict[str, Any]:
             "relative_path": result.solver_library_relative_path,
             "size_bytes": result.solver_library_size_bytes,
             "raw_sha256": result.solver_library_raw_sha256,
-            "format": "ELF",
+            "format": SOLVER_LIBRARY_FORMAT,
             "elf_class": result.elf_class,
             "elf_machine": result.elf_machine,
             "required_exported_symbols": list(result.required_exported_symbols),
-            "load_check": "PASSED_IN_ISOLATED_PROCESS",
+            "load_check": SOLVER_LOAD_CHECK_POLICY,
         },
     }
 
@@ -202,7 +219,8 @@ def require_acados_codegen_result(value: Any) -> AcadosCodegenResult:
         )
     try:
         _validate_codegen_result_structure(value)
-        semantic_sha256 = sha256_json(_result_payload(value))
+        document = validate_acados_codegen_result_document(value.to_dict())
+        semantic_sha256 = document["semantic_identity"]["sha256"]
     except AcadosCodegenError:
         raise
     except (AttributeError, IdentityError, TypeError, ValueError) as exc:

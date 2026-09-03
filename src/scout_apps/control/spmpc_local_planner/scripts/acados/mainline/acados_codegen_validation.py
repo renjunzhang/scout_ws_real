@@ -12,6 +12,11 @@ import tempfile
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from .acados_codegen_result_schema import (
+    ELF_MACHINE_BY_PLATFORM,
+    ELF_SHARED_OBJECT_TYPE,
+    REQUIRED_SOLVER_SYMBOL_SUFFIXES,
+)
 from .acados_ocp_contract import AcadosOcpAssembly, require_acados_ocp_assembly
 from .acados_solver_options_adapter import (
     ACADOS_INTEGER_BOOLEAN_SOLVER_OPTION_FIELDS,
@@ -37,25 +42,6 @@ from .solver_options import SolverOptionsSnapshot, require_solver_options_snapsh
 
 ACADOS_JSON_VALIDATION_SCHEMA = "spmpc_mainline_acados_json_validation_v1"
 GENERATED_ROOT_CANONICAL_VALUE = "."
-ELF_SHARED_OBJECT_TYPE = 3
-ELF_MACHINE_BY_PLATFORM = {
-    "x86_64": 62,
-    "amd64": 62,
-    "aarch64": 183,
-    "arm64": 183,
-    "armv7l": 40,
-    "i386": 3,
-    "i686": 3,
-}
-REQUIRED_SOLVER_SYMBOL_SUFFIXES = (
-    "acados_create_capsule",
-    "acados_create",
-    "acados_solve",
-    "acados_free",
-    "acados_free_capsule",
-    "acados_update_params",
-    "acados_update_params_sparse",
-)
 
 
 class AcadosCodegenValidationError(ValueError):
@@ -451,9 +437,8 @@ def _atomic_replace_regular(path: Path, payload: bytes) -> None:
             try:
                 current = os.stat(temporary, follow_symlinks=False)
                 current_identity = (current.st_dev, current.st_ino)
-                if (
-                    current_identity == temporary_identity
-                    and stat.S_ISREG(current.st_mode)
+                if current_identity == temporary_identity and stat.S_ISREG(
+                    current.st_mode
                 ):
                     temporary.unlink()
             except FileNotFoundError:
