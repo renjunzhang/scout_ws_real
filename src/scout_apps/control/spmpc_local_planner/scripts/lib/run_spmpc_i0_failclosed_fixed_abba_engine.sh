@@ -170,6 +170,7 @@ OUTPUT_TAG="${I0FC_OUTPUT_TAG}"
 RUN_LABEL_PREFIX="${I0FC_RUN_LABEL_PREFIX}"
 RUNNER_SELECTOR_MODE="${I0FC_RUNNER_SELECTOR_MODE}"
 TREATMENT_VARIANT="${I0FC_TREATMENT_VARIANT}"
+TREATMENT_W_SLOSH="${I0FC_TREATMENT_W_SLOSH}"
 TREATMENT_COST_HORIZON_STEPS="${I0FC_TREATMENT_COST_HORIZON_STEPS}"
 TREATMENT_COST_TAIL_DISCOUNT="${I0FC_TREATMENT_COST_TAIL_DISCOUNT}"
 EXACT_REPORT_SUFFIX="${I0FC_EXACT_REPORT_SUFFIX}"
@@ -213,6 +214,7 @@ CONDITION_LABEL="${I0FC_CONDITION_LABEL}"
 PILOT_METHOD="${I0FC_PILOT_METHOD}"
 VARIANT="${I0FC_VARIANT}"
 W_SLOSH="${I0FC_W_SLOSH}"
+W_ACCEL="${I0FC_RUNTIME_W_ACCEL:--1.0}"
 SLOSH_ENABLED="${I0FC_SLOSH_ENABLED}"
 OBSERVER_APPLIED="${I0FC_OBSERVER_APPLIED}"
 EXPECTED_COST_HORIZON_STEPS="${I0FC_EXPECTED_COST_HORIZON_STEPS}"
@@ -312,7 +314,7 @@ if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
     "${SHORT_HORIZON_TEST}" "${RUNTIME_GATE_TEST}" "${RGB_ANALYZER_TEST}"
   )
 fi
-if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+if [[ "${EXECUTION_MODEL_MODE}" == "explicit_actuator" ]]; then
   required_files+=(
     "${EXPLICIT_ACTUATOR_MODEL_TEST}"
     "${ACADOS_B0_JSON}"
@@ -322,7 +324,7 @@ fi
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
-if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+if [[ "${EXECUTION_MODEL_MODE}" == "explicit_actuator" ]]; then
   python3 - "${ACADOS_B0_JSON}" "${ACADOS_SLOSH_JSON}" <<'PY'
 import json
 import sys
@@ -376,6 +378,7 @@ launch_runtime_contract_args=()
 if truthy "${STRICT_RUNTIME_CONTRACT}"; then
   launch_runtime_contract_args=(
     "cmd_vel_topic:=${I0FC_RUNTIME_CMD_TOPIC}"
+    "w_accel:=${I0FC_RUNTIME_W_ACCEL}"
     "w_smooth:=${I0FC_RUNTIME_W_SMOOTH}"
     "w_alpha:=${I0FC_RUNTIME_W_ALPHA}"
     "w_du_a:=${I0FC_RUNTIME_W_DU_A}"
@@ -459,6 +462,7 @@ validate_launch_variant() {
   if truthy "${STRICT_RUNTIME_CONTRACT}"; then
     expected_lines+=(
       "/spmpc_local_planner/topics/cmd_vel: ${I0FC_RUNTIME_CMD_TOPIC}"
+      "/spmpc_local_planner/variants/${variant}/w_accel: ${I0FC_RUNTIME_W_ACCEL}"
       "/spmpc_local_planner/variants/${variant}/w_smooth: ${I0FC_RUNTIME_W_SMOOTH}"
       "/spmpc_local_planner/variants/${variant}/w_alpha: ${I0FC_RUNTIME_W_ALPHA}"
       "/spmpc_local_planner/variants/${variant}/w_du_a: ${I0FC_RUNTIME_W_DU_A}"
@@ -482,7 +486,7 @@ validate_launch_variant() {
 }
 
 validate_launch_variant B0 0.0 false -1 1.0
-validate_launch_variant "${TREATMENT_VARIANT}" 5.0 true \
+validate_launch_variant "${TREATMENT_VARIANT}" "${TREATMENT_W_SLOSH}" true \
   "${TREATMENT_COST_HORIZON_STEPS}" "${TREATMENT_COST_TAIL_DISCOUNT}"
 python3 "${CONTRACT_TEST}"
 if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
@@ -490,7 +494,7 @@ if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
   python3 "${RUNTIME_GATE_TEST}"
   python3 "${RGB_ANALYZER_TEST}"
 fi
-if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+if [[ "${EXECUTION_MODEL_MODE}" == "explicit_actuator" ]]; then
   python3 "${EXPLICIT_ACTUATOR_MODEL_TEST}"
 fi
 VALIDATE_ONLY=true bash "${CAMERA_PREP}" >/dev/null
@@ -499,10 +503,11 @@ echo "================ I0 fail-closed ABBA ================"
 echo "  profile        = ${PROFILE_ID}; protocol=${PROTOCOL_ID}"
 echo "  row/order      = ${PAIR_ROW}/04; B0,Bslosh,Bslosh,B0"
 echo "  condition      = ${CONDITION_LABEL}; ${VARIANT}; w_slosh=${W_SLOSH}"
+echo "  shared weights = w_accel=${W_ACCEL}; w_du_a=${I0FC_RUNTIME_W_DU_A:--1.0}; w_alpha=${I0FC_RUNTIME_W_ALPHA:--1.0}"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  solver liquid  = ${OBSERVER_APPLIED}; cost steps=${EXPECTED_COST_HORIZON_STEPS}, tail=${EXPECTED_COST_TAIL_DISCOUNT}"
 echo "  execution      = ${EXECUTION_MODEL_MODE}; L=${ACTUATOR_LINEAR_DELAY_SEC}/${ACTUATOR_ANGULAR_DELAY_SEC} s; tau=${ACTUATOR_LINEAR_TAU_SEC}/${ACTUATOR_ANGULAR_TAU_SEC} s"
-if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+if [[ "${EXECUTION_MODEL_MODE}" == "explicit_actuator" ]]; then
   echo "  solver runtime = qp_solver_cond_N=10; odom private queue=10"
 fi
 echo "  legacy delay   = ${DELAY_PHASE_MODE}; applied=${REQUIRE_LEGACY_DELAY_APPLICATION}"
@@ -532,6 +537,8 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_abba_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ws1_wa03_rgb_abba.sh
   src/scout_apps/control/spmpc_local_planner/scripts/lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/i0_failclosed_fixed_abba_profile.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/liquid_cost_window_contract.py
@@ -651,8 +658,8 @@ fi
 order_contents="$(printf '%s\n' \
   'row,block,position,condition,variant,w_slosh' \
   '01,01,01,B0,B0,0.0' \
-  "02,01,02,Bslosh,${TREATMENT_VARIANT},5.0" \
-  "03,02,01,Bslosh,${TREATMENT_VARIANT},5.0" \
+  "02,01,02,Bslosh,${TREATMENT_VARIANT},${TREATMENT_W_SLOSH}" \
+  "03,02,01,Bslosh,${TREATMENT_VARIANT},${TREATMENT_W_SLOSH}" \
   '04,02,02,B0,B0,0.0')"
 if [[ "${PROFILE_ID}" == "legacy_v1" ]]; then
   prereg_contents="$(printf '%s\n' \
@@ -677,6 +684,7 @@ else
     "solver_backend=${I0FC_RUNTIME_SOLVER_BACKEND}" \
     "qp_solver_cond_N=10" "odom_subscriber_queue_size=10" \
     "cmd_topic=${I0FC_RUNTIME_CMD_TOPIC}" \
+    "w_accel=${I0FC_RUNTIME_W_ACCEL}" \
     "w_smooth=${I0FC_RUNTIME_W_SMOOTH}" "w_alpha=${I0FC_RUNTIME_W_ALPHA}" \
     "w_du_a=${I0FC_RUNTIME_W_DU_A}" "w_du_vs=${I0FC_RUNTIME_W_DU_VS}" \
     "slosh_height_max=${I0FC_RUNTIME_SLOSH_HEIGHT_MAX}" \
@@ -788,6 +796,7 @@ if truthy "${STRICT_RUNTIME_CONTRACT}"; then
     "BASE_FRAME=${I0FC_RUNTIME_BASE_FRAME}"
     "IMU_SHADOW_READY_TOPIC=${I0FC_RUNTIME_IMU_READY_TOPIC}"
     "OBSERVER_SELECTION_TOPIC=${I0FC_RUNTIME_OBSERVER_SELECTION_TOPIC}"
+    "W_ACCEL=${I0FC_RUNTIME_W_ACCEL}"
     "W_SMOOTH=${I0FC_RUNTIME_W_SMOOTH}"
     "W_ALPHA=${I0FC_RUNTIME_W_ALPHA}"
     "W_DU_A=${I0FC_RUNTIME_W_DU_A}"
@@ -827,6 +836,8 @@ if [[ "${PROFILE_ID}" == "legacy_v1" ]]; then
   BLOCK_SEGMENT_ID_VALUE="I0FC_FIXED_b${BLOCK}"
 elif [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
   BLOCK_SEGMENT_ID_VALUE="I0FC_EXPACT_V1_b${BLOCK}"
+elif [[ "${PROFILE_ID}" == "explicit_actuator_ws1_wa03_v2" ]]; then
+  BLOCK_SEGMENT_ID_VALUE="I0FC_EXPACT_WS1_WA03_V2_b${BLOCK}"
 else
   BLOCK_SEGMENT_ID_VALUE="I0FC_FIXED_S100_V2_b${BLOCK}"
 fi
@@ -837,7 +848,8 @@ PILOT_CONDITION="${PROTOCOL_ID}" PILOT_RECORD_RGB=false PILOT_RECORD_ONLINE_LIQU
 RUN_LABEL="${RUN_LABEL}" NAME="${NAME}" RUN_OUT_DIR="${RUN_OUT_DIR}" \
 PATH_SOURCE_MODE=replay PATH_FILE="${PATH_FILE}" PATH_EXPECTED_SHA256="${FROZEN_PATH_SHA256}" \
 REQUIRE_PATH_HASH=true START_POS_TOL=0.08 START_YAW_TOL=0.15 START_HOLD_SEC=0.5 \
-START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC}" V_REF="${V_REF}" W_SLOSH="${W_SLOSH}" \
+START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC}" V_REF="${V_REF}" \
+W_SLOSH="${W_SLOSH}" W_ACCEL="${W_ACCEL}" \
 DELAY_PHASE_MODE="${DELAY_PHASE_MODE}" \
 DELAY_PHASE_LINEAR_DELAY_SEC="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
 DELAY_PHASE_ANGULAR_DELAY_SEC="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
@@ -880,6 +892,7 @@ bash "${RUNNER}"
 [[ -s "${BAG_PATH}" ]] || fail "bag missing after runner: ${BAG_PATH}"
 exact_postflight_args=(
   "${BAG_PATH}" --condition "${CONDITION}"
+  --expected-w-slosh "${W_SLOSH}"
   --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}"
   --report-schema "${EXACT_REPORT_SCHEMA}"
   --expected-v-ref "${V_REF}" --expected-v-safe-max "${V_SAFE_MAX}"
@@ -899,6 +912,7 @@ if truthy "${STRICT_RUNTIME_CONTRACT}"; then
     --expected-robot-horizon-steps 60
     --expected-dt-sec 0.0333333333333333
     --expected-control-frequency-hz 30.0
+    --expected-config "w_accel=${I0FC_RUNTIME_W_ACCEL}"
     --expected-config "w_smooth=${I0FC_RUNTIME_W_SMOOTH}"
     --expected-config "w_alpha=${I0FC_RUNTIME_W_ALPHA}"
     --expected-config "w_du_a=${I0FC_RUNTIME_W_DU_A}"
@@ -936,11 +950,22 @@ python3 "${CHAIN_POSTFLIGHT}" "${BAG_PATH}" --variant "${VARIANT}" \
   --mocap-tracker "${MOCAP_TRACKER}" --imu-topic "${IMU_TOPIC}" \
   --path-file "${PATH_FILE}" --path-sha256 "${FROZEN_PATH_SHA256}" --report "${CHAIN_REPORT}"
 
+rgb_weight_contract_args=()
+if truthy "${STRICT_RUNTIME_CONTRACT}"; then
+  rgb_weight_contract_args=(
+    --expected-w-accel "${I0FC_RUNTIME_W_ACCEL}"
+    --expected-w-smooth "${I0FC_RUNTIME_W_SMOOTH}"
+    --expected-w-alpha "${I0FC_RUNTIME_W_ALPHA}"
+    --expected-w-du-a "${I0FC_RUNTIME_W_DU_A}"
+    --expected-w-du-vs "${I0FC_RUNTIME_W_DU_VS}"
+  )
+fi
 python3 "${RGB_POSTFLIGHT}" --bag "${BAG_PATH}" --condition "${CONDITION}" \
   --slosh-enabled "${SLOSH_ENABLED}" --smooth-priority-enabled false \
   --protocol "${PROTOCOL_ID}" --report-suffix "${RGB_REPORT_SUFFIX}" \
   --row "${PAIR_ROW}" --block "${BLOCK}" --position "${POSITION}" \
   --expected-weight "${W_SLOSH}" --expected-delay-mode-code "${EXPECTED_DELAY_MODE_CODE}" \
+  "${rgb_weight_contract_args[@]}" \
   --expected-solver-source-code 2 \
   --require-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}" \
   --require-robot-delay-compensation-applied "${REQUIRE_LEGACY_DELAY_APPLICATION}" \

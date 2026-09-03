@@ -20,6 +20,11 @@ EXPLICIT_WRAPPER = (
     PLANNER_SCRIPTS
     / "run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh"
 )
+WS1_WA03_WRAPPER = (
+    PLANNER_SCRIPTS
+    / "run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh"
+)
+WS1_WA03_OPERATOR = PLANNER_SCRIPTS / "run_spmpc_ws1_wa03_rgb_abba.sh"
 ENGINE = (
     PLANNER_SCRIPTS
     / "lib"
@@ -42,6 +47,8 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
         cls.legacy_wrapper = LEGACY_WRAPPER.read_text(encoding="utf-8")
         cls.short100_wrapper = SHORT100_WRAPPER.read_text(encoding="utf-8")
         cls.explicit_wrapper = EXPLICIT_WRAPPER.read_text(encoding="utf-8")
+        cls.ws1_wa03_wrapper = WS1_WA03_WRAPPER.read_text(encoding="utf-8")
+        cls.ws1_wa03_operator = WS1_WA03_OPERATOR.read_text(encoding="utf-8")
         cls.engine = ENGINE.read_text(encoding="utf-8")
         cls.validator = VALIDATOR.read_text(encoding="utf-8")
 
@@ -50,6 +57,8 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             LEGACY_WRAPPER,
             SHORT100_WRAPPER,
             EXPLICIT_WRAPPER,
+            WS1_WA03_WRAPPER,
+            WS1_WA03_OPERATOR,
             ENGINE,
         ):
             subprocess.run(["bash", "-n", str(script)], check=True)
@@ -69,13 +78,31 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "I0FC_ABBA_PROFILE=explicit_actuator_v1",
             self.explicit_wrapper,
         )
+        self.assertIn(
+            "I0FC_ABBA_PROFILE=explicit_actuator_ws1_wa03_v2",
+            self.ws1_wa03_wrapper,
+        )
         shared_engine = "lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh"
         self.assertIn(shared_engine, self.legacy_wrapper)
         self.assertIn(shared_engine, self.short100_wrapper)
         self.assertIn(shared_engine, self.explicit_wrapper)
+        self.assertIn(shared_engine, self.ws1_wa03_wrapper)
         self.assertLess(len(self.legacy_wrapper.splitlines()), 20)
         self.assertLess(len(self.short100_wrapper.splitlines()), 20)
         self.assertLess(len(self.explicit_wrapper.splitlines()), 20)
+        self.assertLess(len(self.ws1_wa03_wrapper.splitlines()), 20)
+
+    def test_ws1_wa03_operator_entry_is_safe_and_short(self):
+        for token in (
+            "--row",
+            "--run",
+            "VALIDATE_ONLY=false",
+            "ARM_MOTION=YES",
+            "CONFIRM_RGB_GEOMETRY=YES",
+            "CONFIRM_NEW_SPEED_PROFILE=YES",
+            "run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh",
+        ):
+            self.assertIn(token, self.ws1_wa03_operator)
 
     def test_explicit_actuator_profile_is_isolated_and_disables_l22(self):
         profile = profiles.get_profile("explicit_actuator_v1")
@@ -118,6 +145,33 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "validate_mocap_execution_chain_bag.py",
             'acquisition_git_revision=${code_revision}',
             'evidence_git_revision=${current_git_revision}',
+        ):
+            self.assertIn(token, self.engine)
+
+    def test_ws1_wa03_profile_freezes_fair_rgb_pair(self):
+        profile = profiles.get_profile("explicit_actuator_ws1_wa03_v2")
+        self.assertEqual(
+            profile.protocol_id,
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2",
+        )
+        self.assertEqual(profile.execution_model_mode, "explicit_actuator")
+        self.assertEqual(profile.delay_phase_mode, "off")
+        self.assertEqual(profile.treatment_variant, "B_slosh")
+        self.assertEqual(profile.treatment_w_slosh, 1.0)
+        self.assertIsNotNone(profile.strict_runtime_contract)
+        self.assertEqual(profile.strict_runtime_contract.w_accel, 0.3)
+        rows = list(profiles.iter_rows(profile))
+        self.assertEqual(
+            [row.variant for row in rows],
+            ["B0", "B_slosh", "B_slosh", "B0"],
+        )
+        self.assertEqual([row.w_slosh for row in rows], [0.0, 1.0, 1.0, 0.0])
+        for token in (
+            '"W_ACCEL=${I0FC_RUNTIME_W_ACCEL}"',
+            '--expected-w-slosh "${W_SLOSH}"',
+            '--expected-config "w_accel=${I0FC_RUNTIME_W_ACCEL}"',
+            '--expected-w-accel "${I0FC_RUNTIME_W_ACCEL}"',
+            '--expected-w-smooth "${I0FC_RUNTIME_W_SMOOTH}"',
         ):
             self.assertIn(token, self.engine)
 

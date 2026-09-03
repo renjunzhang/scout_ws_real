@@ -11,7 +11,7 @@ this experiment.
 import argparse
 import shlex
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Dict, Iterable, Optional
 
 
@@ -30,6 +30,7 @@ class StrictRuntimeContract:
     observer_selection_topic: str
     odom_topic: str
     mocap_tracker: str
+    w_accel: float
     w_smooth: float
     w_alpha: float
     w_du_a: float
@@ -69,6 +70,7 @@ class AbbaProfile:
     run_label_prefix: str
     runner_selector_mode: str
     treatment_variant: str
+    treatment_w_slosh: float
     treatment_cost_horizon_steps: int
     treatment_cost_tail_discount: float
     exact_report_suffix: str
@@ -141,6 +143,7 @@ SHORT100_STRICT_RUNTIME = StrictRuntimeContract(
     # Pin resolved values explicitly.  Using the launch ``-1`` sentinel here
     # would make the preregistration look as if the solver used negative
     # weights, and would defer a YAML/fallback mismatch until postflight.
+    w_accel=0.0,
     w_smooth=0.1,
     w_alpha=0.1,
     w_du_a=0.1,
@@ -171,6 +174,11 @@ SHORT100_STRICT_RUNTIME = StrictRuntimeContract(
     variant_timeout_sec=5.0,
 )
 
+WS1_WA03_STRICT_RUNTIME = replace(
+    SHORT100_STRICT_RUNTIME,
+    w_accel=0.3,
+)
+
 PROFILES: Dict[str, AbbaProfile] = {
     "legacy_v1": AbbaProfile(
         profile_id="legacy_v1",
@@ -180,6 +188,7 @@ PROFILES: Dict[str, AbbaProfile] = {
         run_label_prefix="DEV_I0FC_FIXED",
         runner_selector_mode="pilot_method",
         treatment_variant="B_slosh",
+        treatment_w_slosh=5.0,
         treatment_cost_horizon_steps=-1,
         treatment_cost_tail_discount=1.0,
         exact_report_suffix="_i0_fixed_postflight.json",
@@ -228,6 +237,7 @@ PROFILES: Dict[str, AbbaProfile] = {
         run_label_prefix="DEV_I0FC_FIXED_S100_V2",
         runner_selector_mode="direct_variant",
         treatment_variant="B_slosh_short100",
+        treatment_w_slosh=5.0,
         treatment_cost_horizon_steps=3,
         treatment_cost_tail_discount=0.0,
         exact_report_suffix="_i0_fixed_short100_v2_postflight.json",
@@ -287,6 +297,7 @@ PROFILES: Dict[str, AbbaProfile] = {
         run_label_prefix="DEV_I0FC_EXPACT_V1",
         runner_selector_mode="direct_variant",
         treatment_variant="B_slosh",
+        treatment_w_slosh=5.0,
         treatment_cost_horizon_steps=-1,
         treatment_cost_tail_discount=1.0,
         exact_report_suffix="_i0_explicit_actuator_v1_postflight.json",
@@ -317,6 +328,75 @@ PROFILES: Dict[str, AbbaProfile] = {
             "legacy L22 off; command/actual separated in OCP"
         ),
         strict_runtime_contract=SHORT100_STRICT_RUNTIME,
+        execution_model_mode="explicit_actuator",
+        actuator_linear_delay_sec=0.1666666665,
+        actuator_angular_delay_sec=0.3333333330,
+        actuator_linear_tau_sec=0.112,
+        actuator_angular_tau_sec=0.119,
+        actuator_linear_gain=1.018,
+        actuator_angular_gain=1.096,
+        delay_phase_mode="off",
+        delay_phase_linear_delay_sec=0.15,
+        delay_phase_angular_delay_sec=0.22,
+        expected_delay_mode_code=0,
+        require_legacy_delay_application=False,
+        expected_execution_model_code=1,
+        expected_b0_state_width=23,
+        expected_slosh_state_width=27,
+        minimum_solver_schema_version=3,
+        final_liquid_method="I0",
+    ),
+    "explicit_actuator_ws1_wa03_v2": AbbaProfile(
+        profile_id="explicit_actuator_ws1_wa03_v2",
+        protocol_id=(
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2"
+        ),
+        version_label="i0_failclosed_explicit_actuator_ws1_wa03_abba_dev_v2",
+        output_tag="spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_v2",
+        run_label_prefix="DEV_I0FC_EXPACT_WS1_WA03_V2",
+        runner_selector_mode="direct_variant",
+        treatment_variant="B_slosh",
+        treatment_w_slosh=1.0,
+        treatment_cost_horizon_steps=-1,
+        treatment_cost_tail_discount=1.0,
+        exact_report_suffix=(
+            "_i0_explicit_actuator_ws1_wa03_v2_postflight.json"
+        ),
+        observer_report_suffix=(
+            "_explicit_actuator_ws1_wa03_v2_observer_postflight.json"
+        ),
+        chain_report_suffix=(
+            "_explicit_actuator_ws1_wa03_v2_mocap_chain_postflight.json"
+        ),
+        rgb_report_suffix=(
+            "_i0_explicit_actuator_ws1_wa03_v2_rgb_postflight.json"
+        ),
+        unit_pass_suffix="_explicit_actuator_ws1_wa03_v2_unit_pass.env",
+        rgb_analysis_report_name=(
+            "I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_RGB_ANALYSIS.json"
+        ),
+        rgb_analysis_report_type=(
+            "I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_RGB_ANALYSIS"
+        ),
+        exact_report_schema=(
+            "spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_postflight_v2"
+        ),
+        minimum_p95_improvement_mm=0.05,
+        minimum_rms_improvement_mm=0.0,
+        maximum_slowdown_ratio=1.05,
+        require_fresh_session=True,
+        session_marker_name=(
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2_session.env"
+        ),
+        supersedes_protocol=(
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1"
+        ),
+        legacy_source_commit=LEGACY_SOURCE_COMMIT,
+        operator_note=(
+            "explicit actuator WS1/WA03 v2; B0/B_slosh share w_accel=0.3; "
+            "treatment w_slosh=1.0; online RGB scalar; legacy L22 off"
+        ),
+        strict_runtime_contract=WS1_WA03_STRICT_RUNTIME,
         execution_model_mode="explicit_actuator",
         actuator_linear_delay_sec=0.1666666665,
         actuator_angular_delay_sec=0.3333333330,
@@ -393,7 +473,7 @@ def resolve_row(profile: AbbaProfile, row: str) -> AbbaRow:
         stem_condition="BsloshS100" if short else "Bslosh",
         pilot_method=pilot_method,
         variant=profile.treatment_variant,
-        w_slosh=5.0,
+        w_slosh=profile.treatment_w_slosh,
         slosh_enabled=True,
         observer_applied=profile.final_liquid_method,
         cost_horizon_steps=profile.treatment_cost_horizon_steps,
@@ -436,6 +516,7 @@ def shell_values(profile: AbbaProfile, row: Optional[AbbaRow]) -> Dict[str, str]
         "RUN_LABEL_PREFIX": profile.run_label_prefix,
         "RUNNER_SELECTOR_MODE": profile.runner_selector_mode,
         "TREATMENT_VARIANT": profile.treatment_variant,
+        "TREATMENT_W_SLOSH": str(profile.treatment_w_slosh),
         "TREATMENT_COST_HORIZON_STEPS": str(
             profile.treatment_cost_horizon_steps
         ),

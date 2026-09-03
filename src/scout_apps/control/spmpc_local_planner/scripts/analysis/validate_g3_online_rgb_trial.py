@@ -56,6 +56,7 @@ def parse_args():
     parser.add_argument("--position", required=True)
     parser.add_argument("--measurement-topic", default="/liquid/measurement")
     parser.add_argument("--expected-weight", type=float, required=True)
+    parser.add_argument("--expected-w-accel", type=float)
     parser.add_argument("--expected-w-smooth", type=float)
     parser.add_argument("--expected-w-alpha", type=float)
     parser.add_argument("--expected-w-du-a", type=float)
@@ -818,6 +819,7 @@ def main():
     if not close(config.get("w_slosh"), args.expected_weight):
         failures.append("effective w_slosh does not match condition")
     expected_config_values = {
+        "w_accel": args.expected_w_accel,
         "w_smooth": args.expected_w_smooth,
         "w_alpha": args.expected_w_alpha,
         "w_du_a": args.expected_w_du_a,
