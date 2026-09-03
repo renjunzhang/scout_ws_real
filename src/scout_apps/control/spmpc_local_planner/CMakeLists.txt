@@ -226,6 +226,7 @@ if(SPMPC_MAINLINE_ARTIFACT_DIR)
 
   add_library(spmpc_solver_mainline
     src/solvers/mainline_mpcc_solver_acados.cpp
+    src/solvers/mainline_solver_input_builder.cpp
   )
   add_dependencies(spmpc_solver_mainline spmpc_mainline_artifact_verify)
   target_include_directories(spmpc_solver_mainline PUBLIC
