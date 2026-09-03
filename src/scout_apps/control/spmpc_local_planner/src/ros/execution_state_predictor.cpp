@@ -5,9 +5,21 @@
 
 namespace spmpc_local_planner {
 
-bool ExecutionStatePredictor::configure(const SloshModelParams& slosh_params) {
+bool ExecutionStatePredictor::configure(
+    const SloshModelParams& slosh_params,
+    double explicit_prefix_step_sec) {
     slosh_configured_ = slosh_dynamics_.configure(slosh_params);
-    return slosh_configured_;
+    explicit_prefix_slosh_configured_ = false;
+    if (slosh_configured_ && std::isfinite(explicit_prefix_step_sec) &&
+        explicit_prefix_step_sec > 1e-9) {
+        SloshModelParams prefix_params = slosh_params;
+        prefix_params.dt = explicit_prefix_step_sec;
+        explicit_prefix_slosh_configured_ =
+            explicit_prefix_slosh_dynamics_.configure(prefix_params);
+    }
+    return slosh_configured_ &&
+           (explicit_prefix_step_sec <= 1e-9 ||
+            explicit_prefix_slosh_configured_);
 }
 
 ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_robot,
@@ -224,15 +236,27 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
         robot.yaw = normalizeYaw(robot.yaw + omega_mid * step);
 
         if (slosh_configured_) {
-            SloshDynamics step_model = slosh_dynamics_;
-            if (std::abs(step - step_model.params().dt) > 1e-9) {
-                auto slosh_params = step_model.params();
-                slosh_params.dt = step;
-                step_model.configure(slosh_params);
-            }
             const double a_actual = (next_v - robot.v) / step;
-            slosh = step_model.step(
-                slosh, a_actual, v_mid * omega_mid, omega_mid);
+            const double ay_actual = v_mid * omega_mid;
+            if (explicit_prefix_slosh_configured_ &&
+                std::abs(step -
+                         explicit_prefix_slosh_dynamics_.params().dt) <= 1e-12) {
+                slosh = explicit_prefix_slosh_dynamics_.step(
+                    slosh, a_actual, ay_actual, omega_mid);
+            } else {
+                SloshState next_slosh;
+                if (!slosh_dynamics_.stepWithDt(
+                        slosh,
+                        a_actual,
+                        ay_actual,
+                        omega_mid,
+                        step,
+                        next_slosh)) {
+                    out.status = "SLOSH_PREFIX_DISCRETIZATION_FAILED";
+                    return out;
+                }
+                slosh = next_slosh;
+            }
         }
         robot.v = next_v;
         robot.omega = next_omega;

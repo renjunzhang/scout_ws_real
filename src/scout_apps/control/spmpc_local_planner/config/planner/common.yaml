@@ -34,6 +34,13 @@ topics:
   costmap: /map
   cmd_vel: /cmd_vel
 
+# Keep odom reception independent from the 30 Hz solver callback.  Block 1
+# showed that queue_size=1 on the global callback queue turned solver overruns
+# into 55--80 ms gaps inside the planner even though the source stream was
+# continuous.
+odom:
+  subscriber_queue_size: 10
+
 frames:
   robot_base: base_link
   use_tf_pose: true
@@ -241,6 +248,10 @@ platform:
   kinematics: differential
 
 acados:
+  # 2026-09-03 Row02 pre-solve snapshot replay: cond_N=10 reduced the
+  # Bslosh solver P95 from about 20.68 ms (cond_N=60) to 9.08 ms, with no
+  # failures in 539 sampled snapshots.  Keep B0/Bslosh codegen identical.
+  qp_solver_cond_N: 10
   warm_start:
     enable: true                          # 2026-06-08: 开热启动, 让弯处卡死的 OCP 从"在动"的猜测重启
     type: diff_drive_flatness

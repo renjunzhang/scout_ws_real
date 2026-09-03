@@ -55,7 +55,7 @@ bool SloshDynamics::stepWithDt(
     next_state = state;
     const Eigen::Vector4d x = toEigen(state);
     if (!configured_ || !x.allFinite() || !std::isfinite(ax) || !std::isfinite(ay) ||
-        !std::isfinite(dt_sec) || dt_sec <= 1e-4 || !std::isfinite(omega_n_) ||
+        !std::isfinite(dt_sec) || dt_sec <= 1e-9 || !std::isfinite(omega_n_) ||
         omega_n_ <= 0.0 || !std::isfinite(params_.damping_ratio)) {
         return false;
     }

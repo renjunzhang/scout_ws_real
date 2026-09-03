@@ -235,6 +235,9 @@ SpmpcLocalPlannerROS::SpmpcLocalPlannerROS()
     : tf_listener_(tf_buffer_) {}
 
 SpmpcLocalPlannerROS::~SpmpcLocalPlannerROS() {
+    if (odom_spinner_) {
+        odom_spinner_->stop();
+    }
     if (imu_spinner_) {
         imu_spinner_->stop();
     }
@@ -252,6 +255,15 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("topics/reference_path", path_topic_, path_topic_);
     pnh_.param("topics/costmap", costmap_topic_, costmap_topic_);
     pnh_.param("topics/cmd_vel", cmd_topic_, cmd_topic_);
+    pnh_.param("odom/subscriber_queue_size",
+               odom_subscriber_queue_size_,
+               odom_subscriber_queue_size_);
+    if (odom_subscriber_queue_size_ < 1 ||
+        odom_subscriber_queue_size_ > 1000) {
+        ROS_WARN("[spmpc_local_planner] invalid odom/subscriber_queue_size=%d; using 10",
+                 odom_subscriber_queue_size_);
+        odom_subscriber_queue_size_ = 10;
+    }
     pnh_.param("frames/robot_base", robot_base_frame_, robot_base_frame_);
     pnh_.param("frames/reference_target", reference_target_frame_, reference_target_frame_);
     pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
@@ -886,7 +898,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_ERROR("[spmpc_local_planner] processed-IMU pipeline configure failed; disabling shadow");
         imu_shadow_enable_ = false;
     }
-    if (!execution_predictor_.configure(solver_params.slosh)) {
+    const double explicit_prefix_step_sec =
+        actuator_model_params_.mode == ExecutionModelMode::ExplicitActuator
+            ? actuator_model_params_.max_integration_step_sec
+            : 0.0;
+    if (!execution_predictor_.configure(
+            solver_params.slosh, explicit_prefix_step_sec)) {
         ROS_WARN("[spmpc_local_planner] delay_phase shadow slosh predictor configure failed; shadow slosh stays pass-through");
     }
     std::string liquid_nowcast_error;
@@ -904,7 +921,14 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     }
     obstacle_enable_ = solver_params.obstacle_enable;
 
-    odom_sub_ = nh_.subscribe(odom_topic_, 1, &SpmpcLocalPlannerROS::odomCallback, this);
+    odom_nh_ = nh_;
+    odom_nh_.setCallbackQueue(&odom_callback_queue_);
+    odom_sub_ = odom_nh_.subscribe<nav_msgs::Odometry>(
+        odom_topic_,
+        static_cast<std::uint32_t>(odom_subscriber_queue_size_),
+        &SpmpcLocalPlannerROS::odomCallback,
+        this,
+        ros::TransportHints().tcpNoDelay());
     if (imu_shadow_enable_) {
         imu_nh_ = nh_;
         imu_nh_.setCallbackQueue(&imu_callback_queue_);
@@ -930,17 +954,21 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
     control_timer_ = nh_.createTimer(ros::Duration(period), &SpmpcLocalPlannerROS::controlTimerCallback, this);
+    odom_spinner_.reset(new ros::AsyncSpinner(1, &odom_callback_queue_));
+    odom_spinner_->start();
     if (imu_shadow_enable_) {
         imu_spinner_.reset(new ros::AsyncSpinner(1, &imu_callback_queue_));
         imu_spinner_->start();
     }
 
-    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s liquid_nowcast=%s comparison=%s",
+    ROS_INFO("[spmpc_local_planner] initialized variant=%s mode=%s path_topic=%s costmap_topic=%s cmd_topic=%s odom_topic=%s odom_queue=%d imu_pipeline=%s imu_topic=%s imu_queue=%d observer_source=%s observer_fallback=%s latch_fallback=%s liquid_nowcast=%s comparison=%s",
              variant_.name.c_str(),
              experiment_mode_.c_str(),
              path_topic_.c_str(),
              costmap_topic_.c_str(),
              cmd_topic_.c_str(),
+             odom_topic_.c_str(),
+             odom_subscriber_queue_size_,
              boolText(imu_shadow_enable_),
              imu_topic_.c_str(),
              imu_subscriber_queue_size_,
@@ -1194,6 +1222,14 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
         return;
     }
 
+    ros::Time odom_receive_stamp;
+    OdomTimingDebug odom_timing;
+    {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        odom_receive_stamp = last_odom_receive_stamp_;
+        odom_timing = last_odom_timing_;
+    }
+
     DelayPhaseStatusCode effective_status = status_code;
     const bool has_any_history = !command_history_.empty();
     const double history_span_sec = command_history_.spanSec();
@@ -1209,8 +1245,10 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     const double fallback_missing_history_sec =
         has_any_history ? std::max(0.0, required_history_sec - history_span_sec) : required_history_sec;
     const double cmd_age_sec = has_any_history ? (now - command_history_.latestStamp()).toSec() : -1.0;
-    const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
-    const double odom_age_sec = have_odom_receive ? (now - last_odom_receive_stamp_).toSec() : -1.0;
+    const bool have_odom_receive = !odom_receive_stamp.isZero();
+    const double odom_age_sec = have_odom_receive
+        ? (now - odom_receive_stamp).toSec()
+        : -1.0;
     const auto status_requires_freshness = [](DelayPhaseStatusCode status) {
         return status == DelayPhaseStatusCode::MonitorOk ||
                status == DelayPhaseStatusCode::ShadowOk ||
@@ -1257,7 +1295,7 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     alignment.cmd_age_ms = summary.cmd_age_ms;
     alignment.cmd_period_ms = summary.cmd_period_ms;
     alignment.odom_age_ms = summary.odom_age_ms;
-    alignment.odom_period_ms = last_odom_timing_.stamp_dt_ms;
+    alignment.odom_period_ms = odom_timing.stamp_dt_ms;
     alignment.linear_delay_ms = summary.linear_delay_ms;
     alignment.angular_delay_ms = summary.angular_delay_ms;
     alignment.history_span_ms = summary.history_span_ms;
@@ -1283,7 +1321,7 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
     }
 
     diagnostics_.publishDelayPhase(summary);
-    diagnostics_.publishOdomTiming(last_odom_timing_);
+    diagnostics_.publishOdomTiming(odom_timing);
     diagnostics_.publishDelayCompensation(summary);
     diagnostics_.publishCmdOdomAlignment(alignment);
     diagnostics_.publishExecutionAlignmentStatus(
@@ -1653,7 +1691,9 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
         return;
     }
     // Commit odom to the formal control path only after the same monotonicity
-    // and finite-value checks used by the liquid-observer input boundary.
+    // and finite-value checks used by the liquid-observer input boundary. The
+    // potentially expensive observer update stays outside this short lock.
+    std::lock_guard<std::mutex> lock(odom_mutex_);
     last_odom_receive_stamp_ = receive_stamp;
     last_odom_ = *msg;
     have_odom_ = true;
@@ -1785,7 +1825,16 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
 
-    if (!have_odom_) {
+    nav_msgs::Odometry latest_odom;
+    ros::Time latest_odom_receive_stamp;
+    {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        if (have_odom_) {
+            latest_odom = last_odom_;
+            latest_odom_receive_stamp = last_odom_receive_stamp_;
+        }
+    }
+    if (latest_odom.header.stamp.isZero()) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
@@ -1837,7 +1886,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.imu_excitation = makeExcitationAudit(
         imu_observer_health.snapshot.excitation);
     cycle_audit.timing.raw_robot_state_stamp_ns =
-        static_cast<std::int64_t>(last_odom_.header.stamp.toNSec());
+        static_cast<std::int64_t>(latest_odom.header.stamp.toNSec());
     cycle_audit.timing.raw_liquid_state_stamp_ns =
         observer_selection.selected_state_stamp_ns;
     cycle_audit.timing.state_alignment_required =
@@ -1953,7 +2002,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         cycle_audit.timing.robot_state_extrapolated = extrapolated;
         cycle_audit.timing.state_alignment_status = alignment_status;
     } else {
-        if (!robotStateFromLatest(input.robot)) {
+        if (!robotStateFromLatest(latest_odom, input.robot)) {
             resetTerminalSpinFailGate();
             resetTrackingSafetyGate();
             diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
@@ -2042,8 +2091,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     bool robot_delay_compensation_applied = false;
     bool liquid_delay_compensation_applied = false;
     if (delayPhaseClosedLoopEnabled() && shadow_prediction_ptr) {
-        const bool have_odom_receive = !last_odom_receive_stamp_.isZero();
-        const double odom_age_sec = have_odom_receive ? (delay_phase_now - last_odom_receive_stamp_).toSec() : -1.0;
+        const bool have_odom_receive = !latest_odom_receive_stamp.isZero();
+        const double odom_age_sec = have_odom_receive
+            ? (delay_phase_now - latest_odom_receive_stamp).toSec()
+            : -1.0;
         const bool odom_fresh = have_odom_receive &&
                                 (!std::isfinite(delay_phase_params_.odom_timeout_sec) ||
                                  delay_phase_params_.odom_timeout_sec <= 0.0 ||
@@ -2330,8 +2381,10 @@ RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& od
     return state;
 }
 
-bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
-    state = robotStateFromOdom(last_odom_);
+bool SpmpcLocalPlannerROS::robotStateFromLatest(
+    const nav_msgs::Odometry& latest_odom,
+    RobotState& state) {
+    state = robotStateFromOdom(latest_odom);
     if (!use_tf_pose_) {
         return true;
     }
@@ -2352,13 +2405,13 @@ bool SpmpcLocalPlannerROS::robotStateFromLatest(RobotState& state) {
         state.yaw = tf2::getYaw(tf.transform.rotation);
         return true;
     } catch (const tf2::TransformException& ex) {
-        if (reference_frame != last_odom_.header.frame_id) {
+        if (reference_frame != latest_odom.header.frame_id) {
             ROS_WARN_THROTTLE(1.0,
                               "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; odom frame is %s, refuse mixed-frame fallback",
                               reference_frame.c_str(),
                               robot_base_frame_.c_str(),
                               ex.what(),
-                              last_odom_.header.frame_id.c_str());
+                              latest_odom.header.frame_id.c_str());
             return false;
         }
         ROS_WARN_THROTTLE(1.0,
@@ -2405,8 +2458,15 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
     if (target_stamp.isZero()) {
         return false;
     }
+    std::deque<StampedRobotState> odom_history;
+    std::string latest_odom_frame;
+    {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        odom_history = odom_state_history_;
+        latest_odom_frame = last_odom_.header.frame_id;
+    }
     const auto aligned = alignRobotStateToEpoch(
-        odom_state_history_,
+        odom_history,
         static_cast<std::int64_t>(target_stamp.toNSec()),
         state_timing_params_.max_interpolation_gap_sec,
         state_timing_params_.max_robot_extrapolation_sec);
@@ -2420,7 +2480,7 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
 
     const std::string reference_frame = problem_.referenceFrameId();
     if (!use_tf_pose_ || reference_frame.empty() ||
-        reference_frame == last_odom_.header.frame_id) {
+        reference_frame == latest_odom_frame) {
         return true;
     }
     try {
@@ -2449,6 +2509,10 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
 bool SpmpcLocalPlannerROS::processOdomInput(
     const nav_msgs::Odometry& odom,
     const ros::Time& receive_stamp) {
+    const auto commit_timing = [this](const OdomTimingDebug& timing) {
+        std::lock_guard<std::mutex> lock(odom_mutex_);
+        last_odom_timing_ = timing;
+    };
     OdomTimingDebug timing;
     if (!receive_stamp.isZero() && !odom.header.stamp.isZero()) {
         timing.recv_age_ms = 1000.0 * (receive_stamp - odom.header.stamp).toSec();
@@ -2480,7 +2544,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         std::isfinite(v) && std::isfinite(omega);
     if (receive_stamp.isZero() || odom.header.stamp.isZero() || !finite_control_state) {
         timing.dt_clamped = true;
-        last_odom_timing_ = timing;
+        commit_timing(timing);
         ROS_WARN_THROTTLE(
             1.0,
             "[spmpc_local_planner] rejecting odom control input with invalid stamp, pose, or twist");
@@ -2493,7 +2557,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
     if (!have_prev_odom_) {
         prev_odom_ = odom;
         have_prev_odom_ = true;
-        last_odom_timing_ = timing;
+        commit_timing(timing);
         if (imu_shadow_publish_diagnostics_) {
             publishOdomSloshObserverDebug(odom, excitation, "ODOM_WAITING_FOR_PREVIOUS");
         }
@@ -2508,7 +2572,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         timing.stamp_dt_ms = std::isfinite(dt_msg) ? 1000.0 * dt_msg : 0.0;
         timing.dt_clamped = true;
         timing.have_prev_odom = true;
-        last_odom_timing_ = timing;
+        commit_timing(timing);
 
         const bool clock_reset = std::isfinite(dt_msg) &&
                                  dt_msg < -kOdomClockResetThresholdSec;
@@ -2550,7 +2614,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         timing.stamp_dt_ms = 1000.0 * dt_msg;
         timing.dt_clamped = true;
         timing.have_prev_odom = true;
-        last_odom_timing_ = timing;
+        commit_timing(timing);
         ROS_WARN_THROTTLE(
             1.0,
             "[spmpc_local_planner] rejecting odom control input with non-finite derived excitation");
@@ -2567,7 +2631,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
     timing.omega = omega;
     timing.have_prev_odom = true;
     timing.dt_clamped = false;
-    last_odom_timing_ = timing;
+    commit_timing(timing);
 
     excitation.valid = true;
     excitation.ax = ax;

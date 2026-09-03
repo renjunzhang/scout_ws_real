@@ -81,7 +81,8 @@ private:
                                   std::string& failure_status);
     void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
-    bool robotStateFromLatest(RobotState& state);
+    bool robotStateFromLatest(const nav_msgs::Odometry& latest_odom,
+                              RobotState& state);
     bool robotStateAtEpoch(const ros::Time& target_stamp,
                            RobotState& state,
                            bool& interpolated,
@@ -125,12 +126,14 @@ private:
     ProcessedImuParams loadProcessedImuParams() const;
     SloshRiskGovernorParams loadSloshRiskGovernorParams() const;
 
-    // The processed-IMU shadow runs on a private ROS1 callback queue so its
-    // filtering/matrix exponential/diagnostic publication cannot queue ahead
-    // of the formal odom/path/control callbacks on the global queue.
+    // Odom and processed IMU each run on a private ROS1 callback queue.  A
+    // long acados control callback on the global queue must not discard the
+    // measurements needed to reconstruct the common state epoch.
+    ros::CallbackQueue odom_callback_queue_;
     ros::CallbackQueue imu_callback_queue_;
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
+    ros::NodeHandle odom_nh_;
     ros::NodeHandle imu_nh_;
     ros::Subscriber odom_sub_;
     ros::Subscriber imu_sub_;
@@ -165,14 +168,17 @@ private:
     EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
     ros::Time last_odom_receive_stamp_;
+    std::mutex odom_mutex_;
     std::mutex slosh_observers_mutex_;
     bool imu_input_ready_ = false;
     std::uint32_t imu_input_reset_epoch_ = 0;
 
+    // Formal control snapshots are guarded by odom_mutex_.
     nav_msgs::Odometry last_odom_;
-    nav_msgs::Odometry prev_odom_;
     std::deque<StampedRobotState> odom_state_history_;
     bool have_odom_ = false;
+    // Derivative baseline: private to the single-threaded odom callback queue.
+    nav_msgs::Odometry prev_odom_;
     bool have_prev_odom_ = false;
     bool have_reference_signature_ = false;
     std::string map_vref_profile_path_;
@@ -200,6 +206,7 @@ private:
     bool imu_shadow_enable_ = false;
     bool imu_shadow_publish_diagnostics_ = true;
     bool liquid_nowcast_publish_comparison_ = false;
+    int odom_subscriber_queue_size_ = 10;
     int imu_subscriber_queue_size_ = 10;
     double imu_observer_dt_sec_ = 0.02;
     bool use_tf_pose_ = true;
@@ -239,8 +246,9 @@ private:
     std::uint64_t previous_plan_cycle_id_ = 0;
     double previous_shifted_plan_a_ = 0.0;
     double previous_shifted_plan_alpha_ = 0.0;
-    // Declared last so the worker stops before any callback-owned state is
-    // destroyed.  The explicit destructor also stops it before member teardown.
+    // Declared last so the workers stop before callback-owned state is
+    // destroyed.  The explicit destructor also stops both before teardown.
+    std::unique_ptr<ros::AsyncSpinner> odom_spinner_;
     std::unique_ptr<ros::AsyncSpinner> imu_spinner_;
 };
 

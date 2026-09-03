@@ -180,6 +180,10 @@ class I0FailClosedFixedAbbaContractTest(unittest.TestCase):
             "CURRENT_OBSERVER_SOURCE=processed_imu",
             "OBSERVER_FALLBACK_POLICY=fail_closed",
             "STATE_TIMING_REQUIRE_COMMON_EPOCH=true",
+            '"odom_subscriber_queue_size:=10"',
+            '"/spmpc_local_planner/odom/subscriber_queue_size: 10"',
+            'cond_n != 10',
+            '"qp_solver_cond_N=10" "odom_subscriber_queue_size=10"',
             "SHARED_LINEAR_ACCEL_LIMIT_ENABLE=false",
             "SHARED_ANGULAR_LIMIT_ENABLE=false",
         )

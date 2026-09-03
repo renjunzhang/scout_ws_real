@@ -29,6 +29,8 @@ SHORT_HORIZON_TEST="${SCRIPT_DIR}/tests/test_short_horizon_matched_release.py"
 RUNTIME_GATE_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_short100_runtime_gate.py"
 RGB_ANALYZER_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_abba_rgb_analysis.py"
 EXPLICIT_ACTUATOR_MODEL_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_model.py"
+ACADOS_B0_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/acados_ocp_spmpc_b0.json"
+ACADOS_SLOSH_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/acados_ocp_spmpc_slosh.json"
 ONLINE_LIQUID_LAUNCH="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/launch/online_liquid_height.launch"
 ONLINE_LIQUID_NODE="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/online_liquid_height_node.py"
 ONLINE_LIQUID_DETECTOR="${REPO_ROOT}/src/scout_apps/sensors/realsense_liquid_measurement/scripts/red_liquid_infer_from_bag.py"
@@ -311,11 +313,33 @@ if [[ "${PROFILE_ID}" == "short100_v2" ]]; then
   )
 fi
 if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
-  required_files+=("${EXPLICIT_ACTUATOR_MODEL_TEST}")
+  required_files+=(
+    "${EXPLICIT_ACTUATOR_MODEL_TEST}"
+    "${ACADOS_B0_JSON}"
+    "${ACADOS_SLOSH_JSON}"
+  )
 fi
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
+if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+  python3 - "${ACADOS_B0_JSON}" "${ACADOS_SLOSH_JSON}" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+for raw_path in sys.argv[1:]:
+    path = Path(raw_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    horizon = int(payload.get("dims", {}).get("N", -1))
+    cond_n = int(payload.get("solver_options", {}).get("qp_solver_cond_N", -1))
+    if horizon != 60 or cond_n != 10:
+        raise SystemExit(
+            "generated solver contract mismatch: {} N={} qp_solver_cond_N={}"
+            .format(path, horizon, cond_n)
+        )
+PY
+fi
 [[ "${MOCAP_TRACKER}" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "unsafe MOCAP_TRACKER"
 [[ "${RUN_LABEL}" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "unsafe RUN_LABEL"
 [[ "${PATH_EXPECTED_SHA256,,}" == "${FROZEN_PATH_SHA256}" ]] || fail "C02 path hash contract changed"
@@ -335,6 +359,7 @@ source /opt/ros/noetic/setup.bash
 source "${REPO_ROOT}/devel/setup.bash"
 
 launch_profile_contract_args=(
+  "odom_subscriber_queue_size:=10"
   "execution_model_mode:=${EXECUTION_MODEL_MODE}"
   "execution_model_linear_delay_sec:=${ACTUATOR_LINEAR_DELAY_SEC}"
   "execution_model_angular_delay_sec:=${ACTUATOR_ANGULAR_DELAY_SEC}"
@@ -413,6 +438,7 @@ validate_launch_variant() {
     "/spmpc_local_planner/slosh_observer/source: processed_imu"
     "/spmpc_local_planner/slosh_observer/fallback_policy: fail_closed"
     "/spmpc_local_planner/slosh_observer/latch_fallback: false"
+    "/spmpc_local_planner/odom/subscriber_queue_size: 10"
     "/spmpc_local_planner/execution_model/mode: ${EXECUTION_MODEL_MODE}"
     "/spmpc_local_planner/execution_model/linear_delay_sec: ${ACTUATOR_LINEAR_DELAY_SEC}"
     "/spmpc_local_planner/execution_model/angular_delay_sec: ${ACTUATOR_ANGULAR_DELAY_SEC}"
@@ -476,6 +502,9 @@ echo "  condition      = ${CONDITION_LABEL}; ${VARIANT}; w_slosh=${W_SLOSH}"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  solver liquid  = ${OBSERVER_APPLIED}; cost steps=${EXPECTED_COST_HORIZON_STEPS}, tail=${EXPECTED_COST_TAIL_DISCOUNT}"
 echo "  execution      = ${EXECUTION_MODEL_MODE}; L=${ACTUATOR_LINEAR_DELAY_SEC}/${ACTUATOR_ANGULAR_DELAY_SEC} s; tau=${ACTUATOR_LINEAR_TAU_SEC}/${ACTUATOR_ANGULAR_TAU_SEC} s"
+if [[ "${PROFILE_ID}" == "explicit_actuator_v1" ]]; then
+  echo "  solver runtime = qp_solver_cond_N=10; odom private queue=10"
+fi
 echo "  legacy delay   = ${DELAY_PHASE_MODE}; applied=${REQUIRE_LEGACY_DELAY_APPLICATION}"
 echo "  speed profile  = NEW DEVELOPMENT v_ref=0.20, hard v_safe=0.25 m/s"
 echo "  evidence       = online RGB scalar + NOKOV + I0/actuator + solver audits"
@@ -646,6 +675,7 @@ else
     "slosh_cost_tail_discount=${TREATMENT_COST_TAIL_DISCOUNT}" \
     "robot_horizon_steps=60" "dt_sec=0.0333333333333333" "robot_horizon_sec=2.0" \
     "solver_backend=${I0FC_RUNTIME_SOLVER_BACKEND}" \
+    "qp_solver_cond_N=10" "odom_subscriber_queue_size=10" \
     "cmd_topic=${I0FC_RUNTIME_CMD_TOPIC}" \
     "w_smooth=${I0FC_RUNTIME_W_SMOOTH}" "w_alpha=${I0FC_RUNTIME_W_ALPHA}" \
     "w_du_a=${I0FC_RUNTIME_W_DU_A}" "w_du_vs=${I0FC_RUNTIME_W_DU_VS}" \

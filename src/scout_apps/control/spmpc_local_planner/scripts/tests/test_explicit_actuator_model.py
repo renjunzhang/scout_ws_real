@@ -48,6 +48,9 @@ class ExplicitActuatorModelTest(unittest.TestCase):
         )
         self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (23, 27, 28, 37))
 
+    def test_partial_condensing_horizon_is_frozen(self):
+        self.assertEqual(self.cfg["qp_solver_cond_N"], 10)
+
     def test_fifo_shifts_and_appends_next_command_state(self):
         symbols = export_spmpc_b0_symbols()
         step = transition(symbols)

@@ -28,8 +28,8 @@ public:
 
     SloshState step(const SloshState& state, double ax, double ay, double omega_z) const;
     // Exact ZOH step at a caller-provided interval without mutating the cached
-    // nominal discretization.  Intended for timestamped measurement observers,
-    // not the fixed-step solver rollout.
+    // nominal discretization. Timestamp admission remains the caller's
+    // responsibility; very short positive tail steps are valid for rollout.
     bool stepWithDt(const SloshState& state,
                     double ax,
                     double ay,

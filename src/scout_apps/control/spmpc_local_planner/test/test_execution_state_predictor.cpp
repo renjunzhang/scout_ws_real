@@ -36,7 +36,7 @@ ExecutionStatePredictor makePredictor() {
     SloshModelParams slosh_params;
     slosh_params.dt = 0.02;
     ExecutionStatePredictor predictor;
-    predictor.configure(slosh_params);
+    predictor.configure(slosh_params, 0.01);
     return predictor;
 }
 
@@ -334,6 +334,31 @@ TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesKnownPrefixWithFopdt) {
     EXPECT_NEAR(
         prediction.actuator.alpha_actual,
         (p.angular_gain * 0.30 - expected_omega) / p.angular_tau_sec,
+        1.0e-9);
+}
+
+TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesVeryShortLiquidTail) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    history.push(sample(9.0, 0.20, 0.0));
+    history.push(sample(10.0, 0.20, 0.0));
+
+    RobotState robot;
+    SloshState slosh;
+    slosh.eta_x = 0.001;
+    slosh.eta_x_dot = 0.10;
+    const auto prediction = makePredictor().predictExplicitActuator(
+        robot,
+        slosh,
+        history,
+        stamp(9.99995),
+        stamp(10.0),
+        actuatorParams());
+
+    ASSERT_TRUE(prediction.valid) << prediction.status;
+    EXPECT_TRUE(std::isfinite(prediction.predicted_slosh.eta_x));
+    EXPECT_GT(
+        std::abs(prediction.predicted_slosh.eta_x - slosh.eta_x),
         1.0e-9);
 }
 

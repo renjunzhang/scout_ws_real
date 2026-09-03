@@ -115,6 +115,7 @@ def load_config():
         "actuator_tau_omega": float(common["execution_model"]["angular_tau_sec"]),
         "actuator_gain_v": float(common["execution_model"]["linear_gain"]),
         "actuator_gain_omega": float(common["execution_model"]["angular_gain"]),
+        "qp_solver_cond_N": int(common.get("acados", {}).get("qp_solver_cond_N", n_steps)),
     }
     return cfg
 
@@ -193,7 +194,7 @@ def build_check(cfg, model_key):
     print(f"  path-speed: w_progress={cfg['w_progress']:.4f} w_v={cfg['w_v']:.4f} w_vs={cfg['w_vs']:.4f} v_ref={cfg['v_ref']:.4f}")
 
 
-def generate(cfg, output_root, model_key):
+def generate(cfg, output_root, model_key, qp_cond_n=None):
     try:
         from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
     except ImportError:
@@ -248,6 +249,12 @@ def generate(cfg, output_root, model_key):
         ocp.solver_options.sim_method_num_stages = 4
         ocp.solver_options.sim_method_num_steps = 1
     ocp.solver_options.qp_solver = "PARTIAL_CONDENSING_HPIPM"
+    cond_n = cfg["qp_solver_cond_N"] if qp_cond_n is None else int(qp_cond_n)
+    if cond_n < 1 or cond_n > cfg["N"]:
+        raise ValueError(
+            f"qp_solver_cond_N must be in [1, {cfg['N']}], got {cond_n}"
+        )
+    ocp.solver_options.qp_solver_cond_N = cond_n
     ocp.solver_options.hessian_approx = "EXACT"
     ocp.solver_options.regularize_method = "PROJECT"
     ocp.solver_options.levenberg_marquardt = 1e-3
@@ -272,13 +279,15 @@ def main():
                         help="不依赖 acados，仅校验 CasADi 模型/代价装配")
     parser.add_argument("--output-dir", default=os.path.join(PKG_DIR, "generated", "acados"),
                         help="codegen 输出根目录（默认 <pkg>/generated/acados）")
+    parser.add_argument("--qp-cond-n", type=int, default=None,
+                        help="覆盖 PARTIAL_CONDENSING_HPIPM 的 qp_solver_cond_N；默认读取 common.yaml")
     args = parser.parse_args()
 
     cfg = load_config()
     if args.check:
         build_check(cfg, args.model)
         return 0
-    return generate(cfg, args.output_dir, args.model)
+    return generate(cfg, args.output_dir, args.model, args.qp_cond_n)
 
 
 if __name__ == "__main__":

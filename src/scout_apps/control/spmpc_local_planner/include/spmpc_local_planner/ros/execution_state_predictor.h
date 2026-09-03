@@ -9,7 +9,8 @@ namespace spmpc_local_planner {
 
 class ExecutionStatePredictor {
 public:
-    bool configure(const SloshModelParams& slosh_params);
+    bool configure(const SloshModelParams& slosh_params,
+                   double explicit_prefix_step_sec = 0.0);
 
     ExecutionStatePrediction predict(const RobotState& raw_robot,
                                      const SloshState& raw_slosh,
@@ -31,7 +32,9 @@ private:
     static double normalizeYaw(double yaw);
 
     SloshDynamics slosh_dynamics_;
+    SloshDynamics explicit_prefix_slosh_dynamics_;
     bool slosh_configured_ = false;
+    bool explicit_prefix_slosh_configured_ = false;
 };
 
 }  // namespace spmpc_local_planner

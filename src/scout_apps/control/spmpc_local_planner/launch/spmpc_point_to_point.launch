@@ -1,6 +1,7 @@
 <launch>
   <arg name="planner_variant" default="B0"/>
   <arg name="reference_path_topic" default="/scout/global_path"/>
+  <arg name="odom_subscriber_queue_size" default="10"/>
   <arg name="imu_topic" default="/imu/data"/>
   <arg name="imu_shadow_enable" default="false"/>
   <arg name="observer_source" default="odom"/>
@@ -21,6 +22,7 @@
     <arg name="experiment_mode" value="point_to_point"/>
     <arg name="experiment_config" value="point_to_point"/>
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>
+    <arg name="odom_subscriber_queue_size" value="$(arg odom_subscriber_queue_size)"/>
     <arg name="imu_topic" value="$(arg imu_topic)"/>
     <arg name="imu_shadow_enable" value="$(arg imu_shadow_enable)"/>
     <arg name="observer_source" value="$(arg observer_source)"/>
