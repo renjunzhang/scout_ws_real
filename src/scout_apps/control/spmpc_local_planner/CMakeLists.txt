@@ -18,6 +18,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 find_package(Eigen3 REQUIRED)
+find_package(OpenSSL REQUIRED)
 
 add_message_files(
   FILES
@@ -91,6 +92,21 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
   ${EIGEN3_INCLUDE_DIRS}
 )
+
+add_library(spmpc_artifact_identity STATIC
+  src/solvers/mainline_artifact_identity.cpp
+)
+set_target_properties(spmpc_artifact_identity PROPERTIES
+  POSITION_INDEPENDENT_CODE ON
+)
+target_include_directories(spmpc_artifact_identity PRIVATE
+  ${OPENSSL_INCLUDE_DIR}
+)
+if(TARGET OpenSSL::Crypto)
+  target_link_libraries(spmpc_artifact_identity OpenSSL::Crypto)
+else()
+  target_link_libraries(spmpc_artifact_identity ${OPENSSL_CRYPTO_LIBRARY})
+endif()
 
 add_library(${PROJECT_NAME}
   src/core/variant_config.cpp
@@ -428,6 +444,14 @@ if(CATKIN_ENABLE_TESTING)
   if(TARGET test_mainline_contract)
     target_link_libraries(test_mainline_contract
       ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_mainline_artifact_identity
+    test/test_mainline_artifact_identity.cpp
+  )
+  if(TARGET test_mainline_artifact_identity)
+    target_link_libraries(test_mainline_artifact_identity
+      spmpc_artifact_identity
     )
   endif()
   catkin_add_gtest(test_mainline_release_mailbox
