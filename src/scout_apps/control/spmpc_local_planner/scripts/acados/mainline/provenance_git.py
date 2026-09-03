@@ -29,6 +29,7 @@ from .provenance_files import (
 MAINLINE_BRANCH = "spmpc-mainline"
 MAINLINE_BASE_SHA = "e8d10325ac6138042fdb6e707192568a6e12cbbd"
 REPOSITORY_IDENTITY_SCHEMA = "spmpc_mainline_repository_identity_v1"
+REPOSITORY_SOURCE_LOGICAL_ROOT = "MAINLINE_REPOSITORY_SELECTED_SOURCES"
 
 _TOKEN = object()
 
@@ -182,14 +183,14 @@ def capture_repository_identity(
     sources = capture_selected_source_files(
         root,
         source_paths,
-        logical_root="MAINLINE_REPOSITORY_SELECTED_SOURCES",
+        logical_root=REPOSITORY_SOURCE_LOGICAL_ROOT,
     )
     if before != snapshot():
         raise ProvenanceError("repository changed while provenance was captured")
     sources_after = capture_selected_source_files(
         root,
         source_paths,
-        logical_root="MAINLINE_REPOSITORY_SELECTED_SOURCES",
+        logical_root=REPOSITORY_SOURCE_LOGICAL_ROOT,
     )
     if sources_after.semantic_sha256 != sources.semantic_sha256:
         raise ProvenanceError("selected source bytes changed during provenance capture")
@@ -221,6 +222,7 @@ def capture_repository_identity(
 __all__ = [
     "MAINLINE_BASE_SHA",
     "MAINLINE_BRANCH",
+    "REPOSITORY_SOURCE_LOGICAL_ROOT",
     "RepositoryIdentity",
     "capture_repository_identity",
     "decode_git",

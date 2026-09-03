@@ -27,6 +27,15 @@ from .provenance_files import (
 )
 
 PYTHON_IDENTITY_SCHEMA = "spmpc_mainline_python_runtime_identity_v1"
+CASADI_PACKAGE_FILE_LOGICAL_NAMES = (
+    "casadi/__init__.py",
+    "casadi/_casadi.so",
+    "casadi/libcasadi.so",
+)
+NUMPY_PACKAGE_FILE_LOGICAL_NAMES = (
+    "numpy/__init__.py",
+    "numpy/core/_multiarray_umath.so",
+)
 
 _TOKEN = object()
 
@@ -179,9 +188,13 @@ def capture_python_runtime(python_tool: ToolIdentity) -> PythonRuntimeIdentity:
     casadi_init = module_file(casadi, "CasADi")
     casadi_root = casadi_init.resolve(strict=True).parent
     casadi_files = (
-        capture_linked_file("casadi/__init__.py", casadi_init),
-        capture_linked_file("casadi/_casadi.so", casadi_root / "_casadi.so"),
-        capture_linked_file("casadi/libcasadi.so", casadi_root / "libcasadi.so"),
+        capture_linked_file(CASADI_PACKAGE_FILE_LOGICAL_NAMES[0], casadi_init),
+        capture_linked_file(
+            CASADI_PACKAGE_FILE_LOGICAL_NAMES[1], casadi_root / "_casadi.so"
+        ),
+        capture_linked_file(
+            CASADI_PACKAGE_FILE_LOGICAL_NAMES[2], casadi_root / "libcasadi.so"
+        ),
     )
     numpy_init = module_file(numpy, "NumPy")
     numpy_root = numpy_init.resolve(strict=True).parent
@@ -189,8 +202,10 @@ def capture_python_runtime(python_tool: ToolIdentity) -> PythonRuntimeIdentity:
     if len(numpy_extensions) != 1:
         raise ProvenanceError("NumPy multiarray extension identity is ambiguous")
     numpy_files = (
-        capture_linked_file("numpy/__init__.py", numpy_init),
-        capture_linked_file("numpy/core/_multiarray_umath.so", numpy_extensions[0]),
+        capture_linked_file(NUMPY_PACKAGE_FILE_LOGICAL_NAMES[0], numpy_init),
+        capture_linked_file(
+            NUMPY_PACKAGE_FILE_LOGICAL_NAMES[1], numpy_extensions[0]
+        ),
     )
     packages = (
         PythonPackageIdentity(
@@ -233,6 +248,8 @@ def capture_python_runtime(python_tool: ToolIdentity) -> PythonRuntimeIdentity:
 
 
 __all__ = [
+    "CASADI_PACKAGE_FILE_LOGICAL_NAMES",
+    "NUMPY_PACKAGE_FILE_LOGICAL_NAMES",
     "PythonPackageIdentity",
     "PythonRuntimeIdentity",
     "capture_python_runtime",

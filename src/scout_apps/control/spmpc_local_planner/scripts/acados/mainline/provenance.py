@@ -51,35 +51,18 @@ from .provenance_python import (
     capture_python_runtime,
     require_python_runtime,
 )
-
-PROVENANCE_SCHEMA = "spmpc_mainline_codegen_provenance_v1"
-PROVENANCE_SCOPE = "SOURCE_TOOLCHAIN_AND_ACADOS_INSTALL_IDENTITY"
-PROVENANCE_STATUS = "CAPTURED_FOR_DEV_UNVALIDATED"
-PROVENANCE_ARTIFACT_CLASS = "DEV_UNVALIDATED"
-PROVENANCE_PROMOTION_STATUS = "NOT_PROMOTED"
-STAGING_LOCATION_POLICY = "ABSOLUTE_STAGING_ROOT_EXCLUDED_FROM_IDENTITY"
-
-GENERATOR_API = "AcadosOcpSolver.generate"
-GENERATOR_ARGUMENTS = (
-    ("simulink_opts", None),
-    ("cmake_builder", None),
-    ("verbose", False),
-)
-BUILD_COMMANDS = (
-    ("make", "--no-print-directory", "clean_ocp_shared_lib"),
-    ("make", "--no-print-directory", "ocp_shared_lib"),
-)
-TOOL_ROLES = (
-    "git",
-    "python",
-    "tera",
-    "make",
-    "nm",
-    "readelf",
-    "cc",
-    "cxx",
-    "ar",
-    "ranlib",
+from .provenance_schema import (
+    BUILD_COMMANDS,
+    GENERATOR_API,
+    GENERATOR_ARGUMENTS,
+    PROVENANCE_ARTIFACT_CLASS,
+    PROVENANCE_PROMOTION_STATUS,
+    PROVENANCE_SCHEMA,
+    PROVENANCE_SCOPE,
+    PROVENANCE_STATUS,
+    STAGING_LOCATION_POLICY,
+    TOOL_ROLES,
+    validate_codegen_provenance_document,
 )
 
 _TOKEN = object()
@@ -314,6 +297,7 @@ def require_codegen_provenance(value: Any) -> CodegenProvenance:
     if type(value) is not CodegenProvenance:
         raise ProvenanceError("provenance must have the exact CodegenProvenance type")
     _validate_codegen_provenance(value)
+    validate_codegen_provenance_document(value.to_dict())
     if sha256_json(_provenance_payload(value)) != value.semantic_sha256:
         raise ProvenanceError("codegen provenance semantic identity is inconsistent")
     return value
@@ -416,6 +400,8 @@ __all__ = [
     "PROVENANCE_SCHEMA",
     "PROVENANCE_SCOPE",
     "PROVENANCE_STATUS",
+    "STAGING_LOCATION_POLICY",
+    "TOOL_ROLES",
     "AcadosInstallIdentity",
     "CodegenProvenance",
     "LinkedFileIdentity",
@@ -433,4 +419,5 @@ __all__ = [
     "require_codegen_provenance_current",
     "require_repository_identity",
     "require_tool_identity",
+    "validate_codegen_provenance_document",
 ]

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 import shutil
 import stat
@@ -42,6 +43,15 @@ from acados.mainline.provenance_files import (
 )
 from acados.mainline.provenance_git import capture_repository_identity
 from acados.mainline.provenance_python import capture_python_runtime, module_file
+from acados.mainline.provenance_schema import (
+    BUILD_COMMANDS,
+    GENERATOR_API,
+    GENERATOR_ARGUMENTS,
+    PROVENANCE_SCOPE,
+    STAGING_LOCATION_POLICY,
+    TOOL_ROLES,
+    validate_codegen_provenance_document,
+)
 
 
 def _run(command: list[str], *, cwd: Path | None = None) -> bytes:
@@ -61,6 +71,254 @@ def _write_executable(path: Path, body: str) -> None:
 
 def _tool(path: Path, role: str = "fixture"):
     return capture_tool_identity(role, str(path), (("version", ("--version",)),))
+
+
+def _semantic(payload: dict, scope: str | None = None) -> dict:
+    value = dict(payload)
+    identity = {"sha256": identity_module.sha256_json(payload)}
+    if scope is not None:
+        identity["scope"] = scope
+    value["semantic_identity"] = identity
+    return value
+
+
+def _serialized_provenance_fixture() -> dict:
+    """Build a complete dependency-free document for schema tamper tests."""
+
+    def linked(
+        name: str,
+        executable: bool = False,
+        *,
+        path: str | None = None,
+    ) -> dict:
+        path = path or f"/fixture/{name}"
+        return {
+            "schema_version": "spmpc_mainline_linked_file_identity_v1",
+            "logical_name": name,
+            "requested_path": path,
+            "resolved_path": path,
+            "leaf_symlink_chain": [],
+            "size_bytes": 1,
+            "raw_sha256": "1" * 64,
+            "executable": executable,
+        }
+
+    def source_tree(name: str) -> dict:
+        return _semantic(
+            {
+                "schema_version": "spmpc_mainline_source_tree_identity_v1",
+                "logical_root": name,
+                "capture_root": "ABSOLUTE_CAPTURE_ROOT_EXCLUDED_FROM_IDENTITY",
+                "files": [
+                    {
+                        "relative_path": "fixture.py",
+                        "size_bytes": 1,
+                        "raw_sha256": "2" * 64,
+                    }
+                ],
+            }
+        )
+
+    repository = _semantic(
+        {
+            "schema_version": "spmpc_mainline_repository_identity_v1",
+            "repository_root": "ABSOLUTE_CAPTURE_ROOT_EXCLUDED_FROM_IDENTITY",
+            "branch": "spmpc-mainline",
+            "head_sha": "c" * 40,
+            "base_sha": git_module.MAINLINE_BASE_SHA,
+            "worktree": {
+                "clean": True,
+                "dirty_policy": "RECORDED_NOT_GATED",
+                "status_entry_count": 0,
+                "status_porcelain_sha256": "3" * 64,
+            },
+            "sources": source_tree("MAINLINE_REPOSITORY_SELECTED_SOURCES"),
+        }
+    )
+
+    probe_arguments = {
+        "git": [("version", ["--version"])],
+        "python": [("version", ["--version"])],
+        "tera": [("version", ["--version"])],
+        "make": [("version", ["--version"])],
+        "nm": [("version", ["--version"])],
+        "readelf": [("version", ["--version"])],
+        "cc": [
+            ("version", ["--version"]),
+            ("target", ["-dumpmachine"]),
+            ("full_version", ["-dumpfullversion", "-dumpversion"]),
+        ],
+        "cxx": [
+            ("version", ["--version"]),
+            ("target", ["-dumpmachine"]),
+            ("full_version", ["-dumpfullversion", "-dumpversion"]),
+        ],
+        "ar": [("version", ["--version"])],
+        "ranlib": [("version", ["--version"])],
+    }
+    tools = []
+    requested_commands = {
+        "git": "git",
+        "python": "/fixture/tool-python",
+        "tera": "/fixture/tool-tera",
+        "make": "make",
+        "nm": "nm",
+        "readelf": "readelf",
+        "cc": "cc",
+        "cxx": "c++",
+        "ar": "ar",
+        "ranlib": "ranlib",
+    }
+    for role in TOOL_ROLES:
+        tool_payload = {
+            "schema_version": "spmpc_mainline_tool_identity_v1",
+            "role": role,
+            "requested_command": requested_commands[role],
+            "executable": linked(
+                f"tool:{role}",
+                executable=True,
+                path=(
+                    requested_commands[role]
+                    if requested_commands[role].startswith("/")
+                    else f"/fixture/bin/{role}"
+                ),
+            ),
+            "probes": [
+                {
+                    "name": name,
+                    "arguments": arguments,
+                    "output_text": "fixture version",
+                    "output_raw_sha256": "4" * 64,
+                }
+                for name, arguments in probe_arguments[role]
+            ],
+        }
+        tools.append(_semantic(tool_payload))
+
+    python_runtime = _semantic(
+        {
+            "schema_version": "spmpc_mainline_python_runtime_identity_v1",
+            "implementation": "CPython",
+            "version": "3.fixture",
+            "version_info": [3, 11, 0],
+            "executable_tool_sha256": tools[1]["semantic_identity"]["sha256"],
+            "sys_prefix": "/fixture/python",
+            "sys_base_prefix": "/fixture/python",
+            "sys_path": ["/fixture/python/lib"],
+            "PYTHONPATH": None,
+            "packages": [
+                {
+                    "name": "casadi",
+                    "version": "3.fixture",
+                    "files": [
+                        linked("casadi/__init__.py"),
+                        linked("casadi/_casadi.so"),
+                        linked("casadi/libcasadi.so"),
+                    ],
+                },
+                {
+                    "name": "numpy",
+                    "version": "2.fixture",
+                    "files": [
+                        linked("numpy/__init__.py"),
+                        linked("numpy/core/_multiarray_umath.so"),
+                    ],
+                },
+            ],
+        }
+    )
+
+    acados_libraries = []
+    sonames = {
+        "libacados.so": "libacados.so",
+        "libhpipm.so": "libhpipm.so",
+        "libblasfeo.so": "libblasfeo.so.0",
+    }
+    for name, soname in sonames.items():
+        acados_libraries.append(
+            {
+                "logical_name": name,
+                "file": linked(f"acados/lib/{name}"),
+                "soname": soname,
+                "needed": [],
+                "rpath": None,
+                "runpath": None,
+                "dynamic_section_sha256": "5" * 64,
+            }
+        )
+    acados = _semantic(
+        {
+            "schema_version": "spmpc_mainline_acados_install_identity_v1",
+            "install_root": "/fixture/acados",
+            "install_prefix_policy": "ABSOLUTE_ACADOS_PREFIX_EMBEDDED_IN_GENERATED_TREE",
+            "source_repository": {
+                "root": "/fixture/acados",
+                "head_sha": "a" * 40,
+                "exact_tag": "v0.5.4",
+                "worktree_clean": True,
+                "dirty_policy": "RECORDED_NOT_GATED",
+                "status_porcelain_sha256": "6" * 64,
+            },
+            "commit_marker": "aaaaaaa",
+            "commit_marker_file": linked("acados/lib/git_commit_hash"),
+            "link_libs": {
+                "file": linked("acados/lib/link_libs.json"),
+                "canonical_json_sha256": "7" * 64,
+            },
+            "interface_source_binding_status": "MATCHED_SOURCE_ROOT",
+            "tera_source_binding_status": "BINARY_AND_SUBMODULE_IDENTITIES_RECORDED_SEPARATELY",
+            "interface_tree": source_tree("ACADOS_TEMPLATE_PYTHON_AND_TEMPLATES"),
+            "include_tree": source_tree("ACADOS_INSTALLED_INCLUDE_TREE"),
+            "submodules": [
+                {
+                    "path": path,
+                    "commit_sha": "b" * 40,
+                    "initialized": True,
+                    "worktree_matches_index": True,
+                }
+                for path in sorted(
+                    (
+                        "external/blasfeo",
+                        "external/hpipm",
+                        "interfaces/acados_template/tera_renderer",
+                    )
+                )
+            ],
+            "libraries": acados_libraries,
+        }
+    )
+
+    environment = {name: None for name in COMPILER_ENVIRONMENT_NAMES}
+    return _semantic(
+        {
+            "schema_version": "spmpc_mainline_codegen_provenance_v1",
+            "scope": PROVENANCE_SCOPE,
+            "status": {
+                "provenance": "CAPTURED_FOR_DEV_UNVALIDATED",
+                "artifact_class": "DEV_UNVALIDATED",
+                "promotion": "NOT_PROMOTED",
+            },
+            "repository": repository,
+            "compiler_environment": environment,
+            "tools": tools,
+            "python_runtime": python_runtime,
+            "acados": acados,
+            "host": {
+                "system": "Linux",
+                "release": "fixture",
+                "machine": "x86_64",
+                "libc": ["glibc", "2.fixture"],
+                "byteorder": "little",
+            },
+            "logical_codegen_commands": {
+                "generator_api": GENERATOR_API,
+                "generator_arguments": dict(GENERATOR_ARGUMENTS),
+                "build_commands": [list(item) for item in BUILD_COMMANDS],
+                "staging_location": STAGING_LOCATION_POLICY,
+            },
+        },
+        PROVENANCE_SCOPE,
+    )
 
 
 class MainlineProvenanceTest(unittest.TestCase):
@@ -422,6 +680,181 @@ assert not any(name.split(".", 1)[0] in blocked for name in sys.modules)
             object.__setattr__(tool, "semantic_sha256", "0" * 64)
             with self.assertRaisesRegex(ProvenanceError, "inconsistent"):
                 require_tool_identity(tool)
+
+    def test_resigned_serialized_policy_tampering_is_rejected(self) -> None:
+        baseline = _serialized_provenance_fixture()
+        self.assertIs(validate_codegen_provenance_document(baseline), baseline)
+
+        def resign(document: dict) -> None:
+            payload = {
+                key: value
+                for key, value in document.items()
+                if key != "semantic_identity"
+            }
+            document["semantic_identity"]["sha256"] = identity_module.sha256_json(
+                payload
+            )
+
+        tamper_cases = {
+            "generator API": lambda document: document["logical_codegen_commands"].update(
+                generator_api="AcadosOcpSolver.generate.forged"
+            ),
+            "repository branch": lambda document: document["repository"].update(
+                branch="not-mainline"
+            ),
+            "tool probe arguments": lambda document: document["tools"][0][
+                "probes"
+            ][0].update(arguments=["--help"]),
+            "compiler command syntax": lambda document: (
+                document["compiler_environment"].update(CC="cc --forged"),
+                document["tools"][6].update(requested_command="cc --forged"),
+            ),
+            "Acados install policy": lambda document: document["acados"].update(
+                install_prefix_policy="FORGED_POLICY"
+            ),
+        }
+        for label, mutate in tamper_cases.items():
+            with self.subTest(label=label):
+                forged = copy.deepcopy(baseline)
+                mutate(forged)
+                if label == "repository branch":
+                    resign(forged["repository"])
+                elif label == "tool probe arguments":
+                    resign(forged["tools"][0])
+                elif label == "compiler command syntax":
+                    resign(forged["tools"][6])
+                elif label == "Acados install policy":
+                    resign(forged["acados"])
+                resign(forged)
+                with self.assertRaises(ProvenanceError):
+                    validate_codegen_provenance_document(forged)
+
+    def test_resigned_serialized_symlink_chain_tampering_is_rejected(self) -> None:
+        baseline = _serialized_provenance_fixture()
+
+        def resign(document: dict) -> None:
+            payload = {
+                key: value
+                for key, value in document.items()
+                if key != "semantic_identity"
+            }
+            document["semantic_identity"]["sha256"] = identity_module.sha256_json(
+                payload
+            )
+
+        def resign_runtime_and_root(document: dict) -> None:
+            resign(document["python_runtime"])
+            resign(document)
+
+        target = baseline["python_runtime"]["packages"][0]["files"][0]
+        requested_path = target["requested_path"]
+        resolved_path = "/fixture/casadi/real-init.py"
+        target["resolved_path"] = resolved_path
+        target["leaf_symlink_chain"] = [
+            {"path": requested_path, "target": "real-init.py"}
+        ]
+        resign_runtime_and_root(baseline)
+        self.assertIs(validate_codegen_provenance_document(baseline), baseline)
+
+        tamper_cases = {
+            "empty chain with distinct paths": lambda file: file.update(
+                leaf_symlink_chain=[]
+            ),
+            "first hop differs from requested path": lambda file: file.update(
+                leaf_symlink_chain=[
+                    {"path": "/fixture/not-requested", "target": resolved_path}
+                ]
+            ),
+            "hop target differs from resolved path": lambda file: file.update(
+                leaf_symlink_chain=[
+                    {"path": requested_path, "target": "/fixture/elsewhere"}
+                ]
+            ),
+        }
+        for label, mutate in tamper_cases.items():
+            with self.subTest(label=label):
+                forged = copy.deepcopy(baseline)
+                file = forged["python_runtime"]["packages"][0]["files"][0]
+                mutate(file)
+                resign_runtime_and_root(forged)
+                with self.assertRaises(ProvenanceError):
+                    validate_codegen_provenance_document(forged)
+
+    def test_resigned_serialized_logical_identity_tampering_is_rejected(self) -> None:
+        baseline = _serialized_provenance_fixture()
+
+        def resign(document: dict) -> None:
+            payload = {
+                key: value
+                for key, value in document.items()
+                if key != "semantic_identity"
+            }
+            document["semantic_identity"]["sha256"] = identity_module.sha256_json(
+                payload
+            )
+
+        def resign_all(document: dict) -> None:
+            resign(document["repository"]["sources"])
+            resign(document["repository"])
+            for tool in document["tools"]:
+                resign(tool)
+            document["python_runtime"]["executable_tool_sha256"] = document["tools"][
+                1
+            ]["semantic_identity"]["sha256"]
+            resign(document["python_runtime"])
+            resign(document["acados"]["interface_tree"])
+            resign(document["acados"]["include_tree"])
+            resign(document["acados"])
+            resign(document)
+
+        tamper_cases = {
+            "repository source role": lambda document: document["repository"][
+                "sources"
+            ].update(logical_root="FORGED_REPOSITORY_SOURCES"),
+            "tool executable role": lambda document: document["tools"][0][
+                "executable"
+            ].update(logical_name="tool:forged"),
+            "CasADi package file role": lambda document: document["python_runtime"][
+                "packages"
+            ][0]["files"][0].update(logical_name="casadi/forged.py"),
+            "NumPy package file role": lambda document: document["python_runtime"][
+                "packages"
+            ][1]["files"][1].update(logical_name="numpy/forged.so"),
+            "Acados marker role": lambda document: document["acados"][
+                "commit_marker_file"
+            ].update(logical_name="acados/lib/forged_marker"),
+            "Acados marker install binding": lambda document: document["acados"][
+                "commit_marker_file"
+            ].update(requested_path="/fixture/elsewhere/git_commit_hash"),
+            "Acados marker source binding": lambda document: document["acados"][
+                "commit_marker_file"
+            ].update(resolved_path="/fixture/elsewhere/lib/git_commit_hash"),
+            "Acados link-libs role": lambda document: document["acados"][
+                "link_libs"
+            ]["file"].update(logical_name="acados/lib/forged.json"),
+            "Acados link-libs install binding": lambda document: document["acados"][
+                "link_libs"
+            ]["file"].update(requested_path="/fixture/elsewhere/link_libs.json"),
+            "Acados interface-tree role": lambda document: document["acados"][
+                "interface_tree"
+            ].update(logical_root="FORGED_INTERFACE_TREE"),
+            "Acados include-tree role": lambda document: document["acados"][
+                "include_tree"
+            ].update(logical_root="FORGED_INCLUDE_TREE"),
+            "Acados library-file role": lambda document: document["acados"][
+                "libraries"
+            ][0]["file"].update(logical_name="acados/lib/forged.so"),
+            "Acados library install binding": lambda document: document["acados"][
+                "libraries"
+            ][0]["file"].update(requested_path="/fixture/elsewhere/libacados.so"),
+        }
+        for label, mutate in tamper_cases.items():
+            with self.subTest(label=label):
+                forged = copy.deepcopy(baseline)
+                mutate(forged)
+                resign_all(forged)
+                with self.assertRaises(ProvenanceError):
+                    validate_codegen_provenance_document(forged)
 
     def test_complete_acados_capture_when_environment_is_explicitly_available(self) -> None:
         install_text = os.environ.get("ACADOS_SOURCE_DIR")

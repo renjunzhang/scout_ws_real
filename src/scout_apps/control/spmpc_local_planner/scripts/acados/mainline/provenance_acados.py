@@ -40,6 +40,10 @@ ACADOS_PREFIX_POLICY = "ABSOLUTE_ACADOS_PREFIX_EMBEDDED_IN_GENERATED_TREE"
 TERA_SOURCE_BINDING_STATUS = "BINARY_AND_SUBMODULE_IDENTITIES_RECORDED_SEPARATELY"
 
 ACADOS_LIBRARY_NAMES = ("libacados.so", "libhpipm.so", "libblasfeo.so")
+ACADOS_COMMIT_MARKER_LOGICAL_NAME = "acados/lib/git_commit_hash"
+ACADOS_LINK_LIBS_LOGICAL_NAME = "acados/lib/link_libs.json"
+ACADOS_INTERFACE_TREE_LOGICAL_ROOT = "ACADOS_TEMPLATE_PYTHON_AND_TEMPLATES"
+ACADOS_INCLUDE_TREE_LOGICAL_ROOT = "ACADOS_INSTALLED_INCLUDE_TREE"
 ACADOS_LIBRARY_SONAMES = {
     "libacados.so": "libacados.so",
     "libhpipm.so": "libhpipm.so",
@@ -349,7 +353,7 @@ def capture_acados_install(
         raise ProvenanceError("Acados capture requires git and readelf tool identities")
     root = canonical_absolute_path(install_root, "Acados install root")
     marker_file = capture_linked_file(
-        "acados/lib/git_commit_hash",
+        ACADOS_COMMIT_MARKER_LOGICAL_NAME,
         root / "lib" / "git_commit_hash",
     )
     try:
@@ -407,16 +411,16 @@ def capture_acados_install(
     )
     interface_tree = capture_source_tree(
         interface_root,
-        logical_root="ACADOS_TEMPLATE_PYTHON_AND_TEMPLATES",
+        logical_root=ACADOS_INTERFACE_TREE_LOGICAL_ROOT,
         include=lambda relative: not relative.endswith((".pyc", ".pyo")),
         excluded_directories=("__pycache__",),
     )
     include_tree = capture_source_tree(
         root / "include",
-        logical_root="ACADOS_INSTALLED_INCLUDE_TREE",
+        logical_root=ACADOS_INCLUDE_TREE_LOGICAL_ROOT,
     )
     link_file = capture_linked_file(
-        "acados/lib/link_libs.json",
+        ACADOS_LINK_LIBS_LOGICAL_NAME,
         root / "lib" / "link_libs.json",
     )
     try:
@@ -465,6 +469,12 @@ def capture_acados_install(
 
 
 __all__ = [
+    "ACADOS_COMMIT_MARKER_LOGICAL_NAME",
+    "ACADOS_INCLUDE_TREE_LOGICAL_ROOT",
+    "ACADOS_INTERFACE_TREE_LOGICAL_ROOT",
+    "ACADOS_LIBRARY_NAMES",
+    "ACADOS_LIBRARY_SONAMES",
+    "ACADOS_LINK_LIBS_LOGICAL_NAME",
     "ACADOS_PREFIX_POLICY",
     "ACADOS_REQUIRED_TAG",
     "AcadosInstallIdentity",
