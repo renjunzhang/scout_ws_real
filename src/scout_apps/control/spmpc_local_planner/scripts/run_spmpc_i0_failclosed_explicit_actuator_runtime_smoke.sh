@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# One independent B_slosh runtime smoke for the explicit-actuator mainline.
-# This is a timing/fail-closed acceptance run, not an ABBA efficacy sample.
+# One independent B_slosh smoke for the explicit-actuator mainline.
+# The default profile preserves the runtime acceptance run; waccel03 changes
+# only w_accel for the first command-smoothing check. Neither is an ABBA sample.
 
 set -euo pipefail
 
@@ -43,8 +44,34 @@ CONFIRM_PATH_CLEAR="${CONFIRM_PATH_CLEAR:-NO}"
 DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-5}"
+SMOKE_PROFILE="${SMOKE_PROFILE:-runtime_baseline}"
 
-PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1
+case "${SMOKE_PROFILE}" in
+  runtime_baseline)
+    PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1
+    OUTPUT_SERIES=spmpc_i0_failclosed_explicit_actuator_runtime_smoke_v1
+    RUN_LABEL_PREFIX=DEV_I0FC_EXPACT_RUNTIME_SMOKE_V1
+    SMOKE_SCOPE=development_runtime_smoke_only
+    SMOKE_PURPOSE="runtime acceptance only; NOT B0/Bslosh efficacy"
+    OPERATOR_NOTE="one B_slosh explicit-actuator runtime smoke; no RGB efficacy claim"
+    BLOCK_SEGMENT_ID=I0FC_EXPACT_RUNTIME_SMOKE_V1
+    W_ACCEL=0.0
+    ;;
+  waccel03)
+    PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1
+    OUTPUT_SERIES=spmpc_i0_failclosed_explicit_actuator_waccel03_smoke_v1
+    RUN_LABEL_PREFIX=DEV_I0FC_EXPACT_WACCEL03_SMOKE_V1
+    SMOKE_SCOPE=development_waccel03_smoke_only
+    SMOKE_PURPOSE="single-variable w_accel=0.3 command-smoothing smoke"
+    OPERATOR_NOTE="one B_slosh explicit-actuator w_accel=0.3 smoke; RGB disabled"
+    BLOCK_SEGMENT_ID=I0FC_EXPACT_WACCEL03_SMOKE_V1
+    W_ACCEL=0.3
+    ;;
+  *)
+    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline or waccel03"
+    ;;
+esac
+
 VARIANT=B_slosh
 W_SLOSH=5.0
 V_REF=0.20
@@ -82,8 +109,8 @@ FROZEN_PATH_SHA256=1464ef37857bcb899d8b0e4867ff63ea06f017e1b871bed80e077f450be14
 FROZEN_MAP_FILE=/home/geist/scout_maps/real/20260829_mocap_exec/map_carto_20260829_mocap_exec_v1.pbstream
 FROZEN_MAP_SHA256=34e45fd8205a766dbc6e3dcea667c5a0a618e26b331d48351c25645e31a19595
 
-RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_spmpc_i0_failclosed_explicit_actuator_runtime_smoke_v1/H0}"
-RUN_LABEL="DEV_I0FC_EXPACT_RUNTIME_SMOKE_V1_${STAMP}_Bslosh"
+RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/H0}"
+RUN_LABEL="${RUN_LABEL_PREFIX}_${STAMP}_Bslosh"
 NAME="${RUN_LABEL}"
 BAG_PATH="${RUN_OUT_DIR}/${NAME}.bag"
 EXACT_REPORT="${RUN_OUT_DIR}/${NAME}_i0_explicit_actuator_contract_postflight.json"
@@ -185,6 +212,7 @@ launch_dump="$(roslaunch --dump-params \
   speed_safety_enable:=true v_safe_max:="${V_SAFE_MAX}" \
   speed_safety_tolerance:="${SPEED_SAFETY_TOLERANCE}" \
   v_ref:="${V_REF}" w_slosh:="${W_SLOSH}" \
+  w_accel:="${W_ACCEL}" \
   w_smooth:="${W_SMOOTH}" w_alpha:="${W_ALPHA}" \
   w_du_a:="${W_DU_A}" w_du_vs:="${W_DU_VS}" \
   slosh_height_max:="${SLOSH_HEIGHT_MAX}" alpha_max:="${ALPHA_MAX}")" \
@@ -196,6 +224,7 @@ expected_launch_lines=(
   "/spmpc_local_planner/variants/B_slosh/slosh_enable: true"
   "/spmpc_local_planner/variants/B_slosh/w_slosh: 5.0"
   "/spmpc_local_planner/variants/B_slosh/v_ref: 0.2"
+  "/spmpc_local_planner/variants/B_slosh/w_accel: ${W_ACCEL}"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_alpha: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_a: 0.1"
@@ -228,13 +257,14 @@ python3 "${SMOKE_TEST}"
 bash -n "${BASH_SOURCE[0]}"
 
 echo "================ explicit actuator runtime smoke ================"
+echo "  profile        = ${SMOKE_PROFILE}"
 echo "  protocol       = ${PROTOCOL_ID}"
-echo "  purpose        = runtime acceptance only; NOT B0/Bslosh efficacy"
-echo "  condition      = B_slosh; w_slosh=5.0; one bag only"
+echo "  purpose        = ${SMOKE_PURPOSE}"
+echo "  condition      = B_slosh; w_slosh=5.0; w_accel=${W_ACCEL}; one bag only"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
-echo "  frozen weights = w_smooth/w_alpha/w_du_a/w_du_vs=0.1"
+echo "  frozen weights = w_accel=${W_ACCEL}; w_smooth/w_alpha/w_du_a/w_du_vs=0.1"
 echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
 echo "  RGB            = disabled; no efficacy conclusion from this bag"
 echo "  output         = ${BAG_PATH}"
@@ -305,9 +335,11 @@ current_git_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 mkdir -p "${RUN_OUT_DIR}"
 {
   echo "protocol=${PROTOCOL_ID}"
-  echo "scope=development_runtime_smoke_only"
+  echo "profile=${SMOKE_PROFILE}"
+  echo "scope=${SMOKE_SCOPE}"
   echo "condition=B_slosh"
   echo "w_slosh=${W_SLOSH}"
+  echo "w_accel=${W_ACCEL}"
   echo "v_ref=${V_REF}"
   echo "v_safe_max=${V_SAFE_MAX}"
   echo "observer=processed_imu"
@@ -338,6 +370,7 @@ env \
   REF_TOPIC="${REF_TOPIC}" COSTMAP_TOPIC="${COSTMAP_TOPIC}" \
   REFERENCE_TARGET_FRAME="${REFERENCE_TARGET_FRAME}" BASE_FRAME="${BASE_FRAME}" \
   V_REF="${V_REF}" W_SLOSH="${W_SLOSH}" W_SMOOTH="${W_SMOOTH}" \
+  W_ACCEL="${W_ACCEL}" \
   W_ALPHA="${W_ALPHA}" W_DU_A="${W_DU_A}" W_DU_VS="${W_DU_VS}" \
   SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX}" ALPHA_MAX="${ALPHA_MAX}" \
   EXECUTION_MODEL_MODE="${EXECUTION_MODEL_MODE}" \
@@ -381,7 +414,7 @@ env \
   RECORDER_ACTIVE_TIMEOUT_SEC=15 PLANNER_STARTUP_SEC=2 \
   PATH_GENERATOR_STARTUP_SEC=2 EXPECTED_RUNTIME_VARIANT="${VARIANT}" \
   RUNTIME_VARIANT_TIMEOUT_SEC=5 SPLIT_BLOCK=false ACQUISITION_RETRY=false \
-  RETRY_REASON_FILE= BLOCK_SEGMENT_ID=I0FC_EXPACT_RUNTIME_SMOKE_V1 \
+  RETRY_REASON_FILE= BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID}" \
   ORDER_POSITION=01 RECORD_RGB=false RECORD_CAMERA=false \
   RECORD_CAMERA_INFO=false RECORD_CAMERA_COMPRESSED=false RECORD_DEPTH=false \
   RECORD_ONLINE_LIQUID=false RECORD_ONLINE_LIQUID_DEBUG_IMAGES=false \
@@ -389,7 +422,7 @@ env \
   RECORD_ALL_EXISTING_TOPICS=false RECORD_TOPIC_INFO=true RECORD_MOCAP=true \
   RECORD_MOCAP_PATH=false MOCAP_TRACKER="${MOCAP_TRACKER}" \
   RECORD_SEC=70 MAX_RECORD_SEC=70 SEND_ZERO_ON_EXIT=true \
-  OPERATOR_NOTE="one B_slosh explicit-actuator runtime smoke; no RGB efficacy claim" \
+  OPERATOR_NOTE="${OPERATOR_NOTE}" \
   bash "${RUNNER}"
 
 [[ -s "${BAG_PATH}" ]] || fail "bag missing after runner: ${BAG_PATH}"
@@ -410,6 +443,7 @@ python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
   --require-legacy-delay-application false \
   --expected-execution-model-code 1 --expected-state-width 27 \
   --minimum-solver-schema-version 3 \
+  --expected-config "w_accel=${W_ACCEL}" \
   --expected-config "w_smooth=${W_SMOOTH}" \
   --expected-config "w_alpha=${W_ALPHA}" \
   --expected-config "w_du_a=${W_DU_A}" \
@@ -441,6 +475,7 @@ fi
 printf '%s\n' \
   "status=PASS" \
   "protocol=${PROTOCOL_ID}" \
+  "profile=${SMOKE_PROFILE}" \
   "condition=Bslosh" \
   "bag=${BAG_PATH}" \
   "git_revision=${current_git_revision}" \

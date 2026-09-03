@@ -38,6 +38,7 @@
   <arg name="w_slosh" default="-1.0" doc="覆盖当前 variant 的 w_slosh; 负值时用 variants.yaml 原值(sweep 用)"/>
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖当前 variant 的 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
+  <arg name="w_accel" default="-1.0" doc="覆盖当前 variant 的 w_accel; 负值时用 variants.yaml 原值"/>
   <arg name="w_smooth" default="-1.0" doc="覆盖当前 variant 的 w_smooth; 负值时用 variants.yaml 原值"/>
   <arg name="w_alpha" default="-1.0" doc="覆盖当前 variant 的 w_alpha; 负值时由 w_smooth fallback"/>
   <arg name="w_du_a" default="-1.0" doc="覆盖当前 variant 的 w_du_a; 负值时由 w_smooth fallback"/>
@@ -143,6 +144,8 @@
     <!-- sweep 时覆盖该 variant 的 w_slosh(在 variants.yaml 加载之后, 故生效); w_slosh<0 跳过 -->
     <param name="variants/$(arg planner_variant)/w_slosh" value="$(arg w_slosh)"
            if="$(eval float(arg('w_slosh')) >= 0.0)"/>
+    <param name="variants/$(arg planner_variant)/w_accel" value="$(arg w_accel)"
+           if="$(eval float(arg('w_accel')) >= 0.0)"/>
     <param name="variants/$(arg planner_variant)/w_smooth" value="$(arg w_smooth)"
            if="$(eval float(arg('w_smooth')) >= 0.0)"/>
     <!-- speed diagnostic 时覆盖该 variant 的 v_ref; v_ref<0 跳过，保持默认行为 -->

@@ -154,6 +154,7 @@ class WrapperContractTest(unittest.TestCase):
 
     def test_runtime_and_weights_are_frozen(self):
         for token in (
+            'SMOKE_PROFILE="${SMOKE_PROFILE:-runtime_baseline}"',
             "EXECUTION_MODEL_MODE=explicit_actuator",
             "DELAY_PHASE_MODE=off",
             "ACTUATOR_LINEAR_DELAY_SEC=0.1666666665",
@@ -164,12 +165,24 @@ class WrapperContractTest(unittest.TestCase):
             "W_ALPHA=0.1",
             "W_DU_A=0.1",
             "W_DU_VS=0.1",
+            "W_ACCEL=0.0",
             "STATE_TIMING_MAX_INTERPOLATION_GAP_SEC=0.050",
             "qp_solver_cond_N=10",
             "odom_subscriber_queue_size=10",
         ):
             self.assertIn(token, self.wrapper)
-        self.assertNotIn("W_ACCEL", self.wrapper)
+
+    def test_waccel03_is_a_distinct_single_variable_profile(self):
+        for token in (
+            "waccel03)",
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1",
+            "spmpc_i0_failclosed_explicit_actuator_waccel03_smoke_v1",
+            "DEV_I0FC_EXPACT_WACCEL03_SMOKE_V1",
+            "W_ACCEL=0.3",
+            'w_accel:="${W_ACCEL}"',
+            '--expected-config "w_accel=${W_ACCEL}"',
+        ):
+            self.assertIn(token, self.wrapper)
 
     def test_rgb_is_disabled_and_both_postflights_are_automatic(self):
         for token in (
