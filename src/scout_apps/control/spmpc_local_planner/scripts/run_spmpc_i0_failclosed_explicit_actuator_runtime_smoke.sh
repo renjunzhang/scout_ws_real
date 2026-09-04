@@ -13,10 +13,12 @@ RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
 RECORDER="${SCRIPT_DIR}/record_spmpc_full_rgb_bag.sh"
 EXACT_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_i0_failclosed_fixed_abba_bag.py"
 RUNTIME_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_explicit_actuator_runtime_smoke.py"
+FULL_DA_PLOTTER="${SCRIPT_DIR}/analysis/plot_spmpc_full_da_diagnostics.py"
 PATH_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_s_path.py"
 MAP_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_field_map.py"
 MODEL_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_model.py"
 SMOKE_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_runtime_smoke.py"
+FULL_DA_PLOT_TEST="${SCRIPT_DIR}/tests/test_plot_spmpc_full_da_diagnostics.py"
 FULL_DA_WRAPPER="${SCRIPT_DIR}/run_spmpc_full_da_smoke.sh"
 ACADOS_B0_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/acados_ocp_spmpc_b0.json"
 ACADOS_SLOSH_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/acados_ocp_spmpc_slosh.json"
@@ -181,6 +183,11 @@ NAME="${RUN_LABEL}"
 BAG_PATH="${RUN_OUT_DIR}/${NAME}.bag"
 EXACT_REPORT="${RUN_OUT_DIR}/${NAME}_i0_explicit_actuator_contract_postflight.json"
 RUNTIME_REPORT="${RUN_OUT_DIR}/${NAME}_runtime_postflight.json"
+DIAGNOSTIC_PLOT_DIR="${RUN_OUT_DIR}/${NAME}_diagnostic_plots"
+DIAGNOSTIC_PLOT_MARKER=not_requested
+if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  DIAGNOSTIC_PLOT_MARKER="${DIAGNOSTIC_PLOT_DIR}"
+fi
 PASS_MARKER="${RUN_OUT_DIR}/${NAME}_runtime_smoke_pass.env"
 PREREG_FILE="${RUN_OUT_DIR}/${NAME}_runtime_smoke_prereg.env"
 
@@ -189,10 +196,12 @@ required_files=(
   "${RECORDER}"
   "${EXACT_POSTFLIGHT}"
   "${RUNTIME_POSTFLIGHT}"
+  "${FULL_DA_PLOTTER}"
   "${PATH_VALIDATOR}"
   "${MAP_VALIDATOR}"
   "${MODEL_TEST}"
   "${SMOKE_TEST}"
+  "${FULL_DA_PLOT_TEST}"
   "${FULL_DA_WRAPPER}"
   "${ACADOS_B0_JSON}"
   "${ACADOS_SLOSH_JSON}"
@@ -325,6 +334,9 @@ require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
 
 python3 "${MODEL_TEST}"
 python3 "${SMOKE_TEST}"
+if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  python3 "${FULL_DA_PLOT_TEST}"
+fi
 bash -n "${BASH_SOURCE[0]}"
 
 echo "================ explicit actuator runtime smoke ================"
@@ -371,15 +383,23 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_i0_failclosed_fixed_abba_bag.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_explicit_actuator_runtime_smoke.py
+  src/scout_apps/control/spmpc_local_planner/scripts/analysis/plot_spmpc_full_da_diagnostics.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_model.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_runtime_smoke.py
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_plot_spmpc_full_da_diagnostics.py
 )
 dirty_runtime="$(git -C "${REPO_ROOT}" status --porcelain --untracked-files=normal -- "${runtime_paths[@]}")"
 [[ -z "${dirty_runtime}" ]] \
   || fail "runtime/evidence paths are dirty; commit and rebuild before motion"
 
-for output in "${BAG_PATH}" "${BAG_PATH}.active" "${EXACT_REPORT}" \
-  "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}"; do
+attempt_outputs=(
+  "${BAG_PATH}" "${BAG_PATH}.active" "${EXACT_REPORT}"
+  "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}"
+)
+if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  attempt_outputs+=("${DIAGNOSTIC_PLOT_DIR}")
+fi
+for output in "${attempt_outputs[@]}"; do
   [[ ! -e "${output}" ]] || fail "preserve existing output: ${output}"
 done
 
@@ -435,6 +455,7 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "rgb_efficacy_claim_forbidden=true"
 } > "${PREREG_FILE}"
 
+runner_rc=0
 env \
   MATRIX_PRESET= PILOT_METHOD= VARIANT="${VARIANT}" ALG="${VARIANT}" \
   DATE="${DATE}" STAMP="${STAMP}" PILOT_MODE=true \
@@ -502,44 +523,61 @@ env \
   RECORD_MOCAP_PATH=false MOCAP_TRACKER="${MOCAP_TRACKER}" \
   RECORD_SEC=70 MAX_RECORD_SEC=70 SEND_ZERO_ON_EXIT=true \
   OPERATOR_NOTE="${OPERATOR_NOTE}" \
-  bash "${RUNNER}"
+  bash "${RUNNER}" || runner_rc=$?
 
-[[ -s "${BAG_PATH}" ]] || fail "bag missing after runner: ${BAG_PATH}"
-
+bag_rc=0
+plot_rc=0
 exact_rc=0
-python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
-  --condition Bslosh --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
-  --expected-w-slosh "${W_SLOSH}" \
-  --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
-  --expected-variant B_slosh \
-  --expected-slosh-cost-horizon-steps -1 \
-  --expected-slosh-cost-tail-discount 1.0 \
-  --expected-slosh-eta-dot-ratio 0.3 \
-  --expected-robot-horizon-steps 60 \
-  --expected-dt-sec 0.0333333333333333 \
-  --expected-control-frequency-hz 30.0 \
-  --expected-v-ref "${V_REF}" --expected-v-safe-max "${V_SAFE_MAX}" \
-  --minimum-application-fraction 1.0 --expected-delay-mode-code 0 \
-  --require-legacy-delay-application false \
-  --expected-execution-model-code 1 \
-  --expected-state-width "${EXPECTED_SLOSH_STATE_WIDTH}" \
-  --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}" \
-  --expected-config "w_accel=${W_ACCEL}" \
-  --expected-config "w_smooth=${W_SMOOTH}" \
-  --expected-config "w_alpha=${W_ALPHA}" \
-  --expected-config "w_du_a=${W_DU_A}" \
-  --expected-config "w_du_vs=${W_DU_VS}" \
-  --expected-config "slosh_height_max=${SLOSH_HEIGHT_MAX}" \
-  --expected-config "alpha_max=${ALPHA_MAX}" \
-  --expected-config "execution_model_mode_code=1" \
-  --expected-config "actuator_linear_delay_sec=${ACTUATOR_LINEAR_DELAY_SEC}" \
-  --expected-config "actuator_angular_delay_sec=${ACTUATOR_ANGULAR_DELAY_SEC}" \
-  --expected-config "actuator_linear_tau_sec=${ACTUATOR_LINEAR_TAU_SEC}" \
-  --expected-config "actuator_angular_tau_sec=${ACTUATOR_ANGULAR_TAU_SEC}" \
-  --expected-config "actuator_linear_gain=${ACTUATOR_LINEAR_GAIN}" \
-  --expected-config "actuator_angular_gain=${ACTUATOR_ANGULAR_GAIN}" \
-  --expected-config "actuator_linear_delay_steps=5" \
-  --expected-config "actuator_angular_delay_steps=10" || exact_rc=$?
+runtime_rc=0
+if [[ -s "${BAG_PATH}" ]]; then
+  # Plot before either PASS/FAIL validator: failed runs are often the most
+  # useful diagnostic bags, so their six figures must survive aggregation.
+  if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+    python3 "${FULL_DA_PLOTTER}" "${BAG_PATH}" \
+      --output-dir "${DIAGNOSTIC_PLOT_DIR}" || plot_rc=$?
+  fi
+
+  python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
+    --condition Bslosh --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
+    --expected-w-slosh "${W_SLOSH}" \
+    --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
+    --expected-variant B_slosh \
+    --expected-slosh-cost-horizon-steps -1 \
+    --expected-slosh-cost-tail-discount 1.0 \
+    --expected-slosh-eta-dot-ratio 0.3 \
+    --expected-robot-horizon-steps 60 \
+    --expected-dt-sec 0.0333333333333333 \
+    --expected-control-frequency-hz 30.0 \
+    --expected-v-ref "${V_REF}" --expected-v-safe-max "${V_SAFE_MAX}" \
+    --minimum-application-fraction 1.0 --expected-delay-mode-code 0 \
+    --require-legacy-delay-application false \
+    --expected-execution-model-code 1 \
+    --expected-state-width "${EXPECTED_SLOSH_STATE_WIDTH}" \
+    --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}" \
+    --expected-config "w_accel=${W_ACCEL}" \
+    --expected-config "w_smooth=${W_SMOOTH}" \
+    --expected-config "w_alpha=${W_ALPHA}" \
+    --expected-config "w_du_a=${W_DU_A}" \
+    --expected-config "w_du_vs=${W_DU_VS}" \
+    --expected-config "slosh_height_max=${SLOSH_HEIGHT_MAX}" \
+    --expected-config "alpha_max=${ALPHA_MAX}" \
+    --expected-config "execution_model_mode_code=1" \
+    --expected-config "actuator_linear_delay_sec=${ACTUATOR_LINEAR_DELAY_SEC}" \
+    --expected-config "actuator_angular_delay_sec=${ACTUATOR_ANGULAR_DELAY_SEC}" \
+    --expected-config "actuator_linear_tau_sec=${ACTUATOR_LINEAR_TAU_SEC}" \
+    --expected-config "actuator_angular_tau_sec=${ACTUATOR_ANGULAR_TAU_SEC}" \
+    --expected-config "actuator_linear_gain=${ACTUATOR_LINEAR_GAIN}" \
+    --expected-config "actuator_angular_gain=${ACTUATOR_ANGULAR_GAIN}" \
+    --expected-config "actuator_linear_delay_steps=5" \
+    --expected-config "actuator_angular_delay_steps=10" || exact_rc=$?
+else
+  bag_rc=1
+  if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+    plot_rc=125
+  fi
+  exact_rc=125
+  runtime_rc=125
+fi
 
 runtime_args=(
   "${BAG_PATH}"
@@ -562,11 +600,12 @@ if truthy "${CONTROL_CONTINUITY_GATE}"; then
     --five-hz-band-max-hz 5.5
   )
 fi
-runtime_rc=0
-python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
+if (( bag_rc == 0 )); then
+  python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
+fi
 
-if (( exact_rc != 0 || runtime_rc != 0 )); then
-  fail "postflight failed: contract_rc=${exact_rc}, runtime_rc=${runtime_rc}; preserve the bag and reports for diagnosis"
+if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 )); then
+  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}; preserve the bag, plots, and reports for diagnosis"
 fi
 
 printf '%s\n' \
@@ -575,6 +614,7 @@ printf '%s\n' \
   "profile=${SMOKE_PROFILE}" \
   "condition=Bslosh" \
   "bag=${BAG_PATH}" \
+  "diagnostic_plots=${DIAGNOSTIC_PLOT_MARKER}" \
   "git_revision=${current_git_revision}" \
   "exact_postflight_sha256=$(sha256sum "${EXACT_REPORT}" | awk '{print $1}')" \
   "runtime_postflight_sha256=$(sha256sum "${RUNTIME_REPORT}" | awk '{print $1}')" \
@@ -582,4 +622,7 @@ printf '%s\n' \
 
 echo "[${SCRIPT_NAME}] PASS: one B_slosh runtime smoke completed"
 echo "[${SCRIPT_NAME}] bag=${BAG_PATH}"
+if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  echo "[${SCRIPT_NAME}] diagnostic plots=${DIAGNOSTIC_PLOT_DIR}"
+fi
 echo "[${SCRIPT_NAME}] runtime report=${RUNTIME_REPORT}"

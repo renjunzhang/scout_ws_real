@@ -16,6 +16,8 @@ usage() {
 净空检查完成后录制一包不带 RGB 的低速 B_slosh smoke。配置冻结为：
 w_slosh=1.0, w_accel=0.3, w_du_a=0.1, w_alpha=0.1,
 v_ref=0.20 m/s, v_safe_max=0.25 m/s, a_max=0.6 m/s^2, N=60, cond_N=10。
+录包结束后会先生成六张离线诊断图，再汇总 runner 与 postflight 的
+PASS/FAIL；失败包、已有诊断图和报告均保留。
 EOF
 }
 
