@@ -50,6 +50,14 @@ def parse_args():
     parser.add_argument(
         "--max-consecutive-callback-overrun", type=int, default=1
     )
+    parser.add_argument("--max-delta-a0-p95", type=float)
+    parser.add_argument("--max-turning-a0-5hz-amplitude", type=float)
+    parser.add_argument("--max-strong-a0-sign-flips", type=int)
+    parser.add_argument("--turning-omega-threshold", type=float, default=0.08)
+    parser.add_argument("--strong-a0-threshold", type=float, default=0.5)
+    parser.add_argument("--control-frequency-hz", type=float, default=30.0)
+    parser.add_argument("--five-hz-band-min-hz", type=float, default=4.5)
+    parser.add_argument("--five-hz-band-max-hz", type=float, default=5.5)
     return parser.parse_args()
 
 
@@ -105,6 +113,46 @@ def max_consecutive_true(flags):
     return longest
 
 
+def finite_float(value):
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def dominant_uniform_dft(values, sample_rate_hz, min_hz, max_hz):
+    """Return the strongest one-sided DFT component in a frozen band.
+
+    Turning samples are concatenated and treated as a 30 Hz sequence.  This
+    exactly preserves the diagnostic convention used for the 0.07821 baseline.
+    """
+    samples = [float(value) for value in values]
+    count = len(samples)
+    if count < 2 or sample_rate_hz <= 0.0 or min_hz < 0.0 or max_hz < min_hz:
+        return None, None
+    first_bin = max(1, int(math.ceil(min_hz * count / sample_rate_hz)))
+    last_bin = min(count // 2, int(math.floor(max_hz * count / sample_rate_hz)))
+    if first_bin > last_bin:
+        return None, None
+    mean = sum(samples) / count
+    centered = [value - mean for value in samples]
+    best_frequency = None
+    best_amplitude = None
+    for bin_index in range(first_bin, last_bin + 1):
+        real = 0.0
+        imag = 0.0
+        for sample_index, value in enumerate(centered):
+            phase = 2.0 * math.pi * bin_index * sample_index / count
+            real += value * math.cos(phase)
+            imag -= value * math.sin(phase)
+        amplitude = 2.0 * math.hypot(real, imag) / count
+        if best_amplitude is None or amplitude > best_amplitude:
+            best_frequency = bin_index * sample_rate_hz / count
+            best_amplitude = amplitude
+    return best_frequency, best_amplitude
+
+
 def _in_window(records, start, end):
     if start is None or end is None:
         return []
@@ -130,6 +178,14 @@ def compute_runtime_report(
     max_control_callback_p95_ms=30.0,
     callback_period_ms=1000.0 / 30.0,
     max_consecutive_callback_overrun=1,
+    max_delta_a0_p95=None,
+    max_turning_a0_5hz_amplitude=None,
+    max_strong_a0_sign_flips=None,
+    turning_omega_threshold=0.08,
+    strong_a0_threshold=0.5,
+    control_frequency_hz=30.0,
+    five_hz_band_min_hz=4.5,
+    five_hz_band_max_hz=5.5,
     initial_failures=None,
 ):
     failures = list(initial_failures or [])
@@ -258,6 +314,89 @@ def compute_runtime_report(
         for _, row in motion_interventions
     )
 
+    valid_solver_rows = []
+    for when, message in motion_audits:
+        a0 = finite_float(getattr(message, "solver_u0_a", None))
+        omega = finite_float(getattr(message, "published_cmd_omega", None))
+        if (
+            bool(getattr(message, "solve_success", False))
+            and not bool(getattr(message, "terminal_phase", False))
+            and str(getattr(message, "solver_status", "")).endswith("ACADOS_OK")
+            and a0 is not None
+            and omega is not None
+        ):
+            valid_solver_rows.append((when, a0, omega))
+    a0_values = [row[1] for row in valid_solver_rows]
+    delta_a0 = [
+        abs(current - previous)
+        for previous, current in zip(a0_values, a0_values[1:])
+    ]
+    delta_a0_p95 = percentile_linear(delta_a0, 95.0)
+    turning_values = [
+        a0 for _, a0, omega in valid_solver_rows
+        if abs(omega) >= turning_omega_threshold
+    ]
+    five_hz_frequency, five_hz_amplitude = dominant_uniform_dft(
+        turning_values,
+        control_frequency_hz,
+        five_hz_band_min_hz,
+        five_hz_band_max_hz,
+    )
+    strong_sign_flips = sum(
+        abs(previous[2]) >= turning_omega_threshold
+        and abs(current[2]) >= turning_omega_threshold
+        and abs(previous[1]) >= strong_a0_threshold
+        and abs(current[1]) >= strong_a0_threshold
+        and previous[1] * current[1] < 0.0
+        for previous, current in zip(valid_solver_rows, valid_solver_rows[1:])
+    )
+
+    continuity_gate_enabled = any(
+        threshold is not None
+        for threshold in (
+            max_delta_a0_p95,
+            max_turning_a0_5hz_amplitude,
+            max_strong_a0_sign_flips,
+        )
+    )
+    if continuity_gate_enabled and len(valid_solver_rows) < minimum_samples:
+        failures.append(
+            "valid ACADOS a0 samples {} < {}".format(
+                len(valid_solver_rows), minimum_samples
+            )
+        )
+    if max_delta_a0_p95 is not None:
+        if delta_a0_p95 is None:
+            failures.append("no readable Delta-a0 samples")
+        elif delta_a0_p95 > max_delta_a0_p95 + 1.0e-12:
+            failures.append(
+                "|Delta a0| P95 {:.6f} > {:.6f} m/s^2".format(
+                    delta_a0_p95, max_delta_a0_p95
+                )
+            )
+    if max_turning_a0_5hz_amplitude is not None:
+        if len(turning_values) < minimum_samples or five_hz_amplitude is None:
+            failures.append(
+                "turning a0 samples {} insufficient for 5 Hz metric".format(
+                    len(turning_values)
+                )
+            )
+        elif five_hz_amplitude > max_turning_a0_5hz_amplitude + 1.0e-12:
+            failures.append(
+                "turning a0 ~5 Hz amplitude {:.6f} > {:.6f}".format(
+                    five_hz_amplitude, max_turning_a0_5hz_amplitude
+                )
+            )
+    if (
+        max_strong_a0_sign_flips is not None
+        and strong_sign_flips > max_strong_a0_sign_flips
+    ):
+        failures.append(
+            "strong a0 sign flips {} > {}".format(
+                strong_sign_flips, max_strong_a0_sign_flips
+            )
+        )
+
     if common_epoch_failure_count:
         failures.append(
             "common-epoch failure count={}".format(common_epoch_failure_count)
@@ -288,7 +427,7 @@ def compute_runtime_report(
         )
 
     return {
-        "schema": "spmpc_explicit_actuator_runtime_smoke_postflight_v1",
+        "schema": "spmpc_explicit_actuator_runtime_smoke_postflight_v2",
         "protocol": protocol,
         "status": "PASS" if not failures else "FAIL",
         "bag": str(bag),
@@ -308,11 +447,27 @@ def compute_runtime_report(
         "control_callback_max_ms": callback_max_ms,
         "callback_over_33_3ms_count": callback_overrun_count,
         "max_consecutive_callback_overrun": longest_callback_overrun,
+        "control_continuity": {
+            "valid_solver_sample_count": len(valid_solver_rows),
+            "delta_a0_sample_count": len(delta_a0),
+            "abs_delta_a0_p95_mps2": delta_a0_p95,
+            "turning_sample_count": len(turning_values),
+            "turning_a0_band_peak_frequency_hz": five_hz_frequency,
+            "turning_a0_band_peak_amplitude_mps2": five_hz_amplitude,
+            "strong_a0_sign_flip_count": strong_sign_flips,
+        },
         "thresholds": {
             "max_planner_odom_gap_ms": max_planner_odom_gap_ms,
             "max_control_callback_p95_ms_strict": max_control_callback_p95_ms,
             "callback_period_ms": callback_period_ms,
             "max_consecutive_callback_overrun": max_consecutive_callback_overrun,
+            "max_delta_a0_p95_mps2": max_delta_a0_p95,
+            "max_turning_a0_5hz_amplitude_mps2": max_turning_a0_5hz_amplitude,
+            "max_strong_a0_sign_flips": max_strong_a0_sign_flips,
+            "turning_omega_threshold_radps": turning_omega_threshold,
+            "strong_a0_threshold_mps2": strong_a0_threshold,
+            "control_frequency_hz": control_frequency_hz,
+            "five_hz_band_hz": [five_hz_band_min_hz, five_hz_band_max_hz],
         },
         "failures": failures,
     }
@@ -336,6 +491,27 @@ def validate(args):
         failures.append("callback period must be positive")
     if args.max_consecutive_callback_overrun < 0:
         failures.append("max consecutive callback overrun must be non-negative")
+    for label, value in (
+        ("max Delta-a0 P95", args.max_delta_a0_p95),
+        ("max turning a0 5 Hz amplitude", args.max_turning_a0_5hz_amplitude),
+    ):
+        if value is not None and (not math.isfinite(value) or value < 0.0):
+            failures.append("{} must be finite and non-negative".format(label))
+    if args.max_strong_a0_sign_flips is not None and args.max_strong_a0_sign_flips < 0:
+        failures.append("max strong a0 sign flips must be non-negative")
+    if not math.isfinite(args.turning_omega_threshold) or args.turning_omega_threshold < 0.0:
+        failures.append("turning omega threshold must be finite and non-negative")
+    if not math.isfinite(args.strong_a0_threshold) or args.strong_a0_threshold < 0.0:
+        failures.append("strong a0 threshold must be finite and non-negative")
+    if not math.isfinite(args.control_frequency_hz) or args.control_frequency_hz <= 0.0:
+        failures.append("control frequency must be finite and positive")
+    if (
+        not math.isfinite(args.five_hz_band_min_hz)
+        or not math.isfinite(args.five_hz_band_max_hz)
+        or args.five_hz_band_min_hz < 0.0
+        or args.five_hz_band_max_hz < args.five_hz_band_min_hz
+    ):
+        failures.append("5 Hz band must be finite, non-negative, and ordered")
 
     if not bag_path.is_file():
         failures.append("bag does not exist: {}".format(bag_path))
@@ -389,6 +565,14 @@ def validate(args):
         max_control_callback_p95_ms=args.max_control_callback_p95_ms,
         callback_period_ms=args.callback_period_ms,
         max_consecutive_callback_overrun=args.max_consecutive_callback_overrun,
+        max_delta_a0_p95=args.max_delta_a0_p95,
+        max_turning_a0_5hz_amplitude=args.max_turning_a0_5hz_amplitude,
+        max_strong_a0_sign_flips=args.max_strong_a0_sign_flips,
+        turning_omega_threshold=args.turning_omega_threshold,
+        strong_a0_threshold=args.strong_a0_threshold,
+        control_frequency_hz=args.control_frequency_hz,
+        five_hz_band_min_hz=args.five_hz_band_min_hz,
+        five_hz_band_max_hz=args.five_hz_band_max_hz,
         initial_failures=failures,
     )
     report_path.parent.mkdir(parents=True, exist_ok=True)

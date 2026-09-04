@@ -43,14 +43,18 @@ enum Param {
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
 static_assert(ACTUATOR_GAIN_OMEGA + 1 == SPMPC_B0_NP,
               "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+static_assert(SPMPC_B0_NX == kExplicitActuatorB0StateSize,
+              "B0 状态布局与生成的 spmpc_b0 求解器不一致");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
+static_assert(SPMPC_SLOSH_NX == kExplicitActuatorSloshStateSize,
+              "slosh 状态布局与生成的 spmpc_slosh 求解器不一致");
 static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
 #endif
 
 constexpr double kDisabledEtaMaxSq = 1e12;
 
-// 统一封装两个生成求解器（B0 23 维 / slosh 27 维），把前缀相关调用收敛到一处。
+// 统一封装两个生成求解器（B0 24 维 / slosh 28 维），把前缀相关调用收敛到一处。
 struct GenSolver {
     enum Kind { B0, SLOSH } kind = B0;
     void* capsule = nullptr;
@@ -255,6 +259,7 @@ WarmStartState makeWarmStartState(const double* x, bool slosh) {
         state.angular_delay_queue[static_cast<size_t>(i)] =
             x[8 + kExplicitLinearDelaySteps + i];
     }
+    state.a_cmd_memory = x[kExplicitActuatorAccelMemoryIndex];
     if (slosh) {
         state.eta_x = x[kExplicitActuatorSloshStateOffset];
         state.eta_x_dot = x[kExplicitActuatorSloshStateOffset + 1];
@@ -288,6 +293,7 @@ HorizonStateDebug makeHorizonState(const WarmStartState& state,
     out.h_modal = h_modal;
     out.v_cmd = state.v_cmd;
     out.omega_cmd = state.omega_cmd;
+    out.a_cmd_memory = state.a_cmd_memory;
     out.delayed_v_cmd = state.linear_delay_queue.front();
     out.delayed_omega_cmd = state.angular_delay_queue.front();
     out.a_actual =
@@ -308,6 +314,7 @@ HorizonStateDebug makeHorizonState(const WarmStartState& state,
     out.model_state.insert(out.model_state.end(),
                            state.angular_delay_queue.begin(),
                            state.angular_delay_queue.end());
+    out.model_state.push_back(state.a_cmd_memory);
     if (slosh) {
         out.model_state.push_back(state.eta_x);
         out.model_state.push_back(state.eta_x_dot);
@@ -408,6 +415,7 @@ void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
         x[8 + kExplicitLinearDelaySteps + i] =
             state.angular_delay_queue[static_cast<size_t>(i)];
     }
+    x[kExplicitActuatorAccelMemoryIndex] = state.a_cmd_memory;
     if (slosh) {
         x[kExplicitActuatorSloshStateOffset] = state.eta_x;
         x[kExplicitActuatorSloshStateOffset + 1] = state.eta_x_dot;
@@ -486,6 +494,7 @@ bool isWarmStartFinite(const WarmStartOutput& warm_start) {
         if (!std::isfinite(state.px) || !std::isfinite(state.py) || !std::isfinite(state.theta) ||
             !std::isfinite(state.v) || !std::isfinite(state.s) || !std::isfinite(state.omega) ||
             !std::isfinite(state.v_cmd) || !std::isfinite(state.omega_cmd) ||
+            !std::isfinite(state.a_cmd_memory) ||
             !std::isfinite(state.eta_x) || !std::isfinite(state.eta_x_dot) ||
             !std::isfinite(state.eta_y) || !std::isfinite(state.eta_y_dot)) {
             return false;
@@ -508,6 +517,7 @@ bool isWarmStartFinite(const WarmStartOutput& warm_start) {
 void copyActuatorState(const ActuatorState& actuator, WarmStartState& state) {
     state.v_cmd = actuator.v_cmd;
     state.omega_cmd = actuator.omega_cmd;
+    state.a_cmd_memory = actuator.a_cmd_memory;
     state.linear_delay_queue = actuator.linear_delay_queue;
     state.angular_delay_queue = actuator.angular_delay_queue;
 }
@@ -568,6 +578,7 @@ void rolloutExplicitActuatorWarmStart(WarmStartOutput& warm_start,
         next.omega_cmd = clampValue(
             state.omega_cmd + control.alpha * dt,
             -params.omega_max, params.omega_max);
+        next.a_cmd_memory = control.a;
         for (int i = 0; i + 1 < kExplicitLinearDelaySteps; ++i) {
             next.linear_delay_queue[static_cast<size_t>(i)] =
                 state.linear_delay_queue[static_cast<size_t>(i + 1)];
@@ -812,7 +823,8 @@ bool ContinuousMpccSolverAcados::solve(
         return false;
     }
     if (params_.actuator.mode != ExecutionModelMode::ExplicitActuator ||
-        !input.actuator.valid) {
+        !input.actuator.valid ||
+        !std::isfinite(input.actuator.a_cmd_memory)) {
         output.status = "EXPLICIT_ACTUATOR_STATE_INVALID";
         return false;
     }
@@ -1012,15 +1024,17 @@ bool ContinuousMpccSolverAcados::solve(
             p[W_SLOSH_ETA_DOT] = variant_.w_slosh *
                 params_.slosh.slosh_eta_dot_ratio * stage_scale;
         }
-        // omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证；仅 a/v_s 做第一帧连续性。
+        // a_cmd 通过 a_cmd_memory 在所有控制 stage 做连续性代价。
+        // a_prev 仅保留在参数 ABI/快照中；显式代价不再消费它。
+        p[W_DU_A] = variant_.w_du_a;
+        p[A_PREV] = input.actuator.a_cmd_memory;
+        // v_s 没有记忆状态，仍只在 stage 0 对上一次 solver 控制做跨周期连续性。
         if (stage == 0 && have_u_prev_) {
-            p[W_DU_A] = variant_.w_du_a;
             p[W_DU_VS] = variant_.w_du_vs;
-            p[A_PREV] = u_prev_[0];
             p[VS_PREV] = u_prev_[2];
         } else {
-            p[W_DU_A] = 0.0; p[W_DU_VS] = 0.0;
-            p[A_PREV] = 0.0; p[VS_PREV] = 0.0;
+            p[W_DU_VS] = 0.0;
+            p[VS_PREV] = 0.0;
         }
         snapshot.stage_parameters.insert(
             snapshot.stage_parameters.end(), p, p + gen->np);
@@ -1124,7 +1138,7 @@ bool ContinuousMpccSolverAcados::solve(
     }
 
     // Capture the exact primal x/u guess present in the capsule immediately before solve().
-    // Dual variables and internal SQP memory are intentionally not claimed by schema v1;
+    // Dual variables and internal SQP memory are intentionally not claimed by this schema;
     // actual replay must still pass the frozen numerical reproduction gate.
     capturePrimalGuess(
         *gen, slosh, params_.actuator, c_h,
@@ -1264,11 +1278,15 @@ bool ContinuousMpccSolverAcados::solve(
         const double vsn = (uk[2] - v_ref) / vs_ref;
         output.cost.J_v += (variant_.w_v * vn * vn + variant_.w_vs * vsn * vsn) * inv_n;
 
-        // a/v_s 跨周期第一帧连续性（stage 0）；omega 连续性由状态保证，Δomega 平滑由 w_alpha(全 stage)负责。
+        // a_cmd_memory(k)=a_cmd(k-1)：统计与 solver 一致的全时域 Δa_cmd 代价。
+        const double da =
+            (uk[0] - solved_states[static_cast<size_t>(k)].a_cmd_memory) /
+            a_ref;
+        output.cost.J_smooth += variant_.w_du_a * da * da * inv_n;
+        // v_s 仍仅有跨周期第一帧连续性。
         if (k == 0 && have_u_prev_) {
-            const double da = (uk[0] - u_prev_[0]) / a_ref;
             const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-            output.cost.J_smooth += (variant_.w_du_a * da * da + variant_.w_du_vs * dvs * dvs) * inv_n;
+            output.cost.J_smooth += variant_.w_du_vs * dvs * dvs * inv_n;
         }
     }
 

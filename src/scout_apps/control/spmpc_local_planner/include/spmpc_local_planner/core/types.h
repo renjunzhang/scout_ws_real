@@ -243,6 +243,7 @@ struct HorizonStateDebug {
     double h_modal = 0.0;
     double v_cmd = 0.0;
     double omega_cmd = 0.0;
+    double a_cmd_memory = 0.0;
     double delayed_v_cmd = 0.0;
     double delayed_omega_cmd = 0.0;
     double a_actual = 0.0;

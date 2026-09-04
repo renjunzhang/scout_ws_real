@@ -8,7 +8,7 @@
 
 namespace spmpc_local_planner {
 
-// 连续 MPCC（acados 后端，显式执行器主线：B0 23D / slosh 27D MPCC）。
+// 连续 MPCC（acados 后端，显式执行器主线：B0 24D / slosh 28D MPCC）。
 //
 // 编译期分两种形态：
 //   - 定义了 SPMPC_WITH_ACADOS（CMake 探测到 acados 与生成的 spmpc_b0 求解器）：

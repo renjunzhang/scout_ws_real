@@ -273,7 +273,7 @@ def generate(cfg, output_root, model_key, qp_cond_n=None):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=list(MODELS.keys()), default="b0",
-                        help="生成哪个模型：b0（23维explicit-actuator）| slosh（27维explicit-actuator）| "
+                        help="生成哪个模型：b0（24维explicit-actuator）| slosh（28维explicit-actuator）| "
                              "b0_direct_omega_legacy（5维诊断）| slosh_direct_omega（9维诊断）")
     parser.add_argument("--check", action="store_true",
                         help="不依赖 acados，仅校验 CasADi 模型/代价装配")

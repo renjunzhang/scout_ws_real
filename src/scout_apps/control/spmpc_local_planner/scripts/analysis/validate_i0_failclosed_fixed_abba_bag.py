@@ -192,6 +192,9 @@ def validate(args):
     )
     legacy_delay_expected = args.require_legacy_delay_application == "true"
     explicit_actuator_expected = args.expected_execution_model_code == 1.0
+    full_horizon_da_expected = (
+        explicit_actuator_expected and args.expected_state_width in (24, 28)
+    )
     failures = []
     if not math.isfinite(expected_weight) or expected_weight < 0.0:
         failures.append("expected w_slosh must be finite and non-negative")
@@ -541,6 +544,17 @@ def validate(args):
             actuator_valid_fraction,
             args.minimum_application_fraction,
         )
+    if full_horizon_da_expected:
+        unreadable_accel_memory = sum(
+            not finite(row.get("a_cmd_memory"))
+            for _, row in motion_solver_inputs
+        )
+        if unreadable_accel_memory:
+            failures.append(
+                "solver-input a_cmd_memory unreadable count={}".format(
+                    unreadable_accel_memory
+                )
+            )
 
     warm_start_unreadable_count = sum(
         not finite(row.get("used_fallback")) for _, row in motion_warm_starts
@@ -679,6 +693,17 @@ def validate(args):
                             label, previous_len, expected_rows * state_width
                         )
                     )
+                if full_horizon_da_expected and len(message.initial_guess_states) >= state_width:
+                    initial_memory = message.initial_guess_states[23]
+                    snapshot_memory = getattr(
+                        message, "actuator_a_cmd_memory", None
+                    )
+                    if not close(initial_memory, snapshot_memory, tolerance=1.0e-8):
+                        liquid_artifact_failures.append(
+                            "{}: initial a_cmd_memory={} differs from actuator memory {}".format(
+                                label, initial_memory, snapshot_memory
+                            )
+                        )
             if explicit_actuator_expected:
                 if str(message.backend) != "continuous_mpcc_acados_explicit_actuator":
                     liquid_artifact_failures.append(
@@ -695,6 +720,14 @@ def validate(args):
                 if not bool(message.actuator_state_valid):
                     liquid_artifact_failures.append(
                         "{}: actuator state is invalid".format(label)
+                    )
+                if full_horizon_da_expected and not finite(
+                    getattr(message, "actuator_a_cmd_memory", None)
+                ):
+                    liquid_artifact_failures.append(
+                        "{}: actuator a_cmd_memory is non-finite or missing".format(
+                            label
+                        )
                     )
                 if len(message.actuator_linear_delay_queue) != 5:
                     liquid_artifact_failures.append(
@@ -724,6 +757,33 @@ def validate(args):
                             label, sorted(missing_parameters)
                         )
                     )
+                if full_horizon_da_expected:
+                    parameter_names = [str(name) for name in message.parameter_names]
+                    try:
+                        w_du_a_index = parameter_names.index("w_du_a")
+                    except ValueError:
+                        w_du_a_index = -1
+                    expected_w_du_a = extra_expected_config.get("w_du_a")
+                    if w_du_a_index < 0 or expected_w_du_a is None:
+                        liquid_artifact_failures.append(
+                            "{}: full-horizon Delta-a contract lacks w_du_a metadata".format(
+                                label
+                            )
+                        )
+                    else:
+                        width = int(message.parameter_width)
+                        for stage in range(int(message.horizon_steps) + 1):
+                            value_index = stage * width + w_du_a_index
+                            if value_index >= len(message.stage_parameters) or not close(
+                                message.stage_parameters[value_index],
+                                expected_w_du_a,
+                            ):
+                                liquid_artifact_failures.append(
+                                    "{}: stage {} w_du_a is not {}".format(
+                                        label, stage, expected_w_du_a
+                                    )
+                                )
+                                break
         for message in valid_horizons:
             label = "horizon cycle {}".format(message.cycle_id)
             liquid_artifact_failures.extend(
@@ -748,14 +808,17 @@ def validate(args):
                 )
             if explicit_actuator_expected:
                 expected_rows = int(message.horizon_steps) + 1
-                for field in (
+                state_fields = [
                     "v_cmd",
                     "omega_cmd",
                     "delayed_v_cmd",
                     "delayed_omega_cmd",
                     "a_actual",
                     "alpha_actual",
-                ):
+                ]
+                if full_horizon_da_expected:
+                    state_fields.append("a_cmd_memory")
+                for field in state_fields:
                     values = list(getattr(message, field, []))
                     if len(values) != expected_rows:
                         liquid_artifact_failures.append(
@@ -769,6 +832,20 @@ def validate(args):
                                 label, field
                             )
                         )
+                if full_horizon_da_expected:
+                    memories = list(getattr(message, "a_cmd_memory", []))
+                    controls = list(getattr(message, "a", []))
+                    if len(memories) == expected_rows and len(controls) == expected_rows - 1:
+                        mismatch_count = sum(
+                            not close(memories[k + 1], controls[k], tolerance=1.0e-5)
+                            for k in range(len(controls))
+                        )
+                        if mismatch_count:
+                            liquid_artifact_failures.append(
+                                "{}: a_cmd_memory(k+1)=a_cmd(k) mismatch count={}".format(
+                                    label, mismatch_count
+                                )
+                            )
                 if str(message.backend) != "continuous_mpcc_acados_explicit_actuator":
                     liquid_artifact_failures.append(
                         "{}: wrong explicit-actuator backend {!r}".format(

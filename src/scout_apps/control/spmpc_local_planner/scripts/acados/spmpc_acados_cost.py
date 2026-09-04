@@ -12,6 +12,7 @@ contour / lag 用 s 的参考多项式解析计算（局部 MPCC）。
 import casadi as ca
 
 from spmpc_acados_model import (
+    ACCEL_MEMORY_INDEX,
     PIDX, PIDX_SLOSH, PIDX_DIRECT_OMEGA_LEGACY, PIDX_SLOSH_DIRECT_OMEGA,
 )
 
@@ -194,9 +195,10 @@ def stage_cost_expr(sym, cfg):
         + p[PIDX["w_alpha"]] * (alpha / alpha_max) ** 2
     )
 
-    # 控制变化率：a/v_s 相对 u_prev，仅 stage 0 由 wrapper 置非零 -> 跨周期第一帧连续性（§4.5）。
-    # omega 已是状态(初值=实测 omega)，跨周期连续性由状态保证，不再需要 du_omega。
-    du_a = (a - p[PIDX["a_prev"]]) / a_max
+    # a_cmd_memory(k+1)=a_cmd(k)，因此同一表达式在所有控制 stage 约束
+    # a_cmd(k)-a_cmd(k-1)。stage 0 的 memory 由最终发布命令历史初始化。
+    # omega 已是状态，Δomega 由全时域 w_alpha 间接平滑；本轮不增加 Δalpha。
+    du_a = (a - x[ACCEL_MEMORY_INDEX]) / a_max
     du_vs = (v_s - p[PIDX["vs_prev"]]) / vs_max
     j_smooth = (
         p[PIDX["w_du_a"]] * du_a ** 2

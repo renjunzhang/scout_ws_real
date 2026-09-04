@@ -295,6 +295,16 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
             cmd.angular.z;
     }
 
+    // The queue tail is the final command emitted one OCP interval before
+    // target_epoch.  Use final published commands, rather than the previous
+    // solver candidate, as the stage-0 acceleration-memory authority.
+    out.actuator.a_cmd_memory =
+        (out.actuator.v_cmd - out.actuator.linear_delay_queue.back()) /
+        params.dt;
+    if (!std::isfinite(out.actuator.a_cmd_memory)) {
+        out.status = "INVALID_ACCEL_COMMAND_MEMORY";
+        return out;
+    }
     out.actuator.delayed_v_cmd = out.actuator.linear_delay_queue.front();
     out.actuator.delayed_omega_cmd = out.actuator.angular_delay_queue.front();
     out.actuator.a_actual =

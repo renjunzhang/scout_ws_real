@@ -293,6 +293,7 @@ TEST(ExecutionStatePredictor, ExplicitActuatorBuildsIndependentFifos) {
     EXPECT_TRUE(prediction.history_complete);
     EXPECT_NEAR(prediction.actuator.v_cmd, 0.36, 1.0e-9);
     EXPECT_NEAR(prediction.actuator.omega_cmd, -0.72, 1.0e-9);
+    EXPECT_NEAR(prediction.actuator.a_cmd_memory, 0.30, 1.0e-9);
     for (int i = 0; i < kExplicitLinearDelaySteps; ++i) {
         EXPECT_NEAR(
             prediction.actuator.linear_delay_queue[static_cast<size_t>(i)],
@@ -305,6 +306,26 @@ TEST(ExecutionStatePredictor, ExplicitActuatorBuildsIndependentFifos) {
             -0.02 * (26 + i),
             1.0e-9);
     }
+}
+
+TEST(ExecutionStatePredictor, ExplicitActuatorAccelerationMemoryUsesEmittedCommands) {
+    CommandHistoryBuffer history;
+    history.configure(2.0);
+    const double dt = 1.0 / 30.0;
+    for (int i = 0; i <= 12; ++i) {
+        const double v = i < 12 ? 0.20 : 0.17;
+        history.push(sample(10.0 - (12 - i) * dt, v, 0.0));
+    }
+
+    RobotState robot;
+    SloshState slosh;
+    const auto prediction = makePredictor().predictExplicitActuator(
+        robot, slosh, history, stamp(10.0), stamp(10.0), actuatorParams());
+
+    ASSERT_TRUE(prediction.valid) << prediction.status;
+    EXPECT_NEAR(prediction.actuator.v_cmd, 0.17, 1.0e-12);
+    EXPECT_NEAR(prediction.actuator.linear_delay_queue.back(), 0.20, 1.0e-12);
+    EXPECT_NEAR(prediction.actuator.a_cmd_memory, -0.90, 1.0e-9);
 }
 
 TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesKnownPrefixWithFopdt) {

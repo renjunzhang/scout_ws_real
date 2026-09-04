@@ -17,6 +17,7 @@ PATH_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_s_path.py"
 MAP_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_field_map.py"
 MODEL_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_model.py"
 SMOKE_TEST="${SCRIPT_DIR}/tests/test_explicit_actuator_runtime_smoke.py"
+FULL_DA_WRAPPER="${SCRIPT_DIR}/run_spmpc_full_da_smoke.sh"
 ACADOS_B0_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/acados_ocp_spmpc_b0.json"
 ACADOS_SLOSH_JSON="${REPO_ROOT}/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/acados_ocp_spmpc_slosh.json"
 
@@ -73,6 +74,10 @@ W_DU_A=0.1
 W_DU_VS=0.1
 SLOSH_HEIGHT_MAX=0.001
 ALPHA_MAX=1.2
+EXPECTED_B0_STATE_WIDTH=23
+EXPECTED_SLOSH_STATE_WIDTH=27
+MINIMUM_SOLVER_SCHEMA_VERSION=3
+CONTROL_CONTINUITY_GATE=false
 
 case "${SMOKE_PROFILE}" in
   runtime_baseline)
@@ -107,8 +112,25 @@ case "${SMOKE_PROFILE}" in
     OPERATOR_NOTE="one B_slosh explicit-actuator weight smoke; RGB disabled"
     BLOCK_SEGMENT_ID=I0FC_EXPACT_WEIGHT_TUNING_V1
     ;;
+  full_da)
+    PROTOCOL_ID=SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_FULL_DA_SMOKE_DEV_V1
+    OUTPUT_SERIES=spmpc_i0_failclosed_explicit_actuator_full_da_smoke_v1
+    RUN_LABEL_PREFIX=DEV_I0FC_EXPACT_FULL_DA_SMOKE_V1
+    SMOKE_SCOPE=development_full_horizon_delta_a_smoke_only
+    SMOKE_PURPOSE="full-horizon Delta-a_cmd continuity smoke; one bag, no efficacy claim"
+    OPERATOR_NOTE="one B_slosh full-horizon Delta-a_cmd smoke; RGB disabled"
+    BLOCK_SEGMENT_ID=I0FC_EXPACT_FULL_DA_SMOKE_V1
+    W_SLOSH=1.0
+    W_ACCEL=0.3
+    W_DU_A=0.1
+    W_ALPHA=0.1
+    EXPECTED_B0_STATE_WIDTH=24
+    EXPECTED_SLOSH_STATE_WIDTH=28
+    MINIMUM_SOLVER_SCHEMA_VERSION=4
+    CONTROL_CONTINUITY_GATE=true
+    ;;
   *)
-    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, or weight_tuning"
+    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, weight_tuning, or full_da"
     ;;
 esac
 
@@ -171,6 +193,7 @@ required_files=(
   "${MAP_VALIDATOR}"
   "${MODEL_TEST}"
   "${SMOKE_TEST}"
+  "${FULL_DA_WRAPPER}"
   "${ACADOS_B0_JSON}"
   "${ACADOS_SLOSH_JSON}"
   "${FROZEN_PATH_FILE}"
@@ -196,20 +219,24 @@ python3 "${MAP_VALIDATOR}" "${FROZEN_MAP_FILE}" \
   --expected-resolution 0.02 \
   --expected-pbstream-sha256 "${FROZEN_MAP_SHA256}" >/dev/null
 
-python3 - "${ACADOS_B0_JSON}" "${ACADOS_SLOSH_JSON}" <<'PY'
+python3 - \
+  "${ACADOS_B0_JSON}" "${EXPECTED_B0_STATE_WIDTH}" \
+  "${ACADOS_SLOSH_JSON}" "${EXPECTED_SLOSH_STATE_WIDTH}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-for raw_path in sys.argv[1:]:
+for raw_path, raw_expected_nx in zip(sys.argv[1::2], sys.argv[2::2]):
     path = Path(raw_path)
     payload = json.loads(path.read_text(encoding="utf-8"))
     horizon = int(payload.get("dims", {}).get("N", -1))
+    nx = int(payload.get("dims", {}).get("nx", -1))
     cond_n = int(payload.get("solver_options", {}).get("qp_solver_cond_N", -1))
-    if horizon != 60 or cond_n != 10:
+    expected_nx = int(raw_expected_nx)
+    if horizon != 60 or nx != expected_nx or cond_n != 10:
         raise SystemExit(
-            "generated solver contract mismatch: {} N={} qp_solver_cond_N={}".format(
-                path, horizon, cond_n
+            "generated solver contract mismatch: {} N={} nx={} expected_nx={} qp_solver_cond_N={}".format(
+                path, horizon, nx, expected_nx, cond_n
             )
         )
 PY
@@ -313,6 +340,9 @@ echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
 echo "  RGB            = disabled; no efficacy conclusion from this bag"
 echo "  output         = ${BAG_PATH}"
 echo "  acceptance     = epoch/solver/fault-zero=0; odom gaps>50ms=0; callback P95<30ms; consecutive overruns<=1"
+if truthy "${CONTROL_CONTINUITY_GATE}"; then
+  echo "  continuity     = |Delta a0| P95<=0.0785; turning ~5Hz amplitude<=0.0391; strong flips=0"
+fi
 echo "================================================================="
 
 if truthy "${VALIDATE_ONLY}"; then
@@ -337,6 +367,7 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_weight_smoke.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_full_da_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_i0_failclosed_fixed_abba_bag.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_explicit_actuator_runtime_smoke.py
@@ -398,6 +429,9 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "path_sha256=${FROZEN_PATH_SHA256}"
   echo "map_sha256=${FROZEN_MAP_SHA256}"
   echo "git_revision=${current_git_revision}"
+  echo "full_horizon_delta_a=$([[ \"${SMOKE_PROFILE}\" == \"full_da\" ]] && echo true || echo false)"
+  echo "expected_b0_state_width=${EXPECTED_B0_STATE_WIDTH}"
+  echo "expected_slosh_state_width=${EXPECTED_SLOSH_STATE_WIDTH}"
   echo "rgb_efficacy_claim_forbidden=true"
 } > "${PREREG_FILE}"
 
@@ -487,8 +521,9 @@ python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
   --expected-v-ref "${V_REF}" --expected-v-safe-max "${V_SAFE_MAX}" \
   --minimum-application-fraction 1.0 --expected-delay-mode-code 0 \
   --require-legacy-delay-application false \
-  --expected-execution-model-code 1 --expected-state-width 27 \
-  --minimum-solver-schema-version 3 \
+  --expected-execution-model-code 1 \
+  --expected-state-width "${EXPECTED_SLOSH_STATE_WIDTH}" \
+  --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}" \
   --expected-config "w_accel=${W_ACCEL}" \
   --expected-config "w_smooth=${W_SMOOTH}" \
   --expected-config "w_alpha=${W_ALPHA}" \
@@ -506,13 +541,29 @@ python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
   --expected-config "actuator_linear_delay_steps=5" \
   --expected-config "actuator_angular_delay_steps=10" || exact_rc=$?
 
+runtime_args=(
+  "${BAG_PATH}"
+  --report "${RUNTIME_REPORT}"
+  --protocol "${PROTOCOL_ID}"
+  --max-planner-odom-gap-ms 50.0
+  --max-control-callback-p95-ms 30.0
+  --callback-period-ms 33.3333333333333
+  --max-consecutive-callback-overrun 1
+)
+if truthy "${CONTROL_CONTINUITY_GATE}"; then
+  runtime_args+=(
+    --max-delta-a0-p95 0.0785
+    --max-turning-a0-5hz-amplitude 0.0391
+    --max-strong-a0-sign-flips 0
+    --turning-omega-threshold 0.08
+    --strong-a0-threshold 0.5
+    --control-frequency-hz 30.0
+    --five-hz-band-min-hz 4.5
+    --five-hz-band-max-hz 5.5
+  )
+fi
 runtime_rc=0
-python3 "${RUNTIME_POSTFLIGHT}" "${BAG_PATH}" \
-  --report "${RUNTIME_REPORT}" --protocol "${PROTOCOL_ID}" \
-  --max-planner-odom-gap-ms 50.0 \
-  --max-control-callback-p95-ms 30.0 \
-  --callback-period-ms 33.3333333333333 \
-  --max-consecutive-callback-overrun 1 || runtime_rc=$?
+python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
 
 if (( exact_rc != 0 || runtime_rc != 0 )); then
   fail "postflight failed: contract_rc=${exact_rc}, runtime_rc=${runtime_rc}; preserve the bag and reports for diagnosis"

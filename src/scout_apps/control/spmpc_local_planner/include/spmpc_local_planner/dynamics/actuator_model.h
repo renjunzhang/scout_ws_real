@@ -11,8 +11,10 @@ namespace spmpc_local_planner {
 // with scripts/acados/spmpc_acados_model.py.
 constexpr int kExplicitLinearDelaySteps = 5;
 constexpr int kExplicitAngularDelaySteps = 10;
-constexpr int kExplicitActuatorBaseStateSize =
+constexpr int kExplicitActuatorAccelMemoryIndex =
     8 + kExplicitLinearDelaySteps + kExplicitAngularDelaySteps;
+constexpr int kExplicitActuatorBaseStateSize =
+    kExplicitActuatorAccelMemoryIndex + 1;
 constexpr int kExplicitActuatorSloshStateOffset =
     kExplicitActuatorBaseStateSize;
 constexpr int kExplicitActuatorB0StateSize =
@@ -46,6 +48,9 @@ struct ActuatorState {
     bool valid = false;
     double v_cmd = 0.0;
     double omega_cmd = 0.0;
+    // Previous emitted linear command acceleration at the OCP start epoch.
+    // The explicit OCP advances this as a_mem(k+1)=a_cmd(k).
+    double a_cmd_memory = 0.0;
     std::array<double, kExplicitLinearDelaySteps> linear_delay_queue{};
     std::array<double, kExplicitAngularDelaySteps> angular_delay_queue{};
     double delayed_v_cmd = 0.0;

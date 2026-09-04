@@ -1,6 +1,6 @@
 # Replay-oriented snapshot captured after OCP parameters/bounds/warm-start are set
 # and immediately before acados solve(). Explicit-actuator state rows are:
-# B0: [x,y,yaw,v_actual,s,omega_actual,v_cmd,omega_cmd,q_v(5),q_omega(10)]
+# B0: [x,y,yaw,v_actual,s,omega_actual,v_cmd,omega_cmd,q_v(5),q_omega(10),a_cmd_memory]
 # slosh: the B0 row followed by [eta_x,eta_x_dot,eta_y,eta_y_dot].
 # Control rows are [a_cmd,alpha_cmd,v_s].
 # stage_parameters contains (N+1) rows with parameter_width entries per row.
@@ -54,6 +54,7 @@ float64 eta_y_dot
 bool actuator_state_valid
 float64 actuator_v_cmd
 float64 actuator_omega_cmd
+float64 actuator_a_cmd_memory
 float64 actuator_delayed_v_cmd
 float64 actuator_delayed_omega_cmd
 float64 actuator_a_actual

@@ -278,10 +278,10 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     std_msgs::Float32MultiArray msg;
     msg.layout.dim.resize(1);
     msg.layout.dim[0].label =
-        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,robot_delay_compensation_applied,liquid_delay_compensation_applied,actuator_state_valid,v_cmd,omega_cmd,delayed_v_cmd,delayed_omega_cmd,a_actual,alpha_actual";
-    msg.layout.dim[0].size = 21;
-    msg.layout.dim[0].stride = 21;
-    msg.data.resize(21, 0.0f);
+        "source_code,delay_compensation_applied,x,y,yaw,v,omega,eta_x,eta_x_dot,eta_y,eta_y_dot,h_modal_mm,robot_delay_compensation_applied,liquid_delay_compensation_applied,actuator_state_valid,v_cmd,omega_cmd,delayed_v_cmd,delayed_omega_cmd,a_actual,alpha_actual,a_cmd_memory";
+    msg.layout.dim[0].size = 22;
+    msg.layout.dim[0].stride = 22;
+    msg.data.resize(22, 0.0f);
     msg.data[0] = static_cast<float>(source_code);
     // Keep the legacy aggregate field and all historical state indices stable.
     msg.data[1] = (robot_delay_compensation_applied || liquid_delay_compensation_applied)
@@ -306,6 +306,7 @@ void DiagnosticsPublisher::publishSolverInputState(const SolverInput& input,
     msg.data[18] = static_cast<float>(input.actuator.delayed_omega_cmd);
     msg.data[19] = static_cast<float>(input.actuator.a_actual);
     msg.data[20] = static_cast<float>(input.actuator.alpha_actual);
+    msg.data[21] = static_cast<float>(input.actuator.a_cmd_memory);
     solver_input_state_pub_.publish(msg);
 }
 
@@ -1106,7 +1107,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 3;
+    msg.schema_version = 4;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
     msg.valid = horizon.valid;
@@ -1138,6 +1139,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.h_modal.reserve(state_count);
     msg.v_cmd.reserve(state_count);
     msg.omega_cmd.reserve(state_count);
+    msg.a_cmd_memory.reserve(state_count);
     msg.delayed_v_cmd.reserve(state_count);
     msg.delayed_omega_cmd.reserve(state_count);
     msg.a_actual.reserve(state_count);
@@ -1158,6 +1160,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
         msg.h_modal.push_back(state.h_modal);
         msg.v_cmd.push_back(state.v_cmd);
         msg.omega_cmd.push_back(state.omega_cmd);
+        msg.a_cmd_memory.push_back(state.a_cmd_memory);
         msg.delayed_v_cmd.push_back(state.delayed_v_cmd);
         msg.delayed_omega_cmd.push_back(state.delayed_omega_cmd);
         msg.a_actual.push_back(state.a_actual);
@@ -1181,7 +1184,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 3;
+    msg.schema_version = 4;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
     msg.valid = snapshot.valid;
@@ -1213,6 +1216,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.actuator_state_valid = snapshot.actuator.valid;
     msg.actuator_v_cmd = snapshot.actuator.v_cmd;
     msg.actuator_omega_cmd = snapshot.actuator.omega_cmd;
+    msg.actuator_a_cmd_memory = snapshot.actuator.a_cmd_memory;
     msg.actuator_delayed_v_cmd = snapshot.actuator.delayed_v_cmd;
     msg.actuator_delayed_omega_cmd = snapshot.actuator.delayed_omega_cmd;
     msg.actuator_a_actual = snapshot.actuator.a_actual;

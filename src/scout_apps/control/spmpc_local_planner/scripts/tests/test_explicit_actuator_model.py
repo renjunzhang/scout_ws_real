@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Contracts for the generated explicit command/actual OCP model."""
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -10,10 +11,13 @@ import numpy as np
 
 
 ACADOS_DIR = Path(__file__).resolve().parents[1] / "acados"
+GENERATED_DIR = Path(__file__).resolve().parents[2] / "generated" / "acados"
 sys.path.insert(0, str(ACADOS_DIR))
 
 from generate_spmpc_acados import default_parameter_values, load_config  # noqa: E402
+from spmpc_acados_cost import stage_cost_expr  # noqa: E402
 from spmpc_acados_model import (  # noqa: E402
+    ACCEL_MEMORY_INDEX,
     ANGULAR_QUEUE_START,
     LINEAR_QUEUE_START,
     NP,
@@ -21,6 +25,7 @@ from spmpc_acados_model import (  # noqa: E402
     NX,
     NX_SLOSH,
     PIDX,
+    SLOSH_STATE_OFFSET,
     export_spmpc_b0_symbols,
     export_spmpc_slosh_symbols,
 )
@@ -42,14 +47,23 @@ class ExplicitActuatorModelTest(unittest.TestCase):
     def test_dimensions_and_parameter_contract(self):
         b0 = export_spmpc_b0_symbols()
         slosh = export_spmpc_slosh_symbols()
-        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (23, 3, 28))
+        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (24, 3, 28))
         self.assertEqual(
-            (slosh["nx"], slosh["nu"], slosh["np"]), (27, 3, 37)
+            (slosh["nx"], slosh["nu"], slosh["np"]), (28, 3, 37)
         )
-        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (23, 27, 28, 37))
+        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (24, 28, 28, 37))
+        self.assertEqual((ACCEL_MEMORY_INDEX, SLOSH_STATE_OFFSET), (23, 24))
 
     def test_partial_condensing_horizon_is_frozen(self):
         self.assertEqual(self.cfg["qp_solver_cond_N"], 10)
+
+    def test_generated_solver_json_contract(self):
+        for name, expected_nx in (("spmpc_b0", 24), ("spmpc_slosh", 28)):
+            path = GENERATED_DIR / name / "acados_ocp_{}.json".format(name)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["dims"]["nx"], expected_nx)
+            self.assertEqual(payload["dims"]["N"], 60)
+            self.assertEqual(payload["solver_options"]["qp_solver_cond_N"], 10)
 
     def test_fifo_shifts_and_appends_next_command_state(self):
         symbols = export_spmpc_b0_symbols()
@@ -58,7 +72,7 @@ class ExplicitActuatorModelTest(unittest.TestCase):
         x[6] = 0.10
         x[7] = -0.20
         x[LINEAR_QUEUE_START:ANGULAR_QUEUE_START] = np.arange(5) + 1.0
-        x[ANGULAR_QUEUE_START:23] = np.arange(10) + 11.0
+        x[ANGULAR_QUEUE_START:ACCEL_MEMORY_INDEX] = np.arange(10) + 11.0
         u = np.array([0.30, -0.60, 0.10])
         p = default_parameter_values(self.cfg, with_slosh=False)
 
@@ -72,9 +86,50 @@ class ExplicitActuatorModelTest(unittest.TestCase):
             result[ANGULAR_QUEUE_START - 1], x[6] + u[0] * dt, places=12
         )
         np.testing.assert_allclose(
-            result[ANGULAR_QUEUE_START:22], x[ANGULAR_QUEUE_START + 1:23]
+            result[ANGULAR_QUEUE_START:ACCEL_MEMORY_INDEX - 1],
+            x[ANGULAR_QUEUE_START + 1:ACCEL_MEMORY_INDEX],
         )
-        self.assertAlmostEqual(result[22], x[7] + u[1] * dt, places=12)
+        self.assertAlmostEqual(
+            result[ACCEL_MEMORY_INDEX - 1], x[7] + u[1] * dt, places=12
+        )
+
+    def test_acceleration_memory_advances_to_current_command_on_both_models(self):
+        for symbols, nx in (
+            (export_spmpc_b0_symbols(), NX),
+            (export_spmpc_slosh_symbols(), NX_SLOSH),
+        ):
+            step = transition(symbols)
+            x = np.zeros(nx)
+            x[ACCEL_MEMORY_INDEX] = -0.41
+            u = np.array([0.27, 0.0, 0.0])
+            p = default_parameter_values(
+                self.cfg, with_slosh=symbols["with_slosh"]
+            )
+            result = np.asarray(step(x, u, p)).reshape(-1)
+            self.assertAlmostEqual(result[ACCEL_MEMORY_INDEX], u[0], places=12)
+
+    def test_stage_cost_uses_state_memory_not_legacy_a_prev(self):
+        symbols = export_spmpc_b0_symbols()
+        cost = ca.Function(
+            "full_horizon_da_cost",
+            [symbols["x"], symbols["u"], symbols["p"]],
+            [stage_cost_expr(symbols, self.cfg)],
+        )
+        x = np.zeros(NX)
+        u = np.array([0.30, 0.0, 0.0])
+        p = default_parameter_values(self.cfg, with_slosh=False)
+        p[PIDX["a_prev"]] = u[0]
+        p[PIDX["w_du_a"]] = 0.0
+        without_continuity = float(cost(x, u, p))
+        p[PIDX["w_du_a"]] = 1.0
+        with_state_delta = float(cost(x, u, p))
+        self.assertAlmostEqual(
+            with_state_delta - without_continuity,
+            (u[0] / self.cfg["a_max"]) ** 2 / self.cfg["N"],
+            places=12,
+        )
+        x[ACCEL_MEMORY_INDEX] = u[0]
+        self.assertAlmostEqual(float(cost(x, u, p)), without_continuity, places=12)
 
     def test_new_command_cannot_change_actual_before_fifo_delay(self):
         symbols = export_spmpc_b0_symbols()
@@ -115,7 +170,9 @@ class ExplicitActuatorModelTest(unittest.TestCase):
         p = default_parameter_values(self.cfg, with_slosh=True)
 
         result = np.asarray(step(x, np.array([0.60, 0.0, 0.0]), p)).reshape(-1)
-        np.testing.assert_allclose(result[23:27], np.zeros(4), atol=1.0e-12)
+        np.testing.assert_allclose(
+            result[SLOSH_STATE_OFFSET:NX_SLOSH], np.zeros(4), atol=1.0e-12
+        )
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@
 B0（无 slosh）采用显式 command/actual 执行器模型：
   基础状态 = [px, py, theta, v_actual, s, omega_actual, v_cmd, omega_cmd]
   延迟状态 = 5 拍线速度 FIFO + 10 拍角速度 FIFO
+  连续性状态 = [a_cmd_memory]，满足 a_cmd_memory(k+1) = a_cmd(k)
   控制 u   = [a_cmd, alpha_cmd, v_s]
 
 每个 OCP interval 内以固定 FIFO 头作为延迟输入，用 RK4 离散连续 FOPDT；
@@ -25,7 +26,8 @@ ANGULAR_DELAY_STEPS = 10
 ACTUATOR_CORE_NX = 8
 LINEAR_QUEUE_START = ACTUATOR_CORE_NX
 ANGULAR_QUEUE_START = LINEAR_QUEUE_START + LINEAR_DELAY_STEPS
-SLOSH_STATE_OFFSET = ANGULAR_QUEUE_START + ANGULAR_DELAY_STEPS
+ACCEL_MEMORY_INDEX = ANGULAR_QUEUE_START + ANGULAR_DELAY_STEPS
+SLOSH_STATE_OFFSET = ACCEL_MEMORY_INDEX + 1
 
 NX = SLOSH_STATE_OFFSET
 NU = 3  # [a, alpha, v_s]
@@ -38,8 +40,8 @@ PARAM_NAMES = [
     "ry0", "ry1", "ry2", "ry3",   # y_ref(s) = ry0 + ry1 s + ry2 s^2 + ry3 s^3
     "w_contour", "w_lag", "w_progress",   # 跟踪 / 进度权重（运行时可调，变体切换用）
     "w_a", "w_omega", "w_v", "w_vs", "w_alpha",  # 幅值/速度: a / omega / v / v_s / alpha
-    "w_du_a", "w_du_vs",                  # 控制变化率（仅 stage 0 置非零 -> a/v_s 跨周期第一帧连续性）
-    "a_prev", "vs_prev",                  # 上一控制周期实际下发的 a / v_s（§4.5）
+    "w_du_a", "w_du_vs",                  # a_cmd 全时域连续性 / v_s 跨周期第一帧连续性
+    "a_prev", "vs_prev",                  # a_prev 仅保留 ABI/诊断兼容；vs_prev 供 stage 0 使用
     "e_c_ref", "e_l_ref",                 # contour / lag 归一化尺度
     "v_ref",                               # 物理速度/虚拟路径进度参考速度：用于 v 和 v_s tracking 防 creep
     "actuator_dt",                         # 离散 OCP 步长
@@ -112,6 +114,7 @@ def _export_explicit_actuator_symbols(name, with_slosh):
     omega_cmd = ca.SX.sym("omega_cmd")
     q_v = ca.SX.sym("q_v", LINEAR_DELAY_STEPS)
     q_omega = ca.SX.sym("q_omega", ANGULAR_DELAY_STEPS)
+    a_cmd_memory = ca.SX.sym("a_cmd_memory")
 
     eta = []
     if with_slosh:
@@ -123,7 +126,7 @@ def _export_explicit_actuator_symbols(name, with_slosh):
         ]
     x = ca.vertcat(
         px, py, theta, v_actual, s, omega_actual, v_cmd, omega_cmd,
-        q_v, q_omega, *eta)
+        q_v, q_omega, a_cmd_memory, *eta)
 
     a_cmd = ca.SX.sym("a_cmd")
     alpha_cmd = ca.SX.sym("alpha_cmd")
@@ -156,6 +159,8 @@ def _export_explicit_actuator_symbols(name, with_slosh):
             u[1],
         ]
         values.extend([0.0] * (LINEAR_DELAY_STEPS + ANGULAR_DELAY_STEPS))
+        # a_cmd_memory 是离散记忆状态，interval 末由 disc_dyn 直接覆盖为当前 a_cmd。
+        values.append(0.0)
         if with_slosh:
             eta_x = z[SLOSH_STATE_OFFSET]
             eta_x_dot = z[SLOSH_STATE_OFFSET + 1]
@@ -184,8 +189,9 @@ def _export_explicit_actuator_symbols(name, with_slosh):
     next_q_v = ca.vertcat(
         x[LINEAR_QUEUE_START + 1:ANGULAR_QUEUE_START], integrated[6])
     next_q_omega = ca.vertcat(
-        x[ANGULAR_QUEUE_START + 1:SLOSH_STATE_OFFSET], integrated[7])
-    next_parts = [integrated[0:ACTUATOR_CORE_NX], next_q_v, next_q_omega]
+        x[ANGULAR_QUEUE_START + 1:ACCEL_MEMORY_INDEX], integrated[7])
+    next_parts = [
+        integrated[0:ACTUATOR_CORE_NX], next_q_v, next_q_omega, a_cmd]
     if with_slosh:
         next_parts.append(integrated[SLOSH_STATE_OFFSET:SLOSH_STATE_OFFSET + 4])
     disc_dyn = ca.vertcat(*next_parts)
@@ -201,6 +207,7 @@ def _export_explicit_actuator_symbols(name, with_slosh):
         "nu": NU,
         "np": np_dim,
         "with_slosh": with_slosh,
+        "accel_memory_index": ACCEL_MEMORY_INDEX,
         "eta_base": SLOSH_STATE_OFFSET,
         "linear_delay_steps": LINEAR_DELAY_STEPS,
         "angular_delay_steps": ANGULAR_DELAY_STEPS,

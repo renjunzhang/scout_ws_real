@@ -46,6 +46,7 @@ float64[] eta_y_dot
 float64[] h_modal
 float64[] v_cmd
 float64[] omega_cmd
+float64[] a_cmd_memory
 float64[] delayed_v_cmd
 float64[] delayed_omega_cmd
 float64[] a_actual

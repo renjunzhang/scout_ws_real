@@ -13,6 +13,7 @@ WRAPPER = SCRIPTS_DIR / "run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke
 SHORT_WRAPPER = SCRIPTS_DIR / "run_spmpc_weight_smoke.sh"
 ANALYZER = SCRIPTS_DIR / "analysis" / "validate_explicit_actuator_runtime_smoke.py"
 EXACT_VALIDATOR = SCRIPTS_DIR / "analysis" / "validate_i0_failclosed_fixed_abba_bag.py"
+FULL_DA_WRAPPER = SCRIPTS_DIR / "run_spmpc_full_da_smoke.sh"
 
 SPEC = importlib.util.spec_from_file_location("runtime_smoke", ANALYZER)
 runtime_smoke = importlib.util.module_from_spec(SPEC)
@@ -38,6 +39,9 @@ def audit(when, duration_ms=10.0, active=True, **overrides):
         "state_time_aligned": True,
         "solve_attempted": True,
         "solve_success": True,
+        "solver_status": "B_slosh_ACADOS_OK",
+        "terminal_phase": False,
+        "solver_u0_a": 0.0,
     }
     values.update(overrides)
     return SimpleNamespace(**values)
@@ -67,6 +71,17 @@ class RuntimeAnalysisTest(unittest.TestCase):
             ),
             2,
         )
+
+    def test_five_hz_metric_reproduces_frozen_amplitude_convention(self):
+        values = [
+            0.07821 * __import__("math").sin(2.0 * __import__("math").pi * 5.0 * k / 30.0)
+            for k in range(330)
+        ]
+        frequency, amplitude = runtime_smoke.dominant_uniform_dft(
+            values, 30.0, 4.5, 5.5
+        )
+        self.assertAlmostEqual(frequency, 5.0, places=12)
+        self.assertAlmostEqual(amplitude, 0.07821, places=10)
 
     def test_clean_runtime_passes(self):
         audits = [
@@ -123,12 +138,79 @@ class RuntimeAnalysisTest(unittest.TestCase):
         self.assertEqual(report["planner_odom_gap_over_50ms_count"], 1)
         self.assertEqual(report["max_consecutive_callback_overrun"], 2)
 
+    def test_full_da_control_gates_pass_for_smooth_a0(self):
+        import math
+
+        times = [1.0 + index / 30.0 for index in range(330)]
+        audits = [
+            (
+                when,
+                audit(
+                    when,
+                    published_cmd_omega=0.10,
+                    solver_u0_a=0.02 * math.sin(2.0 * math.pi * 5.0 * index / 30.0),
+                ),
+            )
+            for index, when in enumerate(times)
+        ]
+        odom_rows = [(when, odom(when)) for when in times]
+        interventions = [(when, clean_intervention()) for when in times]
+        report = runtime_smoke.compute_runtime_report(
+            audits,
+            odom_rows,
+            interventions,
+            protocol="FULL_DA_TEST",
+            bag="fake.bag",
+            max_delta_a0_p95=0.0785,
+            max_turning_a0_5hz_amplitude=0.0391,
+            max_strong_a0_sign_flips=0,
+        )
+        self.assertEqual(report["status"], "PASS")
+        self.assertAlmostEqual(
+            report["control_continuity"]["turning_a0_band_peak_amplitude_mps2"],
+            0.02,
+            places=10,
+        )
+
+    def test_full_da_control_gates_reject_baseline_oscillation(self):
+        import math
+
+        times = [1.0 + index / 30.0 for index in range(330)]
+        audits = [
+            (
+                when,
+                audit(
+                    when,
+                    published_cmd_omega=0.10,
+                    solver_u0_a=0.07821 * math.sin(
+                        2.0 * math.pi * 5.0 * index / 30.0
+                    ),
+                ),
+            )
+            for index, when in enumerate(times)
+        ]
+        report = runtime_smoke.compute_runtime_report(
+            audits,
+            [(when, odom(when)) for when in times],
+            [(when, clean_intervention()) for when in times],
+            protocol="FULL_DA_TEST",
+            bag="fake.bag",
+            max_delta_a0_p95=0.0785,
+            max_turning_a0_5hz_amplitude=0.0391,
+            max_strong_a0_sign_flips=0,
+        )
+        self.assertEqual(report["status"], "FAIL")
+        self.assertTrue(
+            any("~5 Hz amplitude" in failure for failure in report["failures"])
+        )
+
 
 class WrapperContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.wrapper = WRAPPER.read_text(encoding="utf-8")
         cls.short_wrapper = SHORT_WRAPPER.read_text(encoding="utf-8")
+        cls.full_da_wrapper = FULL_DA_WRAPPER.read_text(encoding="utf-8")
         cls.exact_validator = EXACT_VALIDATOR.read_text(encoding="utf-8")
 
     def test_is_an_independent_one_bslosh_protocol(self):
@@ -201,6 +283,32 @@ class WrapperContractTest(unittest.TestCase):
         ):
             self.assertIn(token, self.wrapper)
         self.assertIn('"--expected-w-slosh"', self.exact_validator)
+
+    def test_full_da_profile_is_frozen_and_gates_the_two_baseline_metrics(self):
+        for token in (
+            "full_da)",
+            "SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_FULL_DA_SMOKE_DEV_V1",
+            "W_SLOSH=1.0",
+            "W_ACCEL=0.3",
+            "W_DU_A=0.1",
+            "W_ALPHA=0.1",
+            "EXPECTED_B0_STATE_WIDTH=24",
+            "EXPECTED_SLOSH_STATE_WIDTH=28",
+            "--max-delta-a0-p95 0.0785",
+            "--max-turning-a0-5hz-amplitude 0.0391",
+            "--max-strong-a0-sign-flips 0",
+        ):
+            self.assertIn(token, self.wrapper)
+        subprocess.run(["bash", "-n", str(FULL_DA_WRAPPER)], check=True)
+        for token in (
+            "SMOKE_PROFILE=full_da",
+            "VALIDATE_ONLY=true",
+            "VALIDATE_ONLY=false",
+            "ARM_MOTION=YES",
+            "CONFIRM_RUNTIME_SMOKE=YES",
+            "CONFIRM_PATH_CLEAR=YES",
+        ):
+            self.assertIn(token, self.full_da_wrapper)
 
     def test_short_cli_is_validate_only_by_default_and_requires_run_flag(self):
         subprocess.run(["bash", "-n", str(SHORT_WRAPPER)], check=True)

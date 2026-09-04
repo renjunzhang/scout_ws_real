@@ -19,6 +19,7 @@ struct WarmStartState {
     double omega_cmd = 0.0;
     std::array<double, kExplicitLinearDelaySteps> linear_delay_queue{};
     std::array<double, kExplicitAngularDelaySteps> angular_delay_queue{};
+    double a_cmd_memory = 0.0;
     double eta_x = 0.0;
     double eta_x_dot = 0.0;
     double eta_y = 0.0;

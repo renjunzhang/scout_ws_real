@@ -16,8 +16,8 @@ bool finite(double value) {
 
 bool finiteState(const WarmStartState& state) {
     return finite(state.px) && finite(state.py) && finite(state.theta) && finite(state.v) && finite(state.s) &&
-           finite(state.omega) && finite(state.eta_x) && finite(state.eta_x_dot) && finite(state.eta_y) &&
-           finite(state.eta_y_dot);
+           finite(state.omega) && finite(state.a_cmd_memory) && finite(state.eta_x) && finite(state.eta_x_dot) &&
+           finite(state.eta_y) && finite(state.eta_y_dot);
 }
 
 bool finiteControl(const WarmStartControl& control) {
