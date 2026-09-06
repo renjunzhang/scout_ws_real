@@ -14,11 +14,19 @@
 >
 > full-da smoke 采集与 2026-09-06 续写基线：`diag/lt-dwa-collision-tracking @ 8228d1e4fd6efb74da84c5ea72e8e9333293d973`，续写前工作区 clean
 >
+> 幅相续查基线：`diag/lt-dwa-collision-tracking @ 5ee9109`，阶段性文档已提交、未推送；本次续写前工作区 clean，未改 runtime/solver 或冻结参数
+>
+> 激励一致性续查基线：`diag/lt-dwa-collision-tracking @ 5ee9109`，分析代码与 runtime 无相对 HEAD 差异；分析期间两份文档处于已修改未提交状态（与本次 12.6 节一致）
+>
 > 对应方案：[20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md](../实物对比实验/20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md)
 
 ## 1. 结论
 
 截至 2026-09-06，新增完整时域 `Delta a_cmd` 后的一包无 RGB smoke 运行正常，但两项连续性指标仅降低 `33.8% / 42.3%`，均未满足预注册的 `50%` 门；不能进入新 RGB 配对。现有 bag 足够继续离线排查，不需要为当前分析重录。新结果与口径边界见第 12 节。
+
+同包的实际未来命令精细重放显示：333 ms 提前量下，两个转弯窗的 I0/预测 `eta_x` 约 5 Hz 幅值比仍为 `1.97`，与原 horizon 的 `2.01` 接近。重规划和 RK4 数值阻尼不足以单独解释这段幅值差；优先核对模型激励与 processed-IMU 输入的幅值、参考点和时间口径。I0 是内部 observer，当前未证明真实液面失配的唯一原因，详见 12.5 节。
+
+随后把模型侧也套用与 processed-IMU 完全相同的处理路径（nominal lever arm 回到 IMU 位置 + 10 Hz 加速度低通 + 12 Hz gyro 低通 + 角加速度差分 + lever-arm 修正），两个转弯窗的 I0/模型纵向 5 Hz 带内 RMS 比为 `5.12 / 5.97`（谱平均 `5.37`），相位差约 `-136°`、coherence `0.754`；对 `sensor_delay` 的 ±20 ms 敏感性只把相位推到 `-100°~-172°`，幅值比仍约 `5.4`。即当前时间/坐标不确定度不足以对齐两条信号，直接把相位差加进 delay 或把幅值比乘到 gain 都缺乏本包证据；误差也不能主要归于未来命令被重规划替换或 RK4 数值阻尼。详见 12.6 节。
 
 2026-09-03 同权重 RGB 配对的有效负结果继续保留，不能用后续无 RGB smoke 推翻：
 
@@ -468,13 +476,99 @@ PreSolveSnapshot / PredictedHorizon schema v4；RGB disabled
 
 数值离散化也保留为待查线索：快照参数对应的液体固有频率约 `4.973 Hz`；单步 RK4 的自由模态等效衰减率约 `1.7453 s⁻¹`，连续模型为 `1.5623 s⁻¹`，约 333 ms 后的自由响应幅值比为 `0.9408`。这只是同一模型的数值传播差异，不是实车受迫响应或 RGB 误差测量，尚未据此改求解器。
 
-### 12.5 当前决策与后续边界
+### 12.5 实际命令重放：幅值、相位与激励核查
+
+本节在阶段性提交 `5ee9109` 后完成，仍只分析 12.1 节的同一包。复用现有 `horizon_liquid_replay.py` 的精确模态传播和 `analyze_mocap_execution_chain.py` 的动捕运动学辅助函数，没有重求解或重新标定参数。
+
+方法：654 个有效非终端快照分别从同一 solver 初态出发，以实际未来发布命令作 ZOH 历史，按命令经冻结延迟到达的事件切分；执行器一阶系统精确传播，液体激励用不超过 2 ms 子步的区间平均 `a_x`、`v*omega`。对照原 horizon 与未来 odom/I0，提前量为 `33/100/167/267/333 ms`。这是事后已知未来命令的重放，不是在线预测器。频谱沿用两个已定位转弯窗 `[7.3,13.5] / [15.7,20.0] s`，100 Hz 重采样、2 s Hann 窗、50% overlap，共 8 段，取 5 Hz bin；不是 smoke 门的转弯拼接 DFT。
+
+**时间与数值自检：**
+
+- `/cmd_vel` 共 2053 条，发布 audit 共 2051 条；按值和邻近接收时间逐一核对后，2051 条 audit 全部匹配，运动窗内无缺失/多余命令，值差为 `0`。另两条是运动前约 `13.41/13.37 s` 的零命令；重放只使用 audit 的 `command_publish_stamp`，不使用 bag 接收时刻作相位基准。
+- I0 的 `state_stamp=measurement_stamp`；`state_stamp-accel_effective_stamp` 的 min/median/max 均为 `+6.834 ms`。这与 `SloshObserverBank::observerStamp`、`ProcessedImuPipeline` 和现有单元测试一致，是当前实现约定，不是独立物理时间标定，也不能仅据此认定时间戳 bug。I0 比较使用发布的 `state_stamp`，激励比较使用 `accel_effective_stamp`。
+- 相邻 I0 时间间隔与 `sample_dt` 的最大差约 `1.38e-14 s`；以前一状态和后一输入单步重建 I0，最大状态差约 `1.73e-16`。这只证明内部递推一致，不证明物理模型正确。
+- 每 100 拍抽查 2 ms/1 ms 子步，最大 `eta_x/eta_y` 差分别为 `1.11e-8/8.41e-10 m`，速度差小于 `5e-14`；另用合成 5 Hz 信号核对幅值比、相位符号与 coherence，用常值命令核对执行器精确响应和时间平移不变性，均通过。
+
+**333 ms 提前量的内部状态诊断：** 幅值比定义为 `I0/预测`，相位为 `I0 相对预测`，正值表示 I0 超前；下表不是可直接用于执行器标定的传递函数。
+
+| 量 | 原 horizon | 实际未来命令精细重放 |
+|---|---:|---:|
+| `eta_x` 5 Hz 幅值比 | 2.009 | 1.967 |
+| `eta_x` 相位 / coherence | +16.46° / 0.956 | +12.47° / 0.952 |
+| `eta_y` 5 Hz 幅值比 | 1.808 | 1.711 |
+| `eta_y` 相位 / coherence | +14.75° / 0.957 | +9.77° / 0.956 |
+| `eta_x` RMSE，相对 I0，mm | 0.41320 | 0.41302 |
+| `eta_y` RMSE，相对 I0，mm | 0.20810 | 0.20516 |
+
+上述谱量使用两个转弯窗，RMSE 使用全部 654 拍。随提前量从 `33 → 100 → 167 → 267 → 333 ms` 增大，实际命令重放的 `eta_x` 幅值比分别为 `1.087 → 1.175 → 1.396 → 1.693 → 1.967`；原 horizon 同期为 `1.094 → 1.177 → 1.390 → 1.715 → 2.009`。改用真实未来命令、细化传播后，低估幅值的现象没有基本消失；不能主要归结为后续重规划或 RK4 数值阻尼。这仍是相对 I0 的诊断，不能写作 RGB 液面真值误差。
+
+**激励链的剩余不一致：** 非终端段只初始化一次并重放实际命令，模型对 odom 的 `v/omega` RMSE 为 `0.00994 m/s / 0.02701 rad/s`；模型 `a_x/a_y` 对 processed IMU 的 RMSE 却为 `0.18097/0.11049 m/s²`，模型/IMU 标准差比为 `0.306/0.193`。速度趋势能跟随，不代表模态频段激励已拟合。
+
+转弯窗 `a_x` 的 IMU/模型 5 Hz 幅值比约 `4.35`、相位 `-130.7°`，但 coherence 仅 `0.755`，不达到本次解释相位所用的 `0.8` 筛选线；`a_y` 模型频带分母极小、coherence 仅 `0.052`，其极大幅值比不作为可辨识增益。不能据此直接调整 delay、gain 或液体权重。现有 `sensor_delay=15 ms` 的注释不确定度约 `±20 ms`（5 Hz 对应约 `±36°`），IMU yaw 与参考点/lever arm 仍为 nominal，也不能把内部相位差误作精确实车相位标定。
+
+NOKOV 仅作辅助：沿用历史 nominal yaw 后的纵向投影出现约 `0.100 m/s` 偏差，因此不采用其纵向量验证模型，也未默默拟合外参。改用对常量 yaw 无关的 Tracker0 平面速度模长，与模型 `abs(v)` 的 RMSE 为 `0.01243 m/s`；这是零 nominal lever arm、110 ms 居中平滑后的参考点速度粗核对，不是 base 纵向速度或 5 Hz 加速度真值。
+
+新派生产物位于同 bag 旁，未覆盖原六图：
+
+```text
+/home/geist/slosh_bags/real/20260906_spmpc_i0_failclosed_explicit_actuator_full_da_smoke_v1/H0/
+DEV_I0FC_EXPACT_FULL_DA_SMOKE_V1_165501_Bslosh_model_phase_audit/
+  01_model_motion_excitation.png   实际命令模型 vs odom / processed IMU
+  02_liquid_prediction.png         333 ms 提前量的 eta_x/eta_y 时序
+  03_horizon_amplitude_phase.png   各提前量的 5 Hz 幅值比、相位、coherence
+  04_cost_band_removal.png         12.4 节特定去频带扰动的代价变化
+  model_phase_report.json / model_phase_samples.npz
+  cost_report.json / cost_samples.npz
+  check_phase.py / audit.py / render_audit.py
+```
+
+报告保留方法、时间检查、限制和当前 generated 库/配置的 SHA-256；三个脚本是本包离线复现附件，不是新增 runtime 入口。四张 PNG 均完成非空/尺寸/旧 Matplotlib 字符串路径读取检查并逐张查看。原六图中 headerless `/cmd_vel` 辅助线按发布顺序 zip，会受两条额外启动零消息影响，不宜用它精确判断相位；audit 的 solver/final 主链和冻结验收指标不受影响。本次未修改原六图绘图器。
+
+### 12.6 预测激励与 I0 输入一致性：模型侧套用 IMU 处理路径
+
+本节是 12.5 节「激励链的剩余不一致」的续查，仍只分析 12.1 节同一包；产物目录 `excitation_consistency_analysis_5ee9109/`。核心变化是**比较口径更严格**：12.5 节直接比较模型 `a_x` 与 processed-IMU 的 `a_x`，本节先把模型参考点的 `ax, v*omega` 通过 nominal lever arm 变回 IMU 位置，再在实际 50 Hz 采样时刻应用与 IMU 完全相同的 10 Hz 加速度低通、12 Hz gyro 低通、角加速度差分及 lever-arm 修正，两边统一按 `measurement_stamp` 比较，不重复补偿滤波延迟。几何匹配沿用当前软件约定（`liquid_observer_target_icr_proxy` 与模型车体 twist 原点重合、IMU yaw=0、imu→target=(-0.100,+0.045) m），没有完成物理外参、真实 ICR 或液体容器作用点标定。
+
+结论：**在当前冻结执行器参数、nominal 坐标与参考点假设下，即使使用实际发布命令重放，模型激励与进入 I0 的 processed-IMU 激励仍有显著幅值和相位差。** 幅值报告为 4.5–5.5 Hz 选中频点带内 RMS，相位取 5 Hz bin 的 `arg(S_imu, model)`，与 smoke 门的拼接转弯 DFT 不同：
+
+| 窗口 | 模型 4.5–5.5 Hz RMS | I0 同频带 RMS | I0/模型 | 5 Hz 相位差 | coherence |
+|---|---:|---:|---:|---:|---:|
+| 第一转弯 | 0.01639 | 0.08383 | 5.12 | -136.0° | 0.833 |
+| 第二转弯 | 0.01322 | 0.07894 | 5.97 | -136.0° | 0.615 |
+| 两窗谱平均 | 0.01528 | 0.08203 | 5.37 | -136.0° | 0.754 |
+
+该 `-136°` 只描述本包两条信号的频带关系，不能写成「执行器多了 75.5 ms 延迟」；闭环、仅 8 个短窗、第二转弯 coherence 仅 `0.615`，反馈对扰动的响应也能形成这种相位。对 `sensor_delay` 的 ±20 ms 注释不确定度做敏感性检查后，纵向相位差范围约 `-100°~-172°`，幅值比仍约 `5.4`——即当前注明的时间不确定度不足以让两条信号对齐，但不等于已标定实际延迟。原生非等间隔采样、拟合单一 5 Hz 正弦的独立校验给出幅值比 `4.22/4.89`、相位 `-147°/-141°`，同样支持大幅值差与非零相位差。横向 `v*omega` 在该频带几乎没有能量（两窗合并 coherence 约 `0.047`），其巨大比值不作为可辨识增益。
+
+**更换实际未来命令后误差不消失：** 逐个 snapshot 从相同 actual 初态出发，比较原 horizon 与事后已知实际命令历史（同一已记录 IMU 滤波历史初始化预测传感器状态）。100 ms 请求实际约 110 ms、333 ms 约 343 ms。两转弯、两提前量下原计划与实际命令重放相对 I0 的 `a_x` RMSE 都在 `0.24~0.27 m/s²`，彼此差值仅 `0.013~0.021 m/s²`；110 ms 早于冻结的 167 ms 线通道延迟，此时误差已经很大。因此误差不能主要归于未来命令被重规划替换。
+
+**液体数值传播差异不足以解释：** 精确 ZOH 重建整个 I0 序列的最大状态误差为 `1.08e-15`（输入/参数/状态排列/递推语义已读对）。原生约 50 Hz 网格上精确 ZOH 与单步 RK4 的 `eta_x` 相对 RMSE 仅 `1.98%/1.88%`；30 Hz 网格升到 `14.07%/13.88%`（内部模态高度 RMSE `0.1955/0.1976 mm`）。对相同 5 Hz ZOH 正弦，30 Hz RK4 的 eta 稳态幅值为精确 ZOH 的 `0.862`、相位 `-6.86°`，333 ms 自由响应幅值比 `0.9408`、相位 `-4.96°`。数值传播确有额外阻尼和相位偏差，值得单独修正验证，但不能制造已观测到的输入加速度差距。
+
+**已复核但未定位的原因：** 893 条非零 `/cmd_vel` 与 audit 最终命令按序一致（max 差 0）；从原始 IMU 重算重力去除/bias/yaw/两低通/lever-arm 的 2920 相邻样本最大误差 `1.11e-16`；654 个 horizon 的 actual/command 速度、FIFO、acceleration-memory、纵向液体模态与 CasADi 递推吻合到浮点精度（`a_actual` 公式误差 `<5e-16`），仍无状态数组错位或 command/actual 混用证据。纵向 5 Hz 能量在原始加速度中已存在：经相同 10 Hz 滤波后原始 `a_x`、重力投影修正、lever-arm 修正的频带 RMS 分别约 `0.08575/0.000455/0.01487 m/s²`，最终 I0 `a_x` 为 `0.08203 m/s²`——差异并非主要由这两项软件修正新造。仍需区分：命令→车体频响误差、转弯滑移/结构振动等模型外扰动、IMU 外参或动态测量误差、以及 I0 的时间语义。
+
+**下一步判断：** 当前优先级应放在激励来源与参考点一致性、模型外扰动及命令到实测响应的可辨识性上；直接把相位差加进 delay 或把幅值比乘到 gain 都缺乏本包证据。统一液体离散传播可作为独立软件候选，不能代替这条激励链核验。
+
+新派生产物位于同 bag 旁，未覆盖原六图和 12.5 节四图：
+
+```text
+.../H0/excitation_consistency_analysis_5ee9109/
+  01_emitted_command_replay.png    实际命令模型 vs odom / processed IMU
+  02_turn_excitation.png           两个转弯窗的激励对照
+  03_excitation_spectra.png        激励频谱
+  04_identical_input_integrators.png  相同激励的传播器比较
+  05_original_vs_emitted_forecasts.png  原计划 vs 实际命令预测
+  06_ax_band_overlay.png           5 Hz 频带叠图
+  metrics.json / provenance.json / series.npz / rolling_forecasts.csv
+  analyze_excitation.py / write_report.py（离线复现脚本）
+```
+
+`extracted.pkl` 是可删除再生成的解析缓存。本轮产物写于 bag 派生目录、未写入 docs；`provenance.json` 记录了 bag 与相关源码 SHA-256、分析脚本 SHA-256、当时的 `git_status`（两份文档已修改未提交）以及 runtime 源码相对 HEAD 无差异。报告采用匹配 IMU 处理路径后的带内 RMS；其他分析若用单一 5 Hz bin 幅值或直接按 `accel_effective_stamp` 比较未滤波模型，数值不应合并，需先统一预处理、窗口、分母和谱估计定义。
+
+### 12.7 当前决策与后续边界
 
 - 保留本包和失败结果，不降低 50% 门、不进入新 RGB 配对；现有命令、IMU、odom、snapshot 和 horizon 足够下一步离线排查，当前不用再录 bag。
-- 继续用实际已发布命令核对执行器/液体预测，区分未来命令被重规划改变、模型幅值/相位误差和数值传播差异。若做 solver 反事实比较，先完成原配置 replay 复现，再做单变量候选；本次代价重算和去频带 rollout 不等于完成 solver replay。
+- 实际未来命令幅相核查（12.5 节）与模型侧套用 IMU 处理路径的激励一致性核查（12.6 节）均已完成；两者都表明误差不能主要归于重规划或 RK4 数值阻尼。下一步优先查激励来源与参考点一致性、模型外扰动（转弯滑移/结构振动）及命令→实测响应的可辨识性；直接加 delay 或乘 gain 均缺乏本包证据。若做 solver 反事实比较，先完成原配置 replay 复现，再做单变量候选；本次命令重放、代价重算和去频带 rollout 不等于完成 solver replay。
 - 速度、加速度上限、`w_slosh`、执行器参数与地图/路径均保持冻结。下一项控制修复尚未选定；后续若实施，仍需软件验证和由操作者执行的新无 RGB smoke 达标后，才录新 RGB B0/Bslosh 配对。
 - 用户已明确 `解决问题的思路/代码改造方案_唯一主线.md` 属于另一个分支，与当前分支无关。本节不采用它作为修改依据，不修改该文件，也不把该分支的重构设想记作已实现。
-- 本次助手只做离线诊断及文档更新，没有改 runtime/solver 代码，也没有启动实车；文档按用户要求做阶段性提交，不推送。
+- 本次助手只做离线诊断及文档更新，没有改 runtime/solver 代码，也没有启动实车；阶段性提交为 `5ee9109`、未推送，12.5 节幅相续查与 12.6 节激励一致性续查均在该提交之后完成，产物分别在 `*_model_phase_audit/` 与 `*_excitation_consistency_analysis_5ee9109/`。
 
 对应当前分支的实施与验收入口见 [I0 与显式执行器 OCP 最小修复方案](../解决问题的思路/20260903_I0与显式执行器OCP最小修复方案.md)。
 
