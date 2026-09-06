@@ -1,22 +1,26 @@
-# 20260903 I0 + 显式执行器 OCP：Block 1、权重 smoke 与 RGB 配对分析
+# 20260903 I0 + 显式执行器 OCP：Block 1、权重 smoke、RGB 配对与 full-da smoke 分析
 
-> 日期：2026-09-03
+> 日期：2026-09-03；最近更新：2026-09-06
 >
 > 性质：development 实物诊断，不作为正式降晃效果声明
 >
-> 协议：`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WEIGHT_TUNING_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2`
+> 协议：`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_ABBA_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_RUNTIME_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WACCEL03_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WEIGHT_TUNING_SMOKE_DEV_V1`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_WS1_WA03_ABBA_DEV_V2`、`SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_FULL_DA_SMOKE_DEV_V1`
 >
 > 初始写入基线：`diag/lt-dwa-collision-tracking @ a2eacb9f30e14b7439714a558b00696481054e85`
 >
 > smoke 续写基线：`diag/lt-dwa-collision-tracking @ fee6881eb1bfc689912c8ad841988f9b1de15e12`，续写前工作区 clean
 >
-> RGB 配对采集与本次续写基线：`diag/lt-dwa-collision-tracking @ 4e4eaaecec444a8931f33170ca7cddc4e32fce76`，续写前工作区 clean
+> RGB 配对采集与当次续写基线：`diag/lt-dwa-collision-tracking @ 4e4eaaecec444a8931f33170ca7cddc4e32fce76`，续写前工作区 clean
+>
+> full-da smoke 采集与 2026-09-06 续写基线：`diag/lt-dwa-collision-tracking @ 8228d1e4fd6efb74da84c5ea72e8e9333293d973`，续写前工作区 clean
 >
 > 对应方案：[20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md](../实物对比实验/20260903_I0显式执行器OCP_B0_Bslosh_ABBA验证方案.md)
 
 ## 1. 结论
 
-当前结论已经从“准备降低 `w_slosh`”更新为“同权重 RGB 配对得到有效负结果”：
+截至 2026-09-06，新增完整时域 `Delta a_cmd` 后的一包无 RGB smoke 运行正常，但两项连续性指标仅降低 `33.8% / 42.3%`，均未满足预注册的 `50%` 门；不能进入新 RGB 配对。现有 bag 足够继续离线排查，不需要为当前分析重录。新结果与口径边界见第 12 节。
+
+2026-09-03 同权重 RGB 配对的有效负结果继续保留，不能用后续无 RGB smoke 推翻：
 
 1. 最新 V2 配对的 `B0` 与 `Bslosh` 均完成路径；主合同、processed-IMU observer、NOKOV 链和 RGB 标量后验全部通过，common-epoch failure、solver failure 与故障零速均为 `0`。此前的运行时硬停车没有复现。
 2. 在两包共同使用 `w_accel=0.3` 时，`Bslosh(w_slosh=1.0)` 的 RGB `H_vis` P95/RMS 分别为 `1.5423/0.7214 mm`，高于 `B0` 的 `0.9231/0.4410 mm`。按预注册的 `B0-Bslosh` 定义，差值为 `-0.6192/-0.2804 mm`，方向明确不利于 `Bslosh`。
@@ -397,7 +401,84 @@ decision = STOP_BLOCK1_FUTILITY
 - 若继续研究 `Bslosh`，应作为新 development 协议先修改液体目标或加入完整时域 `Δa_cmd/jerk` 连续性约束，再从 smoke 开始，不能把本次 Row03/04 当作补录任务。
 - 上述决策只适用于当前 C02、低速、固定执行器参数和单个 Block1；正式效能结论仍需新的预注册重复实验。
 
-## 12. 权威证据
+## 12. 20260906 完整时域 Delta a_cmd smoke 与离线排查
+
+### 12.1 版本、冻结条件与数据
+
+这是独立 development smoke，不是旧 V2 配对的续行。实现提交为 `064e5e6`，六图诊断为 `a432b79`；采集提交 `8228d1e` 仅修复旧 Matplotlib 测试中 `imread(Path)` 的兼容性。采集前绘图测试 `6/6`、full-da `--validate-only` 均通过。
+
+```text
+protocol: SMPCC_I0_FAILCLOSED_EXPLICIT_ACTUATOR_FULL_DA_SMOKE_DEV_V1
+bag: /home/geist/slosh_bags/real/20260906_spmpc_i0_failclosed_explicit_actuator_full_da_smoke_v1/H0/DEV_I0FC_EXPACT_FULL_DA_SMOKE_V1_165501_Bslosh.bag
+revision: 8228d1e4fd6efb74da84c5ea72e8e9333293d973
+
+B_slosh + processed-IMU I0 + fail_closed + common_epoch
+explicit_actuator；legacy delay off
+w_slosh=1.0, w_accel=0.3, w_du_a=0.1, w_alpha=0.1
+v_ref=0.20 m/s, v_safe_max=0.25 m/s, a_max=0.6 m/s²
+N=60, dt≈1/30 s, cond_N=10；B0/slosh nx=24/28，np=28/37
+PreSolveSnapshot / PredictedHorizon schema v4；RGB disabled
+```
+
+路径继续使用冻结 C02；map/path SHA-256 分别为 `34e45fd8205a766dbc6e3dcea667c5a0a618e26b331d48351c25645e31a19595`、`1464ef37857bcb899d8b0e4867ff63ea06f017e1b871bed80e077f450be14164`。定位恢复后未重建地图，也未另生成路径。
+
+同目录、同 bag stem 下的权威产物：
+
+```text
+*_runtime_smoke_prereg.env
+*_one_click_meta.env
+*_i0_explicit_actuator_contract_postflight.json
+*_runtime_postflight.json
+*_diagnostic_plots/01_timing.png ... 06_cost_frequency.png
+```
+
+### 12.2 验收结果：运行正常，连续性未通过
+
+主合同后验为 `PASS`，含连续性门的 runtime 后验为 `FAIL`，失败项恰为以下两项；不能把主合同通过解释成整个 smoke 通过。
+
+| 指标 | 冻结 Bslosh 基线 | 本包 | 降幅 | 通过阈值 |
+|---|---:|---:|---:|---:|
+| `abs(Delta a0)` P95，m/s² | 0.1569965 | 0.1039313 | 33.8% | ≤0.0785 |
+| 转弯约 5 Hz `a0` 幅值，m/s² | 0.0782094 | 0.0451378 | 42.3% | ≤0.0391 |
+
+基线为第 11 节的 `DEV_I0FC_EXPACT_WS1_WA03_V2_02_Bslosh_b01_p02_a01.bag`，不是另选更差的历史包。新包频带峰为 `5.04425 Hz`；强正负翻转为 `0`。冻结 runtime gate 使用运动窗内有效、成功、非终端 solver 周期的相邻 `a0` 差分；转弯以 `abs(published_cmd_omega)≥0.08 rad/s` 筛选后拼接，沿用固定 `30 Hz`、`4.5–5.5 Hz` 的 DFT 口径。
+
+其他运行门全部通过：到达终点；common-epoch failure、solver failure、故障零速、planner odom `>50 ms` 间隔均为 `0`；odom 最大间隔 `21.070 ms`；callback P95/max 为 `13.877/30.191 ms`，超 `33.3 ms` 周期数与连续超周期均为 `0`。运动窗为 `[1788684939.9300244, 1788684969.6343887]`，共 `892` 个 audit，连续性筛选后 `654` 个 solver 周期、`653` 个相邻差分及 `339` 个转弯样本。
+
+### 12.3 已确认的离线事实
+
+本节使用当前 bag、当前源码与本机 generated 编译库做只读重算，没有启动 ROS 运动节点、改控制参数或重新生成 solver。它是机制诊断，不替代上一节机器验收。
+
+1. **发布链未引入这段振荡。** 654 个有效非终端周期中，solver 与最终发布的线/角命令最大差均为 `0`，terminal/safety/command-contract 介入计数为 `0`。此结论不外推到终端接管段。
+2. **两种“Delta a0”不是同一量。** 同口径相邻 `a0` 差分 P95 为 `0.1039313 m/s²`；在上一轮计划可用的有效拍中，`abs(当前 a0 - 上轮预测 a1)` P95 为 `0.0235764 m/s²`。另由当前 `a0` 减 pre-solve 最终命令历史 memory 得到 P95 `0.1039102 m/s²`。前者说明当前输出随时间的起伏，第二个量说明重规划对旧计划的偏离；命令链图用第二种量，不能代替验收的第一种量。图中整个运动窗重采样/Hann 频谱也不能代替 gate 的转弯拼接 DFT。
+3. **振荡已存在于预测序列内。** 运动后约 `7.3–13.5 s`、`15.7–20.0 s` 的两段中，完整 60 步 `a_cmd` 序列的 `4.5–5.5 Hz` 峰值幅值中位数约为 `0.0204/0.0203 m/s²`。这与命令链上当前 `a0` 和旧计划 `a1` 一起振荡的现象一致，支持优先检查预测内控制与模型/代价的关系，尚不足以证明唯一根因。
+4. **当前实际缩放已核实。** [当前代价表达式](../../../../src/scout_apps/control/spmpc_local_planner/scripts/acados/spmpc_acados_cost.py) 对 running 项除以 `N`；本机 generated `cost_scaling[0..59]=0.0333333333`、`cost_scaling[60]=1`，所以实际 running 系数为 `dt/N≈0.00055556`，terminal 为 `1`。654 个周期的 stage 0、terminal 代价与已编译 C 函数交叉核对，最大绝对误差 `3.47e-18`。缩放事实来自当前实现，不来自其他分支的方案；不能据此直接认定“终端项过强”就是实车振荡根因。
+
+真实目标的分项重算还显示，转弯段 `J_Delta_a`、液体位置 running、液体速度 running 的中位数约为 `4.09e-6 / 3.22e-4 / 9.79e-5`。这些是代价值，不是优化敏感度或因果贡献；不能单凭大小自动提高 `w_du_a` 或降低 `w_slosh`。发布的 cost 图只能辅助看趋势，不等于包含真实 stage/terminal 缩放的总目标。
+
+### 12.4 特定去频带扰动：模型内机制证据
+
+方法：按时间排序的有效非终端周期每 5 拍取样一次，再筛选转弯条件，得到 `69` 个快照。对每个快照保持初态、全部参数、`alpha_cmd` 和 `v_s` 不变，只把 60 步 `a_cmd` 的实数 DFT 中 `4.5–5.5 Hz` 分量置零；原序列与去频带序列都从同一初态按当前离散动力学重新 rollout，再用实际 `dt/N` 与 terminal 缩放计价。未重新优化，也未向 ROS 发布任何结果。
+
+- `69/69` 对序列均通过本次检查的控制与非终端 actual/command 速度 box bounds；这不等于完整安全后验或实车可执行性证明。
+- `69/69` 的全时域 `Delta a` 代价下降，但液体 running 代价和总目标均升高。总目标增量中位数为 `8.95e-5`。
+- 仅在离线计价中将 running 缩放假设为 `1`，仍有 `67/69` 的去频带序列总目标更高。这个检查不等于按新缩放重求解，更不能预测修改缩放后的闭环结果。
+
+当前证据支持：相对于这一特定的平滑扰动，原带频带序列在当前模型/目标中更划算，软连续性代价没有压过相关代价取舍。它不能证明真实液体从该振荡中获益，也不能把“去频带处理”当成拟上线修复。需要继续核对模型相位/幅值、液体状态反馈和连续性约束。
+
+数值离散化也保留为待查线索：快照参数对应的液体固有频率约 `4.973 Hz`；单步 RK4 的自由模态等效衰减率约 `1.7453 s⁻¹`，连续模型为 `1.5623 s⁻¹`，约 333 ms 后的自由响应幅值比为 `0.9408`。这只是同一模型的数值传播差异，不是实车受迫响应或 RGB 误差测量，尚未据此改求解器。
+
+### 12.5 当前决策与后续边界
+
+- 保留本包和失败结果，不降低 50% 门、不进入新 RGB 配对；现有命令、IMU、odom、snapshot 和 horizon 足够下一步离线排查，当前不用再录 bag。
+- 继续用实际已发布命令核对执行器/液体预测，区分未来命令被重规划改变、模型幅值/相位误差和数值传播差异。若做 solver 反事实比较，先完成原配置 replay 复现，再做单变量候选；本次代价重算和去频带 rollout 不等于完成 solver replay。
+- 速度、加速度上限、`w_slosh`、执行器参数与地图/路径均保持冻结。下一项控制修复尚未选定；后续若实施，仍需软件验证和由操作者执行的新无 RGB smoke 达标后，才录新 RGB B0/Bslosh 配对。
+- 用户已明确 `解决问题的思路/代码改造方案_唯一主线.md` 属于另一个分支，与当前分支无关。本节不采用它作为修改依据，不修改该文件，也不把该分支的重构设想记作已实现。
+- 本次助手只做离线诊断及文档更新，没有改 runtime/solver 代码，也没有启动实车；文档按用户要求做阶段性提交，不推送。
+
+对应当前分支的实施与验收入口见 [I0 与显式执行器 OCP 最小修复方案](../解决问题的思路/20260903_I0与显式执行器OCP最小修复方案.md)。
+
+## 13. 权威证据
 
 V1 主后验：
 
