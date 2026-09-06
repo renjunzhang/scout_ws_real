@@ -6,14 +6,14 @@
 namespace spmpc_local_planner {
 
 struct SloshModelParams {
-    double container_radius = 0.0185;
-    double liquid_height = 0.058;
+    double container_radius = 0.01725;
+    double liquid_height = 0.053;
     double liquid_density = 1000.0;
     double damping_ratio = 0.05;
     int mode_index = 1;
     double dt = 1.0 / 30.0;
     double slosh_height_ref = 0.005;
-    double slosh_height_max = 0.008;
+    double slosh_height_max = 0.001;
     double slosh_eta_dot_ratio = 0.3;
     bool use_linear_model = true;
     // Default to modal-only height. The yaw-induced parabola correction is kept as

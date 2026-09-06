@@ -1,6 +1,6 @@
 slosh:
-  container_radius: 0.0185
-  liquid_height: 0.058
+  container_radius: 0.01725  # 内半径 = 内径 34.5 mm / 2（外径 37.5 mm，slosh 用内径）
+  liquid_height: 0.053  # 液面高度 53 mm
   liquid_density: 1000.0
   damping_ratio: 0.05
   mode_index: 1

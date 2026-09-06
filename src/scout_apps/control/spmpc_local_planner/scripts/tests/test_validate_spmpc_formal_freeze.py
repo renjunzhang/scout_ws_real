@@ -78,8 +78,8 @@ class FormalFreezeValidatorTest(unittest.TestCase):
         self.container_yaml = artifact(
             "config/tube_default.yaml",
             "slosh:\n"
-            "  container_radius: 0.0185\n"
-            "  liquid_height: 0.058\n"
+            "  container_radius: 0.01725\n"
+            "  liquid_height: 0.053\n"
             "  damping_ratio: 0.05\n",
         )
         self.container_c2_yaml = artifact(
@@ -227,8 +227,8 @@ class FormalFreezeValidatorTest(unittest.TestCase):
                 "c1_config": "tube_default",
                 "c1_config_file": rel(self.container_yaml),
                 "c1_config_sha256": sha256(self.container_yaml),
-                "c1_radius_m": 0.0185,
-                "c1_liquid_height_m": 0.058,
+                "c1_radius_m": 0.01725,
+                "c1_liquid_height_m": 0.053,
                 "c1_damping_ratio": 0.05,
                 "c1_freeboard_m": 0.02,
                 "c1_f1_hz": 2.0,
@@ -337,9 +337,9 @@ class FormalFreezeValidatorTest(unittest.TestCase):
                 "--container-yaml",
                 str(self.container_yaml),
                 "--container-radius",
-                "0.0185",
+                "0.01725",
                 "--liquid-height",
-                "0.058",
+                "0.053",
                 "--damping-ratio",
                 "0.05",
             ],

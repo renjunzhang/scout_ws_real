@@ -12,8 +12,8 @@ namespace {
 
 SloshModelParams makeParams(bool use_parabola_term = true) {
     SloshModelParams params;
-    params.container_radius = 0.0185;
-    params.liquid_height = 0.058;
+    params.container_radius = 0.01725;
+    params.liquid_height = 0.053;
     params.liquid_density = 997.0;
     params.damping_ratio = 0.047;
     params.mode_index = 1;
