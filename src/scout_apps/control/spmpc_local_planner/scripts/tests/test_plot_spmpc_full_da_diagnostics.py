@@ -326,7 +326,7 @@ class RenderContractTest(unittest.TestCase):
             for path in paths:
                 with self.subTest(path=path.name):
                     self.assertGreater(path.stat().st_size, 2_000)
-                    image = PLOTTER.plt.imread(path)
+                    image = PLOTTER.plt.imread(str(path))
                     self.assertGreater(image.shape[0], 400)
                     self.assertGreater(image.shape[1], 700)
                     self.assertGreater(float(np.std(image)), 0.01)
