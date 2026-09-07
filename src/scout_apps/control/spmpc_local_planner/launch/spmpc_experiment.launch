@@ -1,4 +1,5 @@
 <launch>
+  <arg name="terminal_mpc_stop_handoff_enable" default="false" doc="MPC slowdown followed by latched terminal stop; explicit actuator only"/>
   <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
   <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
   <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
@@ -78,6 +79,7 @@
     <rosparam file="$(find spmpc_local_planner)/config/platforms/$(arg platform_config).yaml" command="load"/>
     <rosparam file="$(find spmpc_local_planner)/config/containers/$(arg container_config).yaml" command="load"/>
     <rosparam file="$(find spmpc_local_planner)/config/experiments/$(arg experiment_config).yaml" command="load"/>
+    <param name="terminal/mpc_stop_handoff_enable" value="$(arg terminal_mpc_stop_handoff_enable)" type="bool"/>
     <param name="planner_variant" value="$(arg planner_variant)"/>
     <param name="variants/$(arg planner_variant)/slosh_enable" value="$(arg slosh_enable)" type="bool"
            if="$(eval arg('slosh_enable') != 'inherit')"/>

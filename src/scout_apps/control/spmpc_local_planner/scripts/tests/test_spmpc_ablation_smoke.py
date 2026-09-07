@@ -120,7 +120,7 @@ class AblationEntryTest(unittest.TestCase):
         for liquid, zero, jerk in (("true", "false", "true"), ("true", "true", "true"),
                                   ("false", "false", "true"), ("true", "false", "false")):
             script = ('VARIANT=B_slosh; SLOSH_ENABLE=$1; ZERO_LIQUID_INITIAL_STATE=$2; '
-                      'JERK_LIMIT_ENABLE=$3; JERK_MAX=0.8\n' + command_array
+                      'JERK_LIMIT_ENABLE=$3; JERK_MAX=0.8; TERMINAL_MPC_STOP_HANDOFF_ENABLE=true\n' + command_array
                       + '\nprintf "%s\\n" "${planner_cmd[@]}"')
             result = subprocess.run(["bash", "-c", script, "test", liquid, zero, jerk],
                                     check=True, capture_output=True, text=True)
@@ -129,6 +129,7 @@ class AblationEntryTest(unittest.TestCase):
             self.assertIn("zero_liquid_initial_state:=" + zero, args)
             self.assertIn("jerk_limit_enable:=" + jerk, args)
             self.assertIn("jerk_max:=0.8", args)
+            self.assertIn("terminal_mpc_stop_handoff_enable:=true", args)
 
 
 if __name__ == "__main__":

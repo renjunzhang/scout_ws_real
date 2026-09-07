@@ -18,6 +18,7 @@ struct TerminalDiagnostics {
     bool speed_gate_reached = false;
     bool omega_gate_reached = false;
     bool reached = false;
+    bool command_owned = false;
     double distance_to_goal = std::numeric_limits<double>::infinity();
     double remaining_s = std::numeric_limits<double>::infinity();
     double dx_robot = std::numeric_limits<double>::quiet_NaN();

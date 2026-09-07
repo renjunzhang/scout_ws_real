@@ -224,6 +224,8 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data.push_back(static_cast<float>(config.zero_liquid_initial_state));
     msg.data.push_back(static_cast<float>(config.jerk_limit_enable));
     msg.data.push_back(static_cast<float>(config.jerk_max));
+    msg.layout.dim[0].label += ",terminal_mpc_stop_handoff_enable";
+    msg.data.push_back(static_cast<float>(config.terminal_mpc_stop_handoff_enable));
     msg.layout.dim[0].size = msg.data.size();
     msg.layout.dim[0].stride = msg.data.size();
     effective_config_pub_.publish(msg);
@@ -839,6 +841,10 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     terminal.data[12] = static_cast<float>(td.v_envelope);
     terminal.data[13] = static_cast<float>(td.cmd_v_pre_clamp);
     terminal.data[14] = static_cast<float>(td.cmd_v_post_clamp);
+    terminal.layout.dim[0].label += ",command_owned";
+    terminal.data.push_back(td.command_owned ? 1.0f : 0.0f);
+    terminal.layout.dim[0].size = terminal.data.size();
+    terminal.layout.dim[0].stride = terminal.data.size();
     terminal_pub_.publish(terminal);
 
     std_msgs::String terminal_mode;

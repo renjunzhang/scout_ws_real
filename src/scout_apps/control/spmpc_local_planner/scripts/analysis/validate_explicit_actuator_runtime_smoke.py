@@ -164,6 +164,12 @@ def _finite_positive_stamp(message, field):
     return value if value > 0.0 else None
 
 
+def task_acceptance_window(audits):
+    """Exclude initial setup, include the entire remaining bag through final stop."""
+    attempts = [when for when, msg in audits if bool(getattr(msg, "solve_attempted", False))]
+    return (min(attempts), max(when for when, _ in audits)) if attempts else (None, None)
+
+
 def compute_runtime_report(
     audits,
     odom_rows,
@@ -205,6 +211,9 @@ def compute_runtime_report(
     if motion_start is None:
         failures.append("no effective motion window")
 
+    acceptance_start, acceptance_end = task_acceptance_window(audits)
+    acceptance_audits = _in_window(audits, acceptance_start, acceptance_end)
+    acceptance_interventions = _in_window(interventions, acceptance_start, acceptance_end)
     motion_audits = _in_window(audits, motion_start, motion_end)
     motion_odom = _in_window(odom_rows, motion_start, motion_end)
     motion_interventions = _in_window(interventions, motion_start, motion_end)
@@ -229,8 +238,6 @@ def compute_runtime_report(
     callback_durations_ms = []
     callback_invalid_count = 0
     callback_overrun_flags = []
-    common_epoch_failure_count = 0
-    solver_failure_count = 0
     for _, message in motion_audits:
         start = _finite_positive_stamp(message, "cycle_start_stamp")
         published = _finite_positive_stamp(message, "command_publish_stamp")
@@ -241,14 +248,15 @@ def compute_runtime_report(
             duration_ms = 1000.0 * (published - start)
             callback_durations_ms.append(duration_ms)
             callback_overrun_flags.append(duration_ms > callback_period_ms)
-        if bool(getattr(message, "state_alignment_required", False)) and not bool(
-            getattr(message, "state_time_aligned", False)
-        ):
-            common_epoch_failure_count += 1
-        if bool(getattr(message, "solve_attempted", False)) and not bool(
-            getattr(message, "solve_success", False)
-        ):
-            solver_failure_count += 1
+
+    # Failure counts are not clipped by command speed or by the last motion sample.
+    failed_solves = [msg for _, msg in audits
+                     if bool(getattr(msg, "solve_attempted", False))
+                     and not bool(getattr(msg, "solve_success", False))]
+    solver_failure_count = len(failed_solves)
+    common_epoch_failure_count = sum(
+        bool(getattr(msg, "state_alignment_required", False)) and
+        not bool(getattr(msg, "state_time_aligned", False)) for _, msg in acceptance_audits)
 
     if callback_invalid_count:
         failures.append(
@@ -306,12 +314,14 @@ def compute_runtime_report(
     )
 
     zero_reason_counts = {
-        field: sum(float(row.get(field, 0.0)) > 0.5 for _, row in motion_interventions)
+        field: sum(float(row.get(field, 0.0)) > 0.5 for _, row in acceptance_interventions)
         for field in BAD_ZERO_FIELDS
     }
+    zero_reason_counts["zero_due_to_solver_failure"] = sum(
+        float(row.get("zero_due_to_solver_failure", 0.0)) > 0.5 for _, row in interventions)
     fault_zero_count = sum(
         any(float(row.get(field, 0.0)) > 0.5 for field in BAD_ZERO_FIELDS)
-        for _, row in motion_interventions
+        for _, row in acceptance_interventions
     )
 
     valid_solver_rows = []
@@ -427,11 +437,14 @@ def compute_runtime_report(
         )
 
     return {
-        "schema": "spmpc_explicit_actuator_runtime_smoke_postflight_v2",
+        "schema": "spmpc_explicit_actuator_runtime_smoke_postflight_v3",
         "protocol": protocol,
         "status": "PASS" if not failures else "FAIL",
         "bag": str(bag),
         "motion_window": {"start_sec": motion_start, "end_sec": motion_end},
+        "acceptance_window": {"start_sec": acceptance_start, "end_sec": acceptance_end},
+        "solver_failure_scope": "whole_bag",
+        "failed_solver_cycle_ids": [int(getattr(msg, "cycle_id", -1)) for msg in failed_solves],
         "common_epoch_failure_count": common_epoch_failure_count,
         "solver_failure_count": solver_failure_count,
         "fault_zero_count": fault_zero_count,

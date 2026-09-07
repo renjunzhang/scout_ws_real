@@ -87,13 +87,20 @@ def validate_bag(args):
     snapshots = {}
     horizons = {}
     config_count = 0
+    audits = []
     expected_config = expected_fields(args.slosh_enable, args.zero_liquid_initial_state,
                                       args.jerk_limit_enable, args.jerk_max)
     expected_config["slosh_enable"] = expected_config.pop("slosh_enabled")
+    expect_handoff = getattr(args, "expect_terminal_handoff", False)
+    if expect_handoff:
+        expected_config["terminal_mpc_stop_handoff_enable"] = 1.0
     # Pair by cycle ID and exact solver epoch, never bag receive time or fitted lag.
     with rosbag.Bag(args.bag) as bag:
         for topic, message, _ in bag.read_messages(
-                topics=[SNAPSHOT_TOPIC, HORIZON_TOPIC, CONFIG_TOPIC]):
+                topics=[SNAPSHOT_TOPIC, HORIZON_TOPIC, CONFIG_TOPIC, "/spmpc/debug/control_cycle_audit"]):
+            if topic.endswith("control_cycle_audit"):
+                audits.append(message)
+                continue
             if topic == CONFIG_TOPIC:
                 config_count += 1
                 config = parse_multiarray(message)
@@ -105,6 +112,15 @@ def validate_bag(args):
                 if message.cycle_id in target:
                     failures.append("duplicate cycle ID on " + topic)
                 target[message.cycle_id] = message
+    if expect_handoff:
+        owned = False
+        for audit in audits:
+            if str(audit.solver_status) in ("TERMINAL_STOP", "GOAL_REACHED"):
+                owned = True
+            if owned and (audit.solve_attempted or audit.solve_success):
+                failures.append("terminal stop incorrectly reentered/reported MPC at cycle " + str(audit.cycle_id))
+        if not audits:
+            failures.append("missing control audit for terminal ownership check")
     if config_count == 0:
         failures.append("missing effective_config")
     if len(horizons) < 10:
@@ -135,6 +151,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag")
     parser.add_argument("--report", required=True)
+    parser.add_argument("--expect-terminal-handoff", action="store_true")
     for name in ("slosh-enable", "zero-liquid-initial-state", "jerk-limit-enable"):
         parser.add_argument("--" + name, choices=("true", "false"), required=True)
     parser.add_argument("--jerk-max", type=float, required=True)

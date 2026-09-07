@@ -23,6 +23,7 @@ void TerminalController::setParams(const TerminalControllerParams& params) {
 void TerminalController::reset() {
     stop_pending_ = false;
     reached_latched_ = false;
+    stop_owned_ = false;
     diagnostics_ = TerminalDiagnostics{};
     diagnostics_.enabled = params_.enable;
 }
@@ -53,6 +54,8 @@ TerminalPlan TerminalController::updateAndPlan(
     }
 
     if (reached_latched_) {
+        plan.owns_command = params_.mpc_stop_handoff_enable;
+        diagnostics_.command_owned = plan.owns_command;
         stop_pending_ = true;
         plan.stop_pending = true;
         plan.envelope_active = true;
@@ -81,11 +84,21 @@ TerminalPlan TerminalController::updateAndPlan(
         stop_pending_ = true;
     }
 
-    const double envelope = computeVelocityEnvelope(goal, a_brake);
+    if (params_.mpc_stop_handoff_enable &&
+        (goal.position_reached || (stop_pending_ && finite(goal.dx_robot) &&
+                                  goal.dx_robot < params_.goal_behind_x))) {
+        stop_owned_ = true;
+    }
+    if (stop_owned_) {
+        stop_pending_ = true;
+    }
+
+    const double envelope = stop_owned_ ? 0.0 : computeVelocityEnvelope(goal, a_brake);
     const bool envelope_active = finite(envelope);
     const bool terminal_phase = stop_pending_ || envelope_active;
 
     plan.stop_pending = stop_pending_;
+    plan.owns_command = stop_owned_;
     plan.envelope_active = envelope_active;
     plan.terminal_phase = terminal_phase;
     plan.pre_terminal_phase = !terminal_phase;
@@ -94,6 +107,8 @@ TerminalPlan TerminalController::updateAndPlan(
         reached_latched_ = true;
         plan.mode = "REACHED";
         diagnostics_.reached = true;
+    } else if (stop_owned_) {
+        plan.mode = "TERMINAL_STOP";
     } else if (stop_pending_) {
         plan.mode = "TERMINAL_CAPTURE_STOP";
     } else if (envelope_active) {
@@ -103,6 +118,7 @@ TerminalPlan TerminalController::updateAndPlan(
     }
 
     diagnostics_.terminal_phase = plan.terminal_phase;
+    diagnostics_.command_owned = plan.owns_command;
     diagnostics_.pre_terminal_phase = plan.pre_terminal_phase;
     diagnostics_.envelope_active = plan.envelope_active;
     diagnostics_.stop_pending = plan.stop_pending;
@@ -160,6 +176,25 @@ TerminalClampOutput TerminalController::clampCommand(
 
     diagnostics_.cmd_v_pre_clamp = out.cmd_v_pre;
     diagnostics_.cmd_v_post_clamp = out.cmd_v_post;
+    return out;
+}
+
+TerminalClampOutput TerminalController::stopCommand(
+    double published_v, double published_omega, double dt,
+    double a_brake, double alpha_brake) const {
+    TerminalClampOutput out;
+    out.cmd_v_pre = published_v;
+    out.cmd_omega_pre = published_omega;
+    // A bad history/period must never produce a motion command. The caller
+    // reports invalid history separately; safety zero always has priority.
+    if (!finite(published_v) || !finite(published_omega) ||
+        !finite(dt) || dt <= 0.0) {
+        return out;
+    }
+    out.cmd_v_post = std::max(0.0, published_v - std::max(0.0, a_brake) * dt);
+    const double omega_magnitude = std::max(
+        0.0, std::abs(published_omega) - std::max(0.0, alpha_brake) * dt);
+    out.cmd_omega_post = std::copysign(omega_magnitude, published_omega);
     return out;
 }
 

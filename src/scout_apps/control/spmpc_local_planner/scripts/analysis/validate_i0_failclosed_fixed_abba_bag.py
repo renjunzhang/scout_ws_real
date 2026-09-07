@@ -26,6 +26,8 @@ ANALYSIS_DIR = Path(__file__).resolve().parent
 if str(ANALYSIS_DIR) not in sys.path:
     sys.path.insert(0, str(ANALYSIS_DIR))
 
+from validate_explicit_actuator_runtime_smoke import task_acceptance_window
+
 from liquid_cost_window_contract import (  # noqa: E402
     parse_expected_config_items,
     validate_config_fields,
@@ -296,6 +298,10 @@ def validate(args):
     if motion_start is None:
         failures.append("no effective motion window")
 
+    acceptance_start, acceptance_end = task_acceptance_window(audits)
+    acceptance_audits = in_window(audits, acceptance_start, acceptance_end)
+    acceptance_interventions = in_window(interventions, acceptance_start, acceptance_end)
+    acceptance_statuses = in_window(statuses, acceptance_start, acceptance_end)
     motion_audits = in_window(audits, motion_start, motion_end)
     motion_alignments = in_window(alignments, motion_start, motion_end)
     motion_configs = in_window(configs, motion_start, motion_end)
@@ -596,13 +602,11 @@ def validate(args):
         if legacy_delay_expected
         else "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
     )
-    for _, message in motion_audits:
+    for _, message in acceptance_audits:
         if str(message.variant) != expected_variant:
             audit_failures["wrong_variant"] += 1
         if int(message.observer_source) != 2:
             audit_failures["wrong_observer_source"] += 1
-        if bool(message.solve_attempted) and not bool(message.solve_success):
-            audit_failures["solver_failure"] += 1
         if bool(message.command_contract_violation):
             audit_failures["command_contract"] += 1
         if bool(message.safety_gate_intervened) and not bool(message.terminal_phase):
@@ -627,6 +631,10 @@ def validate(args):
             or max(abs(robot_stamp - liquid_stamp), abs(robot_stamp - solver_epoch)) > 1.0e-6
         ):
             common_epoch_bad += 1
+    all_failed_solves = [message for _, message in audits
+                         if bool(message.solve_attempted) and not bool(message.solve_success)]
+    if all_failed_solves:
+        audit_failures["solver_failure"] = len(all_failed_solves)
     if audit_failures:
         failures.append("control-audit failures: {}".format(dict(audit_failures)))
     if common_epoch_bad:
@@ -891,20 +899,22 @@ def validate(args):
         failures.extend(liquid_artifact_failures)
 
     zero_counts = {
-        field: sum(row.get(field, 0.0) > 0.5 for _, row in motion_interventions)
+        field: sum(row.get(field, 0.0) > 0.5 for _, row in acceptance_interventions)
         for field in BAD_ZERO_FIELDS
     }
+    zero_counts["zero_due_to_solver_failure"] = sum(
+        row.get("zero_due_to_solver_failure", 0.0) > 0.5 for _, row in interventions)
     nonzero_zero_counts = {key: value for key, value in zero_counts.items() if value}
     if nonzero_zero_counts:
         failures.append("command zero/failure gate observed: {}".format(nonzero_zero_counts))
 
     bad_statuses = collections.Counter(
         status
-        for _, status in motion_statuses
+        for _, status in acceptance_statuses
         if "FAIL" in status.upper() or "WAITING" in status.upper()
     )
     if bad_statuses:
-        failures.append("failure/wait status during motion: {}".format(dict(bad_statuses)))
+        failures.append("failure/wait status during complete run: {}".format(dict(bad_statuses)))
     goal_reached = any(
         status == "GOAL_REACHED"
         and motion_start is not None
@@ -922,6 +932,9 @@ def validate(args):
         "expected_variant": expected_variant,
         "bag": str(bag_path),
         "motion_window": {"start_sec": motion_start, "end_sec": motion_end},
+        "acceptance_window": {"start_sec": acceptance_start, "end_sec": acceptance_end},
+        "solver_failure_scope": "whole_bag",
+        "failed_solver_cycle_ids": [int(msg.cycle_id) for msg in all_failed_solves],
         "counts": {
             "audit_motion": len(motion_audits),
             "alignment_motion": len(motion_alignments),

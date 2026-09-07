@@ -180,6 +180,44 @@ TEST(TerminalController, RateLimitAvoidsInstantHardStop) {
     EXPECT_NEAR(clamp.cmd_v_post, 0.44, 1e-9);
 }
 
+TEST(TerminalController, HandoffDoesNotStopInSlowdownOrCaptureZone) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    EXPECT_FALSE(controller.updateAndPlan(makeGoal(1.0), 0.2, 0.0, 0.6).owns_command);
+    EXPECT_FALSE(controller.updateAndPlan(makeGoal(0.5), 0.0, 0.0, 0.6).owns_command);
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, HandoffPersistsUntilNewTaskReset) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    const auto stop = controller.updateAndPlan(makeGoal(0.1), 0.1, 0.1, 0.6);
+    EXPECT_TRUE(stop.owns_command);
+    EXPECT_EQ(stop.mode, "TERMINAL_STOP");
+    EXPECT_FALSE(controller.reached());
+    EXPECT_TRUE(controller.diagnostics().command_owned);
+    EXPECT_TRUE(controller.updateAndPlan(makeGoal(0.9), 0.1, 0.1, 0.6).owns_command);
+    controller.clearPending();
+    EXPECT_TRUE(controller.updateAndPlan(makeGoal(0.9), 0.1, 0.1, 0.6).owns_command);
+    controller.reset();
+    EXPECT_FALSE(controller.updateAndPlan(makeGoal(0.9), 0.1, 0.1, 0.6).owns_command);
+}
+
+TEST(TerminalController, StopUsesPublishedCommandAndNeverReacceleratesFromZero) {
+    TerminalController controller;
+    const auto stop = controller.stopCommand(0.025937068134, -0.046557832894,
+                                            1.0 / 30.0, 0.6, 1.2);
+    EXPECT_NEAR(stop.cmd_v_post, 0.005937068134, 1e-10);
+    EXPECT_NEAR(stop.cmd_omega_post, -0.006557832894, 1e-10);
+    const auto zero = controller.stopCommand(0.0, 0.0, 1.0 / 30.0, 0.6, 1.2);
+    EXPECT_DOUBLE_EQ(zero.cmd_v_post, 0.0);
+    EXPECT_DOUBLE_EQ(zero.cmd_omega_post, 0.0);
+}
+
 }  // namespace spmpc_local_planner
 
 int main(int argc, char** argv) {

@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_local_planner/core/spmpc_problem.h"
 
 #include <gtest/gtest.h>
 #include <cmath>
@@ -77,6 +78,74 @@ SolverInput makeInput() {
 }
 
 }  // namespace
+
+TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
+    auto params = makeParams();
+    params.jerk_limit_enable = true;
+    params.terminal.mpc_stop_handoff_enable = true;
+    SpmpcProblem problem;
+    problem.configure(params, makeB0Variant());
+    const auto reference = makeStraightReference();
+    problem.setReferencePath(reference);
+    auto input = makeInput();
+    input.robot.x = 4.9;
+    input.robot.v = 0.04;
+    input.actuator.v_cmd = 0.0;
+    input.actuator.a_cmd_memory = -0.7781120448021244;  // bag cycle 1314
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input, output));
+    EXPECT_EQ(output.status, "TERMINAL_STOP");
+    EXPECT_FALSE(output.ocp_solve_attempted);
+    EXPECT_FALSE(output.pre_solve_snapshot.valid);
+    EXPECT_FALSE(output.predicted_horizon.valid);
+    EXPECT_TRUE(output.terminal_diagnostics.command_owned);
+    EXPECT_DOUBLE_EQ(input.actuator.a_cmd_memory, -0.7781120448021244);
+    EXPECT_DOUBLE_EQ(output.cmd_v, 0.0);
+
+    // Repeated publication of the same path and odometry noise cannot release it.
+    problem.setReferencePath(reference);
+    input.robot.x = 4.7;
+    input.robot.v = 0.1;
+    input.actuator.a_cmd_memory = 0.6879754313324827;  // bag cycle 1316
+    ASSERT_TRUE(problem.solve(input, output));
+    EXPECT_FALSE(output.ocp_solve_attempted);
+    EXPECT_EQ(output.status, "TERMINAL_STOP");
+    EXPECT_DOUBLE_EQ(output.cmd_v, 0.0);
+
+    auto points = reference.points();
+    for (auto& point : points) point.x += 1.0;
+    ReferencePath new_reference;
+    new_reference.setPoints(points, "map");
+    problem.setReferencePath(new_reference);
+    input.robot.x = 1.0;
+    input.robot.v = 0.0;
+    input.actuator.a_cmd_memory = 0.0;
+    problem.solve(input, output);
+    EXPECT_TRUE(output.ocp_solve_attempted);
+    EXPECT_FALSE(output.terminal_diagnostics.command_owned);
+}
+
+TEST(TerminalHandoff, SlowdownKeepsPublishedCandidateInsideOcpPlan) {
+    auto params = makeParams();
+    params.jerk_limit_enable = true;
+    params.terminal.mpc_stop_handoff_enable = true;
+    SpmpcProblem problem;
+    problem.configure(params, makeB0Variant());
+    problem.setReferencePath(makeStraightReference());
+    auto input = makeInput();
+    input.robot.x = 4.0;
+    input.actuator.a_cmd_memory = 0.0;
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    ASSERT_TRUE(output.predicted_horizon.valid);
+    EXPECT_TRUE(output.ocp_solve_attempted);
+    EXPECT_FALSE(output.terminal_diagnostics.command_owned);
+    EXPECT_EQ(output.pre_solve_snapshot.v_ref_status, "TERMINAL_MPC_SLOWDOWN");
+    EXPECT_LT(output.pre_solve_snapshot.requested_v_ref, 0.2);
+    EXPECT_DOUBLE_EQ(output.cmd_v, output.predicted_horizon.states[1].v_cmd);
+    EXPECT_DOUBLE_EQ(output.cmd_omega, output.predicted_horizon.states[1].omega_cmd);
+    EXPECT_DOUBLE_EQ(input.v_ref_current, 0.2);
+}
 
 TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ContinuousMpccSolverAcados solver;

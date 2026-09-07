@@ -30,6 +30,7 @@ private:
     StartLockRecovery start_lock_recovery_;
     std::unique_ptr<SpmpcSolver> solver_;
     double last_progress_s_ = 0.0;
+    double configured_v_ref_ = 0.0;
 };
 
 }  // namespace spmpc_local_planner

@@ -742,6 +742,7 @@ trap on_interrupt INT TERM
 
 planner_cmd=(
   roslaunch spmpc_local_planner spmpc_fixed_path.launch
+  "terminal_mpc_stop_handoff_enable:=${TERMINAL_MPC_STOP_HANDOFF_ENABLE:-false}"
   "planner_variant:=${VARIANT}"
   "slosh_enable:=${SLOSH_ENABLE:-inherit}"
   "zero_liquid_initial_state:=${ZERO_LIQUID_INITIAL_STATE:-false}"

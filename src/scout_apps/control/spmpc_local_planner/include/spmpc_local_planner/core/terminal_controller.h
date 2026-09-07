@@ -9,6 +9,8 @@ namespace spmpc_local_planner {
 
 struct TerminalControllerParams {
     bool enable = true;
+    // Explicit-actuator mode: shape the MPC reference, then latch final stop.
+    bool mpc_stop_handoff_enable = false;
     double goal_tolerance = 0.15;
     bool slowdown_enable = true;
     double slowdown_distance = 1.20;
@@ -37,6 +39,7 @@ struct TerminalGoalInfo {
 };
 
 struct TerminalPlan {
+    bool owns_command = false;
     bool terminal_phase = false;
     bool pre_terminal_phase = true;
     bool envelope_active = false;
@@ -74,6 +77,11 @@ public:
         const TerminalPlan& plan,
         double a_brake);
 
+    // Once latched, use truthful last published commands; never measured-speed
+    // noise to reaccelerate, and never hand back to MPC on the same path.
+    TerminalClampOutput stopCommand(double published_v, double published_omega,
+                                   double dt, double a_brake, double alpha_brake) const;
+
     bool reached() const { return diagnostics_.reached; }
     const TerminalDiagnostics& diagnostics() const { return diagnostics_; }
 
@@ -83,6 +91,7 @@ private:
     TerminalControllerParams params_;
     bool stop_pending_ = false;
     bool reached_latched_ = false;
+    bool stop_owned_ = false;
     TerminalDiagnostics diagnostics_;
 };
 

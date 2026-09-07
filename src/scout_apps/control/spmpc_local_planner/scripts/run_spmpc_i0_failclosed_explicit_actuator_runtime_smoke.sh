@@ -89,6 +89,7 @@ ZERO_LIQUID_INITIAL_STATE=false
 JERK_LIMIT_ENABLE=false
 JERK_MAX=1.0
 EXACT_CONDITION=Bslosh
+TERMINAL_MPC_STOP_HANDOFF_ENABLE=false
 ABLATION_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_ablation_smoke.py"
 
 case "${SMOKE_PROFILE}" in
@@ -290,6 +291,7 @@ PY
 launch_dump="$(roslaunch --dump-params \
   spmpc_local_planner spmpc_fixed_path.launch \
   planner_variant:="${VARIANT}" solver_backend:=continuous_mpcc_acados \
+  terminal_mpc_stop_handoff_enable:="${TERMINAL_MPC_STOP_HANDOFF_ENABLE}" \
   slosh_enable:="${SLOSH_ENABLE}" zero_liquid_initial_state:="${ZERO_LIQUID_INITIAL_STATE}" \
   jerk_limit_enable:="${JERK_LIMIT_ENABLE}" jerk_max:="${JERK_MAX}" \
   reference_path_topic:="${REF_TOPIC}" cmd_vel_topic:="${CMD_TOPIC}" \
@@ -343,6 +345,7 @@ expected_launch_lines=(
   "/spmpc_local_planner/variants/B_slosh/slosh_enable: ${SLOSH_ENABLE}"
   "/spmpc_local_planner/ablation/zero_liquid_initial_state: ${ZERO_LIQUID_INITIAL_STATE}"
   "/spmpc_local_planner/ablation/jerk_limit_enable: ${JERK_LIMIT_ENABLE}"
+  "/spmpc_local_planner/terminal/mpc_stop_handoff_enable: ${TERMINAL_MPC_STOP_HANDOFF_ENABLE}"
   "/spmpc_local_planner/variants/B_slosh/v_ref: 0.2"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
@@ -491,6 +494,7 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}"
   echo "jerk_limit_enable=${JERK_LIMIT_ENABLE}"
   echo "jerk_max=${JERK_MAX}"
+  echo "terminal_mpc_stop_handoff_enable=${TERMINAL_MPC_STOP_HANDOFF_ENABLE}"
   echo "launch_params_sha256=$(printf '%s\n' "${launch_dump}" | sha256sum | awk '{print $1}')"
   echo "w_slosh=${W_SLOSH}"
   echo "w_accel=${W_ACCEL}"
@@ -516,6 +520,7 @@ mkdir -p "${RUN_OUT_DIR}"
 runner_rc=0
 env \
   MATRIX_PRESET= PILOT_METHOD= VARIANT="${VARIANT}" ALG="${VARIANT}" \
+  TERMINAL_MPC_STOP_HANDOFF_ENABLE="${TERMINAL_MPC_STOP_HANDOFF_ENABLE}" \
   SLOSH_ENABLE="${SLOSH_ENABLE}" ZERO_LIQUID_INITIAL_STATE="${ZERO_LIQUID_INITIAL_STATE}" \
   JERK_LIMIT_ENABLE="${JERK_LIMIT_ENABLE}" JERK_MAX="${JERK_MAX}" \
   DATE="${DATE}" STAMP="${STAMP}" PILOT_MODE=true \
@@ -633,6 +638,7 @@ if [[ -s "${BAG_PATH}" ]]; then
     --expected-config "actuator_angular_delay_steps=10" || exact_rc=$?
   if [[ "${SMOKE_PROFILE}" == ablation ]]; then
     python3 "${ABLATION_POSTFLIGHT}" "${BAG_PATH}" --report "${ABLATION_REPORT}" \
+      --expect-terminal-handoff \
       --slosh-enable "${SLOSH_ENABLE}" --zero-liquid-initial-state "${ZERO_LIQUID_INITIAL_STATE}" \
       --jerk-limit-enable "${JERK_LIMIT_ENABLE}" --jerk-max "${JERK_MAX}" || ablation_rc=$?
   fi

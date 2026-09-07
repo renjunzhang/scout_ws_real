@@ -58,6 +58,29 @@ def clean_intervention():
 
 
 class RuntimeAnalysisTest(unittest.TestCase):
+    def test_complete_bag_counts_failures_after_last_moving_command(self):
+        times = [1.0 + i / 30.0 for i in range(20)]
+        audits = [(t, audit(t)) for t in times]
+        interventions = [(t, clean_intervention()) for t in times]
+        for cycle, t in enumerate((2.0, 2.033, 2.1, 2.133), 1313):
+            audits.append((t, audit(t, active=False, solve_success=False,
+                                    solver_status="ACADOS_SOLVE_FAILED_4", cycle_id=cycle)))
+            intervention = clean_intervention()
+            intervention["zero_due_to_solver_failure"] = 1.0
+            interventions.append((t, intervention))
+        # A terminal-owned cycle is not an optimization attempt or a success.
+        audits.append((2.2, audit(2.2, active=False, solve_attempted=False,
+                                 solve_success=False, solver_status="TERMINAL_STOP")))
+        report = runtime_smoke.compute_runtime_report(
+            audits, [(t, odom(t)) for t in times], interventions,
+            protocol="COMPLETE_STOP", bag="test.bag")
+        self.assertEqual(report["solver_failure_count"], 4)
+        self.assertEqual(report["fault_zero_count"], 4)
+        self.assertEqual(report["zero_reason_counts"]["zero_due_to_solver_failure"], 4)
+        self.assertLess(report["motion_window"]["end_sec"], 2.0)
+        self.assertEqual(report["acceptance_window"]["end_sec"], 2.2)
+        self.assertEqual(report["status"], "FAIL")
+
     def test_percentile_matches_linear_definition(self):
         self.assertEqual(runtime_smoke.percentile_linear([1.0], 95.0), 1.0)
         self.assertAlmostEqual(

@@ -611,6 +611,16 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke
 去硬约束组也报告相同平滑门，未通过不能删除该对照包；失败包、图和报告保留。
 IMU 激励与液体监视器仍需离线按物理时间分析，自动 PASS 不代表真实降晃有效。
 
+停车接管修复后，该开发入口统一开启 `terminal_mpc_stop_handoff_enable`，
+jerk 上限和四组权重不变。原末端减速包络送入 MPC 速度参考，接管前不再事后
+改写求解器速度；进入原目标位置容差（或原越过目标停车条件）才锁存终端控制，
+不会在 1.2 m 减速区或 0.7 m 捕获区提前停车。终端使用真实发布速度逐步降至零，
+保留原越过目标立即停车和所有安全门；同一路径重发不会释放锁存，新路径或节点重启才重置。
+`TERMINAL_STOP` / `GOAL_REACHED` 周期不调用 MPC，审计的 `solve_attempted`、
+`solve_success` 均为 false，`/spmpc/terminal/debug` 的 `command_owned` 字段明确控制权。
+运行与 I0 契约报告对整包统计求解失败，其他故障门覆盖首次求解至录包结束，
+运动窗口仅继续用于原平滑指标；不能漏掉低速、零命令或到达后的求解失败。
+
 设计与时间对齐要求见[开发思路](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260907_全时域加速度变化硬约束与NoState三组开发验证思路.md)。
 
 ### 10.1 固定路径 alpha-state continuous MPCC

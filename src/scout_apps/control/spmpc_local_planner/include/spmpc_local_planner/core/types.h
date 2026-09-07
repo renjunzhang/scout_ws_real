@@ -193,6 +193,7 @@ struct EffectiveConfigDebug {
     double zero_liquid_initial_state = 0.0;
     double jerk_limit_enable = 0.0;
     double jerk_max = 0.0;
+    double terminal_mpc_stop_handoff_enable = 0.0;
 };
 
 // ROS-independent timestamps for one authoritative control cycle.  All stamps
@@ -474,6 +475,8 @@ struct VRefDebugSummary {
 };
 
 struct SolverOutput {
+    // Set by SpmpcProblem only when the optimization backend was invoked.
+    bool ocp_solve_attempted = false;
     bool success = false;
     std::string status = "NOT_RUN";
     double cmd_v = 0.0;

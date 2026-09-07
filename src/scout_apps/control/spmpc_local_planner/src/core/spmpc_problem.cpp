@@ -44,6 +44,7 @@ SpmpcProblem::SpmpcProblem() = default;
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
+    configured_v_ref_ = variant.v_ref;
     terminal_controller_.setParams(solver_params_.terminal);
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
     solver_ = makeSolver(solver_params_.solver_backend);
@@ -156,21 +157,48 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         return true;
     }
 
+    if (terminal_plan.owns_command) {
+        output = SolverOutput{};
+        const bool valid_history = input.actuator.valid &&
+            std::isfinite(input.actuator.v_cmd) && std::isfinite(input.actuator.omega_cmd) &&
+            std::isfinite(input.dt) && input.dt > 0.0;
+        output.success = valid_history;
+        output.status = valid_history ? "TERMINAL_STOP" : "TERMINAL_STOP_HISTORY_FAILED";
+        if (valid_history && !(goal_info.dx_robot < solver_params_.terminal.goal_behind_x)) {
+            const auto stop = terminal_controller_.stopCommand(
+                input.actuator.v_cmd, input.actuator.omega_cmd, input.dt,
+                solver_params_.a_max, solver_params_.alpha_max);
+            output.cmd_v = stop.cmd_v_post;
+            output.cmd_omega = stop.cmd_omega_post;
+        }
+        output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
+        output.progress_abs_s = proj.s;
+        output.terminal_diagnostics = terminal_controller_.diagnostics();
+        last_progress_s_ = std::max(last_progress_s_, proj.s);
+        updateStartLockRecovery(input, valid_history, output);
+        return valid_history;
+    }
+
     SolverInput guarded_input = input;
     guarded_input.min_progress_s = last_progress_s_;
     guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
+    if (solver_params_.terminal.mpc_stop_handoff_enable && terminal_plan.envelope_active) {
+        guarded_input.has_v_ref_current = true;
+        guarded_input.v_ref_current = std::min(
+            input.has_v_ref_current ? input.v_ref_current : configured_v_ref_,
+            terminal_plan.v_envelope);
+        guarded_input.v_ref_status = "TERMINAL_MPC_SLOWDOWN";
+    }
     const bool ok = solver_->solve(guarded_input, reference_, output);
+    output.ocp_solve_attempted = true;
     if (ok && output.success) {
-        const TerminalClampOutput clamp = terminal_controller_.clampCommand(
-            output.cmd_v,
-            output.cmd_omega,
-            input.robot.v,
-            input.dt,
-            goal_info,
-            terminal_plan,
-            std::max(1e-6, solver_params_.a_max));
-        output.cmd_v = clamp.cmd_v_post;
-        output.cmd_omega = clamp.cmd_omega_post;
+        if (!solver_params_.terminal.mpc_stop_handoff_enable) {
+            const TerminalClampOutput clamp = terminal_controller_.clampCommand(
+                output.cmd_v, output.cmd_omega, input.robot.v, input.dt,
+                goal_info, terminal_plan, std::max(1e-6, solver_params_.a_max));
+            output.cmd_v = clamp.cmd_v_post;
+            output.cmd_omega = clamp.cmd_omega_post;
+        }
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
     }
     output.terminal_diagnostics = terminal_controller_.diagnostics();

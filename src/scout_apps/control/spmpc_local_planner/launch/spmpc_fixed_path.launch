@@ -1,4 +1,5 @@
 <launch>
+  <arg name="terminal_mpc_stop_handoff_enable" default="false" doc="MPC slowdown followed by latched terminal stop; explicit actuator only"/>
   <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
   <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
   <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
@@ -68,6 +69,7 @@
   <arg name="execution_contract_max_post_limit_delta_v" default="0.0001"/>
   <arg name="execution_contract_max_post_limit_delta_omega" default="0.0001"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
+    <arg name="terminal_mpc_stop_handoff_enable" value="$(arg terminal_mpc_stop_handoff_enable)"/>
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="slosh_enable" value="$(arg slosh_enable)"/>
     <arg name="zero_liquid_initial_state" value="$(arg zero_liquid_initial_state)"/>

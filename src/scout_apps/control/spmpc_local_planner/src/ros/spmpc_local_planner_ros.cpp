@@ -568,6 +568,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                solver_params.homotopy_lateral_offset);
     pnh_.param("reference/lookahead_distance", solver_params.lookahead_distance, solver_params.lookahead_distance);
     pnh_.param("terminal/enable", solver_params.terminal.enable, solver_params.terminal.enable);
+    pnh_.param("terminal/mpc_stop_handoff_enable", solver_params.terminal.mpc_stop_handoff_enable, false);
     pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
     pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
     pnh_.param("terminal/goal_reached_max_omega", solver_params.terminal.goal_reached_max_omega, solver_params.terminal.goal_reached_max_omega);
@@ -652,6 +653,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator) {
         ROS_FATAL("[spmpc_local_planner] continuous_mpcc_acados was generated "
                   "for explicit_actuator; legacy_instantaneous is historical-only");
+        return false;
+    }
+    if (solver_params.terminal.mpc_stop_handoff_enable &&
+        (actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator ||
+         solver_params.solver_backend != kSolverBackendContinuousMpccAcados)) {
+        ROS_FATAL("terminal MPC stop handoff requires the explicit-actuator MPCC backend");
         return false;
     }
     solver_params.slosh = loadSloshParams();
@@ -896,6 +903,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         solver_params.zero_liquid_initial_state ? 1.0 : 0.0;
     effective_config_.jerk_limit_enable = solver_params.jerk_limit_enable ? 1.0 : 0.0;
     effective_config_.jerk_max = solver_params.jerk_max;
+    effective_config_.terminal_mpc_stop_handoff_enable = solver_params.terminal.mpc_stop_handoff_enable ? 1.0 : 0.0;
 
     problem_.configure(solver_params, variant_);
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
@@ -2274,8 +2282,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             cycle_audit.timing);
     }
     SolverOutput output;
-    cycle_audit.solve_attempted = true;
     problem_.solve(solve_input, output);
+    cycle_audit.solve_attempted = output.ocp_solve_attempted;
     cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
     cycle_audit.timing.horizon_available_stamp_ns =
@@ -2306,10 +2314,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();
     }
-    const double raw_solver_cmd_v = output.first_shot_debug.success
+    const double raw_solver_cmd_v = !output.ocp_solve_attempted ? 0.0 : output.first_shot_debug.success
         ? output.first_shot_debug.cmd_v_post_clamp
         : output.cmd_v;
-    const double raw_solver_cmd_omega = output.first_shot_debug.success
+    const double raw_solver_cmd_omega = !output.ocp_solve_attempted ? 0.0 : output.first_shot_debug.success
         ? output.first_shot_debug.cmd_omega_post_clamp
         : output.cmd_omega;
     const double terminal_cmd_v = output.cmd_v;
@@ -2336,7 +2344,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     intervention.post_gate_cmd_v = output.cmd_v;
     intervention.post_gate_cmd_omega = output.cmd_omega;
     intervention.output_success = output.success;
-    intervention.zero_due_to_solver_failure = !solver_success;
+    intervention.zero_due_to_solver_failure = output.ocp_solve_attempted && !solver_success;
+    intervention.zero_due_to_command_contract = output.status == "TERMINAL_STOP_HISTORY_FAILED";
     intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
     intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
     cycle_audit.solver_cmd_v = intervention.solver_cmd_v;
@@ -2345,7 +2354,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.terminal_cmd_omega = terminal_cmd_omega;
     cycle_audit.post_gate_cmd_v = intervention.post_gate_cmd_v;
     cycle_audit.post_gate_cmd_omega = intervention.post_gate_cmd_omega;
-    cycle_audit.solve_success = solver_success;
+    cycle_audit.solve_success = output.ocp_solve_attempted && solver_success;
     cycle_audit.command_accepted = output.success;
     cycle_audit.terminal_phase =
         output.terminal_diagnostics.terminal_phase;
