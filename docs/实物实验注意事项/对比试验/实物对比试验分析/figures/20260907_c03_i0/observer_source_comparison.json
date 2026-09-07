@@ -1,0 +1,749 @@
+{
+  "method": "Same fixed C03 task/path10-90/tail5s absolute windows; native valid observer modal_height_m * 1000 at state_stamp=measurement_stamp. No added delay or phase fitting. Odom/IMU excitation and processing differ; their model heights are complementary diagnostics, not two liquid truth sensors.",
+  "rows": [
+    {
+      "label": "B0",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/b0/H0/DEV_I0FC_EXPACT_ABLATION_b0_J1_20260907_c03_213037_Bslosh.bag",
+      "windows": {
+        "path10_90": {
+          "bounds": [
+            1788787882.091725,
+            1788787903.1343143
+          ],
+          "imu": {
+            "n": 1054,
+            "p95": 1.9961861278428876,
+            "rms": 0.9234382430452764,
+            "peak": 4.395391113146156,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.27726173400879,
+              "max_sample_dt_residual_ms": 9.8278808702279e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1053,
+            "p95": 1.1674022936372623,
+            "rms": 0.6008946001236947,
+            "peak": 2.1491710252218197,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.239830017089844,
+              "max_sample_dt_residual_ms": 0.00023088769531345865,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "task": {
+          "bounds": [
+            1788787879.3706448,
+            1788787905.264593
+          ],
+          "imu": {
+            "n": 1297,
+            "p95": 1.8703192088568756,
+            "rms": 0.8928910631146422,
+            "peak": 4.395391113146156,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.27726173400879,
+              "max_sample_dt_residual_ms": 9.8278808702279e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1295,
+            "p95": 1.4294034094387933,
+            "rms": 0.686726255849977,
+            "peak": 2.5630236012784735,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.239830017089844,
+              "max_sample_dt_residual_ms": 0.00023088769531345865,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "tail5s": {
+          "bounds": [
+            1788787905.264593,
+            1788787910.264593
+          ],
+          "imu": {
+            "n": 251,
+            "p95": 1.892834152203621,
+            "rms": 0.7672842582323898,
+            "peak": 3.55402230400529,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.700454711914062,
+              "max_sample_dt_residual_ms": 9.505615218563523e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 250,
+            "p95": 0.7456532709599106,
+            "rms": 0.3096691353420909,
+            "peak": 1.5849457681210777,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.038127899169922,
+              "max_sample_dt_residual_ms": 0.00022532922363399654,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "Smooth-only",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/smooth/H0/DEV_I0FC_EXPACT_ABLATION_smooth_J1_20260907_c03_212446_Bslosh.bag",
+      "windows": {
+        "path10_90": {
+          "bounds": [
+            1788787530.9246,
+            1788787551.8003976
+          ],
+          "imu": {
+            "n": 1046,
+            "p95": 2.4491889135126104,
+            "rms": 1.0730428289690013,
+            "peak": 4.352925093157083,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.359516143798828,
+              "max_sample_dt_residual_ms": 9.876708999267958e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1044,
+            "p95": 1.2969122137479312,
+            "rms": 0.6236427547049105,
+            "peak": 2.3714268237194265,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.6911563873291,
+              "max_sample_dt_residual_ms": 0.0002339461669907672,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "task": {
+          "bounds": [
+            1788787527.8126335,
+            1788787553.9102948
+          ],
+          "imu": {
+            "n": 1308,
+            "p95": 2.3220142614565984,
+            "rms": 1.0185159743652963,
+            "peak": 4.352925093157083,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.359516143798828,
+              "max_sample_dt_residual_ms": 9.876708999267958e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1305,
+            "p95": 1.2817531547730603,
+            "rms": 0.6125818668853261,
+            "peak": 2.3714268237194265,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.6911563873291,
+              "max_sample_dt_residual_ms": 0.0002339461669907672,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "tail5s": {
+          "bounds": [
+            1788787553.9102948,
+            1788787558.9102948
+          ],
+          "imu": {
+            "n": 250,
+            "p95": 2.0834947900073186,
+            "rms": 0.7844689680898869,
+            "peak": 3.997189396503788,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.49994468688965,
+              "max_sample_dt_residual_ms": 9.45068360375112e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 250,
+            "p95": 0.8224534424591285,
+            "rms": 0.34097237873189873,
+            "peak": 1.8004133873144916,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.093202590942383,
+              "max_sample_dt_residual_ms": 0.0002295549316397305,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "NoState",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/nostate/H0/DEV_I0FC_EXPACT_ABLATION_nostate_J1_20260907_c03_212738_Bslosh.bag",
+      "windows": {
+        "path10_90": {
+          "bounds": [
+            1788787703.5813708,
+            1788787724.4477816
+          ],
+          "imu": {
+            "n": 1045,
+            "p95": 2.036353109145844,
+            "rms": 0.9388202636812443,
+            "peak": 4.042490933057425,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.537614822387695,
+              "max_sample_dt_residual_ms": 9.85595702274189e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1043,
+            "p95": 1.4287395760851576,
+            "rms": 0.7247676860661292,
+            "peak": 2.6768413939745708,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.058870315551758,
+              "max_sample_dt_residual_ms": 0.00023258496094011316,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "task": {
+          "bounds": [
+            1788787700.4141743,
+            1788787726.5731506
+          ],
+          "imu": {
+            "n": 1311,
+            "p95": 1.969068992154247,
+            "rms": 0.8969528399118607,
+            "peak": 4.042490933057425,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 22.729158401489258,
+              "max_sample_dt_residual_ms": 9.85595702274189e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1307,
+            "p95": 1.3766725012205583,
+            "rms": 0.6959939910882976,
+            "peak": 2.6768413939745708,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.058870315551758,
+              "max_sample_dt_residual_ms": 0.00023258496094011316,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "tail5s": {
+          "bounds": [
+            1788787726.5731506,
+            1788787731.5731506
+          ],
+          "imu": {
+            "n": 250,
+            "p95": 1.3493851111681043,
+            "rms": 0.5400550547149604,
+            "peak": 2.7830179633842875,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.175695419311523,
+              "max_sample_dt_residual_ms": 9.565429698321637e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 250,
+            "p95": 0.35529240984957355,
+            "rms": 0.140326906525798,
+            "peak": 0.6645220661290361,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.043611526489258,
+              "max_sample_dt_residual_ms": 0.0002305767822265159,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "label": "Full S-MPCC",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/full/H0/DEV_I0FC_EXPACT_ABLATION_full_J1_20260907_c03_212120_Bslosh.bag",
+      "windows": {
+        "path10_90": {
+          "bounds": [
+            1788787325.3942506,
+            1788787346.4600143
+          ],
+          "imu": {
+            "n": 1056,
+            "p95": 2.159333226296158,
+            "rms": 1.1002933351136828,
+            "peak": 4.908353663968794,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 21.045923233032227,
+              "max_sample_dt_residual_ms": 9.958496111073245e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1053,
+            "p95": 1.442048519752604,
+            "rms": 0.743985226309222,
+            "peak": 3.439146607094246,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.074844360351562,
+              "max_sample_dt_residual_ms": 0.00023628332519731732,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "task": {
+          "bounds": [
+            1788787322.1777818,
+            1788787348.5352314
+          ],
+          "imu": {
+            "n": 1321,
+            "p95": 2.0597363577375596,
+            "rms": 1.0332019337065204,
+            "peak": 4.908353663968794,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 21.045923233032227,
+              "max_sample_dt_residual_ms": 9.958496111073245e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 1318,
+            "p95": 1.3990699556370003,
+            "rms": 0.7100518106325058,
+            "peak": 3.439146607094246,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.142078399658203,
+              "max_sample_dt_residual_ms": 0.00023628332519731732,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        },
+        "tail5s": {
+          "bounds": [
+            1788787348.5352314,
+            1788787353.5352314
+          ],
+          "imu": {
+            "n": 250,
+            "p95": 2.183814105038199,
+            "rms": 0.8172474143099601,
+            "peak": 4.001805555007624,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.418643951416016,
+              "max_sample_dt_residual_ms": 9.86083985299313e-07,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "liquid_observer_target_icr_proxy"
+              ],
+              "window_coverage": true
+            }
+          },
+          "odom": {
+            "n": 250,
+            "p95": 0.9972266755299767,
+            "rms": 0.3822431894192364,
+            "peak": 1.8803086411478271,
+            "quality": {
+              "invalid_count": 0,
+              "input_statuses": [
+                "ODOM_READY"
+              ],
+              "state_measurement_max_skew_sec": 0.0,
+              "nonpositive_state_intervals": 0,
+              "max_state_gap_ms": 20.0960636138916,
+              "max_sample_dt_residual_ms": 0.00023169372558376478,
+              "reset_epochs": [
+                0
+              ],
+              "update_skip_count": 0,
+              "axes": [
+                "base_link"
+              ],
+              "reference_points": [
+                "base_link"
+              ],
+              "window_coverage": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}
