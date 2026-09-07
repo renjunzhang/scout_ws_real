@@ -45,11 +45,15 @@ static_assert(ACTUATOR_GAIN_OMEGA + 1 == SPMPC_B0_NP,
               "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 static_assert(SPMPC_B0_NX == kExplicitActuatorB0StateSize,
               "B0 状态布局与生成的 spmpc_b0 求解器不一致");
+static_assert(SPMPC_B0_NG == 1,
+              "Regenerate B0 acados artifacts for the full-horizon jerk switch");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 spmpc_slosh 求解器不一致");
 static_assert(SPMPC_SLOSH_NX == kExplicitActuatorSloshStateSize,
               "slosh 状态布局与生成的 spmpc_slosh 求解器不一致");
 static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
+static_assert(SPMPC_SLOSH_NG == 1,
+              "Regenerate slosh acados artifacts for the full-horizon jerk switch");
 #endif
 
 constexpr double kDisabledEtaMaxSq = 1e12;
@@ -195,7 +199,8 @@ SolverBoundSummary makeGeneratedBounds() {
     return bounds;
 }
 
-void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds, double* x0) {
+void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
+                        double* x0, double delta_a_max) {
     ocp_nlp_config* cfg = gen.config();
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_in* nlp_in = gen.in();
@@ -206,9 +211,13 @@ void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds, double
 
     double lbu[3] = {bounds.a_min, bounds.alpha_min, bounds.v_s_min};
     double ubu[3] = {bounds.a_max, bounds.alpha_max, bounds.v_s_max};
+    double lg[1] = {-delta_a_max};
+    double ug[1] = {delta_a_max};
     for (int stage = 0; stage < gen.n_horizon; ++stage) {
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbu", lbu);
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubu", ubu);
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lg", lg);
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ug", ug);
     }
 
     // Generated explicit-actuator models constrain actual v/omega and command
@@ -809,11 +818,24 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
 }
 
 bool ContinuousMpccSolverAcados::solve(
-    const SolverInput& input,
+    const SolverInput& observed_input,
     const ReferencePath& reference,
     SolverOutput& output) const {
+    // Copy after common-epoch alignment and execution prediction. Observers,
+    // command history and the caller's state remain untouched in every mode.
+    SolverInput input = observed_input;
+    if (use_slosh_model_ && params_.zero_liquid_initial_state) {
+        input.slosh = SloshState{};
+    }
     output = SolverOutput{};
     output.cycle_timing = input.cycle_timing;
+    if ((params_.zero_liquid_initial_state && !use_slosh_model_) ||
+        !std::isfinite(params_.jerk_max) || params_.jerk_max <= 0.0 ||
+        !std::isfinite(input.dt) || input.dt <= 0.0 ||
+        !std::isfinite(params_.jerk_max * input.dt)) {
+        output.status = "INVALID_ABLATION_CONFIG";
+        return false;
+    }
     if (capsule_ == nullptr) {
         output.status = "ACADOS_NOT_CREATED";
         return false;
@@ -908,6 +930,12 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.backend = "continuous_mpcc_acados_explicit_actuator";
     snapshot.variant = variant_.name;
     snapshot.slosh_enabled = slosh;
+    snapshot.zero_liquid_initial_state = params_.zero_liquid_initial_state;
+    snapshot.jerk_limit_enable = params_.jerk_limit_enable;
+    snapshot.jerk_max = params_.jerk_max;
+    snapshot.delta_a_max = params_.jerk_limit_enable
+        ? params_.jerk_max * input.dt : 1e15;
+    snapshot.observed_slosh = observed_input.slosh;
     snapshot.primal_guess_only = true;
     snapshot.control_semantics = "a_cmd_alpha_cmd";
     snapshot.dt = input.dt;
@@ -1064,7 +1092,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.first_shot_debug.x0_omega = input.robot.omega;
     output.first_shot_debug.x0_s = s0;
 
-    applyRuntimeBounds(*gen, output.runtime_bounds, x0);
+    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max);
 
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
@@ -1166,6 +1194,10 @@ bool ContinuousMpccSolverAcados::solve(
     output.predicted_horizon.backend = "continuous_mpcc_acados_explicit_actuator";
     output.predicted_horizon.variant = variant_.name;
     output.predicted_horizon.slosh_enabled = slosh;
+    output.predicted_horizon.zero_liquid_initial_state = params_.zero_liquid_initial_state;
+    output.predicted_horizon.jerk_limit_enable = params_.jerk_limit_enable;
+    output.predicted_horizon.jerk_max = params_.jerk_max;
+    output.predicted_horizon.delta_a_max = snapshot.delta_a_max;
     output.predicted_horizon.control_semantics = "a_cmd_alpha_cmd";
     output.predicted_horizon.dt = input.dt;
     output.predicted_horizon.slosh_cost_horizon_steps =
@@ -1287,6 +1319,23 @@ bool ContinuousMpccSolverAcados::solve(
         if (k == 0 && have_u_prev_) {
             const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
             output.cost.J_smooth += variant_.w_du_vs * dvs * dvs * inv_n;
+        }
+    }
+
+    if (params_.jerk_limit_enable) {
+        // Do not silently publish an RTI result that violates the hard row.
+        // Check consecutive controls, including the truthful published-history
+        // anchor, rather than trusting only the optimized memory coordinates.
+        double previous_a = input.actuator.a_cmd_memory;
+        for (const auto& control : solved_controls) {
+            if (!std::isfinite(control.a) ||
+                std::abs(control.a - previous_a) > snapshot.delta_a_max + 1e-6) {
+                output.status = "JERK_CONSTRAINT_VIOLATION";
+                snapshot.solver_status = output.status;
+                output.predicted_horizon.solver_status = output.status;
+                return false;
+            }
+            previous_a = control.a;
         }
     }
 

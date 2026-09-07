@@ -32,6 +32,11 @@ struct SolverParams {
     WarmStartConfig warm_start;
     PlatformParams platform;
     ActuatorModelParams actuator;
+    // Startup-only ablations for the explicit-actuator MPCC. NoState changes
+    // only the solver's private liquid initial state, never the observer.
+    bool zero_liquid_initial_state = false;
+    bool jerk_limit_enable = false;
+    double jerk_max = 1.0;  // m/s^3; development candidate, inactive by default
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable
     // continuous_mpcc_acados: SPMPC mainline MPCC; direct_omega: RouteB diagnostic; primitive: debug rollout fallback only.
     std::string solver_backend = "continuous_mpcc_acados";

@@ -1,6 +1,8 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 
 #include <gtest/gtest.h>
+#include <cmath>
+#include <limits>
 
 namespace spmpc_local_planner {
 namespace {
@@ -160,6 +162,136 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_TRUE(second.pre_solve_snapshot.have_previous_solution);
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_states.size(), 61u);
     EXPECT_EQ(second.pre_solve_snapshot.previous_solution_controls.size(), 60u);
+}
+
+#ifdef SPMPC_TEST_WITH_SLOSH
+TEST(ReplayDiagnostics, NoStateZerosOnlyOcpLiquidInitialStateOnEverySolve) {
+    auto params = makeParams();
+    params.zero_liquid_initial_state = true;
+    params.jerk_limit_enable = true;
+    auto variant = makeB0Variant();
+    variant.name = "B_slosh";
+    variant.slosh_enable = true;
+    variant.w_slosh = 1.0;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params, variant);
+    SolverInput input = makeInput();
+    input.robot.v = 0.10;
+    input.robot.omega = 0.10;
+    input.actuator.v_cmd = input.robot.v / params.actuator.linear_gain;
+    input.actuator.omega_cmd = input.robot.omega / params.actuator.angular_gain;
+    input.actuator.linear_delay_queue.fill(input.actuator.v_cmd);
+    input.actuator.angular_delay_queue.fill(input.actuator.omega_cmd);
+    input.cycle_timing.solver_input_epoch_ns = 1000000000;
+    const auto reference = makeStraightReference();
+    for (double eta : {0.0004, -0.0007}) {
+        input.slosh = SloshState{eta, 0.002, -eta, -0.003};
+        SolverOutput output;
+        ASSERT_TRUE(solver.solve(input, reference, output)) << output.status;
+        const auto& snapshot = output.pre_solve_snapshot;
+        EXPECT_TRUE(snapshot.zero_liquid_initial_state);
+        EXPECT_DOUBLE_EQ(snapshot.observed_slosh.eta_x, eta);
+        EXPECT_DOUBLE_EQ(snapshot.observed_slosh.eta_y_dot, -0.003);
+        EXPECT_DOUBLE_EQ(input.slosh.eta_x, eta);  // caller/monitor untouched
+        EXPECT_DOUBLE_EQ(input.slosh.eta_y_dot, -0.003);
+        EXPECT_DOUBLE_EQ(snapshot.robot.v, input.robot.v);
+        EXPECT_DOUBLE_EQ(snapshot.actuator.a_cmd_memory, input.actuator.a_cmd_memory);
+        EXPECT_EQ(snapshot.actuator.linear_delay_queue, input.actuator.linear_delay_queue);
+        EXPECT_EQ(output.cycle_timing.solver_input_epoch_ns,
+                  input.cycle_timing.solver_input_epoch_ns);
+        EXPECT_DOUBLE_EQ(snapshot.slosh.eta_x, 0.0);
+        EXPECT_DOUBLE_EQ(snapshot.slosh.eta_x_dot, 0.0);
+        EXPECT_DOUBLE_EQ(snapshot.slosh.eta_y, 0.0);
+        EXPECT_DOUBLE_EQ(snapshot.slosh.eta_y_dot, 0.0);
+        const auto& states = output.predicted_horizon.states;
+        ASSERT_EQ(states.size(), 61u);
+        EXPECT_NEAR(states.front().eta_x, 0.0, 1e-10);
+        EXPECT_NEAR(states.front().eta_y, 0.0, 1e-10);
+        // NoState does not zero the future horizon or disable liquid costs.
+        EXPECT_GT(std::abs(states[1].eta_y), 1e-9);
+        EXPECT_GT(output.cost.J_slosh_eta, 0.0);
+    }
+
+    params.zero_liquid_initial_state = false;
+    solver.configure(params, variant);
+    SolverOutput full;
+    ASSERT_TRUE(solver.solve(input, reference, full)) << full.status;
+    EXPECT_FALSE(full.pre_solve_snapshot.zero_liquid_initial_state);
+    EXPECT_NEAR(full.predicted_horizon.states.front().eta_x, input.slosh.eta_x, 1e-10);
+    EXPECT_NEAR(full.predicted_horizon.states.front().eta_y_dot, input.slosh.eta_y_dot, 1e-10);
+}
+#endif
+
+TEST(ReplayDiagnostics, JerkSwitchBoundsAllStagesAndPublishedHistoryForBothModels) {
+    std::vector<bool> models = {false};
+#ifdef SPMPC_TEST_WITH_SLOSH
+    models.push_back(true);
+#endif
+    for (bool liquid : models) {
+        auto params = makeParams();
+        params.jerk_limit_enable = true;
+        params.jerk_max = 1.0;
+        auto variant = makeB0Variant();
+        variant.slosh_enable = liquid;
+        variant.w_slosh = liquid ? 1.0 : 0.0;
+        ContinuousMpccSolverAcados solver;
+        solver.configure(params, variant);
+        SolverInput input = makeInput();
+        input.actuator.a_cmd_memory = 0.4;
+        input.slosh.eta_x = 0.0005;
+        SolverOutput limited;
+        ASSERT_TRUE(solver.solve(input, makeStraightReference(), limited)) << limited.status;
+        const double bound = params.jerk_max * input.dt;
+        EXPECT_TRUE(limited.pre_solve_snapshot.jerk_limit_enable);
+        EXPECT_DOUBLE_EQ(limited.pre_solve_snapshot.delta_a_max, bound);
+        double previous_a = input.actuator.a_cmd_memory;
+        ASSERT_EQ(limited.predicted_horizon.controls.size(), 60u);
+        for (size_t k = 0; k < limited.predicted_horizon.controls.size(); ++k) {
+            const double a = limited.predicted_horizon.controls[k].a;
+            EXPECT_LE(std::abs(a - previous_a), bound + 1e-6) << "stage " << k;
+            EXPECT_NEAR(limited.predicted_horizon.states[k].a_cmd_memory, previous_a, 1e-7);
+            previous_a = a;
+        }
+        params.jerk_limit_enable = false;
+        solver.configure(params, variant);
+        SolverOutput unlimited;
+        ASSERT_TRUE(solver.solve(input, makeStraightReference(), unlimited)) << unlimited.status;
+        EXPECT_FALSE(unlimited.pre_solve_snapshot.jerk_limit_enable);
+        EXPECT_DOUBLE_EQ(unlimited.pre_solve_snapshot.delta_a_max, 1e15);
+        EXPECT_GT(std::abs(unlimited.predicted_horizon.controls.front().a -
+                           input.actuator.a_cmd_memory), bound + 1e-3);
+    }
+}
+
+TEST(ReplayDiagnostics, InfeasibleJerkHistoryFailsWithoutClampingOrChangingHistory) {
+    auto params = makeParams();
+    params.jerk_limit_enable = true;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params, makeB0Variant());
+    SolverInput input = makeInput();
+    input.actuator.a_cmd_memory = -3.0;
+    SolverOutput output;
+    EXPECT_FALSE(solver.solve(input, makeStraightReference(), output));
+    EXPECT_FALSE(output.success);
+    EXPECT_DOUBLE_EQ(output.cmd_v, 0.0);
+    EXPECT_DOUBLE_EQ(input.actuator.a_cmd_memory, -3.0);
+    EXPECT_DOUBLE_EQ(output.pre_solve_snapshot.actuator.a_cmd_memory, -3.0);
+}
+
+TEST(ReplayDiagnostics, RejectsInvalidAblationConfiguration) {
+    auto params = makeParams();
+    params.jerk_limit_enable = true;
+    params.jerk_max = std::numeric_limits<double>::quiet_NaN();
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params, makeB0Variant());
+    SolverOutput output;
+    EXPECT_FALSE(solver.solve(makeInput(), makeStraightReference(), output));
+    EXPECT_EQ(output.status, "INVALID_ABLATION_CONFIG");
+    params.jerk_max = 1.0;
+    params.zero_liquid_initial_state = true;  // cannot call a liquid-off solver NoState
+    solver.configure(params, makeB0Variant());
+    EXPECT_FALSE(solver.solve(makeInput(), makeStraightReference(), output));
+    EXPECT_EQ(output.status, "INVALID_ABLATION_CONFIG");
 }
 
 }  // namespace spmpc_local_planner

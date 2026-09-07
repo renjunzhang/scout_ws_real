@@ -664,6 +664,26 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_WARN("[spmpc_local_planner] unknown planner_variant '%s'; falling back to B0", variant_name.c_str());
     }
     loadVariantOverrides(variant_.name);
+    pnh_.param("ablation/zero_liquid_initial_state",
+               solver_params.zero_liquid_initial_state,
+               solver_params.zero_liquid_initial_state);
+    pnh_.param("ablation/jerk_limit_enable", solver_params.jerk_limit_enable,
+               solver_params.jerk_limit_enable);
+    pnh_.param("ablation/jerk_max", solver_params.jerk_max, solver_params.jerk_max);
+    if (!std::isfinite(solver_params.jerk_max) || solver_params.jerk_max <= 0.0 ||
+        (solver_params.zero_liquid_initial_state && !variant_.slosh_enable) ||
+        ((solver_params.zero_liquid_initial_state || solver_params.jerk_limit_enable) &&
+         solver_params.solver_backend != kSolverBackendContinuousMpccAcados)) {
+        ROS_FATAL("[spmpc_local_planner] invalid ablation configuration: "
+                  "NoState requires liquid prediction; jerk_max must be finite and positive; "
+                  "ablation switches require the explicit-actuator MPCC backend");
+        return false;
+    }
+    ROS_INFO("[spmpc_local_planner] ablation zero_liquid_initial_state=%s "
+             "jerk_limit_enable=%s jerk_max=%.6f delta_a_max=%.6f (startup-only)",
+             boolText(solver_params.zero_liquid_initial_state),
+             boolText(solver_params.jerk_limit_enable), solver_params.jerk_max,
+             solver_params.jerk_limit_enable ? solver_params.jerk_max * dt_ : 1e15);
     if (!pnh_.hasParam("variants/" + variant_.name + "/w_contour")) {
         ROS_WARN("[spmpc_local_planner] 未找到 variants/%s/* 参数：config/planner/variants.yaml "
                  "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
@@ -872,6 +892,10 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         static_cast<double>(kExplicitLinearDelaySteps);
     effective_config_.actuator_angular_delay_steps =
         static_cast<double>(kExplicitAngularDelaySteps);
+    effective_config_.zero_liquid_initial_state =
+        solver_params.zero_liquid_initial_state ? 1.0 : 0.0;
+    effective_config_.jerk_limit_enable = solver_params.jerk_limit_enable ? 1.0 : 0.0;
+    effective_config_.jerk_max = solver_params.jerk_max;
 
     problem_.configure(solver_params, variant_);
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
@@ -2196,8 +2220,15 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     }
     solve_input.cycle_timing = cycle_audit.timing;
 
+    // This topic describes the effective OCP input. Keep solve_input itself
+    // unmodified for the independent observer-derived diagnostics below; the
+    // solver applies the same private NoState copy and archives both states.
+    SolverInput diagnostic_solver_input = solve_input;
+    if (variant_.slosh_enable && effective_config_.zero_liquid_initial_state > 0.5) {
+        diagnostic_solver_input.slosh = SloshState{};
+    }
     diagnostics_.publishSolverInputState(
-        solve_input,
+        diagnostic_solver_input,
         static_cast<std::uint8_t>(observer_selection.effective_source),
         robot_delay_compensation_applied,
         liquid_delay_compensation_applied,
@@ -2325,8 +2356,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         terminal_spin_blocked || tracking_safety_blocked;
     cycle_audit.status = output.status;
     diagnostics_.publishStatus(output.status);
-    // 诊断统一使用 solver 的实际液体输入：fixed_closed_loop 使用 rollout，
-    // fixed_robot_only 则保留当前 observer 测量。
+    // Observer-derived/pre-ablation diagnostics stay continuous in NoState.
+    // The effective (possibly zero) OCP x0 is in solver_input_state and the
+    // schema-5 pre-solve snapshot; neither is a physical liquid measurement.
     diagnostics_.publishSloshState(solve_input.slosh);
     // 当前标量模型液面高度 = c_h·‖η‖ (+向心项), 由唯一物理核 SloshDynamics 计算; 单位米(模型 proxy)。
     bool observer_dynamics_configured = false;

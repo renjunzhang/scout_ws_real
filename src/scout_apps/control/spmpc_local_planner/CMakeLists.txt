@@ -287,6 +287,9 @@ if(CATKIN_ENABLE_TESTING)
   if(SPMPC_WITH_ACADOS)
     catkin_add_gtest(test_replay_diagnostics test/test_replay_diagnostics.cpp)
     if(TARGET test_replay_diagnostics)
+      if(SPMPC_WITH_ACADOS_SLOSH)
+        target_compile_definitions(test_replay_diagnostics PRIVATE SPMPC_TEST_WITH_SLOSH)
+      endif()
       add_dependencies(test_replay_diagnostics
         ${${PROJECT_NAME}_EXPORTED_TARGETS}
         ${catkin_EXPORTED_TARGETS}

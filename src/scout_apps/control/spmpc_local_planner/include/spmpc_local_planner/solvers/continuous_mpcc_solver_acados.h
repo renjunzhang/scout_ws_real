@@ -29,7 +29,7 @@ private:
     SolverParams params_;
     VariantConfig variant_;
     SloshDynamics slosh_dyn_;             // 与 primitive 共用的液体物理核（注入 slosh 模型参数，§4.3）
-    bool use_slosh_model_ = false;        // 由 variant.slosh_enable 决定接 b0(23维) 还是 slosh(27维)
+    bool use_slosh_model_ = false;        // variant.slosh_enable: b0(24维) / slosh(28维)
 
     void* capsule_ = nullptr;             // 不透明 acados capsule（仅 SPMPC_WITH_ACADOS 下有效）
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;

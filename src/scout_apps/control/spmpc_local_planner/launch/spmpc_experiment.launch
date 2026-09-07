@@ -1,4 +1,8 @@
 <launch>
+  <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
+  <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
+  <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
+  <arg name="jerk_max" default="1.0" doc="m/s^3; development candidate, inactive unless enabled"/>
   <arg name="planner_variant" default="B0" doc="B0|B_accel|B_slosh|B_slosh_short100|B_slosh_linear|B_slosh_anti|B_smooth|B_ours|B_ours_anti|B_slosh_matched0|B_slosh_matched5"/>
   <arg name="experiment_mode" default="fixed_path" doc="fixed_path|point_to_point"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
@@ -75,6 +79,11 @@
     <rosparam file="$(find spmpc_local_planner)/config/containers/$(arg container_config).yaml" command="load"/>
     <rosparam file="$(find spmpc_local_planner)/config/experiments/$(arg experiment_config).yaml" command="load"/>
     <param name="planner_variant" value="$(arg planner_variant)"/>
+    <param name="variants/$(arg planner_variant)/slosh_enable" value="$(arg slosh_enable)" type="bool"
+           if="$(eval arg('slosh_enable') != 'inherit')"/>
+    <param name="ablation/zero_liquid_initial_state" value="$(arg zero_liquid_initial_state)" type="bool"/>
+    <param name="ablation/jerk_limit_enable" value="$(arg jerk_limit_enable)" type="bool"/>
+    <param name="ablation/jerk_max" value="$(arg jerk_max)" type="double"/>
     <param name="experiment_mode" value="$(arg experiment_mode)"/>
     <param name="topics/reference_path" value="$(arg reference_path_topic)"/>
     <param name="odom/subscriber_queue_size" value="$(arg odom_subscriber_queue_size)"/>

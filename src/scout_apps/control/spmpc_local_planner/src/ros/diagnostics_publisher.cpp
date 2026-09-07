@@ -220,6 +220,12 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data[62] = static_cast<float>(config.actuator_angular_gain);
     msg.data[63] = static_cast<float>(config.actuator_linear_delay_steps);
     msg.data[64] = static_cast<float>(config.actuator_angular_delay_steps);
+    msg.layout.dim[0].label += ",zero_liquid_initial_state,jerk_limit_enable,jerk_max";
+    msg.data.push_back(static_cast<float>(config.zero_liquid_initial_state));
+    msg.data.push_back(static_cast<float>(config.jerk_limit_enable));
+    msg.data.push_back(static_cast<float>(config.jerk_max));
+    msg.layout.dim[0].size = msg.data.size();
+    msg.layout.dim[0].stride = msg.data.size();
     effective_config_pub_.publish(msg);
 }
 
@@ -1107,7 +1113,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 4;
+    msg.schema_version = 5;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
     msg.valid = horizon.valid;
@@ -1115,6 +1121,10 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.variant = horizon.variant;
     msg.solver_status = horizon.solver_status == "NOT_RUN" ? output.status : horizon.solver_status;
     msg.slosh_enabled = horizon.slosh_enabled;
+    msg.zero_liquid_initial_state = horizon.zero_liquid_initial_state;
+    msg.jerk_limit_enable = horizon.jerk_limit_enable;
+    msg.jerk_max = horizon.jerk_max;
+    msg.delta_a_max = horizon.delta_a_max;
     msg.control_semantics = horizon.control_semantics;
     msg.dt = horizon.dt;
     msg.horizon_steps = static_cast<uint32_t>(horizon.controls.size());
@@ -1184,7 +1194,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 4;
+    msg.schema_version = 5;
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
     msg.valid = snapshot.valid;
@@ -1192,6 +1202,14 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.variant = snapshot.variant;
     msg.solver_status = snapshot.solver_status == "NOT_RUN" ? output.status : snapshot.solver_status;
     msg.slosh_enabled = snapshot.slosh_enabled;
+    msg.zero_liquid_initial_state = snapshot.zero_liquid_initial_state;
+    msg.jerk_limit_enable = snapshot.jerk_limit_enable;
+    msg.jerk_max = snapshot.jerk_max;
+    msg.delta_a_max = snapshot.delta_a_max;
+    msg.observed_eta_x = snapshot.observed_slosh.eta_x;
+    msg.observed_eta_x_dot = snapshot.observed_slosh.eta_x_dot;
+    msg.observed_eta_y = snapshot.observed_slosh.eta_y;
+    msg.observed_eta_y_dot = snapshot.observed_slosh.eta_y_dot;
     msg.primal_guess_only = snapshot.primal_guess_only;
     msg.control_semantics = snapshot.control_semantics;
     msg.dt = snapshot.dt;

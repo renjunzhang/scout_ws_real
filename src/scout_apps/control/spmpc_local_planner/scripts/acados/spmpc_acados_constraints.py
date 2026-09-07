@@ -11,6 +11,8 @@ obstacle / costmap / hard corridor 不在 B0 引入。
 import casadi as ca
 import numpy as np
 
+from spmpc_acados_model import ACCEL_MEMORY_INDEX
+
 
 def set_constraints_direct_omega_legacy(ocp, cfg):
     """诊断 legacy B0：u[1]=omega 直接受限，状态只约束 v。"""
@@ -47,6 +49,15 @@ def set_constraints(ocp, cfg, explicit_actuator=False):
         ocp.constraints.idxbx = np.array([3, 5, 6, 7])
         ocp.constraints.lbx = np.array([0.0, -omega_max, 0.0, -omega_max])
         ocp.constraints.ubx = np.array([v_max, omega_max, v_max, omega_max])
+        # One linear mixed state/control row at EVERY control stage, including
+        # stage 0: -delta_a_max <= a_cmd - a_cmd_memory <= delta_a_max.
+        # Always generate the row so the runtime switch does not need codegen.
+        # Bounds are disabled by default and replaced by jerk_max * dt in C++.
+        ocp.constraints.C = np.zeros((1, cfg["nx"]))
+        ocp.constraints.C[0, ACCEL_MEMORY_INDEX] = -1.0
+        ocp.constraints.D = np.array([[1.0, 0.0, 0.0]])
+        ocp.constraints.lg = np.array([-1e15])
+        ocp.constraints.ug = np.array([1e15])
     else:
         ocp.constraints.idxbx = np.array([3, 5])
         ocp.constraints.lbx = np.array([0.0, -omega_max])

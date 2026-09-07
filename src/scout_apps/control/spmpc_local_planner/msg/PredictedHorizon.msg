@@ -55,3 +55,9 @@ float64[] alpha_actual
 float64[] a
 float64[] alpha_or_omega
 float64[] v_s
+
+# Schema 5: do not infer an ablation condition from the variant name alone.
+bool zero_liquid_initial_state
+bool jerk_limit_enable
+float64 jerk_max
+float64 delta_a_max

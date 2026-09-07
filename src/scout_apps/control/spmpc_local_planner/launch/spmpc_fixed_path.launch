@@ -1,4 +1,8 @@
 <launch>
+  <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
+  <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
+  <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
+  <arg name="jerk_max" default="1.0" doc="m/s^3; development candidate, inactive unless enabled"/>
   <arg name="planner_variant" default="B0"/>
   <arg name="reference_path_topic" default="/scout/global_path_fixed"/>
   <arg name="odom_subscriber_queue_size" default="10"/>
@@ -65,6 +69,10 @@
   <arg name="execution_contract_max_post_limit_delta_omega" default="0.0001"/>
   <include file="$(find spmpc_local_planner)/launch/spmpc_experiment.launch">
     <arg name="planner_variant" value="$(arg planner_variant)"/>
+    <arg name="slosh_enable" value="$(arg slosh_enable)"/>
+    <arg name="zero_liquid_initial_state" value="$(arg zero_liquid_initial_state)"/>
+    <arg name="jerk_limit_enable" value="$(arg jerk_limit_enable)"/>
+    <arg name="jerk_max" value="$(arg jerk_max)"/>
     <arg name="experiment_mode" value="fixed_path"/>
     <arg name="experiment_config" value="fixed_path"/>
     <arg name="reference_path_topic" value="$(arg reference_path_topic)"/>

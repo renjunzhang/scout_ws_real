@@ -9,6 +9,13 @@ publish_cmd_vel: true
 #   primitive: fallback/debug rollout sampling + cost ranking, not MPCC/mainline
 solver_backend: continuous_mpcc_acados
 
+# Startup-only internal ablations. Liquid prediction itself is controlled by
+# variants/<name>/slosh_enable. All non-liquid weights stay independent.
+ablation:
+  zero_liquid_initial_state: false  # NoState: zero only the OCP liquid x0
+  jerk_limit_enable: false         # |a_cmd[k] - a_cmd_memory[k]| <= jerk_max * dt
+  jerk_max: 1.0                    # m/s^3, offline candidate, not a validated real limit
+
 # Mainline command/actual execution model.  The fixed FIFO lengths are part of
 # the generated acados state dimension: 5 linear steps and 10 angular steps at
 # 30 Hz.  Parameters are the 2026-09-02 NOKOV FOPDT candidates nearest the

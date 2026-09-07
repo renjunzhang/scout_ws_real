@@ -530,6 +530,60 @@ source devel/setup.bash
 
 ## 10. 启动入口
 
+### 10.0 显式内部消融开关（2026-09-07）
+
+`spmpc_experiment.launch`、`spmpc_fixed_path.launch` 和
+`spmpc_point_to_point.launch` 支持同一版求解器的启动开关：
+
+| launch 参数 | 默认值 | 作用 |
+| --- | --- | --- |
+| `slosh_enable` | `inherit` | 沿用 variant；`true/false` 可只切换液体预测，保留非液体权重 |
+| `zero_liquid_initial_state` | `false` | NoState：对齐及前推后，仅将 OCP 四个液体初态置零；I0 继续运行 |
+| `jerk_limit_enable` | `false` | 所有控制 stage 加 `abs(a_cmd - a_cmd_memory) <= jerk_max * dt`，含第 0 拍 |
+| `jerk_max` | `1.0` | 命令加速度变化率上限，单位 m/s³；目前仅为离线开发候选 |
+
+这些开关在节点启动时读取，试验中不热切换。NoState 与 jerk 开关仅支持
+`continuous_mpcc_acados + explicit_actuator`；NoState 要求液体预测打开。
+第 0 拍衔接最终发布命令历史；求解不可行或约束残差超限会报告失败，保留原有停车保护。
+这仍是加速度控制的离散变化率约束，不是把控制变量改成 jerk，也不是实测杯体 jerk 保证。
+
+四组内部消融可以共同使用 `planner_variant:=B_slosh` 并冻结相同的速度、
+非液体权重、执行器、容器、观测器和执行配置，只修改下表各项：
+
+| 条件 | `slosh_enable` | `zero_liquid_initial_state` | `jerk_limit_enable` | `w_slosh` |
+| --- | --- | --- | --- | --- |
+| 平滑基线 | false | false | true | 0 |
+| NoState | true | true | true | 相同正权重 |
+| 完整方法 | true | false | true | 相同正权重 |
+| 完整方法去 jerk | true | false | false | 相同正权重 |
+
+此处“平滑基线”是共同非液体设置的开发条件，不会自动套用另一个 `B_smooth`
+variant 的不同平滑权重。NoState 对比固定相同 jerk 上限；去 jerk 对比只关新增硬约束，
+保留原有全时域软惩罚。外部对比方法可保留原算法，其比较解释为端到端系统效果。
+内部消融时 reference governor 和额外液体 hard cap 保持关闭，避免引入另一条液体状态决策通路。
+
+下面只展开并检查 NoState 参数，不启动节点、不发布运动：
+
+```bash
+roslaunch --dump-params spmpc_local_planner spmpc_fixed_path.launch \
+  planner_variant:=B_slosh slosh_enable:=true \
+  zero_liquid_initial_state:=true jerk_limit_enable:=true jerk_max:=1.0 \
+  v_ref:=0.20 w_slosh:=1.0 w_accel:=0.3 w_alpha:=0.1 w_du_a:=0.1 \
+  observer_source:=processed_imu observer_fallback_policy:=fail_closed \
+  publish_cmd_vel:=false
+```
+
+`effective_config` 在原 65 个字段后追加开关及 `jerk_max`。
+`PreSolveSnapshot` / `PredictedHorizon` 更新为 schema 5，记录开关及实际 `delta_a_max`；
+快照的 `eta_*` 是 OCP 初态，`observed_eta_*` 是 NoState 修改前的对齐/前推状态。
+`solver_input_state` 同样反映实际 OCP 输入；`slosh_state` / `slosh_height` 保留修改前状态，
+原始 I0 监视器及其测量时间戳不受开关影响。统一液体评价应读取 I0 监视器的
+`state_stamp`，不把 OCP 前推状态冒充同一时刻的实测响应。
+
+两个求解器需从当前生成脚本各生成一次，之后切换配置无需重新生成。
+旧冻结 smoke/ABBA 脚本不会自动切换这四组；实物候选上限、采集协议与验收仍需开发验证。
+设计与时间对齐要求见[开发思路](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260907_全时域加速度变化硬约束与NoState三组开发验证思路.md)。
+
 ### 10.1 固定路径 alpha-state continuous MPCC
 
 ```bash

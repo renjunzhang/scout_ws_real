@@ -190,6 +190,9 @@ struct EffectiveConfigDebug {
     double actuator_angular_gain = 0.0;
     double actuator_linear_delay_steps = 0.0;
     double actuator_angular_delay_steps = 0.0;
+    double zero_liquid_initial_state = 0.0;
+    double jerk_limit_enable = 0.0;
+    double jerk_max = 0.0;
 };
 
 // ROS-independent timestamps for one authoritative control cycle.  All stamps
@@ -265,6 +268,10 @@ struct PredictedHorizonDebug {
     std::string variant;
     std::string solver_status = "NOT_RUN";
     bool slosh_enabled = false;
+    bool zero_liquid_initial_state = false;
+    bool jerk_limit_enable = false;
+    double jerk_max = 0.0;
+    double delta_a_max = 0.0;
     std::string control_semantics = "alpha";
     double dt = 0.0;
     int slosh_cost_horizon_steps = -1;
@@ -279,6 +286,13 @@ struct PreSolveSnapshotDebug {
     std::string variant;
     std::string solver_status = "NOT_RUN";
     bool slosh_enabled = false;
+    bool zero_liquid_initial_state = false;
+    bool jerk_limit_enable = false;
+    double jerk_max = 0.0;
+    double delta_a_max = 0.0;
+    // Aligned/predicted liquid state before the NoState intervention. The
+    // existing slosh field below is the actual OCP initial state.
+    SloshState observed_slosh;
     // Current implementation captures the full primal x/u guess but not acados dual variables.
     bool primal_guess_only = true;
     std::string control_semantics = "alpha";

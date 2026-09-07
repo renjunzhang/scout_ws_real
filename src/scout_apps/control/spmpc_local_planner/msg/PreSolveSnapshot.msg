@@ -101,3 +101,16 @@ float64[] initial_guess_states
 float64[] initial_guess_controls
 float64[] previous_solution_states
 float64[] previous_solution_controls
+
+# Schema 5: startup ablations. eta_* above is the actual OCP liquid x0;
+# observed_eta_* is the aligned state before NoState, never a measured phase.
+bool zero_liquid_initial_state
+bool jerk_limit_enable
+float64 jerk_max
+# Bounds on C*x + D*u = a_cmd - a_cmd_memory, at stages 0..N-1.
+# Disabled: +/-1e15. No terminal control row.
+float64 delta_a_max
+float64 observed_eta_x
+float64 observed_eta_x_dot
+float64 observed_eta_y
+float64 observed_eta_y_dot
