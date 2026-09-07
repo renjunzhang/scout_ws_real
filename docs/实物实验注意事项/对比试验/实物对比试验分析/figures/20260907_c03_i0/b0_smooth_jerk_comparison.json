@@ -1,0 +1,142 @@
+{
+  "source": "C03 primitive caches, comparison.json and progress_10_90.json",
+  "method": {
+    "windows": "first nonzero command to TERMINAL_STOP (exclusive), or geometric progress 10--90% boundaries; select cycles by command_publish_stamp",
+    "stage0_constraint_jerk": "(solver_u0_a - same-cycle snapshot.actuator_a_cmd_memory) / snapshot.dt",
+    "adjacent_a0_grid_jerk": "successive solver a0 difference / (1/30), consecutive cycle IDs only; excludes entry anchor",
+    "published_velocity_interval_jerk": "diff(diff(published_v)/diff(publish_stamp)) / diff(midpoint(publish_stamp)); excludes window entry history; command estimate, not IMU jerk",
+    "statistics": "absolute values; native sample linear P50/P95/max; exceedance threshold 1 + 1e-5 m/s^3"
+  },
+  "rows": [
+    {
+      "label": "B0",
+      "stats": {
+        "full_mpc": {
+          "stage0_constraint_jerk": {
+            "n": 764,
+            "p50": 0.15102899036742096,
+            "p95": 0.7529964256420778,
+            "max": 18.00000001799834,
+            "over1_count": 23,
+            "over1_pct": 3.0104712041884816
+          },
+          "adjacent_a0_grid_jerk": {
+            "n": 763,
+            "p50": 0.1499739892628793,
+            "p95": 0.7161365517817232,
+            "max": 2.791814532202264,
+            "over1_count": 21,
+            "over1_pct": 2.7522935779816518
+          },
+          "published_velocity_interval_jerk": {
+            "n": 762,
+            "p50": 0.15714807516332757,
+            "p95": 0.7396651268411943,
+            "max": 4.962005726695089,
+            "over1_count": 23,
+            "over1_pct": 3.0183727034120733
+          },
+          "publish_dt_minmax_ms": [
+            28.04875373840332,
+            39.391279220581055
+          ]
+        },
+        "path10_90": {
+          "stage0_constraint_jerk": {
+            "n": 632,
+            "p50": 0.15528314193498732,
+            "p95": 0.6397164744712591,
+            "max": 2.791814534994072,
+            "over1_count": 10,
+            "over1_pct": 1.5822784810126582
+          },
+          "adjacent_a0_grid_jerk": {
+            "n": 631,
+            "p50": 0.15514842201887302,
+            "p95": 0.6381361641075023,
+            "max": 2.791814532202264,
+            "over1_count": 9,
+            "over1_pct": 1.4263074484944533
+          },
+          "published_velocity_interval_jerk": {
+            "n": 630,
+            "p50": 0.15791515640982895,
+            "p95": 0.6479993995127669,
+            "max": 2.9270598668514127,
+            "over1_count": 10,
+            "over1_pct": 1.5873015873015872
+          },
+          "publish_dt_minmax_ms": [
+            28.287410736083984,
+            39.391279220581055
+          ]
+        }
+      }
+    },
+    {
+      "label": "Smooth-only",
+      "stats": {
+        "full_mpc": {
+          "stage0_constraint_jerk": {
+            "n": 771,
+            "p50": 0.1622923458327183,
+            "p95": 0.9280493863702766,
+            "max": 0.9999999999997026,
+            "over1_count": 0,
+            "over1_pct": 0.0
+          },
+          "adjacent_a0_grid_jerk": {
+            "n": 770,
+            "p50": 0.1621747666167822,
+            "p95": 0.9035920518902465,
+            "max": 0.9999999989997016,
+            "over1_count": 0,
+            "over1_pct": 0.0
+          },
+          "published_velocity_interval_jerk": {
+            "n": 769,
+            "p50": 0.16383997768795416,
+            "p95": 0.829204752567069,
+            "max": 2.2052534657867704,
+            "over1_count": 17,
+            "over1_pct": 2.2106631989596877
+          },
+          "publish_dt_minmax_ms": [
+            29.022216796875,
+            37.841796875
+          ]
+        },
+        "path10_90": {
+          "stage0_constraint_jerk": {
+            "n": 626,
+            "p50": 0.14560450856149396,
+            "p95": 0.6469148297363753,
+            "max": 0.999997338554063,
+            "over1_count": 0,
+            "over1_pct": 0.0
+          },
+          "adjacent_a0_grid_jerk": {
+            "n": 625,
+            "p50": 0.14628333187365672,
+            "p95": 0.6471084800503111,
+            "max": 0.999997337554071,
+            "over1_count": 0,
+            "over1_pct": 0.0
+          },
+          "published_velocity_interval_jerk": {
+            "n": 624,
+            "p50": 0.14769711500400484,
+            "p95": 0.6584689353256912,
+            "max": 1.01634526392366,
+            "over1_count": 3,
+            "over1_pct": 0.4807692307692308
+          },
+          "publish_dt_minmax_ms": [
+            29.022216796875,
+            37.841796875
+          ]
+        }
+      }
+    }
+  ]
+}

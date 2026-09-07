@@ -1,0 +1,270 @@
+{
+  "scene": "20260907_c03",
+  "method": "Project valid PreSolveSnapshot robot_x/y (map) onto fixed path; linearly interpolate geometric s at native I0 state_stamp; retain 10% <= s/L <= 90% within first-command-to-GOAL_REACHED. Positions are planner common-epoch estimates including short rollout. No receipt-time alignment or fitted delay. Sample P95/RMS/max in mm.",
+  "rows": [
+    {
+      "label": "B0",
+      "name": "b0_J1_20260907_c03_213037",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/b0/H0/DEV_I0FC_EXPACT_ABLATION_b0_J1_20260907_c03_213037_Bslosh.bag",
+      "path_length_m": 5.080783715387173,
+      "progress_bounds_m": [
+        0.5080783715387173,
+        4.5727053438484555
+      ],
+      "enter_stamp": 1788787882.091725,
+      "leave_stamp": 1788787903.1343143,
+      "enter_since_start_sec": 2.7210803031921387,
+      "leave_since_start_sec": 23.76366949081421,
+      "duration_sec": 21.04258918762207,
+      "height_mm": {
+        "n": 1054,
+        "p95": 1.9961861278428876,
+        "rms": 0.9234382430452764,
+        "peak": 4.395391113146156,
+        "time_weighted_rms_check": 0.9234067552108046
+      },
+      "quality": {
+        "snapshot_max_gap_ms": 36.394357681274414,
+        "backward_projection_steps": 5,
+        "max_backward_projection_m": 0.030327789553142637,
+        "i0_max_gap_ms": 20.27726173400879,
+        "i0_update_skip_count": 0,
+        "i0_reset_epochs": [
+          0
+        ],
+        "boundary_crossings": [
+          1,
+          1
+        ],
+        "selected_samples_contiguous": true,
+        "snapshot_alignment_statuses": [
+          "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
+        ]
+      },
+      "common_boundary_shift_sensitivity": {
+        "-33.333333_ms": {
+          "n": 1055,
+          "p95": 1.9947349099208174,
+          "rms": 0.9224196439898785,
+          "peak": 4.395391113146156
+        },
+        "+0.000000_ms": {
+          "n": 1054,
+          "p95": 1.9961861278428876,
+          "rms": 0.9234382430452764,
+          "peak": 4.395391113146156
+        },
+        "+33.333333_ms": {
+          "n": 1054,
+          "p95": 1.9961861278428876,
+          "rms": 0.9240092029502931,
+          "peak": 4.395391113146156
+        }
+      },
+      "ocp_s0_window_supplement_height_mm": {
+        "n": 1054,
+        "p95": 1.9961861278428876,
+        "rms": 0.9234382430452764,
+        "peak": 4.395391113146156
+      }
+    },
+    {
+      "label": "Smooth-only",
+      "name": "smooth_J1_20260907_c03_212446",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/smooth/H0/DEV_I0FC_EXPACT_ABLATION_smooth_J1_20260907_c03_212446_Bslosh.bag",
+      "path_length_m": 5.080783715387173,
+      "progress_bounds_m": [
+        0.5080783715387173,
+        4.5727053438484555
+      ],
+      "enter_stamp": 1788787530.9246,
+      "leave_stamp": 1788787551.8003976,
+      "enter_since_start_sec": 3.111966371536255,
+      "leave_since_start_sec": 23.98776412010193,
+      "duration_sec": 20.875797748565674,
+      "height_mm": {
+        "n": 1046,
+        "p95": 2.4491889135126104,
+        "rms": 1.0730428289690013,
+        "peak": 4.352925093157083,
+        "time_weighted_rms_check": 1.0730016846214683
+      },
+      "quality": {
+        "snapshot_max_gap_ms": 35.274505615234375,
+        "backward_projection_steps": 6,
+        "max_backward_projection_m": 0.0039355591584469,
+        "i0_max_gap_ms": 20.359516143798828,
+        "i0_update_skip_count": 0,
+        "i0_reset_epochs": [
+          0
+        ],
+        "boundary_crossings": [
+          1,
+          1
+        ],
+        "selected_samples_contiguous": true,
+        "snapshot_alignment_statuses": [
+          "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
+        ]
+      },
+      "common_boundary_shift_sensitivity": {
+        "-33.333333_ms": {
+          "n": 1046,
+          "p95": 2.4491889135126104,
+          "rms": 1.0699639168079633,
+          "peak": 4.352925093157083
+        },
+        "+0.000000_ms": {
+          "n": 1046,
+          "p95": 2.4491889135126104,
+          "rms": 1.0730428289690013,
+          "peak": 4.352925093157083
+        },
+        "+33.333333_ms": {
+          "n": 1046,
+          "p95": 2.4491889135126104,
+          "rms": 1.0751444050529786,
+          "peak": 4.352925093157083
+        }
+      },
+      "ocp_s0_window_supplement_height_mm": {
+        "n": 1046,
+        "p95": 2.4491889135126104,
+        "rms": 1.0730428289690013,
+        "peak": 4.352925093157083
+      }
+    },
+    {
+      "label": "NoState",
+      "name": "nostate_J1_20260907_c03_212738",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/nostate/H0/DEV_I0FC_EXPACT_ABLATION_nostate_J1_20260907_c03_212738_Bslosh.bag",
+      "path_length_m": 5.080783715387173,
+      "progress_bounds_m": [
+        0.5080783715387173,
+        4.5727053438484555
+      ],
+      "enter_stamp": 1788787703.5813708,
+      "leave_stamp": 1788787724.4477816,
+      "enter_since_start_sec": 3.16719651222229,
+      "leave_since_start_sec": 24.033607244491577,
+      "duration_sec": 20.866410732269287,
+      "height_mm": {
+        "n": 1045,
+        "p95": 2.036353109145844,
+        "rms": 0.9388202636812443,
+        "peak": 4.042490933057425,
+        "time_weighted_rms_check": 0.9387836220731474
+      },
+      "quality": {
+        "snapshot_max_gap_ms": 43.86615753173828,
+        "backward_projection_steps": 1,
+        "max_backward_projection_m": 0.009350320353236352,
+        "i0_max_gap_ms": 20.537614822387695,
+        "i0_update_skip_count": 0,
+        "i0_reset_epochs": [
+          0
+        ],
+        "boundary_crossings": [
+          1,
+          1
+        ],
+        "selected_samples_contiguous": true,
+        "snapshot_alignment_statuses": [
+          "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
+        ]
+      },
+      "common_boundary_shift_sensitivity": {
+        "-33.333333_ms": {
+          "n": 1046,
+          "p95": 2.035958117865146,
+          "rms": 0.9379638250754417,
+          "peak": 4.042490933057425
+        },
+        "+0.000000_ms": {
+          "n": 1045,
+          "p95": 2.036353109145844,
+          "rms": 0.9388202636812443,
+          "peak": 4.042490933057425
+        },
+        "+33.333333_ms": {
+          "n": 1046,
+          "p95": 2.035958117865146,
+          "rms": 0.9389095303938986,
+          "peak": 4.042490933057425
+        }
+      },
+      "ocp_s0_window_supplement_height_mm": {
+        "n": 1045,
+        "p95": 2.036353109145844,
+        "rms": 0.9388202636812443,
+        "peak": 4.042490933057425
+      }
+    },
+    {
+      "label": "Full S-MPCC",
+      "name": "full_J1_20260907_c03_212120",
+      "bag": "/home/geist/slosh_bags/real/20260907_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/full/H0/DEV_I0FC_EXPACT_ABLATION_full_J1_20260907_c03_212120_Bslosh.bag",
+      "path_length_m": 5.080783715387173,
+      "progress_bounds_m": [
+        0.5080783715387173,
+        4.5727053438484555
+      ],
+      "enter_stamp": 1788787325.3942506,
+      "leave_stamp": 1788787346.4600143,
+      "enter_since_start_sec": 3.2164688110351562,
+      "leave_since_start_sec": 24.282232522964478,
+      "duration_sec": 21.06576371192932,
+      "height_mm": {
+        "n": 1056,
+        "p95": 2.159333226296158,
+        "rms": 1.1002933351136828,
+        "peak": 4.908353663968794,
+        "time_weighted_rms_check": 1.1000325334732182
+      },
+      "quality": {
+        "snapshot_max_gap_ms": 38.220882415771484,
+        "backward_projection_steps": 4,
+        "max_backward_projection_m": 0.009162029953833528,
+        "i0_max_gap_ms": 21.045923233032227,
+        "i0_update_skip_count": 0,
+        "i0_reset_epochs": [
+          0
+        ],
+        "boundary_crossings": [
+          1,
+          1
+        ],
+        "selected_samples_contiguous": true,
+        "snapshot_alignment_statuses": [
+          "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT"
+        ]
+      },
+      "common_boundary_shift_sensitivity": {
+        "-33.333333_ms": {
+          "n": 1056,
+          "p95": 2.159333226296158,
+          "rms": 1.0985190698947525,
+          "peak": 4.908353663968794
+        },
+        "+0.000000_ms": {
+          "n": 1056,
+          "p95": 2.159333226296158,
+          "rms": 1.1002933351136828,
+          "peak": 4.908353663968794
+        },
+        "+33.333333_ms": {
+          "n": 1055,
+          "p95": 2.159641706905286,
+          "rms": 1.1017219387342054,
+          "peak": 4.908353663968794
+        }
+      },
+      "ocp_s0_window_supplement_height_mm": {
+        "n": 1056,
+        "p95": 2.159333226296158,
+        "rms": 1.1002933351136828,
+        "peak": 4.908353663968794
+      }
+    }
+  ]
+}
