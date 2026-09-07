@@ -48,10 +48,12 @@ class AblationPostflightTest(unittest.TestCase):
         expected.update(overrides)
         return validator.validate_pair(snapshot, horizon, **expected)[0]
 
-    def test_full_and_nostate_and_smooth(self):
-        for liquid, zero in ((True, False), (True, True), (False, False)):
-            self.assertEqual(self.check_pair(*pair(zero=zero, liquid=liquid),
-                                            zero=zero, liquid=liquid), [])
+    def test_all_conditions(self):
+        for liquid, zero, jerk in ((True, False, True), (True, True, True),
+                                  (False, False, True), (False, False, False),
+                                  (True, False, False)):
+            self.assertEqual(self.check_pair(*pair(zero=zero, liquid=liquid, jerk=jerk),
+                                            zero=zero, liquid=liquid, jerk=jerk), [])
 
     def test_first_and_last_stage_violations(self):
         for stage in (0, 59):
@@ -118,7 +120,8 @@ class AblationEntryTest(unittest.TestCase):
         source = (SCRIPTS / "run_spmpc_real_fixed_path_trial.sh").read_text()
         command_array = source[source.index("planner_cmd=("):source.index("planner_command_string=")]
         for liquid, zero, jerk in (("true", "false", "true"), ("true", "true", "true"),
-                                  ("false", "false", "true"), ("true", "false", "false")):
+                                  ("false", "false", "true"), ("false", "false", "false"),
+                                  ("true", "false", "false")):
             script = ('VARIANT=B_slosh; SLOSH_ENABLE=$1; ZERO_LIQUID_INITIAL_STATE=$2; '
                       'JERK_LIMIT_ENABLE=$3; JERK_MAX=0.8; TERMINAL_MPC_STOP_HANDOFF_ENABLE=true\n' + command_array
                       + '\nprintf "%s\\n" "${planner_cmd[@]}"')

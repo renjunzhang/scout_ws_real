@@ -23,8 +23,9 @@ def resolve(launch, *overrides):
 
 
 class AblationSwitchLaunchTest(unittest.TestCase):
-    def test_four_conditions_preserve_common_motion_and_observer_settings(self):
+    def test_conditions_preserve_common_motion_and_observer_settings(self):
         conditions = {
+            "b0": (False, False, False),
             "smooth": (False, False, True),
             "nostate": (True, True, True),
             "full": (True, False, True),
@@ -33,6 +34,7 @@ class AblationSwitchLaunchTest(unittest.TestCase):
         common = [
             "v_ref:=0.20", "w_accel:=0.3", "w_alpha:=0.1", "w_du_a:=0.1",
             "observer_source:=processed_imu", "observer_fallback_policy:=fail_closed",
+            "terminal_mpc_stop_handoff_enable:=true",
             "jerk_max:=0.8",
         ]
         previous = None

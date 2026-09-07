@@ -547,18 +547,21 @@ source devel/setup.bash
 第 0 拍衔接最终发布命令历史；求解不可行或约束残差超限会报告失败，保留原有停车保护。
 这仍是加速度控制的离散变化率约束，不是把控制变量改成 jerk，也不是实测杯体 jerk 保证。
 
-四组内部消融可以共同使用 `planner_variant:=B_slosh` 并冻结相同的速度、
+内部消融可以共同使用 `planner_variant:=B_slosh` 并冻结相同的速度、
 非液体权重、执行器、容器、观测器和执行配置，只修改下表各项：
 
 | 条件 | `slosh_enable` | `zero_liquid_initial_state` | `jerk_limit_enable` | `w_slosh` |
 | --- | --- | --- | --- | --- |
+| B0（本轮开发基线） | false | false | false | 0 |
 | 平滑基线 | false | false | true | 0 |
 | NoState | true | true | true | 相同正权重 |
 | 完整方法 | true | false | true | 相同正权重 |
 | 完整方法去 jerk | true | false | false | 相同正权重 |
 
 此处“平滑基线”是共同非液体设置的开发条件，不会自动套用另一个 `B_smooth`
-variant 的不同平滑权重。NoState 对比固定相同 jerk 上限；去 jerk 对比只关新增硬约束，
+variant 的不同平滑权重。本轮 `b0` 与 `smooth` 只差新增 jerk 硬约束，均保留
+现有全时域软惩罚；`b0` 不复用历史冻结 B0 的不同权重，也不替换正式 B0 协议。
+NoState 对比固定相同 jerk 上限；去 jerk 对比只关新增硬约束，
 保留原有全时域软惩罚。外部对比方法可保留原算法，其比较解释为端到端系统效果。
 内部消融时 reference governor 和额外液体 hard cap 保持关闭，避免引入另一条液体状态决策通路。
 
@@ -581,7 +584,7 @@ roslaunch --dump-params spmpc_local_planner spmpc_fixed_path.launch \
 `state_stamp`，不把 OCP 前推状态冒充同一时刻的实测响应。
 
 两个求解器需从当前生成脚本各生成一次，之后切换配置无需重新生成。
-旧冻结 smoke/ABBA 入口不会自动切换这四组；新增的开发 smoke 入口复用原运行、
+旧冻结 smoke/ABBA 入口不会自动切换这些组；新增的开发 smoke 入口复用原运行、
 录包、停车、postflight 和六张诊断图流程，以参数选择组别。它不替代正式 RGB/ABBA 协议。
 
 首包建议选择 `full`（完整方法＋硬约束）；先检查，再由操作者启动实车：
@@ -596,23 +599,34 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke
   --condition full --jerk-max 1.0 --run
 ```
 
-`--condition` 可选 `full / nostate / smooth / no_jerk`，一次仅运行一组，
+`--condition` 可选 `full / nostate / smooth / b0 / no_jerk`，一次仅运行一组，
 `--jerk-max` 的单位为 m/s³。默认仅检查参数、路径/地图、生成器约束和软件测试，
 不启动 ROS 节点；这不等于完成历史 bag 可行性回放或现场传感器准入。
-四组共同冻结 `v_ref=0.20`、`v_safe_max=0.25`、`w_accel=0.3`、
+各组共同冻结 `v_ref=0.20`、`v_safe_max=0.25`、`w_accel=0.3`、
 `w_du_a=0.1`、`w_alpha=0.1`；两组液体方法及去硬约束组 `w_slosh=1.0`，
-平滑基线为零。`jerk_max=1.0` 仍是开发候选。
+平滑基线和 B0 为零。`jerk_max=1.0` 仍是开发候选，B0 和 `no_jerk` 不启用该上限。
+
+补录 Smooth-only、NoState、B0 时，将上面运行命令中的 `--condition` 分别改为
+`smooth`、`nostate`、`b0`，每次完成停车和录包后，再回到相同起点并静置后运行下一组。
+各组均持续记录 `/spmpc/debug/slosh_observer_imu`；无 RGB 时统一比较其中的
+`modal_height_m`（换算为 mm），按 `state_stamp` 对齐。本轮统一以首次非零命令发布
+至首次 `GOAL_REACHED` 为任务窗口，并将到达后固定 5 秒作为残余晃动窗口；
+分别报告 P95、RMS、峰值，以及完成时间、
+跟踪误差和整包失败。分析须核验有效状态、时间间隔、重置和覆盖，缺失段不能填零。
+未到达或未录满观察窗口的包明确报告失败或覆盖不足，不混入完整任务的高度排名。
+NoState 只清零 OCP 初态，评价监视器不清零；这些高度表示同一液体模型下的
+实测 IMU 激励响应，不能以 OCP 自己预测的低代价替代，也不等同于真实液面测量。
 
 每包最多录制 70 秒，不带 RGB；输出位于
 `/home/geist/slosh_bags/real/YYYYMMDD_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1/<condition>/H0/`。
 保留原运行及平滑门（差分 P95 ≤ 0.0785 m/s²、转弯约 5 Hz 幅值 ≤ 0.0391 m/s²、
 强翻转为零），并增加 schema 5 消融 postflight：核验实际开关、NoState 初态、
 按 cycle ID 和 solver epoch 配对的发布历史锚点、全 60 stage 硬约束。
-去硬约束组也报告相同平滑门，未通过不能删除该对照包；失败包、图和报告保留。
+B0 和去硬约束组也报告相同平滑门，未通过不能删除该对照包；失败包、图和报告保留。
 IMU 激励与液体监视器仍需离线按物理时间分析，自动 PASS 不代表真实降晃有效。
 
 停车接管修复后，该开发入口统一开启 `terminal_mpc_stop_handoff_enable`，
-jerk 上限和四组权重不变。原末端减速包络送入 MPC 速度参考，接管前不再事后
+jerk 上限和共同权重不变。原末端减速包络送入 MPC 速度参考，接管前不再事后
 改写求解器速度；进入原目标位置容差（或原越过目标停车条件）才锁存终端控制，
 不会在 1.2 m 减速区或 0.7 m 捕获区提前停车。终端使用真实发布速度逐步降至零，
 保留原越过目标立即停车和所有安全门；同一路径重发不会释放锁存，新路径或节点重启才重置。

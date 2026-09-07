@@ -23,11 +23,13 @@ W_SLOSH=1.0
 case "${ABLATION_CONDITION}" in
   full) ;;
   nostate) ZERO_LIQUID_INITIAL_STATE=true ;;
-  smooth)
+  smooth|b0)
     SLOSH_ENABLE=false
     W_SLOSH=0.0
     EXACT_CONDITION=B0
     EXPECTED_ACTIVE_STATE_WIDTH=24
+    # Development B0 keeps the shared soft costs; only smooth adds hard jerk.
+    if [[ "${ABLATION_CONDITION}" == b0 ]]; then JERK_LIMIT_ENABLE=false; fi
     ;;
   no_jerk) JERK_LIMIT_ENABLE=false ;;
   *) fail "unknown ablation condition: ${ABLATION_CONDITION}" ;;
