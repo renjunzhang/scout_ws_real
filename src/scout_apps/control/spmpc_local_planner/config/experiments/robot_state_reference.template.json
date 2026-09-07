@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "status": "unverified",
+  "provenance": "",
+  "calibration_bag_sha256": [],
+  "solver_frame": "map",
+  "mocap_frame": "world",
+  "mocap_stamp_offset_sec": 0.0,
+  "mocap_to_solver": {"x_m": 0.0, "y_m": 0.0, "yaw_rad": 0.0},
+  "tracker_to_base_yaw_rad": 0.0,
+  "base_to_tracker_m": [0.0, 0.0],
+  "uncertainty": {
+    "time_sec": null,
+    "position_m": null,
+    "yaw_rad": null,
+    "v_mps": null,
+    "omega_radps": null
+  },
+  "notes": "零值仅为占位，不能当标定结果。physical_time=header_stamp+offset；base_yaw=tracker_yaw+tracker_to_base_yaw_rad；base_to_tracker_m 是 base 原点指向 Tracker 原点、以 base 轴表示的平面向量。mocap_to_solver 将动捕世界坐标变到 solver 的 map 坐标。禁止在待评价 C03 全轨迹上拟合这些值。只有独立核验时间、外参、作用点和不确定度后才填写 provenance 并改为 verified_independent；脚本不自动完成物理标定。"
+}
