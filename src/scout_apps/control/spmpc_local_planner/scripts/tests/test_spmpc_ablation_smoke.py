@@ -110,7 +110,8 @@ class AblationEntryTest(unittest.TestCase):
     def test_invalid_arguments_fail_before_acquisition(self):
         entry = str(SCRIPTS / "run_spmpc_ablation_smoke.sh")
         for args in (("--condition", "typo"), ("--jerk-max", "nan"),
-                     ("--jerk-max", "0"), ("--jerk-max", "-1"), ("--jerk-max",)):
+                     ("--jerk-max", "0"), ("--jerk-max", "-1"), ("--jerk-max",),
+                     ("--scene", "typo"), ("--scene",)):
             result = subprocess.run(["bash", entry, *args], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn("motion NOT started", result.stdout)

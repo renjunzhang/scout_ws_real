@@ -619,6 +619,41 @@ NoState 只清零 OCP 初态，评价监视器不清零；这些高度表示同�
 
 每包最多录制 70 秒，不带 RGB；输出位于
 `/home/geist/slosh_bags/real/YYYYMMDD_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1/<condition>/H0/`。
+
+新地图与 C03 使用独立场景 `--scene 20260907_c03`，组别、控制权重、速度、
+jerk 上限、I0、终端接管和验收门保持不变。地图/路径配对集中在
+`scripts/lib/spmpc_ablation_scene.sh`；省略 `--scene` 仍使用旧地图/C02，
+不会因 source 外部地图环境文件而自动切换录制入口。
+
+| 场景 | 冻结地图 | 固定路径 |
+| --- | --- | --- |
+| `20260829_c02`（默认） | `20260829_mocap_exec/map_carto_20260829_mocap_exec_v1.pbstream` | `20260829_spmpc_mocap_execution_chain/candidates/mocap_compact_s_C02.json` |
+| `20260907_c03` | `20260907_mocap_exec/map_carto_20260907_mocap_exec_v1.pbstream` | `20260907_spmpc_mocap_execution_chain/candidates/mocap_compact_s_C03.json` |
+
+新场景地图 SHA 为 `86085992407b90571454d1f3c2a1379f602f0259df9535c60a6119470ccbcda6`，
+路径 SHA 为 `bda11f74194bb65d7df3b4ba5f1f5c3cc756dafdfd7bc06e753a288e30f7e006`。
+路径长度约 5.081 m，map 起点 `(0.0214, 0.0049)`，终点 `(4.9591, 0.0240)`。
+录制前仍要求定位进程报告的地图文件与哈希一致，以及 NOKOV 正常。
+新地图的传感器启动命令只负责传感器/定位；NOKOV 接收与 `/mocap/status`
+监视器仍需单独启动，录制入口不会跳过其准入检查。
+
+```bash
+# 仅做预检查，不启动底盘。
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh \
+  --scene 20260907_c03 --condition full --jerk-max 1.0 --validate-only
+
+# 由操作者完成现场准备后，单独执行这一包。
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh \
+  --scene 20260907_c03 --condition full --jerk-max 1.0 --run
+```
+
+同一命令的组别依次改为 `smooth`、`nostate`、`b0`，每包结束后返回同一起点并静置。
+新批次四组都重新录制；旧 C02 的 full 不作为 C03 的配对样本。
+默认输出目录为
+`/home/geist/slosh_bags/real/YYYYMMDD_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1_20260907_c03/<condition>/H0/`，
+bag 名称、预注册和 PASS 文件均记录场景。地图/路径的哈希不匹配会在运动前拒绝，
+控制器无需重新编译；更新地图不等于已证明定位修正消失，新包继续对照 NOKOV。
+
 保留原运行及平滑门（差分 P95 ≤ 0.0785 m/s²、转弯约 5 Hz 幅值 ≤ 0.0391 m/s²、
 强翻转为零），并增加 schema 5 消融 postflight：核验实际开关、NoState 初态、
 按 cycle ID 和 solver epoch 配对的发布历史锚点、全 60 stage 硬约束。

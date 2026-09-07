@@ -196,8 +196,10 @@ FROZEN_PATH_FILE=/home/geist/fixed_paths/real/20260829_spmpc_mocap_execution_cha
 FROZEN_PATH_SHA256=1464ef37857bcb899d8b0e4867ff63ea06f017e1b871bed80e077f450be14164
 FROZEN_MAP_FILE=/home/geist/scout_maps/real/20260829_mocap_exec/map_carto_20260829_mocap_exec_v1.pbstream
 FROZEN_MAP_SHA256=34e45fd8205a766dbc6e3dcea667c5a0a618e26b331d48351c25645e31a19595
+SMOKE_SCENE=20260829_c02
 
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  source "${SCRIPT_DIR}/lib/spmpc_ablation_scene.sh"
   RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/${ABLATION_CONDITION}/H0}"
 else
   RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/H0}"
@@ -235,6 +237,7 @@ required_files=(
 )
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   required_files+=("${ABLATION_POSTFLIGHT}" "${SCRIPT_DIR}/lib/spmpc_ablation_profile.sh"
+    "${SCRIPT_DIR}/lib/spmpc_ablation_scene.sh"
     "${SCRIPT_DIR}/run_spmpc_ablation_smoke.sh" "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py")
 fi
 for required_file in "${required_files[@]}"; do
@@ -395,6 +398,9 @@ echo "  profile        = ${SMOKE_PROFILE}"
 echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
 echo "  condition      = ${PREREG_CONDITION}; config_variant=${VARIANT}; one bag only"
+echo "  scene          = ${SMOKE_SCENE}"
+echo "  frozen map     = ${FROZEN_MAP_FILE}"
+echo "  frozen path    = ${FROZEN_PATH_FILE}"
 echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
@@ -432,6 +438,7 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/lib/spmpc_ablation_profile.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/lib/spmpc_ablation_scene.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_spmpc_ablation_smoke.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_spmpc_ablation_smoke.py
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_weight_smoke.sh
@@ -490,6 +497,7 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "profile=${SMOKE_PROFILE}"
   echo "scope=${SMOKE_SCOPE}"
   echo "condition=${PREREG_CONDITION}"
+  echo "scene=${SMOKE_SCENE}"
   echo "slosh_enable=${SLOSH_ENABLE}"
   echo "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}"
   echo "jerk_limit_enable=${JERK_LIMIT_ENABLE}"
@@ -510,6 +518,8 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "max_interpolation_gap_sec=0.050"
   echo "path_sha256=${FROZEN_PATH_SHA256}"
   echo "map_sha256=${FROZEN_MAP_SHA256}"
+  echo "path_file=${FROZEN_PATH_FILE}"
+  echo "map_file=${FROZEN_MAP_FILE}"
   echo "git_revision=${current_git_revision}"
   echo "full_horizon_delta_a=${FULL_HORIZON_DELTA_A}"
   echo "expected_b0_state_width=${EXPECTED_B0_STATE_WIDTH}"
@@ -685,6 +695,11 @@ printf '%s\n' \
   "protocol=${PROTOCOL_ID}" \
   "profile=${SMOKE_PROFILE}" \
   "condition=${PASS_CONDITION}" \
+  "scene=${SMOKE_SCENE}" \
+  "path_file=${FROZEN_PATH_FILE}" \
+  "path_sha256=${FROZEN_PATH_SHA256}" \
+  "map_file=${FROZEN_MAP_FILE}" \
+  "map_sha256=${FROZEN_MAP_SHA256}" \
   "slosh_enable=${SLOSH_ENABLE}" \
   "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}" \
   "jerk_limit_enable=${JERK_LIMIT_ENABLE}" \
