@@ -743,6 +743,10 @@ trap on_interrupt INT TERM
 planner_cmd=(
   roslaunch spmpc_local_planner spmpc_fixed_path.launch
   "planner_variant:=${VARIANT}"
+  "slosh_enable:=${SLOSH_ENABLE:-inherit}"
+  "zero_liquid_initial_state:=${ZERO_LIQUID_INITIAL_STATE:-false}"
+  "jerk_limit_enable:=${JERK_LIMIT_ENABLE:-false}"
+  "jerk_max:=${JERK_MAX:-1.0}"
   "solver_backend:=${SOLVER_BACKEND}"
   "reference_path_topic:=${REF_TOPIC}"
   "cmd_vel_topic:=${CMD_TOPIC}"

@@ -80,6 +80,16 @@ EXPECTED_B0_STATE_WIDTH=23
 EXPECTED_SLOSH_STATE_WIDTH=27
 MINIMUM_SOLVER_SCHEMA_VERSION=3
 CONTROL_CONTINUITY_GATE=false
+PLOT_DIAGNOSTICS=false
+FULL_HORIZON_DELTA_A=false
+PREREG_CONDITION=B_slosh
+PASS_CONDITION=Bslosh
+SLOSH_ENABLE=true
+ZERO_LIQUID_INITIAL_STATE=false
+JERK_LIMIT_ENABLE=false
+JERK_MAX=1.0
+EXACT_CONDITION=Bslosh
+ABLATION_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_ablation_smoke.py"
 
 case "${SMOKE_PROFILE}" in
   runtime_baseline)
@@ -130,11 +140,20 @@ case "${SMOKE_PROFILE}" in
     EXPECTED_SLOSH_STATE_WIDTH=28
     MINIMUM_SOLVER_SCHEMA_VERSION=4
     CONTROL_CONTINUITY_GATE=true
+    PLOT_DIAGNOSTICS=true
+    FULL_HORIZON_DELTA_A=true
+    ;;
+  ablation)
+    source "${SCRIPT_DIR}/lib/spmpc_ablation_profile.sh"
     ;;
   *)
-    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, weight_tuning, or full_da"
+    fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, weight_tuning, full_da, or ablation"
     ;;
 esac
+if [[ "${SMOKE_PROFILE}" != ablation ]]; then
+  EXPECTED_ACTIVE_STATE_WIDTH="${EXPECTED_SLOSH_STATE_WIDTH}"
+  ABLATION_CONDITION="${SMOKE_PROFILE}"
+fi
 
 require_weight() {
   local name="$1"
@@ -177,7 +196,11 @@ FROZEN_PATH_SHA256=1464ef37857bcb899d8b0e4867ff63ea06f017e1b871bed80e077f450be14
 FROZEN_MAP_FILE=/home/geist/scout_maps/real/20260829_mocap_exec/map_carto_20260829_mocap_exec_v1.pbstream
 FROZEN_MAP_SHA256=34e45fd8205a766dbc6e3dcea667c5a0a618e26b331d48351c25645e31a19595
 
-RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/H0}"
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/${ABLATION_CONDITION}/H0}"
+else
+  RUN_OUT_DIR="${RUN_OUT_DIR:-/home/geist/slosh_bags/real/${DATE}_${OUTPUT_SERIES}/H0}"
+fi
 RUN_LABEL="${RUN_LABEL_PREFIX}_${STAMP}_Bslosh"
 NAME="${RUN_LABEL}"
 BAG_PATH="${RUN_OUT_DIR}/${NAME}.bag"
@@ -185,9 +208,10 @@ EXACT_REPORT="${RUN_OUT_DIR}/${NAME}_i0_explicit_actuator_contract_postflight.js
 RUNTIME_REPORT="${RUN_OUT_DIR}/${NAME}_runtime_postflight.json"
 DIAGNOSTIC_PLOT_DIR="${RUN_OUT_DIR}/${NAME}_diagnostic_plots"
 DIAGNOSTIC_PLOT_MARKER=not_requested
-if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+if truthy "${PLOT_DIAGNOSTICS}"; then
   DIAGNOSTIC_PLOT_MARKER="${DIAGNOSTIC_PLOT_DIR}"
 fi
+ABLATION_REPORT="${RUN_OUT_DIR}/${NAME}_ablation_postflight.json"
 PASS_MARKER="${RUN_OUT_DIR}/${NAME}_runtime_smoke_pass.env"
 PREREG_FILE="${RUN_OUT_DIR}/${NAME}_runtime_smoke_prereg.env"
 
@@ -208,6 +232,10 @@ required_files=(
   "${FROZEN_PATH_FILE}"
   "${FROZEN_MAP_FILE}"
 )
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  required_files+=("${ABLATION_POSTFLIGHT}" "${SCRIPT_DIR}/lib/spmpc_ablation_profile.sh"
+    "${SCRIPT_DIR}/run_spmpc_ablation_smoke.sh" "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py")
+fi
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
 done
@@ -230,18 +258,27 @@ python3 "${MAP_VALIDATOR}" "${FROZEN_MAP_FILE}" \
 
 python3 - \
   "${ACADOS_B0_JSON}" "${EXPECTED_B0_STATE_WIDTH}" \
-  "${ACADOS_SLOSH_JSON}" "${EXPECTED_SLOSH_STATE_WIDTH}" <<'PY'
+  "${ACADOS_SLOSH_JSON}" "${EXPECTED_SLOSH_STATE_WIDTH}" "${SMOKE_PROFILE}" <<'PY'
 import json
 import sys
 from pathlib import Path
 
-for raw_path, raw_expected_nx in zip(sys.argv[1::2], sys.argv[2::2]):
+for raw_path, raw_expected_nx in zip(sys.argv[1:5:2], sys.argv[2:5:2]):
     path = Path(raw_path)
     payload = json.loads(path.read_text(encoding="utf-8"))
     horizon = int(payload.get("dims", {}).get("N", -1))
     nx = int(payload.get("dims", {}).get("nx", -1))
     cond_n = int(payload.get("solver_options", {}).get("qp_solver_cond_N", -1))
     expected_nx = int(raw_expected_nx)
+    if sys.argv[5] == "ablation":
+        constraints = payload.get("constraints", {})
+        row = constraints.get("C", [])
+        expected_row = [0.0] * nx
+        if nx > 23:
+            expected_row[23] = -1.0
+        if (payload.get("dims", {}).get("ng") != 1 or row != [expected_row]
+                or constraints.get("D") != [[1.0, 0.0, 0.0]]):
+            raise SystemExit("regenerate solver: missing full-horizon acceleration-rate row: " + str(path))
     if horizon != 60 or nx != expected_nx or cond_n != 10:
         raise SystemExit(
             "generated solver contract mismatch: {} N={} nx={} expected_nx={} qp_solver_cond_N={}".format(
@@ -253,6 +290,8 @@ PY
 launch_dump="$(roslaunch --dump-params \
   spmpc_local_planner spmpc_fixed_path.launch \
   planner_variant:="${VARIANT}" solver_backend:=continuous_mpcc_acados \
+  slosh_enable:="${SLOSH_ENABLE}" zero_liquid_initial_state:="${ZERO_LIQUID_INITIAL_STATE}" \
+  jerk_limit_enable:="${JERK_LIMIT_ENABLE}" jerk_max:="${JERK_MAX}" \
   reference_path_topic:="${REF_TOPIC}" cmd_vel_topic:="${CMD_TOPIC}" \
   costmap_topic:="${COSTMAP_TOPIC}" reference_target_frame:="${REFERENCE_TARGET_FRAME}" \
   odom_subscriber_queue_size:=10 \
@@ -301,7 +340,9 @@ launch_dump="$(roslaunch --dump-params \
 expected_launch_lines=(
   "/spmpc_local_planner/planner_variant: B_slosh"
   "/spmpc_local_planner/solver_backend: continuous_mpcc_acados"
-  "/spmpc_local_planner/variants/B_slosh/slosh_enable: true"
+  "/spmpc_local_planner/variants/B_slosh/slosh_enable: ${SLOSH_ENABLE}"
+  "/spmpc_local_planner/ablation/zero_liquid_initial_state: ${ZERO_LIQUID_INITIAL_STATE}"
+  "/spmpc_local_planner/ablation/jerk_limit_enable: ${JERK_LIMIT_ENABLE}"
   "/spmpc_local_planner/variants/B_slosh/v_ref: 0.2"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
@@ -332,9 +373,16 @@ require_dump_number "/spmpc_local_planner/variants/B_slosh/w_accel" "${W_ACCEL}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_alpha" "${W_ALPHA}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
 
+require_dump_number "/spmpc_local_planner/ablation/jerk_max" "${JERK_MAX}"
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  require_dump_line "/spmpc_local_planner/slosh_risk_governor/enable: false"
+  require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: false"
+  python3 "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py"
+fi
+
 python3 "${MODEL_TEST}"
 python3 "${SMOKE_TEST}"
-if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+if truthy "${PLOT_DIAGNOSTICS}"; then
   python3 "${FULL_DA_PLOT_TEST}"
 fi
 bash -n "${BASH_SOURCE[0]}"
@@ -349,6 +397,7 @@ echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
 echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
 echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
+echo "  ablation       = ${ABLATION_CONDITION}; slosh=${SLOSH_ENABLE}; zero_x0=${ZERO_LIQUID_INITIAL_STATE}; jerk=${JERK_LIMIT_ENABLE}; j_max=${JERK_MAX}"
 echo "  RGB            = disabled; no efficacy conclusion from this bag"
 echo "  output         = ${BAG_PATH}"
 echo "  acceptance     = epoch/solver/fault-zero=0; odom gaps>50ms=0; callback P95<30ms; consecutive overruns<=1"
@@ -378,6 +427,10 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/src
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
   src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/lib/spmpc_ablation_profile.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_spmpc_ablation_smoke.py
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_spmpc_ablation_smoke.py
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_weight_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_full_da_smoke.sh
   src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh
@@ -394,9 +447,9 @@ dirty_runtime="$(git -C "${REPO_ROOT}" status --porcelain --untracked-files=norm
 
 attempt_outputs=(
   "${BAG_PATH}" "${BAG_PATH}.active" "${EXACT_REPORT}"
-  "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}"
+  "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}" "${ABLATION_REPORT}"
 )
-if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+if truthy "${PLOT_DIAGNOSTICS}"; then
   attempt_outputs+=("${DIAGNOSTIC_PLOT_DIR}")
 fi
 for output in "${attempt_outputs[@]}"; do
@@ -433,7 +486,12 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "protocol=${PROTOCOL_ID}"
   echo "profile=${SMOKE_PROFILE}"
   echo "scope=${SMOKE_SCOPE}"
-  echo "condition=B_slosh"
+  echo "condition=${PREREG_CONDITION}"
+  echo "slosh_enable=${SLOSH_ENABLE}"
+  echo "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}"
+  echo "jerk_limit_enable=${JERK_LIMIT_ENABLE}"
+  echo "jerk_max=${JERK_MAX}"
+  echo "launch_params_sha256=$(printf '%s\n' "${launch_dump}" | sha256sum | awk '{print $1}')"
   echo "w_slosh=${W_SLOSH}"
   echo "w_accel=${W_ACCEL}"
   echo "v_ref=${V_REF}"
@@ -449,7 +507,7 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "path_sha256=${FROZEN_PATH_SHA256}"
   echo "map_sha256=${FROZEN_MAP_SHA256}"
   echo "git_revision=${current_git_revision}"
-  echo "full_horizon_delta_a=$([[ \"${SMOKE_PROFILE}\" == \"full_da\" ]] && echo true || echo false)"
+  echo "full_horizon_delta_a=${FULL_HORIZON_DELTA_A}"
   echo "expected_b0_state_width=${EXPECTED_B0_STATE_WIDTH}"
   echo "expected_slosh_state_width=${EXPECTED_SLOSH_STATE_WIDTH}"
   echo "rgb_efficacy_claim_forbidden=true"
@@ -458,6 +516,8 @@ mkdir -p "${RUN_OUT_DIR}"
 runner_rc=0
 env \
   MATRIX_PRESET= PILOT_METHOD= VARIANT="${VARIANT}" ALG="${VARIANT}" \
+  SLOSH_ENABLE="${SLOSH_ENABLE}" ZERO_LIQUID_INITIAL_STATE="${ZERO_LIQUID_INITIAL_STATE}" \
+  JERK_LIMIT_ENABLE="${JERK_LIMIT_ENABLE}" JERK_MAX="${JERK_MAX}" \
   DATE="${DATE}" STAMP="${STAMP}" PILOT_MODE=true \
   PILOT_CONDITION="${PROTOCOL_ID}" PILOT_RECORD_RGB=false \
   PILOT_RECORD_ONLINE_LIQUID=false \
@@ -529,16 +589,17 @@ bag_rc=0
 plot_rc=0
 exact_rc=0
 runtime_rc=0
+ablation_rc=0
 if [[ -s "${BAG_PATH}" ]]; then
   # Plot before either PASS/FAIL validator: failed runs are often the most
   # useful diagnostic bags, so their six figures must survive aggregation.
-  if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  if truthy "${PLOT_DIAGNOSTICS}"; then
     python3 "${FULL_DA_PLOTTER}" "${BAG_PATH}" \
       --output-dir "${DIAGNOSTIC_PLOT_DIR}" || plot_rc=$?
   fi
 
   python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
-    --condition Bslosh --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
+    --condition "${EXACT_CONDITION}" --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
     --expected-w-slosh "${W_SLOSH}" \
     --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
     --expected-variant B_slosh \
@@ -552,7 +613,7 @@ if [[ -s "${BAG_PATH}" ]]; then
     --minimum-application-fraction 1.0 --expected-delay-mode-code 0 \
     --require-legacy-delay-application false \
     --expected-execution-model-code 1 \
-    --expected-state-width "${EXPECTED_SLOSH_STATE_WIDTH}" \
+    --expected-state-width "${EXPECTED_ACTIVE_STATE_WIDTH}" \
     --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}" \
     --expected-config "w_accel=${W_ACCEL}" \
     --expected-config "w_smooth=${W_SMOOTH}" \
@@ -570,9 +631,14 @@ if [[ -s "${BAG_PATH}" ]]; then
     --expected-config "actuator_angular_gain=${ACTUATOR_ANGULAR_GAIN}" \
     --expected-config "actuator_linear_delay_steps=5" \
     --expected-config "actuator_angular_delay_steps=10" || exact_rc=$?
+  if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+    python3 "${ABLATION_POSTFLIGHT}" "${BAG_PATH}" --report "${ABLATION_REPORT}" \
+      --slosh-enable "${SLOSH_ENABLE}" --zero-liquid-initial-state "${ZERO_LIQUID_INITIAL_STATE}" \
+      --jerk-limit-enable "${JERK_LIMIT_ENABLE}" --jerk-max "${JERK_MAX}" || ablation_rc=$?
+  fi
 else
   bag_rc=1
-  if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+  if truthy "${PLOT_DIAGNOSTICS}"; then
     plot_rc=125
   fi
   exact_rc=125
@@ -604,15 +670,19 @@ if (( bag_rc == 0 )); then
   python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
 fi
 
-if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 )); then
-  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}; preserve the bag, plots, and reports for diagnosis"
+if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 || ablation_rc != 0 )); then
+  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}, ablation_rc=${ablation_rc}; preserve the bag, plots, and reports for diagnosis"
 fi
 
 printf '%s\n' \
   "status=PASS" \
   "protocol=${PROTOCOL_ID}" \
   "profile=${SMOKE_PROFILE}" \
-  "condition=Bslosh" \
+  "condition=${PASS_CONDITION}" \
+  "slosh_enable=${SLOSH_ENABLE}" \
+  "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}" \
+  "jerk_limit_enable=${JERK_LIMIT_ENABLE}" \
+  "jerk_max=${JERK_MAX}" \
   "bag=${BAG_PATH}" \
   "diagnostic_plots=${DIAGNOSTIC_PLOT_MARKER}" \
   "git_revision=${current_git_revision}" \
@@ -620,9 +690,13 @@ printf '%s\n' \
   "runtime_postflight_sha256=$(sha256sum "${RUNTIME_REPORT}" | awk '{print $1}')" \
   "completed_at=$(date --iso-8601=seconds)" > "${PASS_MARKER}"
 
-echo "[${SCRIPT_NAME}] PASS: one B_slosh runtime smoke completed"
+echo "[${SCRIPT_NAME}] PASS: one ${PASS_CONDITION} runtime smoke completed"
 echo "[${SCRIPT_NAME}] bag=${BAG_PATH}"
-if [[ "${SMOKE_PROFILE}" == "full_da" ]]; then
+if truthy "${PLOT_DIAGNOSTICS}"; then
   echo "[${SCRIPT_NAME}] diagnostic plots=${DIAGNOSTIC_PLOT_DIR}"
 fi
 echo "[${SCRIPT_NAME}] runtime report=${RUNTIME_REPORT}"
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  echo "[${SCRIPT_NAME}] ablation report=${ABLATION_REPORT}"
+  printf '%s\n' "ablation_postflight_sha256=$(sha256sum "${ABLATION_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
+fi

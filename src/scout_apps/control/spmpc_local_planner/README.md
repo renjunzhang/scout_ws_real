@@ -581,7 +581,36 @@ roslaunch --dump-params spmpc_local_planner spmpc_fixed_path.launch \
 `state_stamp`，不把 OCP 前推状态冒充同一时刻的实测响应。
 
 两个求解器需从当前生成脚本各生成一次，之后切换配置无需重新生成。
-旧冻结 smoke/ABBA 脚本不会自动切换这四组；实物候选上限、采集协议与验收仍需开发验证。
+旧冻结 smoke/ABBA 入口不会自动切换这四组；新增的开发 smoke 入口复用原运行、
+录包、停车、postflight 和六张诊断图流程，以参数选择组别。它不替代正式 RGB/ABBA 协议。
+
+首包建议选择 `full`（完整方法＋硬约束）；先检查，再由操作者启动实车：
+
+```bash
+cd /home/geist/scout_ws
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh \
+  --condition full --jerk-max 1.0 --validate-only
+
+# 完成现场急停、起点和净空检查后执行；该命令会启动运动。
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh \
+  --condition full --jerk-max 1.0 --run
+```
+
+`--condition` 可选 `full / nostate / smooth / no_jerk`，一次仅运行一组，
+`--jerk-max` 的单位为 m/s³。默认仅检查参数、路径/地图、生成器约束和软件测试，
+不启动 ROS 节点；这不等于完成历史 bag 可行性回放或现场传感器准入。
+四组共同冻结 `v_ref=0.20`、`v_safe_max=0.25`、`w_accel=0.3`、
+`w_du_a=0.1`、`w_alpha=0.1`；两组液体方法及去硬约束组 `w_slosh=1.0`，
+平滑基线为零。`jerk_max=1.0` 仍是开发候选。
+
+每包最多录制 70 秒，不带 RGB；输出位于
+`/home/geist/slosh_bags/real/YYYYMMDD_spmpc_i0_failclosed_explicit_actuator_ablation_smoke_v1/<condition>/H0/`。
+保留原运行及平滑门（差分 P95 ≤ 0.0785 m/s²、转弯约 5 Hz 幅值 ≤ 0.0391 m/s²、
+强翻转为零），并增加 schema 5 消融 postflight：核验实际开关、NoState 初态、
+按 cycle ID 和 solver epoch 配对的发布历史锚点、全 60 stage 硬约束。
+去硬约束组也报告相同平滑门，未通过不能删除该对照包；失败包、图和报告保留。
+IMU 激励与液体监视器仍需离线按物理时间分析，自动 PASS 不代表真实降晃有效。
+
 设计与时间对齐要求见[开发思路](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260907_全时域加速度变化硬约束与NoState三组开发验证思路.md)。
 
 ### 10.1 固定路径 alpha-state continuous MPCC
