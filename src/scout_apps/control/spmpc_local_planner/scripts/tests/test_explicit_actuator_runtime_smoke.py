@@ -351,13 +351,25 @@ class WrapperContractTest(unittest.TestCase):
             self.short_wrapper.index('if [[ "${run_motion}" == "true" ]]'),
         )
 
-    def test_rgb_is_disabled_and_both_postflights_are_automatic(self):
+    def test_rgb_defaults_off_and_both_postflights_are_automatic(self):
+        # Execute only profile resolution, never acquisition. Historical
+        # profiles must remain image-free even with stale exported switches.
+        profile_code = self.wrapper[self.wrapper.index("VARIANT=B_slosh\n"):
+                                    self.wrapper.index("require_weight() {")]
+        for profile in ("runtime_baseline", "waccel03", "weight_tuning", "full_da"):
+            code = ('SCRIPT_DIR=$1; SMOKE_PROFILE=$2; MIN_FREE_GIB=5\n'
+                    'SMOKE_RECORD_RGB=true; SELECTED_OBSERVER_SOURCE=odom\n'
+                    'fail() { exit 2; }\n' + profile_code
+                    + '\nprintf "%s %s %s" "$SMOKE_RECORD_RGB" "$SMOKE_FORBID_IMAGE_STREAMS" "$SELECTED_OBSERVER_SOURCE"')
+            result = subprocess.run(["bash", "-eu", "-c", code, "test", str(SCRIPTS_DIR), profile],
+                                    check=True, capture_output=True, text=True)
+            self.assertEqual(result.stdout, "false true processed_imu")
         for token in (
-            "PILOT_RECORD_RGB=false",
+            'PILOT_RECORD_RGB="${SMOKE_RECORD_RGB}"',
             "PILOT_RECORD_ONLINE_LIQUID=false",
-            "RECORD_CAMERA=false",
-            "RECORD_CAMERA_INFO=false",
-            "FORBID_IMAGE_STREAMS=true",
+            'RECORD_CAMERA="${SMOKE_RECORD_RGB}"',
+            'RECORD_CAMERA_INFO="${SMOKE_RECORD_RGB}"',
+            'FORBID_IMAGE_STREAMS="${SMOKE_FORBID_IMAGE_STREAMS}"',
             "validate_i0_failclosed_fixed_abba_bag.py",
             "validate_explicit_actuator_runtime_smoke.py",
             "--max-control-callback-p95-ms 30.0",

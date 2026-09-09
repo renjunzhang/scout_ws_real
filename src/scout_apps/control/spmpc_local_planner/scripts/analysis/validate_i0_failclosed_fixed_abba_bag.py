@@ -11,6 +11,8 @@ This validator deliberately separates two facts which are easy to conflate:
 
 For B0 the selected liquid state is diagnostic only.  B_slosh must consume
 liquid and satisfy the common-epoch contract on every active solve.
+The source-comparison profile can explicitly expect odom; historical callers
+still require I0. Both profiles retain the processed-IMU health contract.
 """
 
 import argparse
@@ -79,6 +81,8 @@ def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag")
     parser.add_argument("--condition", choices=("B0", "Bslosh"), required=True)
+    parser.add_argument("--expected-observer-source", choices=("processed_imu", "odom"),
+                        default="processed_imu")
     parser.add_argument(
         "--expected-w-slosh",
         type=float,
@@ -180,9 +184,34 @@ def require_fraction(failures, label, observed, minimum):
         )
 
 
+def selection_matches_source(message, source):
+    """Require the requested nominal source, never a fallback masquerading as it.
+
+    IMU stays healthy in the odom comparison too: it is a common evaluation
+    stream, even though its liquid state is not consumed by that controller.
+    """
+    code = {"odom": 1, "processed_imu": 2}[source]
+    status = {"odom": "NOMINAL_ODOM", "processed_imu": "NOMINAL_PROCESSED_IMU"}[source]
+    return (
+        bool(message.configured) and bool(message.valid)
+        and not bool(message.fallback_active) and not bool(message.fallback_latched)
+        and int(message.nominal_source) == code
+        and str(message.nominal_source_name) == source
+        and int(message.effective_source) == code
+        and str(message.effective_source_name) == source
+        and int(message.fallback_policy) == 2
+        and str(message.fallback_policy_name) == "fail_closed"
+        and str(message.status) == status
+        and bool(message.imu_pipeline_ready) and bool(message.imu_fresh)
+        and (source != "odom" or (bool(message.odom_snapshot_valid) and bool(message.odom_fresh)))
+    )
+
+
 def validate(args):
     bag_path = Path(args.bag).expanduser().resolve()
     report_path = Path(args.report).expanduser().resolve()
+    expected_source = getattr(args, "expected_observer_source", "processed_imu")
+    expected_source_code = {"odom": 1, "processed_imu": 2}[expected_source]
     expected_variant = args.expected_variant or (
         "B0" if args.condition == "B0" else "B_slosh"
     )
@@ -435,26 +464,12 @@ def validate(args):
     selection_reset_epochs = set()
     for _, message in selections_to_validate:
         selection_reset_epochs.add(int(message.imu_reset_epoch))
-        if not (
-            bool(message.configured)
-            and bool(message.valid)
-            and not bool(message.fallback_active)
-            and not bool(message.fallback_latched)
-            and int(message.nominal_source) == 2
-            and str(message.nominal_source_name) == "processed_imu"
-            and int(message.effective_source) == 2
-            and str(message.effective_source_name) == "processed_imu"
-            and int(message.fallback_policy) == 2
-            and str(message.fallback_policy_name) == "fail_closed"
-            and str(message.status) == "NOMINAL_PROCESSED_IMU"
-            and bool(message.imu_pipeline_ready)
-            and bool(message.imu_fresh)
-        ):
+        if not selection_matches_source(message, expected_source):
             selection_bad += 1
         if bool(message.solver_consumes_selected_state) != expected_slosh:
             consumption_bad += 1
     if selection_bad:
-        failures.append("processed-IMU/fail-closed selection mismatch count={}".format(selection_bad))
+        failures.append("{}/fail-closed selection mismatch count={}".format(expected_source, selection_bad))
     if consumption_bad:
         failures.append("solver liquid-consumption mismatch count={}".format(consumption_bad))
     if len(selection_reset_epochs) != 1:
@@ -586,14 +601,14 @@ def validate(args):
         for _, row in motion_alignments
     )
     solver_source_bad = sum(
-        not close(row.get("source_code"), 2.0) for _, row in motion_solver_inputs
+        not close(row.get("source_code"), expected_source_code) for _, row in motion_solver_inputs
     )
     if alignment_mode_bad:
         failures.append(
             "delay alignment mode mismatch count={}".format(alignment_mode_bad)
         )
     if solver_source_bad:
-        failures.append("solver-input source is not processed_imu count={}".format(solver_source_bad))
+        failures.append("solver-input source is not {} count={}".format(expected_source, solver_source_bad))
 
     audit_failures = collections.Counter()
     common_epoch_bad = 0
@@ -605,7 +620,7 @@ def validate(args):
     for _, message in acceptance_audits:
         if str(message.variant) != expected_variant:
             audit_failures["wrong_variant"] += 1
-        if int(message.observer_source) != 2:
+        if int(message.observer_source) != expected_source_code:
             audit_failures["wrong_observer_source"] += 1
         if bool(message.command_contract_violation):
             audit_failures["command_contract"] += 1
@@ -947,13 +962,14 @@ def validate(args):
             "valid_horizon_motion": len(valid_horizons),
         },
         "contracts": {
-            "selected_observer": "processed_imu_I0",
+            "selected_observer": "processed_imu_I0" if expected_source == "processed_imu" else "odom_O0",
             "fallback_policy": "fail_closed",
             "solver_consumes_liquid": expected_slosh,
             "final_liquid_input_when_consumed": (
                 "L22_command_history_rollout"
                 if expected_slosh and legacy_delay_expected
-                else "I0_explicit_actuator_epoch"
+                else ("I0_explicit_actuator_epoch" if expected_source == "processed_imu"
+                      else "O0_explicit_actuator_epoch")
                 if expected_slosh
                 else "not_consumed"
             ),

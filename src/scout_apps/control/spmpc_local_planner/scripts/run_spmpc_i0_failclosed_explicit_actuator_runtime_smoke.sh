@@ -91,6 +91,11 @@ JERK_MAX=1.0
 EXACT_CONDITION=Bslosh
 TERMINAL_MPC_STOP_HANDOFF_ENABLE=false
 ABLATION_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_ablation_smoke.py"
+RECORDING_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_comparison_recording.py"
+SOURCE_COMPARISON=false
+SELECTED_OBSERVER_SOURCE=processed_imu
+SMOKE_RECORD_RGB=false
+SMOKE_FORBID_IMAGE_STREAMS=true
 
 case "${SMOKE_PROFILE}" in
   runtime_baseline)
@@ -151,6 +156,12 @@ case "${SMOKE_PROFILE}" in
     fail "unsupported SMOKE_PROFILE=${SMOKE_PROFILE}; use runtime_baseline, waccel03, weight_tuning, full_da, or ablation"
     ;;
 esac
+if [[ "${SMOKE_RECORD_RGB}" == true ]]; then
+  SMOKE_FORBID_IMAGE_STREAMS=false
+  [[ "${MIN_FREE_GIB}" =~ ^[0-9]+$ ]] || fail "MIN_FREE_GIB must be an integer"
+  # 70 s of uncompressed 1920x1080 RGB at 30 Hz alone is about 12.2 GiB.
+  if (( MIN_FREE_GIB < 20 )); then MIN_FREE_GIB=20; fi
+fi
 if [[ "${SMOKE_PROFILE}" != ablation ]]; then
   EXPECTED_ACTIVE_STATE_WIDTH="${EXPECTED_SLOSH_STATE_WIDTH}"
   ABLATION_CONDITION="${SMOKE_PROFILE}"
@@ -215,6 +226,7 @@ if truthy "${PLOT_DIAGNOSTICS}"; then
   DIAGNOSTIC_PLOT_MARKER="${DIAGNOSTIC_PLOT_DIR}"
 fi
 ABLATION_REPORT="${RUN_OUT_DIR}/${NAME}_ablation_postflight.json"
+RECORDING_REPORT="${RUN_OUT_DIR}/${NAME}_recording_postflight.json"
 PASS_MARKER="${RUN_OUT_DIR}/${NAME}_runtime_smoke_pass.env"
 PREREG_FILE="${RUN_OUT_DIR}/${NAME}_runtime_smoke_prereg.env"
 
@@ -239,6 +251,9 @@ if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   required_files+=("${ABLATION_POSTFLIGHT}" "${SCRIPT_DIR}/lib/spmpc_ablation_profile.sh"
     "${SCRIPT_DIR}/lib/spmpc_ablation_scene.sh"
     "${SCRIPT_DIR}/run_spmpc_ablation_smoke.sh" "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py")
+fi
+if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  required_files+=("${RECORDING_POSTFLIGHT}" "${SCRIPT_DIR}/tests/test_spmpc_comparison_recording.py")
 fi
 for required_file in "${required_files[@]}"; do
   [[ -s "${required_file}" ]] || fail "missing required artifact: ${required_file}"
@@ -315,7 +330,7 @@ launch_dump="$(roslaunch --dump-params \
   delay_phase_linear_delay_sec:="${DELAY_PHASE_LINEAR_DELAY_SEC}" \
   delay_phase_angular_delay_sec:="${DELAY_PHASE_ANGULAR_DELAY_SEC}" \
   imu_shadow_enable:=true imu_topic:="${IMU_TOPIC}" imu_subscriber_queue_size:=10 \
-  observer_source:=processed_imu observer_fallback_policy:=fail_closed \
+  observer_source:="${SELECTED_OBSERVER_SOURCE}" observer_fallback_policy:=fail_closed \
   observer_latch_fallback:=false \
   observer_max_imu_state_age_sec:=0.10 observer_max_odom_state_age_sec:=0.50 \
   observer_max_future_skew_sec:=0.005 \
@@ -354,7 +369,7 @@ expected_launch_lines=(
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
   "/spmpc_local_planner/slosh/slosh_height_max: 0.001"
   "/spmpc_local_planner/odom/subscriber_queue_size: 10"
-  "/spmpc_local_planner/slosh_observer/source: processed_imu"
+  "/spmpc_local_planner/slosh_observer/source: ${SELECTED_OBSERVER_SOURCE}"
   "/spmpc_local_planner/slosh_observer/fallback_policy: fail_closed"
   "/spmpc_local_planner/slosh_observer/latch_fallback: false"
   "/spmpc_local_planner/state_timing/require_common_epoch: true"
@@ -385,6 +400,9 @@ if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: false"
   python3 "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py"
 fi
+if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  python3 "${SCRIPT_DIR}/tests/test_spmpc_comparison_recording.py"
+fi
 
 python3 "${MODEL_TEST}"
 python3 "${SMOKE_TEST}"
@@ -401,13 +419,14 @@ echo "  condition      = ${PREREG_CONDITION}; config_variant=${VARIANT}; one bag
 echo "  scene          = ${SMOKE_SCENE}"
 echo "  frozen map     = ${FROZEN_MAP_FILE}"
 echo "  frozen path    = ${FROZEN_PATH_FILE}"
-echo "  observer       = processed-IMU I0; fail_closed; common_epoch=true"
+echo "  observer       = ${SELECTED_OBSERVER_SOURCE}; fail_closed; common_epoch=true; both monitors enabled"
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
 echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
 echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
 echo "  ablation       = ${ABLATION_CONDITION}; slosh=${SLOSH_ENABLE}; zero_x0=${ZERO_LIQUID_INITIAL_STATE}; jerk=${JERK_LIMIT_ENABLE}; j_max=${JERK_MAX}"
-echo "  RGB            = disabled; no efficacy conclusion from this bag"
+echo "  RGB            = ${SMOKE_RECORD_RGB}; 1920x1080@30 when enabled; raw stamped images + camera_info"
+echo "  NOKOV          = raw Tracker0 pose retained"
 echo "  output         = ${BAG_PATH}"
 echo "  acceptance     = epoch/solver/fault-zero=0; odom gaps>50ms=0; callback P95<30ms; consecutive overruns<=1"
 if truthy "${CONTROL_CONTINUITY_GATE}"; then
@@ -450,6 +469,8 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_model.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_runtime_smoke.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_plot_spmpc_full_da_diagnostics.py
+  src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_spmpc_comparison_recording.py
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_spmpc_comparison_recording.py
 )
 dirty_runtime="$(git -C "${REPO_ROOT}" status --porcelain --untracked-files=normal -- "${runtime_paths[@]}")"
 [[ -z "${dirty_runtime}" ]] \
@@ -459,6 +480,9 @@ attempt_outputs=(
   "${BAG_PATH}" "${BAG_PATH}.active" "${EXACT_REPORT}"
   "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}" "${ABLATION_REPORT}"
 )
+if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  attempt_outputs+=("${RECORDING_REPORT}")
+fi
 if truthy "${PLOT_DIAGNOSTICS}"; then
   attempt_outputs+=("${DIAGNOSTIC_PLOT_DIR}")
 fi
@@ -474,6 +498,17 @@ for topic in /map /scan_front "${ODOM_TOPIC}" "${IMU_TOPIC}"; do
   timeout 5s rostopic echo --noarr -n 1 "${topic}" >/dev/null 2>&1 \
     || fail "runtime topic unavailable: ${topic}"
 done
+if [[ "${SMOKE_RECORD_RGB}" == true ]]; then
+  # Header keeps image payloads out of terminal output. Bag postflight checks
+  # native timestamps, geometry and task/tail coverage, not just topic names.
+  timeout 5s rostopic echo -n 1 /camera/color/image_raw/header >/dev/null 2>&1 \
+    || fail "RGB image stream unavailable"
+  camera_info="$(timeout 5s rostopic echo --noarr -n 1 /camera/color/camera_info)" \
+    || fail "RGB camera_info unavailable"
+  grep -Fxq 'width: 1920' <<< "${camera_info}" \
+    && grep -Fxq 'height: 1080' <<< "${camera_info}" \
+    || fail "source comparison requires 1920x1080 RGB in both groups"
+fi
 raw_mocap_topic="/vrpn_client_node/${MOCAP_TRACKER}/pose"
 timeout 5s rostopic echo -n 1 "${raw_mocap_topic}" >/dev/null 2>&1 \
   || fail "no NOKOV pose: ${raw_mocap_topic}"
@@ -508,7 +543,11 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "w_accel=${W_ACCEL}"
   echo "v_ref=${V_REF}"
   echo "v_safe_max=${V_SAFE_MAX}"
-  echo "observer=processed_imu"
+  echo "observer=${SELECTED_OBSERVER_SOURCE}"
+  echo "source_comparison=${SOURCE_COMPARISON}"
+  echo "record_rgb=${SMOKE_RECORD_RGB}"
+  echo "record_mocap=true"
+  echo "dual_monitors=true"
   echo "fallback=fail_closed"
   echo "common_epoch=true"
   echo "execution_model=explicit_actuator"
@@ -524,7 +563,8 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "full_horizon_delta_a=${FULL_HORIZON_DELTA_A}"
   echo "expected_b0_state_width=${EXPECTED_B0_STATE_WIDTH}"
   echo "expected_slosh_state_width=${EXPECTED_SLOSH_STATE_WIDTH}"
-  echo "rgb_efficacy_claim_forbidden=true"
+  echo "rgb_efficacy_claim_forbidden=${SMOKE_FORBID_IMAGE_STREAMS}"
+  echo "rgb_height_evaluation_pending=${SMOKE_RECORD_RGB}"
 } > "${PREREG_FILE}"
 
 runner_rc=0
@@ -534,7 +574,7 @@ env \
   SLOSH_ENABLE="${SLOSH_ENABLE}" ZERO_LIQUID_INITIAL_STATE="${ZERO_LIQUID_INITIAL_STATE}" \
   JERK_LIMIT_ENABLE="${JERK_LIMIT_ENABLE}" JERK_MAX="${JERK_MAX}" \
   DATE="${DATE}" STAMP="${STAMP}" PILOT_MODE=true \
-  PILOT_CONDITION="${PROTOCOL_ID}" PILOT_RECORD_RGB=false \
+  PILOT_CONDITION="${PROTOCOL_ID}" PILOT_RECORD_RGB="${SMOKE_RECORD_RGB}" \
   PILOT_RECORD_ONLINE_LIQUID=false \
   RUN_LABEL="${RUN_LABEL}" NAME="${NAME}" RUN_OUT_DIR="${RUN_OUT_DIR}" \
   PATH_SOURCE_MODE=replay PATH_FILE="${FROZEN_PATH_FILE}" \
@@ -565,7 +605,7 @@ env \
   IMU_SHADOW_ENABLE=true IMU_TOPIC="${IMU_TOPIC}" IMU_SUBSCRIBER_QUEUE_SIZE=10 \
   IMU_SHADOW_READY_TIMEOUT_SEC=20 \
   IMU_SHADOW_READY_TOPIC=/spmpc/debug/slosh_observer_imu \
-  CURRENT_OBSERVER_SOURCE=processed_imu OBSERVER_FALLBACK_POLICY=fail_closed \
+  CURRENT_OBSERVER_SOURCE="${SELECTED_OBSERVER_SOURCE}" OBSERVER_FALLBACK_POLICY=fail_closed \
   OBSERVER_LATCH_FALLBACK=false OBSERVER_MAX_IMU_STATE_AGE_SEC=0.10 \
   OBSERVER_MAX_ODOM_STATE_AGE_SEC=0.50 OBSERVER_MAX_FUTURE_SKEW_SEC=0.005 \
   OBSERVER_SELECTION_TOPIC=/spmpc/debug/slosh_observer_selection \
@@ -590,10 +630,12 @@ env \
   PATH_GENERATOR_STARTUP_SEC=2 EXPECTED_RUNTIME_VARIANT="${VARIANT}" \
   RUNTIME_VARIANT_TIMEOUT_SEC=5 SPLIT_BLOCK=false ACQUISITION_RETRY=false \
   RETRY_REASON_FILE= BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID}" \
-  ORDER_POSITION=01 RECORD_RGB=false RECORD_CAMERA=false \
-  RECORD_CAMERA_INFO=false RECORD_CAMERA_COMPRESSED=false RECORD_DEPTH=false \
+  ORDER_POSITION=01 RECORD_RGB="${SMOKE_RECORD_RGB}" RECORD_CAMERA="${SMOKE_RECORD_RGB}" \
+  RECORD_CAMERA_INFO="${SMOKE_RECORD_RGB}" RECORD_CAMERA_COMPRESSED=false RECORD_DEPTH=false \
+  RGB_EXPECTED_WIDTH=1920 RGB_EXPECTED_HEIGHT=1080 RGB_EXPECTED_FPS=30 \
   RECORD_ONLINE_LIQUID=false RECORD_ONLINE_LIQUID_DEBUG_IMAGES=false \
-  RECORD_STANDALONE_SLOSH=false RECORD_SCAN=true FORBID_IMAGE_STREAMS=true \
+  RECORD_STANDALONE_SLOSH=false RECORD_SCAN=true FORBID_IMAGE_STREAMS="${SMOKE_FORBID_IMAGE_STREAMS}" \
+  LIQUID_EXPORT_AFTER_RECORD=false \
   RECORD_ALL_EXISTING_TOPICS=false RECORD_TOPIC_INFO=true RECORD_MOCAP=true \
   RECORD_MOCAP_PATH=false MOCAP_TRACKER="${MOCAP_TRACKER}" \
   RECORD_SEC=70 MAX_RECORD_SEC=70 SEND_ZERO_ON_EXIT=true \
@@ -605,6 +647,7 @@ plot_rc=0
 exact_rc=0
 runtime_rc=0
 ablation_rc=0
+recording_rc=0
 if [[ -s "${BAG_PATH}" ]]; then
   # Plot before either PASS/FAIL validator: failed runs are often the most
   # useful diagnostic bags, so their six figures must survive aggregation.
@@ -614,6 +657,7 @@ if [[ -s "${BAG_PATH}" ]]; then
   fi
 
   python3 "${EXACT_POSTFLIGHT}" "${BAG_PATH}" \
+    --expected-observer-source "${SELECTED_OBSERVER_SOURCE}" \
     --condition "${EXACT_CONDITION}" --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
     --expected-w-slosh "${W_SLOSH}" \
     --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
@@ -652,6 +696,10 @@ if [[ -s "${BAG_PATH}" ]]; then
       --slosh-enable "${SLOSH_ENABLE}" --zero-liquid-initial-state "${ZERO_LIQUID_INITIAL_STATE}" \
       --jerk-limit-enable "${JERK_LIMIT_ENABLE}" --jerk-max "${JERK_MAX}" || ablation_rc=$?
   fi
+  if [[ "${SOURCE_COMPARISON}" == true ]]; then
+    python3 "${RECORDING_POSTFLIGHT}" "${BAG_PATH}" --report "${RECORDING_REPORT}" \
+      --expect-rgb "${SMOKE_RECORD_RGB}" --tracker "${MOCAP_TRACKER}" || recording_rc=$?
+  fi
 else
   bag_rc=1
   if truthy "${PLOT_DIAGNOSTICS}"; then
@@ -686,8 +734,8 @@ if (( bag_rc == 0 )); then
   python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
 fi
 
-if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 || ablation_rc != 0 )); then
-  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}, ablation_rc=${ablation_rc}; preserve the bag, plots, and reports for diagnosis"
+if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 || ablation_rc != 0 || recording_rc != 0 )); then
+  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}, ablation_rc=${ablation_rc}, recording_rc=${recording_rc}; preserve the bag, plots, and reports for diagnosis"
 fi
 
 printf '%s\n' \
@@ -696,6 +744,10 @@ printf '%s\n' \
   "profile=${SMOKE_PROFILE}" \
   "condition=${PASS_CONDITION}" \
   "scene=${SMOKE_SCENE}" \
+  "observer=${SELECTED_OBSERVER_SOURCE}" \
+  "record_rgb=${SMOKE_RECORD_RGB}" \
+  "record_mocap=true" \
+  "dual_monitors=true" \
   "path_file=${FROZEN_PATH_FILE}" \
   "path_sha256=${FROZEN_PATH_SHA256}" \
   "map_file=${FROZEN_MAP_FILE}" \
@@ -720,4 +772,8 @@ echo "[${SCRIPT_NAME}] runtime report=${RUNTIME_REPORT}"
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   echo "[${SCRIPT_NAME}] ablation report=${ABLATION_REPORT}"
   printf '%s\n' "ablation_postflight_sha256=$(sha256sum "${ABLATION_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
+fi
+if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  echo "[${SCRIPT_NAME}] recording report=${RECORDING_REPORT}"
+  printf '%s\n' "recording_postflight_sha256=$(sha256sum "${RECORDING_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
 fi

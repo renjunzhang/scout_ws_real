@@ -54,3 +54,29 @@ TERMINAL_MPC_STOP_HANDOFF_ENABLE=true
 FULL_HORIZON_DELTA_A=true
 PREREG_CONDITION="${ABLATION_CONDITION}"
 PASS_CONDITION="${ABLATION_CONDITION}"
+
+# Source comparison uses the same full controller and acquisition engine.
+# Explicit flags isolate its labels/evidence from historical image-free bags.
+SOURCE_COMPARISON="${ABLATION_SOURCE_COMPARISON:-false}"
+SELECTED_OBSERVER_SOURCE="${ABLATION_OBSERVER_SOURCE:-processed_imu}"
+SMOKE_RECORD_RGB="${ABLATION_RECORD_RGB:-false}"
+case "${SOURCE_COMPARISON}:${SMOKE_RECORD_RGB}" in
+  true:true|true:false|false:false) ;;
+  *) fail "invalid source-comparison/RGB flags" ;;
+esac
+case "${SELECTED_OBSERVER_SOURCE}" in
+  processed_imu|odom) ;;
+  *) fail "invalid liquid observer source: ${SELECTED_OBSERVER_SOURCE}" ;;
+esac
+if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  [[ "${ABLATION_CONDITION}" == full ]] || fail "source comparison requires full"
+  PROTOCOL_ID=SMPCC_OBSERVER_SOURCE_SMOKE_DEV_V1
+  OUTPUT_SERIES=spmpc_observer_source_smoke_v1
+  RUN_LABEL_PREFIX="DEV_EXPACT_SOURCE_${SELECTED_OBSERVER_SOURCE}_RGB${SMOKE_RECORD_RGB}_J${JERK_MAX}"
+  BLOCK_SEGMENT_ID="SOURCE_${SELECTED_OBSERVER_SOURCE}_RGB${SMOKE_RECORD_RGB}"
+  SMOKE_SCOPE=development_liquid_source_comparison
+  SMOKE_PURPOSE="full method liquid-initial-state source comparison; common dual monitors and NOKOV"
+  OPERATOR_NOTE="liquid_source=${SELECTED_OBSERVER_SOURCE}; jerk_max=${JERK_MAX}; RGB=${SMOKE_RECORD_RGB}; robot state source unchanged"
+elif [[ "${SELECTED_OBSERVER_SOURCE}" != processed_imu ]]; then
+  fail "odom requires explicit source-comparison mode"
+fi
