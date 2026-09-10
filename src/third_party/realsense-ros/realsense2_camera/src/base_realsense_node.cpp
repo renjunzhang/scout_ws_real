@@ -219,6 +219,8 @@ void BaseRealSenseNode::setupErrorCallback()
 {
     for (auto&& s : _dev.query_sensors())
     {
+        if (!_poll_inactive_sensors && !hasEnabledProfile(s))
+            continue;
         s.set_notifications_callback([&](const rs2::notification& n)
         {
             std::vector<std::string> error_strings({"RT IC2 Config error",
@@ -243,9 +245,11 @@ void BaseRealSenseNode::publishTopics()
     setupDevice();
     setupFilters();
     registerHDRoptions();
+    // Select supported profiles before deciding which physical sensors to poll.
+    // Opening/starting streams still happens later in setupStreams().
+    enable_devices();
     registerDynamicReconfigCb(_node_handle);
     setupErrorCallback();
-    enable_devices();
     setupPublishers();
     setupStreams();
     SetBaseStream();
@@ -444,7 +448,8 @@ void BaseRealSenseNode::registerAutoExposureROIOptions(ros::NodeHandle& nh)
     }
 }
 
-void BaseRealSenseNode::registerDynamicOption(ros::NodeHandle& nh, rs2::options sensor, std::string& module_name)
+void BaseRealSenseNode::registerDynamicOption(ros::NodeHandle& nh, rs2::options sensor,
+                                            std::string& module_name, bool allow_error_polling)
 {
     ros::NodeHandle nh1(nh, module_name);
     std::shared_ptr<ddynamic_reconfigure::DDynamicReconfigure> ddynrec = std::make_shared<ddynamic_reconfigure::DDynamicReconfigure>(nh1);
@@ -460,8 +465,15 @@ void BaseRealSenseNode::registerDynamicOption(ros::NodeHandle& nh, rs2::options 
             }
             if (is_checkbox(sensor, option))
             {
-                auto option_value = bool(sensor.get_option(option));
-                if (nh1.param(option_name, option_value, option_value))
+                const bool current_value = bool(sensor.get_option(option));
+                auto option_value = current_value;
+                const bool configured = nh1.param(option_name, option_value, option_value);
+                if (option == RS2_OPTION_ERROR_POLLING_ENABLED && !allow_error_polling)
+                {
+                    option_value = false;
+                    ROS_INFO_STREAM("Disabling error polling for inactive sensor " << module_name);
+                }
+                if (configured || option_value != current_value)
                 {
                     sensor.set_option(option, option_value);
                 }
@@ -604,7 +616,8 @@ void BaseRealSenseNode::registerDynamicReconfigCb(ros::NodeHandle& nh)
     {
         std::string module_name = create_graph_resource_name(sensor.get_info(RS2_CAMERA_INFO_NAME));
         ROS_DEBUG_STREAM("module_name:" << module_name);
-        registerDynamicOption(nh, sensor, module_name);
+        registerDynamicOption(nh, sensor, module_name,
+                              _poll_inactive_sensors || hasEnabledProfile(sensor));
     }
 
     for (NamedFilter nfilter : _filters)
@@ -714,6 +727,7 @@ rs2_stream BaseRealSenseNode::rs2_string_to_stream(std::string str)
 
 void BaseRealSenseNode::getParameters()
 {
+    _pnh.param("poll_inactive_sensors", _poll_inactive_sensors, false);
     ROS_INFO("getParameters...");
 
     // Setup system to use RGB image from the infra stream if configured by user
@@ -2488,6 +2502,17 @@ bool BaseRealSenseNode::getEnabledProfile(const stream_index_pair& stream_index,
     return true;
 }
 
+bool BaseRealSenseNode::hasEnabledProfile(const rs2::sensor& sensor) const
+{
+    for (const auto& profile : _enabled_profiles)
+    {
+        const auto found = _sensors.find(profile.first);
+        if (!profile.second.empty() && found != _sensors.end() && found->second == sensor)
+            return true;
+    }
+    return false;
+}
+
 void BaseRealSenseNode::startMonitoring()
 {
     for (rs2_option option : _monitor_options)
@@ -2513,7 +2538,13 @@ void BaseRealSenseNode::startMonitoring()
 
 void BaseRealSenseNode::publish_temperature()
 {
-    rs2::options sensor(_sensors[_base_stream]);
+    const auto base_sensor = _sensors.find(_base_stream);
+    if (base_sensor == _sensors.end() ||
+        (!_poll_inactive_sensors && !hasEnabledProfile(base_sensor->second)))
+        return;
+    // Querying the inactive stereo module can power it up and interrupt RGB.
+    // Active depth/infra sensors retain temperature and hardware-error monitoring.
+    rs2::options sensor(base_sensor->second);
     for (OptionTemperatureDiag option_diag : _temperature_nodes)
     {
         rs2_option option(option_diag.first);

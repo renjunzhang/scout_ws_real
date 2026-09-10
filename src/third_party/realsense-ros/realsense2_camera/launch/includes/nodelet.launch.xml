@@ -10,6 +10,7 @@
   <arg name="required"            default="false"/>
   <arg name="output"              default="screen"/>  <!-- [ screen | log ]-->
   <arg name="respawn"             default="false"/>
+  <arg name="poll_inactive_sensors" default="false"/>
 
   <arg name="fisheye_width"       default="0"/>
   <arg name="fisheye_height"      default="0"/>
@@ -20,6 +21,8 @@
   <arg name="depth_width"         default="640"/>
   <arg name="depth_height"        default="480"/>
   <arg name="enable_depth"        default="true"/>
+  <arg name="stereo_module/emitter_enabled" default=""/>
+  <arg name="stereo_module/error_polling_enabled" default=""/>
 
   <arg name="confidence_width"    default="640"/>
   <arg name="confidence_height"   default="480"/>
@@ -110,6 +113,12 @@
   
 
 
+  <!-- Generic dynamic options use the public camera namespace, not the
+       realsense2_camera private namespace used for stream profiles. -->
+  <param if="$(eval arg('stereo_module/emitter_enabled') != '')"
+         name="stereo_module/emitter_enabled" type="int" value="$(arg stereo_module/emitter_enabled)"/>
+  <param if="$(eval arg('stereo_module/error_polling_enabled') != '')"
+         name="stereo_module/error_polling_enabled" type="bool" value="$(arg stereo_module/error_polling_enabled)"/>
   <node unless="$(arg external_manager)" pkg="nodelet" type="nodelet" name="$(arg manager)" args="manager" output="$(arg output)" required="$(arg required)" respawn="$(arg respawn)"/>
   <node pkg="nodelet" type="nodelet" name="realsense2_camera" args="load realsense2_camera/RealSenseNodeFactory $(arg manager)" required="$(arg required)" respawn="$(arg respawn)">
     <param name="serial_no"                type="str"  value="$(arg serial_no)"/>
@@ -210,6 +219,7 @@
     <param name="clip_distance"            type="double" value="$(arg clip_distance)"/>
     <param name="linear_accel_cov"         type="double" value="$(arg linear_accel_cov)"/>
     <param name="initial_reset"            type="bool"   value="$(arg initial_reset)"/>
+    <param name="poll_inactive_sensors"    type="bool"   value="$(arg poll_inactive_sensors)"/>
     <param name="reconnect_timeout"        type="double" value="$(arg reconnect_timeout)"/>
     <param name="wait_for_device_timeout"  type="double" value="$(arg wait_for_device_timeout)"/>
     <param name="unite_imu_method"         type="str"    value="$(arg unite_imu_method)"/>

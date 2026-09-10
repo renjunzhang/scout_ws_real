@@ -9,6 +9,7 @@
   <arg name="manager"             default="realsense2_camera_manager"/>
   <arg name="output"              default="screen"/>
   <arg name="respawn"              default="false"/>
+  <arg name="poll_inactive_sensors" default="false"/>
 
   <arg name="fisheye_width"       default="-1"/>
   <arg name="fisheye_height"      default="-1"/>
@@ -17,6 +18,8 @@
   <arg name="depth_width"         default="-1"/>
   <arg name="depth_height"        default="-1"/>
   <arg name="enable_depth"        default="true"/>
+  <arg name="stereo_module/emitter_enabled" default=""/>
+  <arg name="stereo_module/error_polling_enabled" default=""/>
 
   <arg name="confidence_width"    default="-1"/>
   <arg name="confidence_height"   default="-1"/>
@@ -98,6 +101,8 @@
       <arg name="depth_width"              value="$(arg depth_width)"/>
       <arg name="depth_height"             value="$(arg depth_height)"/>
       <arg name="enable_depth"             value="$(arg enable_depth)"/>
+      <arg name="stereo_module/emitter_enabled" value="$(arg stereo_module/emitter_enabled)"/>
+      <arg name="stereo_module/error_polling_enabled" value="$(arg stereo_module/error_polling_enabled)"/>
 
       <arg name="confidence_width"         value="$(arg confidence_width)"/>
       <arg name="confidence_height"        value="$(arg confidence_height)"/>
@@ -131,6 +136,7 @@
       <arg name="clip_distance"            value="$(arg clip_distance)"/>
       <arg name="linear_accel_cov"         value="$(arg linear_accel_cov)"/>
       <arg name="initial_reset"            value="$(arg initial_reset)"/>
+      <arg name="poll_inactive_sensors"    value="$(arg poll_inactive_sensors)"/>
       <arg name="reconnect_timeout"        value="$(arg reconnect_timeout)"/>
       <arg name="wait_for_device_timeout"  value="$(arg wait_for_device_timeout)"/>
       <arg name="unite_imu_method"         value="$(arg unite_imu_method)"/>

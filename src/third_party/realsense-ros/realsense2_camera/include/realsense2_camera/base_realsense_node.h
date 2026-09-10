@@ -164,6 +164,7 @@ namespace realsense2_camera
         std::map<stream_index_pair, std::string> _depth_aligned_frame_id;
         ros::NodeHandle& _node_handle, _pnh;
         bool _align_depth;
+        bool _poll_inactive_sensors;
         std::vector<rs2_option> _monitor_options;
         std::shared_ptr<ros::ServiceServer> _device_info_srv;
 
@@ -241,7 +242,9 @@ namespace realsense2_camera
         void pose_callback(rs2::frame frame);
         void multiple_message_callback(rs2::frame frame, imu_sync_method sync_method);
         void frame_callback(rs2::frame frame);
-        void registerDynamicOption(ros::NodeHandle& nh, rs2::options sensor, std::string& module_name);
+        void registerDynamicOption(ros::NodeHandle& nh, rs2::options sensor, std::string& module_name,
+                                   bool allow_error_polling = true);
+        bool hasEnabledProfile(const rs2::sensor& sensor) const;
         void registerHDRoptions();
         void set_sensor_parameter_to_ros(const std::string& module_name, rs2::options sensor, rs2_option option);
         void monitor_update_functions();

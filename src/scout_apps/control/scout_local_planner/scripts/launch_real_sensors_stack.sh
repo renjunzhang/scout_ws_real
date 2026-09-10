@@ -31,7 +31,15 @@ HZ_WINDOW="${HZ_WINDOW:-10}"
 REALSENSE_COLOR_WIDTH="${REALSENSE_COLOR_WIDTH:-1920}"
 REALSENSE_COLOR_HEIGHT="${REALSENSE_COLOR_HEIGHT:-1080}"
 REALSENSE_COLOR_FPS="${REALSENSE_COLOR_FPS:-30}"
+REALSENSE_POLL_INACTIVE_SENSORS="${REALSENSE_POLL_INACTIVE_SENSORS:-false}"
 REALSENSE_ENABLE_DEPTH="${REALSENSE_ENABLE_DEPTH:-false}"
+REALSENSE_DEPTH_WIDTH="${REALSENSE_DEPTH_WIDTH:--1}"
+REALSENSE_DEPTH_HEIGHT="${REALSENSE_DEPTH_HEIGHT:--1}"
+REALSENSE_DEPTH_FPS="${REALSENSE_DEPTH_FPS:--1}"
+# Empty preserves the SDK/previous option; 0 disables the projector for the
+# explicit 424x240@6 depth keepalive used in the RGB static quality experiment.
+REALSENSE_EMITTER_ENABLED="${REALSENSE_EMITTER_ENABLED:-}"
+REALSENSE_ERROR_POLLING_ENABLED="${REALSENSE_ERROR_POLLING_ENABLED:-}"
 REALSENSE_ENABLE_INFRA="${REALSENSE_ENABLE_INFRA:-false}"
 REALSENSE_ENABLE_INFRA1="${REALSENSE_ENABLE_INFRA1:-false}"
 REALSENSE_ENABLE_INFRA2="${REALSENSE_ENABLE_INFRA2:-false}"
@@ -362,6 +370,9 @@ if [[ "${START_LOCALIZATION}" == "true" ]]; then
     echo "[${SCRIPT_NAME}] localization map=${LOCALIZATION_MAP_FILE} sha256=${LOCALIZATION_MAP_ACTUAL_SHA256}"
 fi
 echo "[${SCRIPT_NAME}] RealSense color=${REALSENSE_COLOR_WIDTH}x${REALSENSE_COLOR_HEIGHT}@${REALSENSE_COLOR_FPS}Hz depth=${REALSENSE_ENABLE_DEPTH} infra=${REALSENSE_ENABLE_INFRA}/${REALSENSE_ENABLE_INFRA1}/${REALSENSE_ENABLE_INFRA2}"
+echo "[${SCRIPT_NAME}] RealSense poll inactive sensors=${REALSENSE_POLL_INACTIVE_SENSORS}"
+echo "[${SCRIPT_NAME}] RealSense depth profile=${REALSENSE_DEPTH_WIDTH}x${REALSENSE_DEPTH_HEIGHT}@${REALSENSE_DEPTH_FPS}Hz emitter=${REALSENSE_EMITTER_ENABLED:-unchanged}"
+echo "[${SCRIPT_NAME}] RealSense stereo error polling=${REALSENSE_ERROR_POLLING_ENABLED:-unchanged}"
 
 if [[ "${START_BASE}" == "true" ]]; then
     setup_can0
@@ -414,7 +425,13 @@ if [[ "${START_REALSENSE}" == "true" ]]; then
         color_width:="${REALSENSE_COLOR_WIDTH}" \
         color_height:="${REALSENSE_COLOR_HEIGHT}" \
         color_fps:="${REALSENSE_COLOR_FPS}" \
+        poll_inactive_sensors:="${REALSENSE_POLL_INACTIVE_SENSORS}" \
         enable_depth:="${REALSENSE_ENABLE_DEPTH}" \
+        depth_width:="${REALSENSE_DEPTH_WIDTH}" \
+        depth_height:="${REALSENSE_DEPTH_HEIGHT}" \
+        depth_fps:="${REALSENSE_DEPTH_FPS}" \
+        stereo_module/emitter_enabled:="${REALSENSE_EMITTER_ENABLED}" \
+        stereo_module/error_polling_enabled:="${REALSENSE_ERROR_POLLING_ENABLED}" \
         enable_infra:="${REALSENSE_ENABLE_INFRA}" \
         enable_infra1:="${REALSENSE_ENABLE_INFRA1}" \
         enable_infra2:="${REALSENSE_ENABLE_INFRA2}"
