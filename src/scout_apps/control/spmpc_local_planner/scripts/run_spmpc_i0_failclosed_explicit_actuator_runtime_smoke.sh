@@ -93,6 +93,10 @@ TERMINAL_MPC_STOP_HANDOFF_ENABLE=false
 ABLATION_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_ablation_smoke.py"
 RECORDING_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_comparison_recording.py"
 SOURCE_COMPARISON=false
+COMPARISON_RECORDING=false
+EXPERIMENT_KIND=legacy
+TRIAL_ID=
+EXPERIMENT_PHASE=
 SELECTED_OBSERVER_SOURCE=processed_imu
 SMOKE_RECORD_RGB=false
 SMOKE_FORBID_IMAGE_STREAMS=true
@@ -252,7 +256,7 @@ if [[ "${SMOKE_PROFILE}" == ablation ]]; then
     "${SCRIPT_DIR}/lib/spmpc_ablation_scene.sh"
     "${SCRIPT_DIR}/run_spmpc_ablation_smoke.sh" "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py")
 fi
-if [[ "${SOURCE_COMPARISON}" == true ]]; then
+if [[ "${COMPARISON_RECORDING}" == true ]]; then
   required_files+=("${RECORDING_POSTFLIGHT}" "${SCRIPT_DIR}/tests/test_spmpc_comparison_recording.py")
 fi
 for required_file in "${required_files[@]}"; do
@@ -400,7 +404,7 @@ if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: false"
   python3 "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py"
 fi
-if [[ "${SOURCE_COMPARISON}" == true ]]; then
+if [[ "${COMPARISON_RECORDING}" == true ]]; then
   python3 "${SCRIPT_DIR}/tests/test_spmpc_comparison_recording.py"
 fi
 
@@ -415,6 +419,9 @@ echo "================ explicit actuator runtime smoke ================"
 echo "  profile        = ${SMOKE_PROFILE}"
 echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
+if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
+  echo "  trial          = ${TRIAL_ID}; phase=${EXPERIMENT_PHASE}"
+fi
 echo "  condition      = ${PREREG_CONDITION}; config_variant=${VARIANT}; one bag only"
 echo "  scene          = ${SMOKE_SCENE}"
 echo "  frozen map     = ${FROZEN_MAP_FILE}"
@@ -423,7 +430,7 @@ echo "  observer       = ${SELECTED_OBSERVER_SOURCE}; fail_closed; common_epoch=
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
 echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
-echo "  speed          = v_ref=0.20; hard v_safe=0.25 m/s"
+echo "  speed          = v_ref=${V_REF}; hard v_safe=${V_SAFE_MAX} m/s; horizon=2.0 s (30 Hz x N=60)"
 echo "  ablation       = ${ABLATION_CONDITION}; slosh=${SLOSH_ENABLE}; zero_x0=${ZERO_LIQUID_INITIAL_STATE}; jerk=${JERK_LIMIT_ENABLE}; j_max=${JERK_MAX}"
 echo "  RGB            = ${SMOKE_RECORD_RGB}; 1920x1080@30 when enabled; raw stamped images + camera_info"
 echo "  NOKOV          = raw Tracker0 pose retained"
@@ -480,7 +487,7 @@ attempt_outputs=(
   "${BAG_PATH}" "${BAG_PATH}.active" "${EXACT_REPORT}"
   "${RUNTIME_REPORT}" "${PASS_MARKER}" "${PREREG_FILE}" "${ABLATION_REPORT}"
 )
-if [[ "${SOURCE_COMPARISON}" == true ]]; then
+if [[ "${COMPARISON_RECORDING}" == true ]]; then
   attempt_outputs+=("${RECORDING_REPORT}")
 fi
 if truthy "${PLOT_DIAGNOSTICS}"; then
@@ -507,7 +514,7 @@ if [[ "${SMOKE_RECORD_RGB}" == true ]]; then
     || fail "RGB camera_info unavailable"
   grep -Fxq 'width: 1920' <<< "${camera_info}" \
     && grep -Fxq 'height: 1080' <<< "${camera_info}" \
-    || fail "source comparison requires 1920x1080 RGB in both groups"
+    || fail "RGB comparison requires 1920x1080 images"
 fi
 raw_mocap_topic="/vrpn_client_node/${MOCAP_TRACKER}/pose"
 timeout 5s rostopic echo -n 1 "${raw_mocap_topic}" >/dev/null 2>&1 \
@@ -545,6 +552,10 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "v_safe_max=${V_SAFE_MAX}"
   echo "observer=${SELECTED_OBSERVER_SOURCE}"
   echo "source_comparison=${SOURCE_COMPARISON}"
+  echo "experiment=${EXPERIMENT_KIND}"
+  echo "phase=${EXPERIMENT_PHASE}"
+  echo "trial_id=${TRIAL_ID}"
+  echo "comparison_recording=${COMPARISON_RECORDING}"
   echo "record_rgb=${SMOKE_RECORD_RGB}"
   echo "record_mocap=true"
   echo "dual_monitors=true"
@@ -696,7 +707,7 @@ if [[ -s "${BAG_PATH}" ]]; then
       --slosh-enable "${SLOSH_ENABLE}" --zero-liquid-initial-state "${ZERO_LIQUID_INITIAL_STATE}" \
       --jerk-limit-enable "${JERK_LIMIT_ENABLE}" --jerk-max "${JERK_MAX}" || ablation_rc=$?
   fi
-  if [[ "${SOURCE_COMPARISON}" == true ]]; then
+  if [[ "${COMPARISON_RECORDING}" == true ]]; then
     python3 "${RECORDING_POSTFLIGHT}" "${BAG_PATH}" --report "${RECORDING_REPORT}" \
       --expect-rgb "${SMOKE_RECORD_RGB}" --tracker "${MOCAP_TRACKER}" || recording_rc=$?
   fi
@@ -743,6 +754,11 @@ printf '%s\n' \
   "protocol=${PROTOCOL_ID}" \
   "profile=${SMOKE_PROFILE}" \
   "condition=${PASS_CONDITION}" \
+  "experiment=${EXPERIMENT_KIND}" \
+  "phase=${EXPERIMENT_PHASE}" \
+  "trial_id=${TRIAL_ID}" \
+  "w_slosh=${W_SLOSH}" \
+  "v_ref=${V_REF}" \
   "scene=${SMOKE_SCENE}" \
   "observer=${SELECTED_OBSERVER_SOURCE}" \
   "record_rgb=${SMOKE_RECORD_RGB}" \
@@ -773,7 +789,7 @@ if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   echo "[${SCRIPT_NAME}] ablation report=${ABLATION_REPORT}"
   printf '%s\n' "ablation_postflight_sha256=$(sha256sum "${ABLATION_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
 fi
-if [[ "${SOURCE_COMPARISON}" == true ]]; then
+if [[ "${COMPARISON_RECORDING}" == true ]]; then
   echo "[${SCRIPT_NAME}] recording report=${RECORDING_REPORT}"
   printf '%s\n' "recording_postflight_sha256=$(sha256sum "${RECORDING_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
 fi

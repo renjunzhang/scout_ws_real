@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Exercise schema-5 postflight on real ROS messages/bags, without robot nodes."""
 import copy
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -107,11 +109,91 @@ class AblationPostflightTest(unittest.TestCase):
 
 
 class AblationEntryTest(unittest.TestCase):
+    def profile(self, **overrides):
+        env = dict(os.environ, ABLATION_EXPERIMENT='ablation-rgb',
+                   ABLATION_CONDITION='full', ABLATION_SCENE='20260907_c03',
+                   ABLATION_SOURCE_COMPARISON='false', ABLATION_OBSERVER_SOURCE='processed_imu',
+                   ABLATION_RECORD_RGB='true', ABLATION_JERK_MAX='0.6',
+                   ABLATION_TRIAL_ID='01_full', ABLATION_PHASE='screening',
+                   ABLATION_W_SLOSH='', ABLATION_V_REF='0.2')
+        env.update(overrides)
+        script = '''fail() { echo "$*" >&2; exit 2; }
+source "$1"
+for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX; do
+  printf '%s=%s\\n' "$key" "${!key}"
+done
+'''
+        return subprocess.run(['bash', '-eu', '-c', script, 'profile-test',
+                               str(SCRIPTS / 'lib/spmpc_ablation_profile.sh')],
+                              env=env, capture_output=True, text=True)
+
+    def test_rgb_three_conditions_keep_common_contracts(self):
+        for condition, weight, liquid, zero, nx in (
+                ('smooth', '0', 'false', 'false', '24'),
+                ('nostate', '1', 'true', 'true', '28'),
+                ('full', '1', 'true', 'false', '28'),
+                ('nostate', '0.5', 'true', 'true', '28'),
+                ('full', '0.5', 'true', 'false', '28')):
+            result = self.profile(ABLATION_CONDITION=condition, ABLATION_W_SLOSH=weight)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            config = dict(line.split('=', 1) for line in result.stdout.splitlines())
+            expected = dict(W_SLOSH=weight, SLOSH_ENABLE=liquid,
+                            ZERO_LIQUID_INITIAL_STATE=zero, EXPECTED_ACTIVE_STATE_WIDTH=nx,
+                            EXACT_CONDITION='B0' if condition == 'smooth' else 'Bslosh',
+                            JERK_LIMIT_ENABLE='true', JERK_MAX='0.6', V_REF='0.20',
+                            SOURCE_COMPARISON='false', COMPARISON_RECORDING='true',
+                            SMOKE_RECORD_RGB='true', PROTOCOL_ID='SMPCC_C03_ABLATION_RGB_DEV_V1')
+            for key, value in expected.items():
+                self.assertEqual(config[key], value, (condition, key))
+            self.assertIn('screening_01_full_' + condition + '_W' + weight,
+                          config['RUN_LABEL_PREFIX'])
+
+    def test_rgb_protocol_rejects_unfrozen_or_ambiguous_inputs(self):
+        for change in ({'ABLATION_CONDITION': 'smooth', 'ABLATION_W_SLOSH': '1'},
+                       {'ABLATION_W_SLOSH': 'nan'}, {'ABLATION_W_SLOSH': '2'},
+                       {'ABLATION_V_REF': '0.25'}, {'ABLATION_V_REF': 'nan'},
+                       {'ABLATION_JERK_MAX': '1'},
+                       {'ABLATION_CONDITION': 'b0'}, {'ABLATION_OBSERVER_SOURCE': 'odom'},
+                       {'ABLATION_SCENE': '20260829_c02'}, {'ABLATION_TRIAL_ID': ''},
+                       {'ABLATION_TRIAL_ID': '../run'}, {'ABLATION_PHASE': 'typo'},
+                       {'ABLATION_SOURCE_COMPARISON': 'true'}):
+            self.assertNotEqual(self.profile(**change).returncode, 0, change)
+
+    def test_cli_forwards_rgb_trial_without_source_comparison(self):
+        # Replace only the engine with an environment capture: no ROS or motion.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            entry = root / 'run_spmpc_ablation_smoke.sh'
+            entry.write_text((SCRIPTS / entry.name).read_text())
+            engine = root / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps(dict(os.environ)))\nPY\n")
+            for condition in ('smooth', 'nostate', 'full'):
+                result = subprocess.run(['bash', str(entry), '--experiment', 'ablation-rgb',
+                    '--scene', '20260907_c03', '--condition', condition, '--observer-source', 'imu',
+                    '--record-rgb', '--trial-id', '02_' + condition, '--w-slosh',
+                    '0' if condition == 'smooth' else '1', '--v-ref', '0.2', '--jerk-max', '0.6'],
+                    capture_output=True, text=True, check=True)
+                env = json.loads(result.stdout)
+                self.assertEqual(env['ABLATION_CONDITION'], condition)
+                self.assertEqual(env['ABLATION_EXPERIMENT'], 'ablation-rgb')
+                self.assertEqual(env['ABLATION_SOURCE_COMPARISON'], 'false')
+                self.assertEqual(env['ABLATION_RECORD_RGB'], 'true')
+                self.assertEqual(env['ABLATION_OBSERVER_SOURCE'], 'processed_imu')
+                self.assertEqual(env['ABLATION_TRIAL_ID'], '02_' + condition)
+                self.assertEqual(env['VALIDATE_ONLY'], 'true')
+            for args, expected in ((['--experiment', 'ablation-rgb', '--trial-id', 'default'], '0.6'),
+                                   ([], '1.0')):
+                result = subprocess.run(['bash', str(entry), *args],
+                                        capture_output=True, text=True, check=True)
+                self.assertEqual(json.loads(result.stdout)['ABLATION_JERK_MAX'], expected)
+
     def test_invalid_arguments_fail_before_acquisition(self):
         entry = str(SCRIPTS / "run_spmpc_ablation_smoke.sh")
         for args in (("--condition", "typo"), ("--jerk-max", "nan"),
                      ("--jerk-max", "0"), ("--jerk-max", "-1"), ("--jerk-max",),
-                     ("--scene", "typo"), ("--scene",)):
+                     ("--scene", "typo"), ("--scene",),
+                     ("--experiment", "typo"), ("--w-slosh", "0.5"),
+                     ("--condition", "smooth", "--record-rgb")):
             result = subprocess.run(["bash", entry, *args], capture_output=True, text=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertNotIn("motion NOT started", result.stdout)

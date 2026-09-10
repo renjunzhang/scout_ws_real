@@ -5,16 +5,24 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 run_motion=false
 condition=full
 jerk_max=1.0
+jerk_explicit=false
 scene=20260829_c02
 observer_source=processed_imu
 source_comparison=false
 record_rgb=false
+experiment=legacy
+w_slosh=
+v_ref=
+trial_id=
+phase=screening
 usage() {
   cat <<'EOF'
 用法：
   bash run_spmpc_ablation_smoke.sh [--condition full|nostate|smooth|b0|no_jerk]
        [--scene 20260829_c02|20260907_c03] [--jerk-max 1.0] [--validate-only | --run]
        [--observer-source imu|odom] [--record-rgb]
+       [--experiment ablation-rgb --trial-id 01_smooth --phase screening|validation]
+       [--w-slosh 0|0.5|1.0 --v-ref 0.2]
 
 默认只检查，不启动 ROS 节点或底盘。--run 录一包 70 秒以内的低速开发 smoke，
 操作者须先完成急停、起点和净空检查。复用原运行、录包、停车和画图流程。
@@ -25,6 +33,10 @@ v_ref=0.20 m/s，jerk_max 单位 m/s³，默认 1.0 仍是开发候选。
 默认不录 RGB。--observer-source 或 --record-rgb 进入完整方法的来源对照批次，
 只允许 --condition full；--record-rgb 录原始 RGB、相机信息及 metadata。
 来源对照始终保留 NOKOV 和 IMU/odom 两套液体监视器；只改变 OCP 液体初态来源。
+--experiment ablation-rgb 是独立的 C03/IMU 三组协议，支持 smooth/nostate/full，
+强制录 RGB、Tracker0 与双监视器；每次只录一包，必须给出 --trial-id。
+该协议 jerk 固定 0.6、v_ref 固定 0.2；smooth 的 w_slosh 必须为 0，nostate/full 可选 1.0 或 0.5。
+未指定权重时 smooth=0、nostate/full=1；默认 phase=screening。
 RGB 使用 1920x1080@30Hz，需至少 20 GiB 空间；液面标尺/ROI 仍需核验后离线提取。
 检查通过仅表示控制与录制契约通过，不代表真实降晃有效。
 各组均保留既有平滑验收门；b0/no_jerk 未通过平滑门也保留对照包及报告。
@@ -34,13 +46,18 @@ EOF
 }
 while (( $# )); do
   case "$1" in
-    --condition|--jerk-max|--scene|--observer-source)
+    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--v-ref|--trial-id|--phase)
       (( $# >= 2 )) || { usage >&2; exit 2; }
       case "$1" in
         --condition) condition="$2" ;;
-        --jerk-max) jerk_max="$2" ;;
+        --jerk-max) jerk_max="$2"; jerk_explicit=true ;;
         --scene) scene="$2" ;;
         --observer-source) observer_source="$2"; source_comparison=true ;;
+        --experiment) experiment="$2" ;;
+        --w-slosh) w_slosh="$2" ;;
+        --v-ref) v_ref="$2" ;;
+        --trial-id) trial_id="$2" ;;
+        --phase) phase="$2" ;;
       esac
       shift 2 ;;
     --run) run_motion=true; shift ;;
@@ -63,12 +80,24 @@ case "${observer_source}" in
   odom) ;;
   *) echo "未知液体初态来源：${observer_source}" >&2; exit 2 ;;
 esac
+case "${experiment}" in
+  ablation-rgb)
+    source_comparison=false; record_rgb=true
+    if [[ "${jerk_explicit}" == false ]]; then jerk_max=0.6; fi ;;
+  legacy)
+    if [[ -n "${w_slosh}${v_ref}${trial_id}" || "${phase}" != screening ]]; then
+      echo "权重/速度/轮次/阶段参数需要 --experiment ablation-rgb" >&2; exit 2
+    fi ;;
+  *) echo "未知实验协议：${experiment}" >&2; exit 2 ;;
+esac
 if [[ "${source_comparison}" == true && "${condition}" != full ]]; then
   echo "来源对照仅允许 --condition full，避免混入其他消融变量" >&2
   exit 2
 fi
 if [[ "${run_motion}" == true ]]; then
   exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
+    ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+    ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
     ABLATION_SOURCE_COMPARISON="${source_comparison}" \
     ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
     ABLATION_SCENE="${scene}" \
@@ -77,6 +106,8 @@ if [[ "${run_motion}" == true ]]; then
     bash "${SCRIPT_DIR}/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
 fi
 exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
+  ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+  ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
   ABLATION_SOURCE_COMPARISON="${source_comparison}" \
   ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
   ABLATION_SCENE="${scene}" \

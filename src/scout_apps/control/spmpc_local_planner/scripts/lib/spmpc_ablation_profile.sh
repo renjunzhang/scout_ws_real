@@ -60,15 +60,60 @@ PASS_CONDITION="${ABLATION_CONDITION}"
 SOURCE_COMPARISON="${ABLATION_SOURCE_COMPARISON:-false}"
 SELECTED_OBSERVER_SOURCE="${ABLATION_OBSERVER_SOURCE:-processed_imu}"
 SMOKE_RECORD_RGB="${ABLATION_RECORD_RGB:-false}"
+EXPERIMENT_KIND="${ABLATION_EXPERIMENT:-legacy}"
+COMPARISON_RECORDING=false
+TRIAL_ID=
+EXPERIMENT_PHASE=
+case "${EXPERIMENT_KIND}" in
+  legacy) ;;
+  ablation-rgb)
+    [[ "${SOURCE_COMPARISON}" == false ]] || fail "ablation-rgb is separate from source comparison"
+    [[ "${ABLATION_SCENE:-}" == 20260907_c03 ]] || fail "ablation-rgb requires --scene 20260907_c03"
+    [[ "${SELECTED_OBSERVER_SOURCE}" == processed_imu ]] || fail "ablation-rgb freezes IMU source"
+    [[ "${JERK_MAX}" == 0.6 ]] || fail "ablation-rgb freezes jerk_max=0.6"
+    case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
+    TRIAL_ID="${ABLATION_TRIAL_ID:-}"
+    [[ "${TRIAL_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$ ]] || fail "ablation-rgb requires a safe --trial-id (1-40 characters)"
+    EXPERIMENT_PHASE="${ABLATION_PHASE:-screening}"
+    case "${EXPERIMENT_PHASE}" in screening|validation) ;; *) fail "invalid experiment phase" ;; esac
+    W_SLOSH="$(python3 - "${ABLATION_CONDITION}" "${ABLATION_W_SLOSH:-${W_SLOSH}}" "${ABLATION_V_REF:-0.2}" <<'PY'
+import math
+import sys
+try:
+    weight, speed = map(float, sys.argv[2:])
+    allowed = (0.0,) if sys.argv[1] == 'smooth' else (0.5, 1.0)
+    if not math.isfinite(weight) or weight not in allowed or speed != 0.2:
+        raise ValueError()
+except ValueError:
+    raise SystemExit('ablation-rgb: smooth weight=0; nostate/full weight=0.5 or 1; v_ref=0.2')
+print(format(weight, '.12g'))
+PY
+)" || fail "invalid frozen ablation-rgb weights/speed"
+    V_REF=0.20
+    SMOKE_RECORD_RGB=true
+    COMPARISON_RECORDING=true
+    ;;
+  *) fail "unknown ablation experiment: ${EXPERIMENT_KIND}" ;;
+esac
 case "${SOURCE_COMPARISON}:${SMOKE_RECORD_RGB}" in
   true:true|true:false|false:false) ;;
+  false:true) [[ "${EXPERIMENT_KIND}" == ablation-rgb ]] || fail "RGB requires an explicit comparison protocol" ;;
   *) fail "invalid source-comparison/RGB flags" ;;
 esac
 case "${SELECTED_OBSERVER_SOURCE}" in
   processed_imu|odom) ;;
   *) fail "invalid liquid observer source: ${SELECTED_OBSERVER_SOURCE}" ;;
 esac
-if [[ "${SOURCE_COMPARISON}" == true ]]; then
+if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
+  PROTOCOL_ID=SMPCC_C03_ABLATION_RGB_DEV_V1
+  OUTPUT_SERIES=spmpc_ablation_rgb_v1
+  RUN_LABEL_PREFIX="DEV_ABLATION_RGB_${EXPERIMENT_PHASE}_${TRIAL_ID}_${ABLATION_CONDITION}_W${W_SLOSH}_J${JERK_MAX}"
+  BLOCK_SEGMENT_ID="ABLATION_RGB_${EXPERIMENT_PHASE}_${TRIAL_ID}"
+  SMOKE_SCOPE=development_three_condition_rgb_comparison
+  SMOKE_PURPOSE="C03 three-condition comparison; shared IMU, RGB, NOKOV and dual monitors"
+  OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_max=${JERK_MAX}; IMU; RGB=true"
+elif [[ "${SOURCE_COMPARISON}" == true ]]; then
+  COMPARISON_RECORDING=true
   [[ "${ABLATION_CONDITION}" == full ]] || fail "source comparison requires full"
   PROTOCOL_ID=SMPCC_OBSERVER_SOURCE_SMOKE_DEV_V1
   OUTPUT_SERIES=spmpc_observer_source_smoke_v1
