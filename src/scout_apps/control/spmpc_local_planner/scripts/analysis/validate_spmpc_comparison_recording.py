@@ -144,10 +144,13 @@ def validate_bag(args):
                     stamp = seconds(msg.command_publish_stamp)
                     if stamp <= 0 or not math.isfinite(stamp):
                         failures.append("invalid audited publication stamp")
+                        continue
                     if abs(msg.published_cmd_v) > 1e-9 or abs(msg.published_cmd_omega) > 1e-9:
                         published.append(stamp)
-                if msg.solver_status == "GOAL_REACHED":
-                    goals.append(seconds(msg.cycle_start_stamp))
+                    # Match the metric windows: a cycle status alone is not
+                    # a published goal event, and callback start is earlier.
+                    if msg.solver_status == "GOAL_REACHED":
+                        goals.append(stamp)
             else:
                 rows[topic].append(stream_row(topic, msg))
     if not published or not goals or min(goals) <= min(published):
@@ -182,12 +185,12 @@ def validate_bag(args):
             image_stats["max_camera_info_stamp_skew_sec"] = max_skew
             if max_skew > .5/args.rgb_fps:
                 failures.append("RGB image/camera_info timestamps do not match")
-    return {"schema": "spmpc_comparison_recording_v1", "bag": str(args.bag),
+    return {"schema": "spmpc_comparison_recording_v2", "bag": str(args.bag),
             "status": "FAIL" if failures else "PASS", "failures": failures,
             "expect_rgb": args.expect_rgb, "task_start_sec": start, "goal_sec": goal,
             "coverage_end_sec": stop, "tail_sec": args.tail_sec, "streams": streams,
             "scope": "recorded native-time coverage only; no physical clock/extrinsic or RGB height calibration",
-            "timebase": "audit command_publish_stamp/cycle_start_stamp; observer state_stamp; raw image/mocap header.stamp"}
+            "timebase": "audit command_publish_stamp for first motion and published GOAL_REACHED; observer state_stamp; raw image/mocap header.stamp"}
 
 
 def main():

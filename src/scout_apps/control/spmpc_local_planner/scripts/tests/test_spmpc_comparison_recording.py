@@ -108,6 +108,44 @@ class RecordingContractTest(unittest.TestCase):
             self.assertEqual(report["status"], "PASS", report)
             self.assertEqual(report["coverage_end_sec"], 16.)
 
+    def test_goal_window_uses_actual_command_publication(self):
+        rows = sample_messages()
+        goal = next(msg for _, topic, msg in rows
+                    if topic == recording.AUDIT and msg.solver_status == "GOAL_REACHED")
+        goal.command_publish_stamp = genpy.Time.from_sec(11.05)
+        report = self.validate(rows)
+        self.assertEqual(report["status"], "PASS", report)
+        self.assertEqual(report["goal_sec"], 11.05)
+        self.assertEqual(report["coverage_end_sec"], 16.05)
+
+        # Coverage up to cycle_start + 5 s must not hide the missing end of
+        # the tail measured from the actual goal command publication.
+        report = self.validate([row for row in rows if row[0] <= 16.01])
+        self.assertEqual(report["status"], "FAIL", report)
+        self.assertTrue(any("boundary coverage" in item for item in report["failures"]))
+
+    def test_unpublished_or_invalid_goal_cannot_close_recording_window(self):
+        for published in (False, True):
+            with self.subTest(published=published):
+                rows = sample_messages()
+                goal = next(msg for _, topic, msg in rows
+                            if topic == recording.AUDIT and msg.solver_status == "GOAL_REACHED")
+                goal.command_was_published = published
+                goal.command_publish_stamp = genpy.Time()
+                report = self.validate(rows)
+                self.assertEqual(report["status"], "FAIL", report)
+
+    def test_unpublished_goal_does_not_preempt_later_published_goal(self):
+        rows = sample_messages()
+        unpublished = ControlCycleAudit()
+        unpublished.cycle_start_stamp = genpy.Time.from_sec(10.5)
+        unpublished.solver_status = "GOAL_REACHED"
+        rows.append((10.5, recording.AUDIT, unpublished))
+        report = self.validate(sorted(rows, key=lambda row: row[0]))
+        self.assertEqual(report["status"], "PASS", report)
+        self.assertEqual(report["goal_sec"], 11.)
+        self.assertEqual(report["coverage_end_sec"], 16.)
+
     def test_missing_rgb_nokov_or_either_monitor_fails(self):
         for missing in (recording.IMAGE, recording.INFO, recording.IMU, recording.ODOM,
                         "/vrpn_client_node/Tracker0/pose"):
@@ -141,6 +179,78 @@ class RecordingContractTest(unittest.TestCase):
 
     def test_image_free_mode_rejects_unexpected_images(self):
         self.assertEqual(self.validate(sample_messages(), False)["status"], "FAIL")
+
+
+class RgbSwitchContractTest(unittest.TestCase):
+    def recorded_rgb(self, switches, pilot=None):
+        # Run the real recorder with ROS CLI stubs. Inspect its final topic
+        # arguments and metadata, without a master, nodes, or a real bag.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            command_log = root / "rosbag_args.json"
+            for name in ("rostopic", "rosparam", "rosnode"):
+                stub = root / name
+                stub.write_text("#!/bin/sh\nexit 0\n")
+                stub.chmod(0o755)
+            stub = root / "rosbag"
+            stub.write_text(
+                "#!/usr/bin/python3\nimport json, os, sys\n"
+                "from pathlib import Path\n"
+                "Path(os.environ['TEST_ROSBAG_ARGS']).write_text(json.dumps(sys.argv[1:]))\n")
+            stub.chmod(0o755)
+            environment = {
+                "PATH": str(root) + os.pathsep + os.environ["PATH"],
+                "OUT_DIR": str(root / "output"), "NAME": "rgb_switch_test",
+                "RECORD_SEC": "0", "RECORD_TOPIC_INFO": "false",
+                "LIQUID_EXPORT_AFTER_RECORD": "false",
+                "TEST_ROSBAG_ARGS": str(command_log), **switches,
+            }
+            recorder = SCRIPTS / "record_spmpc_full_rgb_bag.sh"
+            command = ["bash", str(recorder)]
+            if pilot is not None:
+                # Execute only the real runner's RGB policy before passing
+                # the resolved switches to the recorder; never start a trial.
+                runner = (SCRIPTS / "run_spmpc_real_fixed_path_trial.sh").read_text()
+                truthy = runner[runner.index("truthy() {"):runner.index("\nfail() {")]
+                begin = runner.index('if truthy "${PILOT_MODE}"; then\n  # Pilot image')
+                end = runner.index('RECORD_ONLINE_LIQUID_DEBUG_IMAGES=', begin)
+                code = (truthy + runner[begin:end]
+                        + '\nexport RECORD_RGB RECORD_CAMERA\nexec bash "$1"\n')
+                environment.update(PILOT_MODE="true" if pilot else "false",
+                                   PILOT_RECORD_RGB=switches.get("PILOT_RECORD_RGB", "false"),
+                                   PILOT_RECORD_ONLINE_LIQUID="false")
+                command = ["bash", "-eu", "-c", code, "rgb-policy-test", str(recorder)]
+            subprocess.run(command, env=environment, check=True, capture_output=True,
+                           text=True, timeout=10)
+            args = json.loads(command_log.read_text())
+            info = (root / "output" / "rgb_switch_test_info.txt").read_text()
+            metadata = dict(line.split("=", 1) for line in info.splitlines() if "=" in line)
+            self.assertEqual(metadata["record_rgb"], metadata["record_camera"])
+            selected = (root / "output" / "rgb_switch_test_selected_topics.txt").read_text().splitlines()
+            self.assertEqual(recording.IMAGE in selected, recording.IMAGE in args)
+            return recording.IMAGE in args
+
+    def test_rgb_precedence_and_legacy_alias_reach_recorded_topics(self):
+        cases = (
+            ({}, False),
+            ({"RECORD_CAMERA": "true"}, True),
+            ({"RECORD_RGB": "true"}, True),
+            ({"RECORD_RGB": "true", "RECORD_CAMERA": "false"}, True),
+            ({"RECORD_RGB": "false", "RECORD_CAMERA": "true"}, False),
+            ({"RECORD_RGB": "", "RECORD_CAMERA": "true"}, True),
+        )
+        for pilot in (None, False):
+            for switches, expected in cases:
+                with self.subTest(pilot=pilot, switches=switches):
+                    self.assertEqual(self.recorded_rgb(switches, pilot), expected)
+
+    def test_pilot_rgb_policy_overrides_both_stale_aliases(self):
+        for enabled in (False, True):
+            with self.subTest(enabled=enabled):
+                switches = {"PILOT_RECORD_RGB": "true" if enabled else "false",
+                            "RECORD_RGB": "false" if enabled else "true",
+                            "RECORD_CAMERA": "false" if enabled else "true"}
+                self.assertEqual(self.recorded_rgb(switches, pilot=True), enabled)
 
 
 class SourceEntryTest(unittest.TestCase):

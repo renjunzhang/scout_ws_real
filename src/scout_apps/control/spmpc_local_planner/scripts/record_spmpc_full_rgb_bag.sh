@@ -17,9 +17,10 @@ NAME="${NAME:-spmpc_full_${RUN_LABEL}_${VARIANT}_${STAMP}}"
 # Full whitelist by default. Use RECORD_ALL_EXISTING_TOPICS=true only for short
 # diagnostic runs when disk space is known to be sufficient.
 RECORD_ALL_EXISTING_TOPICS="${RECORD_ALL_EXISTING_TOPICS:-false}"
-# RECORD_RGB is the preferred switch. RECORD_CAMERA is kept as a backward-compatible alias.
+# Explicit RECORD_RGB wins; RECORD_CAMERA is a fallback for legacy callers.
+# Keep both metadata fields consistent with the actual image topic selection.
 RECORD_RGB="${RECORD_RGB:-${RECORD_CAMERA:-false}}"
-RECORD_CAMERA="${RECORD_CAMERA:-${RECORD_RGB}}"
+RECORD_CAMERA="${RECORD_RGB}"
 RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO:-true}"
 RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED:-false}"
 RECORD_DEPTH="${RECORD_DEPTH:-false}"

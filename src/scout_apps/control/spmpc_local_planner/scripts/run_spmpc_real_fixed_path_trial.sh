@@ -420,8 +420,10 @@ if truthy "${PILOT_MODE}"; then
   RECORD_DEPTH=false
   RECORD_ONLINE_LIQUID="${PILOT_RECORD_ONLINE_LIQUID}"
 else
-  RECORD_RGB="${RECORD_RGB:-false}"
-  RECORD_CAMERA="${RECORD_CAMERA:-${RECORD_RGB}}"
+  # Match the recorder: the preferred RGB switch overrides a stale alias,
+  # while legacy callers that only set RECORD_CAMERA still work.
+  RECORD_RGB="${RECORD_RGB:-${RECORD_CAMERA:-false}}"
+  RECORD_CAMERA="${RECORD_RGB}"
   RECORD_CAMERA_INFO="${RECORD_CAMERA_INFO:-true}"
   RECORD_CAMERA_COMPRESSED="${RECORD_CAMERA_COMPRESSED:-false}"
   RECORD_DEPTH="${RECORD_DEPTH:-false}"
