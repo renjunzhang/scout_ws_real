@@ -368,7 +368,6 @@ expected_launch_lines=(
   "/spmpc_local_planner/ablation/zero_liquid_initial_state: ${ZERO_LIQUID_INITIAL_STATE}"
   "/spmpc_local_planner/ablation/jerk_limit_enable: ${JERK_LIMIT_ENABLE}"
   "/spmpc_local_planner/terminal/mpc_stop_handoff_enable: ${TERMINAL_MPC_STOP_HANDOFF_ENABLE}"
-  "/spmpc_local_planner/variants/B_slosh/v_ref: 0.2"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
   "/spmpc_local_planner/slosh/slosh_height_max: 0.001"
@@ -394,6 +393,7 @@ for expected_line in "${expected_launch_lines[@]}"; do
   require_dump_line "${expected_line}"
 done
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_slosh" "${W_SLOSH}"
+require_dump_number "/spmpc_local_planner/variants/B_slosh/v_ref" "${V_REF}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_accel" "${W_ACCEL}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_alpha" "${W_ALPHA}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
@@ -419,7 +419,7 @@ echo "================ explicit actuator runtime smoke ================"
 echo "  profile        = ${SMOKE_PROFILE}"
 echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
-if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
+if [[ -n "${TRIAL_ID}" ]]; then
   echo "  trial          = ${TRIAL_ID}; phase=${EXPERIMENT_PHASE}"
 fi
 echo "  condition      = ${PREREG_CONDITION}; config_variant=${VARIANT}; one bag only"

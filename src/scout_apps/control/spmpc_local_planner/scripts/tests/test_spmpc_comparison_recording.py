@@ -147,10 +147,13 @@ class RecordingContractTest(unittest.TestCase):
         self.assertEqual(report["coverage_end_sec"], 16.)
 
     def test_missing_rgb_nokov_or_either_monitor_fails(self):
-        for missing in (recording.IMAGE, recording.INFO, recording.IMU, recording.ODOM,
-                        "/vrpn_client_node/Tracker0/pose"):
-            rows = [r for r in sample_messages() if r[1] != missing]
-            self.assertEqual(self.validate(rows)["status"], "FAIL", missing)
+        for rgb in (True, False):
+            required = [recording.IMU, recording.ODOM, "/vrpn_client_node/Tracker0/pose"]
+            if rgb:
+                required += [recording.IMAGE, recording.INFO]
+            for missing in required:
+                rows = [r for r in sample_messages(rgb) if r[1] != missing]
+                self.assertEqual(self.validate(rows, rgb)["status"], "FAIL", (rgb, missing))
 
     def test_stopping_at_goal_does_not_pass_tail_coverage(self):
         rows = [r for r in sample_messages() if r[0] <= 11.2]

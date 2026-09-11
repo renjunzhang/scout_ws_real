@@ -66,31 +66,46 @@ TRIAL_ID=
 EXPERIMENT_PHASE=
 case "${EXPERIMENT_KIND}" in
   legacy) ;;
-  ablation-rgb)
-    [[ "${SOURCE_COMPARISON}" == false ]] || fail "ablation-rgb is separate from source comparison"
-    [[ "${ABLATION_SCENE:-}" == 20260907_c03 ]] || fail "ablation-rgb requires --scene 20260907_c03"
-    [[ "${SELECTED_OBSERVER_SOURCE}" == processed_imu ]] || fail "ablation-rgb freezes IMU source"
-    [[ "${JERK_MAX}" == 0.6 ]] || fail "ablation-rgb freezes jerk_max=0.6"
-    case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
+  ablation-rgb|internal-slosh)
+    [[ "${SOURCE_COMPARISON}" == false ]] || fail "${EXPERIMENT_KIND} is separate from source comparison"
+    [[ "${ABLATION_SCENE:-}" == 20260907_c03 ]] || fail "${EXPERIMENT_KIND} requires --scene 20260907_c03"
+    [[ "${SELECTED_OBSERVER_SOURCE}" == processed_imu ]] || fail "${EXPERIMENT_KIND} freezes IMU source"
+    if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
+      [[ "${JERK_MAX}" == 0.6 ]] || fail "ablation-rgb freezes jerk_max=0.6"
+      case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
+    else
+      case "${ABLATION_CONDITION}" in b0|full) ;; *) fail "internal-slosh requires b0 or full" ;; esac
+      [[ "${SMOKE_RECORD_RGB}" == false ]] || fail "internal-slosh requires RGB disabled"
+    fi
     TRIAL_ID="${ABLATION_TRIAL_ID:-}"
-    [[ "${TRIAL_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$ ]] || fail "ablation-rgb requires a safe --trial-id (1-40 characters)"
+    [[ "${TRIAL_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$ ]] || fail "${EXPERIMENT_KIND} requires a safe --trial-id (1-40 characters)"
     EXPERIMENT_PHASE="${ABLATION_PHASE:-screening}"
     case "${EXPERIMENT_PHASE}" in screening|validation) ;; *) fail "invalid experiment phase" ;; esac
-    W_SLOSH="$(python3 - "${ABLATION_CONDITION}" "${ABLATION_W_SLOSH:-${W_SLOSH}}" "${ABLATION_V_REF:-0.2}" <<'PY'
+    experiment_numbers="$(python3 - "${EXPERIMENT_KIND}" "${ABLATION_CONDITION}" "${ABLATION_W_SLOSH:-${W_SLOSH}}" "${ABLATION_V_REF:-0.2}" <<'PY'
 import math
 import sys
 try:
-    weight, speed = map(float, sys.argv[2:])
-    allowed = (0.0,) if sys.argv[1] == 'smooth' else (0.5, 1.0)
-    if not math.isfinite(weight) or weight not in allowed or speed != 0.2:
+    mode, condition = sys.argv[1:3]
+    weight, speed = map(float, sys.argv[3:])
+    if not all(map(math.isfinite, (weight, speed))):
+        raise ValueError()
+    if mode == 'ablation-rgb':
+        valid = weight in ((0.0,) if condition == 'smooth' else (0.5, 1.0)) and speed == 0.2
+    else:
+        valid = (weight == 0.0 if condition == 'b0' else 0 < weight <= 20) and 0 < speed <= 0.2
+    if not valid:
         raise ValueError()
 except ValueError:
-    raise SystemExit('ablation-rgb: smooth weight=0; nostate/full weight=0.5 or 1; v_ref=0.2')
-print(format(weight, '.12g'))
+    raise SystemExit('invalid weights/speed: ablation-rgb requires smooth=0, nostate/full=0.5|1, v=0.2; '
+                     'internal-slosh requires b0=0, 0<full<=20, 0<v<=0.2')
+print(format(weight, '.12g'), format(speed, '.12g'))
 PY
-)" || fail "invalid frozen ablation-rgb weights/speed"
-    V_REF=0.20
-    SMOKE_RECORD_RGB=true
+)" || fail "invalid ${EXPERIMENT_KIND} weights/speed"
+    read -r W_SLOSH V_REF <<< "${experiment_numbers}"
+    if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
+      V_REF=0.20
+      SMOKE_RECORD_RGB=true
+    fi
     COMPARISON_RECORDING=true
     ;;
   *) fail "unknown ablation experiment: ${EXPERIMENT_KIND}" ;;
@@ -112,6 +127,16 @@ if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
   SMOKE_SCOPE=development_three_condition_rgb_comparison
   SMOKE_PURPOSE="C03 three-condition comparison; shared IMU, RGB, NOKOV and dual monitors"
   OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_max=${JERK_MAX}; IMU; RGB=true"
+elif [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  PROTOCOL_ID=SMPCC_C03_INTERNAL_SLOSH_DEV_V1
+  OUTPUT_SERIES=spmpc_internal_slosh_v1
+  jerk_label="${JERK_MAX}"
+  if [[ "${JERK_LIMIT_ENABLE}" == false ]]; then jerk_label=off; fi
+  RUN_LABEL_PREFIX="DEV_INTERNAL_SLOSH_${EXPERIMENT_PHASE}_${TRIAL_ID}_${ABLATION_CONDITION}_W${W_SLOSH}_J${jerk_label}_V${V_REF}"
+  BLOCK_SEGMENT_ID="INTERNAL_SLOSH_${EXPERIMENT_PHASE}_${TRIAL_ID}"
+  SMOKE_SCOPE=development_internal_slosh_combined_method_comparison
+  SMOKE_PURPOSE="C03 B0/full combined-method comparison; IMU monitor metrics; RGB disabled"
+  OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_enable=${JERK_LIMIT_ENABLE}; jerk_max=${JERK_MAX}; v_ref=${V_REF}; IMU; RGB=false"
 elif [[ "${SOURCE_COMPARISON}" == true ]]; then
   COMPARISON_RECORDING=true
   [[ "${ABLATION_CONDITION}" == full ]] || fail "source comparison requires full"

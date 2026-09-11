@@ -21,8 +21,8 @@ usage() {
   bash run_spmpc_ablation_smoke.sh [--condition full|nostate|smooth|b0|no_jerk]
        [--scene 20260829_c02|20260907_c03] [--jerk-max 1.0] [--validate-only | --run]
        [--observer-source imu|odom] [--record-rgb]
-       [--experiment ablation-rgb --trial-id 01_smooth --phase screening|validation]
-       [--w-slosh 0|0.5|1.0 --v-ref 0.2]
+       [--experiment ablation-rgb|internal-slosh --trial-id 01_b0 --phase screening|validation]
+       [--w-slosh NUMBER --v-ref MPS]
 
 默认只检查，不启动 ROS 节点或底盘。--run 录一包 70 秒以内的低速开发 smoke，
 操作者须先完成急停、起点和净空检查。复用原运行、录包、停车和画图流程。
@@ -37,6 +37,12 @@ v_ref=0.20 m/s，jerk_max 单位 m/s³，默认 1.0 仍是开发候选。
 强制录 RGB、Tracker0 与双监视器；每次只录一包，必须给出 --trial-id。
 该协议 jerk 固定 0.6、v_ref 固定 0.2；smooth 的 w_slosh 必须为 0，nostate/full 可选 1.0 或 0.5。
 未指定权重时 smooth=0、nostate/full=1；默认 phase=screening。
+--experiment internal-slosh 是独立的 C03/IMU 内部 slosh 对比，支持 b0/full，
+不录 RGB/depth，保留 Tracker0、双监视器与四项验收，不要求相机启动。
+该协议默认 jerk=0.6、v_ref=0.2；jerk 可设正数，0<v_ref<=0.2，
+b0 权重固定 0 且硬 jerk 关闭；full 默认权重 1，可设 0<w_slosh<=20（首轮只比较 1/0.5）。
+必须指定 trial-id；组别、权重、实际 jerk 开关、速度、轮次/阶段写入包名和验收元数据。
+IMU 来源、30 Hz/N=60/2 秒、执行器及其他软权重保持现状；本轮首对保持 J0.6/v0.2。
 RGB 使用 1920x1080@30Hz，需至少 20 GiB 空间；液面标尺/ROI 仍需核验后离线提取。
 检查通过仅表示控制与录制契约通过，不代表真实降晃有效。
 各组均保留既有平滑验收门；b0/no_jerk 未通过平滑门也保留对照包及报告。
@@ -84,9 +90,15 @@ case "${experiment}" in
   ablation-rgb)
     source_comparison=false; record_rgb=true
     if [[ "${jerk_explicit}" == false ]]; then jerk_max=0.6; fi ;;
+  internal-slosh)
+    if [[ "${record_rgb}" == true ]]; then
+      echo "internal-slosh 不录 RGB，请移除 --record-rgb" >&2; exit 2
+    fi
+    source_comparison=false; record_rgb=false
+    if [[ "${jerk_explicit}" == false ]]; then jerk_max=0.6; fi ;;
   legacy)
     if [[ -n "${w_slosh}${v_ref}${trial_id}" || "${phase}" != screening ]]; then
-      echo "权重/速度/轮次/阶段参数需要 --experiment ablation-rgb" >&2; exit 2
+      echo "权重/速度/轮次/阶段参数需要 --experiment ablation-rgb 或 internal-slosh" >&2; exit 2
     fi ;;
   *) echo "未知实验协议：${experiment}" >&2; exit 2 ;;
 esac
