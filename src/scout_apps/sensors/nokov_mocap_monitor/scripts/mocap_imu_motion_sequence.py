@@ -50,6 +50,7 @@ def nonnegative_float(text: str) -> float:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--arm-motion", default="NO")
+    parser.add_argument("--profile", choices=("planar", "spin_center"), default="planar")
     parser.add_argument("--cmd-topic", default="/cmd_vel")
     parser.add_argument("--segment-topic", default="/mocap_imu_calib/segment")
     parser.add_argument("--status-topic", default="/mocap_imu_calib/status")
@@ -108,8 +109,9 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("countdown_sec must be <= 15")
     if args.s_repeats < 3 or args.s_repeats > 5:
         raise ValueError("s_repeats must be in [3, 5]")
-    if args.static_pre_sec < 60.0 or args.static_post_sec < 60.0:
-        raise ValueError("static_pre_sec and static_post_sec must each be >= 60 s")
+    minimum_static = 5.0 if args.profile == "spin_center" else 60.0
+    if args.static_pre_sec < minimum_static or args.static_post_sec < minimum_static:
+        raise ValueError("static_pre_sec and static_post_sec must each be >= {} s".format(minimum_static))
     if args.static_pre_sec > 300.0 or args.static_post_sec > 300.0:
         raise ValueError("static_pre_sec and static_post_sec must each be <= 300 s")
     if args.linear_nominal < args.linear_low:
@@ -124,7 +126,7 @@ def validate_args(args: argparse.Namespace) -> None:
 
     duration_limits = {
         "straight_sec": 2.0,
-        "spin_hold_sec": 10.0,
+        "spin_hold_sec": 45.0 if args.profile == "spin_center" else 10.0,
         "spin_rev_leg_sec": 5.0,
         "spin_rev_middle_sec": 10.0,
         "s_hold_sec": 1.5,
@@ -135,6 +137,18 @@ def validate_args(args: argparse.Namespace) -> None:
     for name, maximum in duration_limits.items():
         if getattr(args, name) > maximum:
             raise ValueError("{} exceeds the hard limit {} s".format(name, maximum))
+
+    if args.profile == "spin_center":
+        if args.spin_omega > 0.30:
+            raise ValueError("spin_center omega must be <= 0.30 rad/s")
+        if args.spin_omega * args.spin_hold_sec < math.pi + 0.5:
+            raise ValueError("spin_center needs at least pi+0.5 rad commanded per direction")
+        if args.settle_sec < 5.0:
+            raise ValueError("spin_center settle_sec must be >= 5 s")
+        if (args.countdown_sec + args.static_pre_sec + args.static_post_sec
+                + 2*args.spin_hold_sec + args.settle_sec + args.final_zero_sec) > 600:
+            raise ValueError("total sequence duration exceeds 600 s")
+        return
 
     straight_max_distance = args.linear_nominal * args.straight_sec
     s_pass_distance = 2.0 * args.s_v * args.s_hold_sec
@@ -456,6 +470,10 @@ class MotionSequence:
     def set_command(self, linear: float, angular: float, event: str = "") -> tuple:
         if not math.isfinite(linear) or not math.isfinite(angular):
             raise SequenceAbort("refusing a non-finite motion command")
+        if self.args.profile == "spin_center" and (
+            abs(linear) > 1e-12 or abs(angular) > self.args.spin_omega + 1e-12
+        ):
+            raise SequenceAbort("spin_center only permits zero linear speed and configured yaw rate")
         if abs(linear) > 0.25 or abs(angular) > 0.50:
             raise SequenceAbort(
                 "command exceeds hard envelope: v={}, omega={}".format(linear, angular)
@@ -858,6 +876,16 @@ class MotionSequence:
         self.publish_status("RUNNING")
         self.publish_event("SEQUENCE_START")
         self.hold_zero("static_pre", self.args.static_pre_sec)
+
+        if self.args.profile == "spin_center":
+            self.run_segment("spin_ccw_hold", 0.0, self.args.spin_omega, self.args.spin_hold_sec)
+            self.hold_zero("settle_after_spin_ccw", self.args.settle_sec)
+            self.run_segment("spin_cw_hold", 0.0, -self.args.spin_omega, self.args.spin_hold_sec)
+            self.hold_zero("static_post", self.args.static_post_sec)
+            self.publish_event("SEQUENCE_END")
+            self.publish_status("COMPLETE")
+            self.sequence_complete = True
+            return
 
         self.run_segment("straight_low_forward", self.args.linear_low, 0.0, self.args.straight_sec)
         self.hold_zero("settle_after_straight_low_forward", self.args.settle_sec)

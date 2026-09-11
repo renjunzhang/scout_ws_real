@@ -7,11 +7,14 @@ catkin_package()
 
 if(CATKIN_ENABLE_TESTING)
   catkin_add_nosetests(test/test_mocap_imu_relative_latency.py)
+  catkin_add_nosetests(test/test_mocap_spin_profile.py)
+  catkin_add_nosetests(test/test_mocap_spin_center.py)
 endif()
 
 catkin_install_python(PROGRAMS
   scripts/analyze_mocap_imu_relative_latency.py
   scripts/analyze_planar_imu_extrinsics.py
+  scripts/analyze_mocap_spin_center.py
   scripts/mocap_pose_monitor.py
   scripts/mocap_imu_motion_sequence.py
   scripts/validate_mocap_imu_bag.py
@@ -23,6 +26,7 @@ install(PROGRAMS
   scripts/record_mocap_imu_spin.sh
   scripts/run_mocap_imu_calibration_sequence.sh
   scripts/run_mocap_imu_relative_latency_trial.sh
+  scripts/run_mocap_spin_center.sh
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

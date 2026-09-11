@@ -26,6 +26,11 @@ WS_ROOT="$(resolve_ws_root)"
 RECORDER_SCRIPT="${RECORDER_SCRIPT:-${SCRIPT_DIR}/record_mocap_imu_spin.sh}"
 MOTION_SEQUENCE_SCRIPT="${MOTION_SEQUENCE_SCRIPT:-${SCRIPT_DIR}/mocap_imu_motion_sequence.py}"
 BAG_VALIDATOR="${BAG_VALIDATOR:-${SCRIPT_DIR}/validate_mocap_imu_bag.py}"
+MOTION_PROFILE="${MOTION_PROFILE:-planar}"
+case "${MOTION_PROFILE}" in
+    planar|spin_center) ;;
+    *) echo "[${SCRIPT_NAME}] ERROR: unsupported MOTION_PROFILE=${MOTION_PROFILE}" >&2; exit 2 ;;
+esac
 
 ARM_MOTION="${ARM_MOTION:-NO}"
 VALIDATE_ONLY="${VALIDATE_ONLY:-false}"
@@ -79,6 +84,11 @@ MAX_ABS_ANGULAR=0.50
 MAX_CMD_HZ=100
 MIN_CMD_HZ=50
 MIN_STATIC_SEC=60
+MAX_SPIN_HOLD_SEC=10
+if [[ "${MOTION_PROFILE}" == "spin_center" ]]; then
+    MIN_STATIC_SEC=5
+    MAX_SPIN_HOLD_SEC=45
+fi
 
 SEGMENT_TOPIC="/mocap_imu_calib/segment"
 STATUS_TOPIC="/mocap_imu_calib/status"
@@ -214,7 +224,7 @@ require_range S_V "${S_V}" 0.000001 "${MAX_ABS_LINEAR}"
 require_range SPIN_OMEGA "${SPIN_OMEGA}" 0.000001 "${MAX_ABS_ANGULAR}"
 require_range S_OMEGA "${S_OMEGA}" 0.000001 "${MAX_ABS_ANGULAR}"
 require_range STRAIGHT_SEC "${STRAIGHT_SEC}" 0.1 2.0
-require_range SPIN_HOLD_SEC "${SPIN_HOLD_SEC}" 0.1 10.0
+require_range SPIN_HOLD_SEC "${SPIN_HOLD_SEC}" 0.1 "${MAX_SPIN_HOLD_SEC}"
 require_range SPIN_REV_LEG_SEC "${SPIN_REV_LEG_SEC}" 0.1 5.0
 require_range SPIN_REV_MIDDLE_SEC "${SPIN_REV_MIDDLE_SEC}" 0.1 10.0
 require_range S_HOLD_SEC "${S_HOLD_SEC}" 0.1 1.5
@@ -222,6 +232,14 @@ require_range SETTLE_SEC "${SETTLE_SEC}" 0.1 10.0
 require_range FINAL_ZERO_SEC "${FINAL_ZERO_SEC}" 0.2 5.0
 require_range STATIC_PRE_SEC "${STATIC_PRE_SEC}" "${MIN_STATIC_SEC}" 300
 require_range STATIC_POST_SEC "${STATIC_POST_SEC}" "${MIN_STATIC_SEC}" 300
+if [[ "${MOTION_PROFILE}" == "spin_center" ]]; then
+    require_range SPIN_OMEGA "${SPIN_OMEGA}" 0.000001 0.30
+    require_range SETTLE_SEC "${SETTLE_SEC}" 5 10
+    if ! awk -v w="${SPIN_OMEGA}" -v t="${SPIN_HOLD_SEC}" 'BEGIN { exit !(w*t >= 3.641592653589793) }'; then
+        echo "[${SCRIPT_NAME}] ERROR: center spin needs at least pi+0.5 rad commanded per direction." >&2
+        exit 2
+    fi
+fi
 if (( COUNTDOWN_SEC > 15 )); then
     echo "[${SCRIPT_NAME}] ERROR: COUNTDOWN_SEC must be <= 15." >&2
     exit 2
@@ -323,6 +341,14 @@ S_LATERAL_ACCEL="$(awk -v v="${S_V}" -v w="${S_OMEGA}" 'BEGIN { printf "%.4f", v
 TOTAL_TRANSLATION="$(awk -v vl="${LINEAR_LOW}" -v vn="${LINEAR_NOMINAL}" -v ts="${STRAIGHT_SEC}" -v sv="${S_V}" -v sh="${S_HOLD_SEC}" -v n="${S_REPEATS}" 'BEGIN { printf "%.3f", 2*(vl+vn)*ts + 8*sv*sh*n }')"
 TOTAL_YAW="$(awk -v w="${SPIN_OMEGA}" -v hold="${SPIN_HOLD_SEC}" -v leg="${SPIN_REV_LEG_SEC}" -v middle="${SPIN_REV_MIDDLE_SEC}" -v sw="${S_OMEGA}" -v sh="${S_HOLD_SEC}" -v n="${S_REPEATS}" 'BEGIN { printf "%.3f", 2*w*hold + w*(2*leg+middle) + 8*sw*sh*n }')"
 PLANNED_DURATION="$(awk -v cd="${COUNTDOWN_SEC}" -v pre="${STATIC_PRE_SEC}" -v post="${STATIC_POST_SEC}" -v st="${STRAIGHT_SEC}" -v settle="${SETTLE_SEC}" -v spin="${SPIN_HOLD_SEC}" -v leg="${SPIN_REV_LEG_SEC}" -v middle="${SPIN_REV_MIDDLE_SEC}" -v sh="${S_HOLD_SEC}" -v n="${S_REPEATS}" -v zero="${FINAL_ZERO_SEC}" 'BEGIN { printf "%.1f", cd+pre+post+4*st+7*settle+2*spin+2*leg+middle+n*(8*sh+4*settle)+zero }')"
+if [[ "${MOTION_PROFILE}" == "spin_center" ]]; then
+    STRAIGHT_LOW_DISTANCE=0
+    STRAIGHT_NOMINAL_DISTANCE=0
+    S_PASS_DISTANCE=0
+    TOTAL_TRANSLATION=0
+    TOTAL_YAW="$(awk -v w="${SPIN_OMEGA}" -v t="${SPIN_HOLD_SEC}" 'BEGIN { printf "%.3f", 2*w*t }')"
+    PLANNED_DURATION="$(awk -v cd="${COUNTDOWN_SEC}" -v pre="${STATIC_PRE_SEC}" -v post="${STATIC_POST_SEC}" -v settle="${SETTLE_SEC}" -v spin="${SPIN_HOLD_SEC}" -v zero="${FINAL_ZERO_SEC}" 'BEGIN { printf "%.1f", cd+pre+post+settle+2*spin+zero }')"
+fi
 
 GIT_HASH="unknown"
 GIT_DIRTY="unknown"
@@ -353,6 +379,10 @@ done
 
 if [[ "${VALIDATE_ONLY}" == "true" ]]; then
     echo "[${SCRIPT_NAME}] Validation passed; no recorder or motion publisher was started."
+    if [[ "${MOTION_PROFILE}" == "spin_center" ]]; then
+        echo "[${SCRIPT_NAME}] Spin center: v=0, omega=+/-${SPIN_OMEGA} rad/s, ${SPIN_HOLD_SEC}s each; total ~${PLANNED_DURATION}s."
+        exit 0
+    fi
     echo "[${SCRIPT_NAME}] Planar profile: cmd=${CMD_HZ}Hz, straight=${STRAIGHT_LOW_DISTANCE}/${STRAIGHT_NOMINAL_DISTANCE}m."
     echo "[${SCRIPT_NAME}] S pass=${S_PASS_DISTANCE}m, radius=${S_RADIUS}m, nominal |v*omega|=${S_LATERAL_ACCEL}m/s^2."
     echo "[${SCRIPT_NAME}] Static pre/post=${STATIC_PRE_SEC}/${STATIC_POST_SEC}s; full six-axis tilt is not included."
@@ -395,7 +425,8 @@ done
     echo "created_at=$(date --iso-8601=seconds)"
     echo "run_label=${RUN_LABEL}"
     echo "name=${NAME}"
-    echo "profile=planar_imu_mocap_raw_recording"
+    echo "profile=${MOTION_PROFILE}"
+    echo "vrpn_use_server_time=$(rosparam get /vrpn_client_node/use_server_time 2>/dev/null || printf 'unknown')"
     echo "publisher_mode=persistent_python"
     echo "motion_sequence_script=${MOTION_SEQUENCE_SCRIPT}"
     echo "mocap_tracker=${MOCAP_TRACKER}"
@@ -560,12 +591,18 @@ echo
 echo "================ Planar mocap/IMU recording sequence ================"
 echo "  output bag       = ${BAG_PATH}"
 echo "  cmd publisher    = persistent ${CMD_HZ} Hz -> ${CMD_TOPIC}"
+if [[ "${MOTION_PROFILE}" == "spin_center" ]]; then
+echo "  spin center      = v=0, omega=+/-${SPIN_OMEGA} rad/s, ${SPIN_HOLD_SEC}s per direction"
+echo "  settle / total   = ${SETTLE_SEC}s / ~${PLANNED_DURATION}s"
+echo "  scope            = effective rotation center; geometry only, no acceleration differentiation"
+else
 echo "  straight v       = ${LINEAR_LOW} / ${LINEAR_NOMINAL} m/s"
 echo "  S command        = v=${S_V} m/s, |omega|=${S_OMEGA} rad/s"
 echo "  S geometry       = pass ${S_PASS_DISTANCE} m, radius ${S_RADIUS} m"
 echo "  lateral stimulus = ${S_LATERAL_ACCEL} m/s^2 nominal"
 echo "  static pre/post  = ${STATIC_PRE_SEC} / ${STATIC_POST_SEC} s"
 echo "  scope             = planar raw-data recording; no six-axis tilt"
+fi
 echo "======================================================================"
 echo "Clear at least ~1 m around the robot and keep the emergency stop ready."
 echo
@@ -574,6 +611,7 @@ start_recorder
 
 motion_args=(
     --arm-motion YES
+    --profile "${MOTION_PROFILE}"
     --cmd-topic "${CMD_TOPIC}"
     --segment-topic "${SEGMENT_TOPIC}"
     --status-topic "${STATUS_TOPIC}"

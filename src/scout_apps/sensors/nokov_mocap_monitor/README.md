@@ -2,7 +2,7 @@
 
 Nokov/XINGYING 动捕监控包，用于 Scout 实物实验中的**外部轨迹监控、rosbag 真值记录、RViz 显示和离线分析**。
 
-> **隔离边界：** 动捕监控节点和 launch 只做监控，不参与规划控制闭环；它们不替换 `/odom`，不作为任何 planner 的输入，也不发布 `/cmd_vel`。只有操作者显式执行第 9.4 节的实物运动序列并设置 `ARM_MOTION=YES` 时，独立标定脚本才会发布 `/cmd_vel`。
+> **隔离边界：** 动捕监控节点和 launch 只做监控，不参与规划控制闭环；它们不替换 `/odom`，不作为任何 planner 的输入，也不发布 `/cmd_vel`。操作者显式执行第 9.4 节的 `ARM_MOTION=YES` 或第 9.6 节的 `--run` 时，独立测量脚本才会发布 `/cmd_vel`。
 
 ---
 
@@ -490,6 +490,38 @@ run_mocap_imu_calibration_sequence.sh 会启动上述 recorder，并用单个长
 结束后生成 bag、SHA-256、`*_relative_latency.json`、`*_relative_latency.md`、对齐信号 CSV 和互相关图。结果正值表示 NOKOV 比 IMU 晚，负值表示 NOKOV 更早或 IMU 更晚。这项结果只能称为“NOKOV 相对 IMU 延迟”，不能称为 NOKOV 绝对延迟。
 
 ---
+
+### 9.6 Tracker0 顺逆自转测旋转中心
+
+复用 `record_mocap_imu_spin.sh`、`mocap_imu_motion_sequence.py` 和原运行/录制验收，
+增加 `spin_center` 模式。底盘、IMU、Tracker0 监控须已启动；停止 planner/teleop 发令。
+默认只做在线检查，显式 `--run` 才录包并运动：
+
+```bash
+cd /home/geist/scout_ws
+source /opt/ros/noetic/setup.bash
+source devel/setup.bash
+bash src/scout_apps/sensors/nokov_mocap_monitor/scripts/run_mocap_spin_center.sh \
+  --tracker Tracker0 --omega 0.2 --hold-sec 32 \
+  --static-sec 5 --settle-sec 5 --trial-id 01 --run
+```
+
+流程约 85 秒：倒计时 5 秒 → 静止 5 秒 → `v=0, ω=+0.2` 32 秒 →
+停稳 5 秒 → `v=0, ω=-0.2` 32 秒 → 静止 5 秒 → 归零退出。
+全程持续 50 Hz 发令；命令冲突、传感器超时或 Ctrl+C 沿用原归零流程。
+把 `--run` 换成 `--check` 可单独检查。速度、每向时长、静止时间、Tracker 名称、
+试次标签和 `--output-dir` 均可显式传入；文件名自动附加时间，拒绝覆盖。
+
+默认保存至 `/home/geist/slosh_bags/real/YYYYMMDD_mocap_spin_center/`。
+录制原始 Tracker0 位姿、IMU、odom、命令与段标记，不依赖 RGB/depth。
+录制验收通过后自动调用 `analyze_mocap_spin_center.py`，生成 `*_center_fit.json`。
+它按角度均匀取样，以同帧位置/yaw 拟合偏移，不做时间微分；
+接收时间只用于粗分段并裁去启停边界。实际转角不足 180°、残差超限、
+半段或顺逆方向偏移不一致时返回失败。拟合门参数见分析脚本 `--help`。
+
+结果是 **Tracker0 的水平 yaw 坐标下到有效旋转中心的偏移**，
+不自动等同于车体几何中心、`base_link` 或杯子外参，也不写入控制参数。
+此步骤不解决采集时间问题，不能仅凭拟合通过就重算有效 slosh 指标。
 
 ## 10. 诊断脚本
 

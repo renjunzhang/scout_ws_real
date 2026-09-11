@@ -110,6 +110,7 @@ def main():
     args = parse_args()
     config = load_config(args.config)
     errors = []
+    spin_center = config.get("profile") == "spin_center"
     topics = {
         "cmd": args.cmd_topic,
         "imu": args.imu_topic,
@@ -157,7 +158,9 @@ def main():
                     cmd_has_negative_v |= v < -1e-6
                     cmd_has_positive_w |= w > 1e-6
                     cmd_has_negative_w |= w < -1e-6
-                    if abs(v) > 0.250001 or abs(w) > 0.500001:
+                    if abs(v) > 0.250001 or abs(w) > 0.500001 or (
+                        spin_center and (abs(v) > 1e-12 or abs(w) > float(config["spin_omega"])+1e-6)
+                    ):
                         cmd_limit_violations += 1
                     last_cmds.append(values)
                     if len(last_cmds) > 20:
@@ -258,6 +261,8 @@ def main():
         "static_pre": float(config.get("static_pre_sec", "60")),
         "static_post": float(config.get("static_post_sec", "60")),
     }
+    if spin_center:
+        static_minimum["settle_after_spin_ccw"] = float(config.get("settle_sec", "5"))
     for label, expected in static_minimum.items():
         matches = [value for value in event_values if value.startswith("END|{}|".format(label))]
         if len(matches) != 1:
@@ -276,7 +281,7 @@ def main():
     s_starts = [value for value in event_values if s_start_re.match(value)]
     s_ends = [value for value in event_values if s_end_re.match(value)]
     s_switches = [value for value in event_values if s_switch_re.match(value)]
-    expected_s_passes = 4 * repeats
+    expected_s_passes = 0 if spin_center else 4 * repeats
     if (len(s_starts), len(s_switches), len(s_ends)) != (
         expected_s_passes,
         expected_s_passes,
@@ -300,9 +305,29 @@ def main():
 
     if cmd_limit_violations:
         errors.append("cmd_vel contains {} hard-limit violations".format(cmd_limit_violations))
-    if not all(
-        (cmd_has_positive_v, cmd_has_negative_v, cmd_has_positive_w, cmd_has_negative_w)
-    ):
+    if spin_center:
+        if cmd_has_positive_v or cmd_has_negative_v or not (cmd_has_positive_w and cmd_has_negative_w):
+            errors.append("spin_center requires zero linear commands and both angular directions")
+        expected_labels = ["static_pre", "spin_ccw_hold", "settle_after_spin_ccw", "spin_cw_hold", "static_post"]
+        start_labels = [value.split("|")[1] for value in event_values if value.startswith("START|")]
+        end_labels = [value.split("|")[1] for value in event_values if value.startswith("END|")]
+        if start_labels != expected_labels or end_labels != expected_labels:
+            errors.append("spin_center segment order is incomplete or contains unexpected motion")
+        for label, sign in (("spin_ccw_hold", 1), ("spin_cw_hold", -1)):
+            starts = [value for value in event_values if value.startswith("START|"+label+"|")]
+            ends = [value for value in event_values if value.startswith("END|"+label+"|")]
+            if len(starts) != 1 or len(ends) != 1:
+                continue  # sequence check above already reports missing/duplicate markers
+            _, fields = event_parts(starts[0])
+            v = float(fields.get("v", "nan"))
+            w = float(fields.get("omega", "nan"))
+            _, end_fields = event_parts(ends[0])
+            duration = float(end_fields.get("actual_duration", "nan"))
+            if (not finite((v, w, duration)) or abs(v) > 1e-12
+                    or abs(w-sign*float(config["spin_omega"])) > 1e-6
+                    or abs(duration-float(config["spin_hold_sec"])) > .10):
+                errors.append("{} command/duration does not match center-spin config".format(label))
+    elif not all((cmd_has_positive_v, cmd_has_negative_v, cmd_has_positive_w, cmd_has_negative_w)):
         errors.append("cmd_vel does not contain all positive/negative linear/angular excitations")
     if len(last_cmds) < 10 or not all(abs(v) < 1e-12 and abs(w) < 1e-12 for v, w in last_cmds[-10:]):
         errors.append("bag does not end with at least 10 zero commands")
@@ -310,6 +335,8 @@ def main():
     report = {
         "ok": not errors,
         "bag": str(bag_path),
+        "profile": config.get("profile", "planar"),
+        "scope": "stream and command integrity only; center geometry requires separate fit",
         "errors": errors,
         "streams": {label: stream.as_dict() for label, stream in stats.items()},
         "status_values": status_values,
