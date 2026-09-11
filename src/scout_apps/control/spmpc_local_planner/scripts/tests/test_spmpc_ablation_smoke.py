@@ -115,7 +115,8 @@ class AblationEntryTest(unittest.TestCase):
                    ABLATION_SOURCE_COMPARISON='false', ABLATION_OBSERVER_SOURCE='processed_imu',
                    ABLATION_RECORD_RGB='true', ABLATION_JERK_MAX='0.6',
                    ABLATION_TRIAL_ID='01_full', ABLATION_PHASE='screening',
-                   ABLATION_W_SLOSH='', ABLATION_V_REF='0.2')
+                   ABLATION_W_SLOSH='', ABLATION_V_REF='0.2',
+                   ABLATION_EVALUATION_LOCK='', ABLATION_EVALUATION_ROW='')
         env.update(overrides)
         script = '''fail() { echo "$*" >&2; exit 2; }
 source "$1"
@@ -161,11 +162,11 @@ done
 
     def test_internal_pair_keeps_common_evidence_and_labels_actual_jerk(self):
         for condition, raw_weight, expected_weight, speed, jerk in (
-                ('b0', '', '0', '0.2', '0.6'),
-                ('b0', '0', '0', '0.15', '0.4'),
+                ('smooth', '', '0', '0.2', '0.6'),
+                ('smooth', '0', '0', '0.2', '0.6'),
                 ('full', '', '1', '0.2', '0.6'),
                 ('full', '0.5', '0.5', '0.2', '0.6'),
-                ('full', '0.75', '0.75', '0.15', '0.4')):
+                ('full', '0.75', '0.75', '0.2', '0.6')):
             result = self.profile(ABLATION_EXPERIMENT='internal-slosh',
                                   ABLATION_RECORD_RGB='false', ABLATION_CONDITION=condition,
                                   ABLATION_W_SLOSH=raw_weight, ABLATION_V_REF=speed,
@@ -175,29 +176,31 @@ done
             active = condition == 'full'
             expected = dict(W_SLOSH=expected_weight, V_REF=speed, JERK_MAX=jerk,
                             SLOSH_ENABLE=str(active).lower(),
-                            JERK_LIMIT_ENABLE=str(active).lower(),
+                            JERK_LIMIT_ENABLE='true',
                             ZERO_LIQUID_INITIAL_STATE='false',
                             EXPECTED_ACTIVE_STATE_WIDTH='28' if active else '24',
                             EXACT_CONDITION='Bslosh' if active else 'B0',
                             SOURCE_COMPARISON='false', COMPARISON_RECORDING='true',
-                            SMOKE_RECORD_RGB='false', PROTOCOL_ID='SMPCC_C03_INTERNAL_SLOSH_DEV_V1')
+                            SMOKE_RECORD_RGB='false', PROTOCOL_ID='SMPCC_C03_INTERNAL_SLOSH_DEV_V2')
             for key, value in expected.items():
                 self.assertEqual(config[key], value, (condition, key))
-            self.assertIn('_W' + expected_weight + '_J' + (jerk if active else 'off') + '_V' + speed,
+            self.assertIn('_W' + expected_weight + '_J' + jerk + '_V' + speed,
                           config['RUN_LABEL_PREFIX'])
-            self.assertIn('jerk_enable=' + str(active).lower(), config['OPERATOR_NOTE'])
+            self.assertIn('jerk_enable=true', config['OPERATOR_NOTE'])
             self.assertIn('v_ref=' + speed, config['OPERATOR_NOTE'])
 
     def test_internal_protocol_rejects_ambiguous_or_out_of_range_inputs(self):
         defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false')
-        for change in ({'ABLATION_CONDITION': 'b0', 'ABLATION_W_SLOSH': '1'},
+        for change in ({'ABLATION_CONDITION': 'smooth', 'ABLATION_W_SLOSH': '1'},
+                       {'ABLATION_CONDITION': 'b0'}, {'ABLATION_V_REF': '0.15'},
+                       {'ABLATION_JERK_MAX': '0.4'}, {'ABLATION_PHASE': 'validation'},
                        {'ABLATION_W_SLOSH': '0'}, {'ABLATION_W_SLOSH': '-1'},
                        {'ABLATION_W_SLOSH': 'nan'}, {'ABLATION_W_SLOSH': 'inf'},
                        {'ABLATION_W_SLOSH': '20.1'}, {'ABLATION_V_REF': '0.25'},
                        {'ABLATION_V_REF': 'nan'}, {'ABLATION_V_REF': '0'},
                        {'ABLATION_JERK_MAX': 'nan'}, {'ABLATION_JERK_MAX': '0'},
                        {'ABLATION_RECORD_RGB': 'true'}, {'ABLATION_OBSERVER_SOURCE': 'odom'},
-                       {'ABLATION_CONDITION': 'smooth'}, {'ABLATION_SCENE': '20260829_c02'},
+                       {'ABLATION_CONDITION': 'nostate'}, {'ABLATION_SCENE': '20260829_c02'},
                        {'ABLATION_TRIAL_ID': ''}, {'ABLATION_TRIAL_ID': '../run'},
                        {'ABLATION_PHASE': 'typo'}, {'ABLATION_SOURCE_COMPARISON': 'true'}):
             self.assertNotEqual(self.profile(**dict(defaults, **change)).returncode, 0, change)
@@ -210,18 +213,21 @@ done
             entry.write_text((SCRIPTS / entry.name).read_text())
             engine = root / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
             engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps(dict(os.environ)))\nPY\n")
-            for condition, weight, action in (('b0', '0', '--validate-only'),
+            for condition, weight, action in (('smooth', '0', '--validate-only'),
                                                ('full', '0.5', '--run')):
                 result = subprocess.run(['bash', str(entry), '--experiment', 'internal-slosh',
                     '--scene', '20260907_c03', '--condition', condition, '--observer-source', 'imu',
                     '--trial-id', '01_' + condition, '--w-slosh', weight, '--phase', 'validation',
-                    '--v-ref', '0.15', '--jerk-max', '0.4', action],
+                    '--v-ref', '0.2', '--jerk-max', '0.6',
+                    '--evaluation-lock', '/tmp/test-lock.json', '--evaluation-row', '02' if condition == 'smooth' else '01', action],
                     capture_output=True, text=True, check=True)
                 env = json.loads(result.stdout)
                 expected = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_CONDITION=condition,
                                 ABLATION_SOURCE_COMPARISON='false', ABLATION_RECORD_RGB='false',
                                 ABLATION_OBSERVER_SOURCE='processed_imu', ABLATION_W_SLOSH=weight,
-                                ABLATION_V_REF='0.15', ABLATION_JERK_MAX='0.4',
+                                ABLATION_V_REF='0.2', ABLATION_JERK_MAX='0.6',
+                                ABLATION_EVALUATION_LOCK='/tmp/test-lock.json',
+                                ABLATION_EVALUATION_ROW='02' if condition == 'smooth' else '01',
                                 ABLATION_TRIAL_ID='01_' + condition, ABLATION_PHASE='validation',
                                 VALIDATE_ONLY='false' if action == '--run' else 'true')
                 for key, value in expected.items():
@@ -235,6 +241,23 @@ done
                 result = subprocess.run(['bash', str(entry), *flags], capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('internal-slosh 不录 RGB', result.stderr)
+
+    def test_internal_validation_requires_lock_and_matching_row(self):
+        defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false',
+                        ABLATION_PHASE='validation')
+        with tempfile.NamedTemporaryFile(mode='w') as lock:
+            lock.write('{}')  # The engine, not this profile, validates lock contents.
+            lock.flush()
+            defaults['ABLATION_EVALUATION_LOCK'] = lock.name
+            for row, condition in (('01', 'full'), ('02', 'smooth'),
+                                   ('03', 'smooth'), ('04', 'full')):
+                result = self.profile(**dict(defaults, ABLATION_EVALUATION_ROW=row,
+                                             ABLATION_CONDITION=condition))
+                self.assertEqual(result.returncode, 0, result.stderr)
+            for overrides in ({'ABLATION_EVALUATION_ROW': '02', 'ABLATION_CONDITION': 'full'},
+                              {'ABLATION_EVALUATION_ROW': '05'},
+                              {'ABLATION_EVALUATION_ROW': '01', 'ABLATION_PHASE': 'screening'}):
+                self.assertNotEqual(self.profile(**dict(defaults, **overrides)).returncode, 0)
 
     def test_cli_forwards_rgb_trial_without_source_comparison(self):
         # Replace only the engine with an environment capture: no ROS or motion.

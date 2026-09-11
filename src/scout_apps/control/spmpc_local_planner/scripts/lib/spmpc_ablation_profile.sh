@@ -64,6 +64,8 @@ EXPERIMENT_KIND="${ABLATION_EXPERIMENT:-legacy}"
 COMPARISON_RECORDING=false
 TRIAL_ID=
 EXPERIMENT_PHASE=
+EVALUATION_LOCK="${ABLATION_EVALUATION_LOCK:-}"
+EVALUATION_ROW="${ABLATION_EVALUATION_ROW:-}"
 case "${EXPERIMENT_KIND}" in
   legacy) ;;
   ablation-rgb|internal-slosh)
@@ -74,13 +76,25 @@ case "${EXPERIMENT_KIND}" in
       [[ "${JERK_MAX}" == 0.6 ]] || fail "ablation-rgb freezes jerk_max=0.6"
       case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
     else
-      case "${ABLATION_CONDITION}" in b0|full) ;; *) fail "internal-slosh requires b0 or full" ;; esac
+      case "${ABLATION_CONDITION}" in smooth|full) ;; *) fail "internal-slosh V2 requires smooth or full; b0 disables hard jerk" ;; esac
+      [[ "${JERK_MAX}" == 0.6 ]] || fail "internal-slosh V2 freezes jerk_max=0.6"
       [[ "${SMOKE_RECORD_RGB}" == false ]] || fail "internal-slosh requires RGB disabled"
     fi
     TRIAL_ID="${ABLATION_TRIAL_ID:-}"
     [[ "${TRIAL_ID}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$ ]] || fail "${EXPERIMENT_KIND} requires a safe --trial-id (1-40 characters)"
     EXPERIMENT_PHASE="${ABLATION_PHASE:-screening}"
     case "${EXPERIMENT_PHASE}" in screening|validation) ;; *) fail "invalid experiment phase" ;; esac
+    if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+      if [[ "${EXPERIMENT_PHASE}" == validation ]]; then
+        [[ -s "${EVALUATION_LOCK}" ]] || fail "validation requires --evaluation-lock from completed screening"
+        case "${EVALUATION_ROW}:${ABLATION_CONDITION}" in
+          01:full|02:smooth|03:smooth|04:full) ;;
+          *) fail "validation requires rows 01 full, 02 smooth, 03 smooth, 04 full" ;;
+        esac
+      else
+        [[ -z "${EVALUATION_LOCK}${EVALUATION_ROW}" ]] || fail "screening does not accept an evaluation lock/row"
+      fi
+    fi
     experiment_numbers="$(python3 - "${EXPERIMENT_KIND}" "${ABLATION_CONDITION}" "${ABLATION_W_SLOSH:-${W_SLOSH}}" "${ABLATION_V_REF:-0.2}" <<'PY'
 import math
 import sys
@@ -92,12 +106,12 @@ try:
     if mode == 'ablation-rgb':
         valid = weight in ((0.0,) if condition == 'smooth' else (0.5, 1.0)) and speed == 0.2
     else:
-        valid = (weight == 0.0 if condition == 'b0' else 0 < weight <= 20) and 0 < speed <= 0.2
+        valid = (weight == 0.0 if condition == 'smooth' else 0 < weight <= 20) and speed == 0.2
     if not valid:
         raise ValueError()
 except ValueError:
     raise SystemExit('invalid weights/speed: ablation-rgb requires smooth=0, nostate/full=0.5|1, v=0.2; '
-                     'internal-slosh requires b0=0, 0<full<=20, 0<v<=0.2')
+                     'internal-slosh V2 requires smooth=0, 0<full<=20, v=0.2')
 print(format(weight, '.12g'), format(speed, '.12g'))
 PY
 )" || fail "invalid ${EXPERIMENT_KIND} weights/speed"
@@ -128,14 +142,14 @@ if [[ "${EXPERIMENT_KIND}" == ablation-rgb ]]; then
   SMOKE_PURPOSE="C03 three-condition comparison; shared IMU, RGB, NOKOV and dual monitors"
   OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_max=${JERK_MAX}; IMU; RGB=true"
 elif [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
-  PROTOCOL_ID=SMPCC_C03_INTERNAL_SLOSH_DEV_V1
-  OUTPUT_SERIES=spmpc_internal_slosh_v1
+  PROTOCOL_ID=SMPCC_C03_INTERNAL_SLOSH_DEV_V2
+  OUTPUT_SERIES=spmpc_internal_slosh_v2
   jerk_label="${JERK_MAX}"
   if [[ "${JERK_LIMIT_ENABLE}" == false ]]; then jerk_label=off; fi
   RUN_LABEL_PREFIX="DEV_INTERNAL_SLOSH_${EXPERIMENT_PHASE}_${TRIAL_ID}_${ABLATION_CONDITION}_W${W_SLOSH}_J${jerk_label}_V${V_REF}"
   BLOCK_SEGMENT_ID="INTERNAL_SLOSH_${EXPERIMENT_PHASE}_${TRIAL_ID}"
-  SMOKE_SCOPE=development_internal_slosh_combined_method_comparison
-  SMOKE_PURPOSE="C03 B0/full combined-method comparison; IMU monitor metrics; RGB disabled"
+  SMOKE_SCOPE=frozen_evaluation_chain_internal_model_comparison
+  SMOKE_PURPOSE="C03 full/smooth comparison; shared hard jerk; IMU/odom screening then frozen-chain validation; no RGB"
   OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_enable=${JERK_LIMIT_ENABLE}; jerk_max=${JERK_MAX}; v_ref=${V_REF}; IMU; RGB=false"
 elif [[ "${SOURCE_COMPARISON}" == true ]]; then
   COMPARISON_RECORDING=true
@@ -149,4 +163,7 @@ elif [[ "${SOURCE_COMPARISON}" == true ]]; then
   OPERATOR_NOTE="liquid_source=${SELECTED_OBSERVER_SOURCE}; jerk_max=${JERK_MAX}; RGB=${SMOKE_RECORD_RGB}; robot state source unchanged"
 elif [[ "${SELECTED_OBSERVER_SOURCE}" != processed_imu ]]; then
   fail "odom requires explicit source-comparison mode"
+fi
+if [[ "${EXPERIMENT_KIND}" != internal-slosh && -n "${EVALUATION_LOCK}${EVALUATION_ROW}" ]]; then
+  fail "evaluation lock/row is only supported by internal-slosh V2"
 fi

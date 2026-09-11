@@ -15,14 +15,17 @@ w_slosh=
 v_ref=
 trial_id=
 phase=screening
+evaluation_lock=
+evaluation_row=
 usage() {
   cat <<'EOF'
 用法：
   bash run_spmpc_ablation_smoke.sh [--condition full|nostate|smooth|b0|no_jerk]
        [--scene 20260829_c02|20260907_c03] [--jerk-max 1.0] [--validate-only | --run]
        [--observer-source imu|odom] [--record-rgb]
-       [--experiment ablation-rgb|internal-slosh --trial-id 01_b0 --phase screening|validation]
+       [--experiment ablation-rgb|internal-slosh --trial-id s01_full --phase screening|validation]
        [--w-slosh NUMBER --v-ref MPS]
+       [--evaluation-lock FILE --evaluation-row 01|02|03|04]
 
 默认只检查，不启动 ROS 节点或底盘。--run 录一包 70 秒以内的低速开发 smoke，
 操作者须先完成急停、起点和净空检查。复用原运行、录包、停车和画图流程。
@@ -37,12 +40,14 @@ v_ref=0.20 m/s，jerk_max 单位 m/s³，默认 1.0 仍是开发候选。
 强制录 RGB、Tracker0 与双监视器；每次只录一包，必须给出 --trial-id。
 该协议 jerk 固定 0.6、v_ref 固定 0.2；smooth 的 w_slosh 必须为 0，nostate/full 可选 1.0 或 0.5。
 未指定权重时 smooth=0、nostate/full=1；默认 phase=screening。
---experiment internal-slosh 是独立的 C03/IMU 内部 slosh 对比，支持 b0/full，
+--experiment internal-slosh V2 是 C03/IMU 的 Full/Smooth-only 内部模型指标对比，
 不录 RGB/depth，保留 Tracker0、双监视器与四项验收，不要求相机启动。
-该协议默认 jerk=0.6、v_ref=0.2；jerk 可设正数，0<v_ref<=0.2，
-b0 权重固定 0 且硬 jerk 关闭；full 默认权重 1，可设 0<w_slosh<=20（首轮只比较 1/0.5）。
+只支持 full/smooth，两组固定硬 jerk=0.6、v_ref=0.2、IMU 初态来源、2 秒时域和非液体权重。
+smooth 只关闭液体优化，权重为 0；full 默认权重 1，可设 0<w_slosh<=20（首轮只建议 1/0.5）。
+旧 b0 关闭硬 jerk，不能作为本轮 Smooth；NoState/RGB 后置。
 必须指定 trial-id；组别、权重、实际 jerk 开关、速度、轮次/阶段写入包名和验收元数据。
-IMU 来源、30 Hz/N=60/2 秒、执行器及其他软权重保持现状；本轮首对保持 J0.6/v0.2。
+screening 并列保存 IMU/odom 指标；validation 必须给已冻结的 --evaluation-lock 和 --evaluation-row，
+行顺序固定为 01 full、02 smooth、03 smooth、04 full，不按单包结果切换评价监视器。
 RGB 使用 1920x1080@30Hz，需至少 20 GiB 空间；液面标尺/ROI 仍需核验后离线提取。
 检查通过仅表示控制与录制契约通过，不代表真实降晃有效。
 各组均保留既有平滑验收门；b0/no_jerk 未通过平滑门也保留对照包及报告。
@@ -52,7 +57,7 @@ EOF
 }
 while (( $# )); do
   case "$1" in
-    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--v-ref|--trial-id|--phase)
+    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--v-ref|--trial-id|--phase|--evaluation-lock|--evaluation-row)
       (( $# >= 2 )) || { usage >&2; exit 2; }
       case "$1" in
         --condition) condition="$2" ;;
@@ -64,6 +69,8 @@ while (( $# )); do
         --v-ref) v_ref="$2" ;;
         --trial-id) trial_id="$2" ;;
         --phase) phase="$2" ;;
+        --evaluation-lock) evaluation_lock="$2" ;;
+        --evaluation-row) evaluation_row="$2" ;;
       esac
       shift 2 ;;
     --run) run_motion=true; shift ;;
@@ -106,10 +113,14 @@ if [[ "${source_comparison}" == true && "${condition}" != full ]]; then
   echo "来源对照仅允许 --condition full，避免混入其他消融变量" >&2
   exit 2
 fi
+if [[ "${experiment}" != internal-slosh && -n "${evaluation_lock}${evaluation_row}" ]]; then
+  echo "评价锁/行号仅支持 internal-slosh V2" >&2; exit 2
+fi
 if [[ "${run_motion}" == true ]]; then
   exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
     ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
     ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
+    ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \
     ABLATION_SOURCE_COMPARISON="${source_comparison}" \
     ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
     ABLATION_SCENE="${scene}" \
@@ -120,6 +131,7 @@ fi
 exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
   ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
   ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
+  ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \
   ABLATION_SOURCE_COMPARISON="${source_comparison}" \
   ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
   ABLATION_SCENE="${scene}" \

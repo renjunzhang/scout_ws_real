@@ -92,6 +92,13 @@ EXACT_CONDITION=Bslosh
 TERMINAL_MPC_STOP_HANDOFF_ENABLE=false
 ABLATION_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_ablation_smoke.py"
 RECORDING_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_spmpc_comparison_recording.py"
+INTERNAL_METRICS="${SCRIPT_DIR}/analysis/analyze_internal_slosh_pair.py"
+EVALUATION_TOOL="${SCRIPT_DIR}/analysis/freeze_internal_slosh_evaluation.py"
+EVALUATION_LOCK=
+EVALUATION_ROW=
+EVALUATION_LOCK_SHA256=
+EVALUATION_PRIMARY_MONITOR=
+EVALUATION_CHAIN_SHA256=
 SOURCE_COMPARISON=false
 COMPARISON_RECORDING=false
 EXPERIMENT_KIND=legacy
@@ -233,6 +240,9 @@ ABLATION_REPORT="${RUN_OUT_DIR}/${NAME}_ablation_postflight.json"
 RECORDING_REPORT="${RUN_OUT_DIR}/${NAME}_recording_postflight.json"
 PASS_MARKER="${RUN_OUT_DIR}/${NAME}_runtime_smoke_pass.env"
 PREREG_FILE="${RUN_OUT_DIR}/${NAME}_runtime_smoke_prereg.env"
+LAUNCH_PARAMS_FILE="${RUN_OUT_DIR}/${NAME}_launch_params.yaml"
+INTERNAL_REPORT="${RUN_OUT_DIR}/${NAME}_internal_slosh.json"
+LOCK_COPY="${RUN_OUT_DIR}/${NAME}_evaluation_lock.json"
 
 required_files=(
   "${RUNNER}"
@@ -399,6 +409,16 @@ require_dump_number "/spmpc_local_planner/variants/B_slosh/w_alpha" "${W_ALPHA}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
 
 require_dump_number "/spmpc_local_planner/ablation/jerk_max" "${JERK_MAX}"
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  EVALUATION_CHAIN_SHA256="$(python3 "${EVALUATION_TOOL}" fingerprint)" || fail "evaluation chain unavailable"
+  if [[ "${EXPERIMENT_PHASE}" == validation ]]; then
+    EVALUATION_LOCK_SHA256="$(sha256sum "${EVALUATION_LOCK}" | awk '{print $1}')"
+    EVALUATION_PRIMARY_MONITOR="$(python3 "${EVALUATION_TOOL}" check \
+      --lock "${EVALUATION_LOCK}" --condition "${ABLATION_CONDITION}" --row "${EVALUATION_ROW}" \
+      --path-sha256 "${FROZEN_PATH_SHA256}" --map-sha256 "${FROZEN_MAP_SHA256}" \
+      <<< "${launch_dump}")" || fail "evaluation lock does not match this run"
+  fi
+fi
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   require_dump_line "/spmpc_local_planner/slosh_risk_governor/enable: false"
   require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: false"
@@ -421,6 +441,9 @@ echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
 if [[ -n "${TRIAL_ID}" ]]; then
   echo "  trial          = ${TRIAL_ID}; phase=${EXPERIMENT_PHASE}"
+fi
+if [[ -n "${EVALUATION_PRIMARY_MONITOR}" ]]; then
+  echo "  evaluation     = ${EVALUATION_PRIMARY_MONITOR}; row=${EVALUATION_ROW}; lock=${EVALUATION_LOCK}"
 fi
 echo "  condition      = ${PREREG_CONDITION}; config_variant=${VARIANT}; one bag only"
 echo "  scene          = ${SMOKE_SCENE}"
@@ -479,6 +502,12 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_spmpc_comparison_recording.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_spmpc_comparison_recording.py
 )
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  runtime_paths+=(
+    src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_internal_slosh_pair.py
+    src/scout_apps/control/spmpc_local_planner/scripts/analysis/freeze_internal_slosh_evaluation.py
+  )
+fi
 dirty_runtime="$(git -C "${REPO_ROOT}" status --porcelain --untracked-files=normal -- "${runtime_paths[@]}")"
 [[ -z "${dirty_runtime}" ]] \
   || fail "runtime/evidence paths are dirty; commit and rebuild before motion"
@@ -489,6 +518,9 @@ attempt_outputs=(
 )
 if [[ "${COMPARISON_RECORDING}" == true ]]; then
   attempt_outputs+=("${RECORDING_REPORT}")
+fi
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  attempt_outputs+=("${LAUNCH_PARAMS_FILE}" "${INTERNAL_REPORT}" "${LOCK_COPY}")
 fi
 if truthy "${PLOT_DIAGNOSTICS}"; then
   attempt_outputs+=("${DIAGNOSTIC_PLOT_DIR}")
@@ -534,6 +566,14 @@ grep -Fxq -- "${CMD_TOPIC}" <<< "${published_topics}" \
 
 current_git_revision="$(git -C "${REPO_ROOT}" rev-parse HEAD)"
 mkdir -p "${RUN_OUT_DIR}"
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  printf '%s\n' "${launch_dump}" > "${LAUNCH_PARAMS_FILE}"
+  if [[ "${EXPERIMENT_PHASE}" == validation ]]; then
+    cp -- "${EVALUATION_LOCK}" "${LOCK_COPY}"
+    [[ "$(sha256sum "${LOCK_COPY}" | awk '{print $1}')" == "${EVALUATION_LOCK_SHA256}" ]] \
+      || fail "evaluation lock changed during preflight"
+  fi
+fi
 {
   echo "protocol=${PROTOCOL_ID}"
   echo "profile=${SMOKE_PROFILE}"
@@ -554,6 +594,10 @@ mkdir -p "${RUN_OUT_DIR}"
   echo "source_comparison=${SOURCE_COMPARISON}"
   echo "experiment=${EXPERIMENT_KIND}"
   echo "phase=${EXPERIMENT_PHASE}"
+  echo "evaluation_lock_sha256=${EVALUATION_LOCK_SHA256}"
+  echo "evaluation_primary_monitor=${EVALUATION_PRIMARY_MONITOR}"
+  echo "evaluation_row=${EVALUATION_ROW}"
+  echo "evaluation_chain_sha256=${EVALUATION_CHAIN_SHA256}"
   echo "trial_id=${TRIAL_ID}"
   echo "comparison_recording=${COMPARISON_RECORDING}"
   echo "record_rgb=${SMOKE_RECORD_RGB}"
@@ -745,8 +789,15 @@ if (( bag_rc == 0 )); then
   python3 "${RUNTIME_POSTFLIGHT}" "${runtime_args[@]}" || runtime_rc=$?
 fi
 
-if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 || ablation_rc != 0 || recording_rc != 0 )); then
-  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}, ablation_rc=${ablation_rc}, recording_rc=${recording_rc}; preserve the bag, plots, and reports for diagnosis"
+internal_rc=0
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  # Write a diagnostic report even for a failed/missing bag; never discard an attempt.
+  printf '%s\n' "runner_exit_code=${runner_rc}" "diagnostics_exit_code=${plot_rc}" >> "${PREREG_FILE}"
+  python3 "${INTERNAL_METRICS}" --bag "${BAG_PATH}" --report "${INTERNAL_REPORT}" || internal_rc=$?
+fi
+
+if (( runner_rc != 0 || bag_rc != 0 || plot_rc != 0 || exact_rc != 0 || runtime_rc != 0 || ablation_rc != 0 || recording_rc != 0 || internal_rc != 0 )); then
+  fail "smoke aggregation failed: runner_rc=${runner_rc}, bag_rc=${bag_rc}, plot_rc=${plot_rc}, contract_rc=${exact_rc}, runtime_rc=${runtime_rc}, ablation_rc=${ablation_rc}, recording_rc=${recording_rc}, internal_rc=${internal_rc}; preserve the bag, plots, and reports for diagnosis"
 fi
 
 printf '%s\n' \
@@ -756,6 +807,10 @@ printf '%s\n' \
   "condition=${PASS_CONDITION}" \
   "experiment=${EXPERIMENT_KIND}" \
   "phase=${EXPERIMENT_PHASE}" \
+  "evaluation_lock_sha256=${EVALUATION_LOCK_SHA256}" \
+  "evaluation_primary_monitor=${EVALUATION_PRIMARY_MONITOR}" \
+  "evaluation_row=${EVALUATION_ROW}" \
+  "evaluation_chain_sha256=${EVALUATION_CHAIN_SHA256}" \
   "trial_id=${TRIAL_ID}" \
   "w_slosh=${W_SLOSH}" \
   "v_ref=${V_REF}" \
@@ -778,6 +833,11 @@ printf '%s\n' \
   "exact_postflight_sha256=$(sha256sum "${EXACT_REPORT}" | awk '{print $1}')" \
   "runtime_postflight_sha256=$(sha256sum "${RUNTIME_REPORT}" | awk '{print $1}')" \
   "completed_at=$(date --iso-8601=seconds)" > "${PASS_MARKER}"
+
+if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
+  printf '%s\n' "internal_slosh_sha256=$(sha256sum "${INTERNAL_REPORT}" | awk '{print $1}')" >> "${PASS_MARKER}"
+  echo "[${SCRIPT_NAME}] internal metrics=${INTERNAL_REPORT}"
+fi
 
 echo "[${SCRIPT_NAME}] PASS: one ${PASS_CONDITION} runtime smoke completed"
 echo "[${SCRIPT_NAME}] bag=${BAG_PATH}"
