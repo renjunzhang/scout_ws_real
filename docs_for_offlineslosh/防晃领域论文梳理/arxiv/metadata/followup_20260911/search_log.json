@@ -1,0 +1,32 @@
+[
+  {
+    "group": "wheeled_slosh",
+    "url": "https://export.arxiv.org/api/query?search_query=%28all%3Asloshing+OR+all%3A%22slosh-free%22+OR+all%3A%22anti-slosh%22%29+AND+%28all%3Awheeled+OR+all%3A%22mobile+robot%22%29&max_results=30&sortBy=relevance",
+    "count": 1,
+    "status": 200
+  },
+  {
+    "group": "shaping_liquid",
+    "url": "https://export.arxiv.org/api/query?search_query=all%3A%22input+shaping%22+AND+%28all%3Aliquid+OR+all%3Asloshing+OR+all%3Atransportation%29&max_results=30&sortBy=relevance",
+    "count": 3,
+    "status": 200
+  },
+  {
+    "group": "transport_suppress",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3Aliquid+OR+ti%3Asloshing%29+AND+%28all%3A%22trajectory+planning%22+OR+all%3A%22trajectory+optimization%22%29&max_results=30&sortBy=relevance",
+    "count": 2,
+    "status": 200
+  },
+  {
+    "group": "shape_exact",
+    "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22input+shaping%22+OR+ti%3A%22command+shaping%22&max_results=30&sortBy=relevance",
+    "count": 11,
+    "status": 200
+  },
+  {
+    "group": "known_ruckig",
+    "url": "https://export.arxiv.org/api/query?id_list=2105.04830&max_results=1",
+    "count": 1,
+    "status": 200
+  }
+]

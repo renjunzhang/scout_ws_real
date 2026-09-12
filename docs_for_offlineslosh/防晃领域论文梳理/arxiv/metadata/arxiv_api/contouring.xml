@@ -1,0 +1,568 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/6hjaW7ntLJrTmyxh5Wz2lwKa9gc</id>
+  <title>arXiv Query: search_query=(ti:"contouring control" OR ti:"model predictive path-following") AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=25</title>
+  <updated>2026-09-11T14:08:45Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(ti:%22contouring+control%22+OR+ti:%22model+predictive+path-following%22)+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=25&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>25</opensearch:itemsPerPage>
+  <opensearch:totalResults>22</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2506.15447v1</id>
+    <title>Model Predictive Path-Following Control for a Quadrotor</title>
+    <updated>2025-06-18T13:18:50Z</updated>
+    <link href="https://arxiv.org/abs/2506.15447v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2506.15447v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Automating drone-assisted processes is a complex task. Many solutions rely on trajectory generation and tracking, whereas in contrast, path-following control is a particularly promising approach, offering an intuitive and natural approach to automate tasks for drones and other vehicles. While different solutions to the path-following problem have been proposed, most of them lack the capability to explicitly handle state and input constraints, are formulated in a conservative two-stage approach, or are only applicable to linear systems. To address these challenges, the paper is built upon a Model Predictive Control-based path-following framework and extends its application to the Crazyflie quadrotor, which is investigated in hardware experiments. A cascaded control structure including an underlying attitude controller is included in the Model Predictive Path-Following Control formulation to meet the challenging real-time demands of quadrotor control. The effectiveness of the proposed method is demonstrated through real-world experiments, representing, to the best of the authors' knowledge, a novel application of this MPC-based path-following approach to the quadrotor. Additionally, as an extension to the original method, to allow for deviations of the path in cases where the precise following of the path might be overly restrictive, a corridor path-following approach is presented.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-06-18T13:18:50Z</published>
+    <arxiv:comment>15 pages, 11 figures, submitted to PAMM 2025</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>David Leprich</name>
+    </author>
+    <author>
+      <name>Mario Rosenfelder</name>
+    </author>
+    <author>
+      <name>Mario Hermle</name>
+    </author>
+    <author>
+      <name>Jingshan Chen</name>
+    </author>
+    <author>
+      <name>Peter Eberhard</name>
+    </author>
+    <arxiv:doi>10.1002/pamm.70056</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1002/pamm.70056" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1710.02555v2</id>
+    <title>Model Predictive Path-Following for Constrained Differentially Flat Systems</title>
+    <updated>2017-11-02T15:24:08Z</updated>
+    <link href="https://arxiv.org/abs/1710.02555v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1710.02555v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>For many tasks, predictive path-following control can significantly improve the performance and robustness of autonomous robots over traditional trajectory tracking control. It does this by prioritizing closeness to the path over timed progress along the path and by looking ahead to account for changes in the path. We propose a novel predictive path-following approach that couples feedforward linearization with path-based model predictive control. Our approach has a few key advantages. By utilizing the differential flatness property, we reduce the path-based model predictive control problem from a nonlinear to a convex optimization problem. Robustness to disturbances is achieved by a dynamic path reference, which adjusts its speed based on the robot's progress. We also account for key system constraints. We demonstrate these advantages in experiment on a quadrotor. We show improved performance over a baseline trajectory tracking controller by keeping the quadrotor closer to the desired path under nominal conditions, with an initial offset and under a wind disturbance.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2017-10-06T18:56:13Z</published>
+    <arxiv:comment>8 pages, submitted to ICRA 2018</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Melissa Greeff</name>
+    </author>
+    <author>
+      <name>Angela P. Schoellig</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1703.02279v1</id>
+    <title>On Model Predictive Path Following and Trajectory Tracking for Industrial Robots</title>
+    <updated>2017-03-07T08:52:42Z</updated>
+    <link href="https://arxiv.org/abs/1703.02279v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1703.02279v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this article we show how the model predictive path following controller allows robotic manipulators to stop at obstructions in a way that model predictive trajectory tracking controllers cannot. We present both controllers as applied to robotic manipulators, simulations for a two-link manipulator using an interior point solver, consider discretization of the optimal control problem using collocation or Runge-Kutta, and discuss the real-time viability of our implementation of the model predictive path following controller.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2017-03-07T08:52:42Z</published>
+    <arxiv:comment>Draft of article for CASE 2017</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Mathias Hauan Arbo</name>
+    </author>
+    <author>
+      <name>Esten Ingar Grøtli</name>
+    </author>
+    <author>
+      <name>Jan Tommy Gravdahl</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1506.09084v2</id>
+    <title>Implementation of Nonlinear Model Predictive Path-Following Control for an Industrial Robot</title>
+    <updated>2016-08-18T21:13:04Z</updated>
+    <link href="https://arxiv.org/abs/1506.09084v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1506.09084v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Many robotic applications, such as milling, gluing, or high precision measurements, require the exact following of a pre-defined geometric path. In this paper, we investigate the real-time feasible implementation of model predictive path-following control for an industrial robot. We consider constrained output path following with and without reference speed assignment. We present results from an implementation of the proposed model predictive path-following controller on a KUKA LWR IV robot.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-06-30T13:40:34Z</published>
+    <arxiv:comment>8 pages, 3 figures; final revised version</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <arxiv:journal_ref>IEEE Transactions on Control System Technology, 2017 25(4), 1505-1511</arxiv:journal_ref>
+    <author>
+      <name>Timm Faulwasser</name>
+    </author>
+    <author>
+      <name>Tobias Weber</name>
+    </author>
+    <author>
+      <name>Juan Pablo Zometa</name>
+    </author>
+    <author>
+      <name>Rolf Findeisen</name>
+    </author>
+    <arxiv:doi>10.1109/TCST.2016.2601624</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TCST.2016.2601624" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2304.12063v1</id>
+    <title>Risk in Stochastic and Robust Model Predictive Path-Following Control for Vehicular Motion Planning</title>
+    <updated>2023-04-24T13:00:01Z</updated>
+    <link href="https://arxiv.org/abs/2304.12063v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2304.12063v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In automated driving, risk describes potential harm to passengers of an autonomous vehicle (AV) and other road users. Recent studies suggest that human-like driving behavior emerges from embedding risk in AV motion planning algorithms. Additionally, providing evidence that risk is minimized during the AV operation is essential to vehicle safety certification. However, there has yet to be a consensus on how to define and operationalize risk in motion planning or how to bound or minimize it during operation. In this paper, we define a stochastic risk measure and introduce it as a constraint into both robust and stochastic nonlinear model predictive path-following controllers (RMPC and SMPC respectively). We compare the vehicle's behavior arising from employing SMPC and RMPC with respect to safety and path-following performance. Further, the implementation of an automated driving example is provided, showcasing the effects of different risk tolerances and uncertainty growths in predictions of other road users for both cases. We find that the RMPC is significantly more conservative than the SMPC, while also displaying greater following errors towards references. Further, the RMPCs behavior cannot be considered as human-like. Moreover, unlike SMPC, the RMPC cannot account for different risk tolerances. The RMPC generates undesired driving behavior for even moderate uncertainties, which are handled better by the SMPC.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-04-24T13:00:01Z</published>
+    <arxiv:comment>Accepted for the 2023 Intelligent Vehicles Symposium, 8 pages</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Leon Tolksdorf</name>
+    </author>
+    <author>
+      <name>Arturo Tejada</name>
+    </author>
+    <author>
+      <name>Nathan van de Wouw</name>
+    </author>
+    <author>
+      <name>Christian Birkner</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2002.10291v3</id>
+    <title>Estimation-aware model predictive path-following control for a general 2-trailer with a car-like tractor</title>
+    <updated>2020-05-06T13:47:30Z</updated>
+    <link href="https://arxiv.org/abs/2002.10291v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2002.10291v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The design of the path-following controller is crucial for reliable autonomous vehicle operation. This design problem is especially challenging for a general 2-trailer with a car-like tractor due to the vehicle's unstable joint-angle kinematics in backward motion. Additionally, advanced sensors placed in the rear of the tractor have been proposed to solve the joint-angle estimation problem. Since these sensors typically have a limited field of view, the estimation solution introduces restrictions on the joint-angle configurations that can be estimated with high accuracy. To explicitly consider these constraints in the controller, a model predictive path-following control approach is proposed. Two approaches with different computation complexity and performance are presented. In the first approach, the joint-angle constraints are modeled as a union of convex polytopes, making it necessary to incorporate binary decision variables. The second approach avoids binary variables at the expense of a more conservative controller. In simulations and field experiments, the performance of the proposed path-following control approach is compared with a previously proposed control strategy.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-02-20T20:36:43Z</published>
+    <arxiv:comment>Submitted to IEEE Transactions on Robotics. arXiv admin note: substantial text overlap with arXiv:2002.06874</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Oskar Ljungqvist</name>
+    </author>
+    <author>
+      <name>Daniel Axehill</name>
+    </author>
+    <author>
+      <name>Henrik Pettersson</name>
+    </author>
+    <author>
+      <name>Johan Löfberg</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2508.09502v1</id>
+    <title>Reactive Model Predictive Contouring Control for Robot Manipulators</title>
+    <updated>2025-08-13T05:22:00Z</updated>
+    <link href="https://arxiv.org/abs/2508.09502v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2508.09502v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This contribution presents a robot path-following framework via Reactive Model Predictive Contouring Control (RMPCC) that successfully avoids obstacles, singularities and self-collisions in dynamic environments at 100 Hz. Many path-following methods rely on the time parametrization, but struggle to handle collision and singularity avoidance while adhering kinematic limits or other constraints. Specifically, the error between the desired path and the actual position can become large when executing evasive maneuvers. Thus, this paper derives a method that parametrizes the reference path by a path parameter and performs the optimization via RMPCC. In particular, Control Barrier Functions (CBFs) are introduced to avoid collisions and singularities in dynamic environments. A Jacobian-based linearization and Gauss-Newton Hessian approximation enable solving the nonlinear RMPCC problem at 100 Hz, outperforming state-of-the-art methods by a factor of 10. Experiments confirm that the framework handles dynamic obstacles in real-world settings with low contouring error and low robot acceleration.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-08-13T05:22:00Z</published>
+    <arxiv:comment>8 pages, 7 figures, 3 tables, conference paper, Accepted for publication at IEEE/RSJ International Conference on Intelligent Robots and Systems(IROS) 2025</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Junheon Yoon</name>
+    </author>
+    <author>
+      <name>Woo-Jeong Baek</name>
+    </author>
+    <author>
+      <name>Jaeheung Park</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2002.06874v4</id>
+    <title>On sensing-aware model predictive path-following control for a reversing general 2-trailer with a car-like tractor</title>
+    <updated>2020-05-06T12:59:37Z</updated>
+    <link href="https://arxiv.org/abs/2002.06874v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2002.06874v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The design of reliable path-following controllers is a key ingredient for successful deployment of self-driving vehicles. This controller-design problem is especially challenging for a general 2-trailer with a car-like tractor due to the vehicle's structurally unstable joint-angle kinematics in backward motion and the car-like tractor's curvature limitations which can cause the vehicle segments to fold and enter a jackknife state. Furthermore, advanced sensors with a limited field of view have been proposed to solve the joint-angle estimation problem online, which introduce additional restrictions on which vehicle states that can be reliably estimated. To incorporate these restrictions at the level of control, a model predictive path-following controller is proposed. By taking the vehicle's physical and sensing limitations into account, it is shown in real-world experiments that the performance of the proposed path-following controller in terms of suppressing disturbances and recovering from non-trivial initial states is significantly improved compared to a previously proposed solution where the constraints have been neglected.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-02-17T10:27:45Z</published>
+    <arxiv:comment>IEEE International Conference on Robotics and Automation (ICRA), 2020</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Oskar Ljungqvist</name>
+    </author>
+    <author>
+      <name>Daniel Axehill</name>
+    </author>
+    <author>
+      <name>Henrik Pettersson</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2108.13205v4</id>
+    <title>Model Predictive Contouring Control for Time-Optimal Quadrotor Flight</title>
+    <updated>2022-05-04T07:06:09Z</updated>
+    <link href="https://arxiv.org/abs/2108.13205v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2108.13205v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We tackle the problem of flying time-optimal trajectories through multiple waypoints with quadrotors. State-of-the-art solutions split the problem into a planning task - where a global, time-optimal trajectory is generated - and a control task - where this trajectory is accurately tracked. However, at the current state, generating a time-optimal trajectory that considers the full quadrotor model requires solving a difficult time allocation problem via optimization, which is computationally demanding (in the order of minutes or even hours). This is detrimental for replanning in presence of disturbances. We overcome this issue by solving the time allocation problem and the control problem concurrently via Model Predictive Contouring Control (MPCC). Our MPCC optimally selects the future states of the platform at runtime, while maximizing the progress along the reference path and minimizing the distance to it. We show that, even when tracking simplified trajectories, the proposed MPCC results in a path that approaches the true time-optimal one, and which can be generated in real-time. We validate our approach in the real world, where we show that our method outperforms both the current state-of-the-art and a world-class human pilot in terms of lap time achieving speeds of up to 60 km/h.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-08-30T13:01:49Z</published>
+    <arxiv:comment>17 pages, 16 figures. Video: https://www.youtube.com/watch?v=mHDQcckqdg4 This paper has been accepted for publication in the IEEE Transactions on Robotics (T-RO), 2022</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Angel Romero</name>
+    </author>
+    <author>
+      <name>Sihao Sun</name>
+    </author>
+    <author>
+      <name>Philipp Foehn</name>
+    </author>
+    <author>
+      <name>Davide Scaramuzza</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2010.10190v1</id>
+    <title>Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments</title>
+    <updated>2020-10-20T11:00:12Z</updated>
+    <link href="https://arxiv.org/abs/2010.10190v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2010.10190v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a method for local motion planning in unstructured environments with static and moving obstacles, such as humans. Given a reference path and speed, our optimization-based receding-horizon approach computes a local trajectory that minimizes the tracking error while avoiding obstacles. We build on nonlinear model-predictive contouring control (MPCC) and extend it to incorporate a static map by computing, online, a set of convex regions in free space. We model moving obstacles as ellipsoids and provide a correct bound to approximate the collision region, given by the Minkowsky sum of an ellipse and a circle. Our framework is agnostic to the robot model. We present experimental results with a mobile robot navigating in indoor environments populated with humans. Our method is executed fully onboard without the need of external support and can be applied to other robot morphologies such as autonomous cars.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-10-20T11:00:12Z</published>
+    <arxiv:comment>8 pages, 8 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Bruno Brito</name>
+    </author>
+    <author>
+      <name>Boaz Floor</name>
+    </author>
+    <author>
+      <name>Laura Ferranti</name>
+    </author>
+    <author>
+      <name>Javier Alonso-Mora</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2007.03271v3</id>
+    <title>CMPCC: Corridor-based Model Predictive Contouring Control for Aggressive Drone Flight</title>
+    <updated>2021-02-24T15:42:47Z</updated>
+    <link href="https://arxiv.org/abs/2007.03271v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2007.03271v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper, we propose an efficient, receding horizon, local adaptive low-level planner as the middle layer between our original planner and controller. Our method is named as corridor-based model predictive contouring control (CMPCC) since it builds upon on MPCC and utilizes the flight corridor as hard safety constraints. It optimizes the flight aggressiveness and tracking accuracy simultaneously, thus improving our system's robustness by overcoming unmeasured disturbances. Our method features its online flight speed optimization, strict safety and feasibility, and real-time performance, and will be released as a low-level plugin for a large variety of quadrotor systems.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-07-07T08:15:43Z</published>
+    <arxiv:comment>source code: https://github.com/ZJU-FAST-Lab/CMPCC video: https://www.youtube.com/watch?v=_7CzBh-0wQ0 summited to: iser2020</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Jialin Ji</name>
+    </author>
+    <author>
+      <name>Xin Zhou</name>
+    </author>
+    <author>
+      <name>Chao Xu</name>
+    </author>
+    <author>
+      <name>Fei Gao</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2408.04485v1</id>
+    <title>A Learning-Based Model Predictive Contouring Control for Vehicle Evasive Manoeuvres</title>
+    <updated>2024-08-08T14:23:23Z</updated>
+    <link href="https://arxiv.org/abs/2408.04485v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2408.04485v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a novel Learning-based Model Predictive Contouring Control (L-MPCC) algorithm for evasive manoeuvres at the limit of handling. The algorithm uses the Student-t Process (STP) to minimise model mismatches and uncertainties online. The proposed STP captures the mismatches between the prediction model and the measured lateral tyre forces and yaw rate. The mismatches correspond to the posterior means provided to the prediction model to improve its accuracy. Simultaneously, the posterior covariances are propagated to the vehicle lateral velocity and yaw rate along the prediction horizon. The STP posterior covariance directly depends on the variance of observed data, so its variance is more significant when the online measurements differ from the recorded ones in the training set and smaller in the opposite case. Thus, these covariances can be utilised in the L-MPCC's cost function to minimise the vehicle state uncertainties. In a high-fidelity simulation environment, we demonstrate that the proposed L-MPCC can successfully avoid obstacles, keeping the vehicle stable while driving a double lane change manoeuvre at a higher velocity than an MPCC without STP. Furthermore, the proposed controller yields a significantly lower peak sideslip angle, improving the vehicle's manoeuvrability compared to an L-MPCC with a Gaussian Process.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-08-08T14:23:23Z</published>
+    <arxiv:comment>The work will be presented at AVEC'24 in Milan</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Alberto Bertipaglia</name>
+    </author>
+    <author>
+      <name>Mohsen Alirezaei</name>
+    </author>
+    <author>
+      <name>Riender Happee</name>
+    </author>
+    <author>
+      <name>Barys Shyrokau</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.00141v1</id>
+    <title>AD-MPCC: Adaptive Differentiable Model Predictive Contouring Control for Autonomous Racing</title>
+    <updated>2026-06-30T20:19:35Z</updated>
+    <link href="https://arxiv.org/abs/2607.00141v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2607.00141v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents Adaptive Differentiable Model Predictive Contouring Control (AD-MPCC), a framework for autonomous racing that integrates differentiable MPCC with online parameter estimation to handle varying road-surface conditions. For online parameter estimation, we leverage a parameterized Pacejka Magic Formula together with a regularized moving-horizon estimation scheme with exponentially decaying weights to capture road interactions and update parameters in real time. Furthermore, we propose a differentiable MPCC (Diff-MPCC) framework that enables optimal adjustment of objective weights based on predefined long-horizon performance costs. To implement Diff-MPCC for online objective weight adaptation, we propose a Pacejka-informed machine learning model that is trained in a supervised manner using data generated by Diff-MPCC to tune the objective weights. Simulation results demonstrate that AD-MPCC reliably ensures safety and achieves faster lap times compared to baseline controllers in both single-surface and multiple-surface scenarios.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-06-30T20:19:35Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Nam T. Nguyen</name>
+    </author>
+    <author>
+      <name>Binh Nguyen</name>
+    </author>
+    <author>
+      <name>Ahmad Amine</name>
+    </author>
+    <author>
+      <name>Thanh Vo-Duy</name>
+    </author>
+    <author>
+      <name>Rahul Mangharam</name>
+    </author>
+    <author>
+      <name>Truong X. Nghiem</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2403.17551v2</id>
+    <title>MPCC++: Model Predictive Contouring Control for Time-Optimal Flight with Safety Constraints</title>
+    <updated>2024-06-14T09:48:41Z</updated>
+    <link href="https://arxiv.org/abs/2403.17551v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2403.17551v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Quadrotor flight is an extremely challenging problem due to the limited control authority encountered at the limit of handling. Model Predictive Contouring Control (MPCC) has emerged as a promising model-based approach for time optimization problems such as drone racing. However, the standard MPCC formulation used in quadrotor racing introduces the notion of the gates directly in the cost function, creating a multi objective optimization that continuously trades off between maximizing progress and tracking the path accurately. This paper introduces three key components that enhance the state-of-the-art MPCC approach for drone racing. First and foremost, we provide safety guarantees in the form of a track constraint and terminal set. The track constraint is designed as a spatial constraint which prevents gate collisions while allowing for time optimization only in the cost function. Second, we augment the existing first principles dynamics with a residual term that captures complex aerodynamic effects and thrust forces learned directly from real-world data. Third, we use Trust Region Bayesian Optimization (TuRBO), a state-of-the-art global Bayesian Optimization algorithm, to tune the hyperparameters of the MPCC controller given a sparse reward based on lap time minimization. The proposed approach achieves similar lap times to the best-performing RL policy and outperforms the best model-based controller while satisfying constraints. In both simulation and real world, our approach consistently prevents gate crashes with 100% success rate, while pushing the quadrotor to its physical limits reaching speeds of more than 80km/h.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-03-26T09:58:27Z</published>
+    <arxiv:comment>12 pages, 6 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <arxiv:journal_ref>Robotics: Science and Systems (RSS), 2024</arxiv:journal_ref>
+    <author>
+      <name>Maria Krinner</name>
+    </author>
+    <author>
+      <name>Angel Romero</name>
+    </author>
+    <author>
+      <name>Leonard Bauersfeld</name>
+    </author>
+    <author>
+      <name>Melanie Zeilinger</name>
+    </author>
+    <author>
+      <name>Andrea Carron</name>
+    </author>
+    <author>
+      <name>Davide Scaramuzza</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2604.24064v1</id>
+    <title>Trajectory Planning for an Articulated Commercial Vehicle using Model Predictive Contouring Control</title>
+    <updated>2026-04-27T05:40:01Z</updated>
+    <link href="https://arxiv.org/abs/2604.24064v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2604.24064v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a trajectory planning method for articulated commercial vehicles, specifically tractor-semitrailers, based on Model Predictive Contouring Control (MPCC). Although MPCC has proven effective for passenger cars, it is generally ill-suited for tractor-semitrailers. These vehicles are significantly larger, the semitrailer follows a different path than the tractor, and reversing maneuvers are unstable and prone to jackknifing. Furthermore, practical driving scenarios often require scenario-dependent prioritization of different vehicle `anchor points', e.g., prioritizing the semitrailer position during docking or the tractor position when parking to charge. Therefore, we extend MPCC to enable scenario-dependent weighting of these anchor points and incorporate explicit road-boundary constraints for the front and rear tractor axles and the semitrailer axle, thereby ensuring that all considered wheels remain within the drivable area. The simulation results demonstrate the successful navigation of a representative logistic scenario in both forward and reverse direction. Furthermore, the influence of the optimization parameters on the trajectories is analyzed, providing insights into controlling the vehicle behavior. Finally, first tests using a full-scale prototype vehicle show the practical applicability of the approach.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-04-27T05:40:01Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <arxiv:journal_ref>2025 IEEE 28th International Conference on Intelligent Transportation Systems (ITSC) Gold Coast Australia 2025 pp. 421-427</arxiv:journal_ref>
+    <author>
+      <name>A. J. Aertssen</name>
+    </author>
+    <author>
+      <name>R. G. M. Huisman</name>
+    </author>
+    <author>
+      <name>I. J. M. Besselink</name>
+    </author>
+    <author>
+      <name>J. Elfring</name>
+    </author>
+    <author>
+      <name>M. J. G. van de Molengraft</name>
+    </author>
+    <arxiv:doi>10.1109/ITSC60802.2025.11423006</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/ITSC60802.2025.11423006" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2608.21056v1</id>
+    <title>FF-MPCC: High-speed Agile Formation Flight with Model Predictive Contouring Control</title>
+    <updated>2026-08-21T12:56:07Z</updated>
+    <link href="https://arxiv.org/abs/2608.21056v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2608.21056v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Flying in a prescribed formation in an agile manner remains a challenging problem in the field of UAVs, particularly when following highly-demanding trajectories that require flight at platform limits. We address this problem by proposing a novel decentralized approach to formation flight along a given path that integrates formation maintenance into the MPCC framework, allowing UAVs to adapt their progression along complex paths while respecting individual dynamic constraints and maintaining the desired formation. To this end, we introduce a novel reparametrization and synchronization method for dynamic formation geometries together with a decentralized approach to determine the desired positions for the individual UAVs. The proposed approach allows the formation to coordinate high-speed path following without compromising formation integrity. The proposed approach is validated through extensive simulation and real-world experiments involving scenarios with varying complexity of paths and changes of required formation shape on the fly. In comparison to time-parameterized trajectory tracking, we demonstrate improved formation maintenance by 65% in high-speed flight with velocities up to 21 m/s, while achieving comparable times required to reach the goal.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-08-21T12:56:07Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Aditya Dandwate</name>
+    </author>
+    <author>
+      <name>Vit Kratky</name>
+    </author>
+    <author>
+      <name>Parakh M. Gupta</name>
+    </author>
+    <author>
+      <name>Martin Saska</name>
+    </author>
+    <author>
+      <name>Robert Penicka</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2308.06742v1</id>
+    <title>Model Predictive Contouring Control for Vehicle Obstacle Avoidance at the Limit of Handling</title>
+    <updated>2023-08-13T10:23:47Z</updated>
+    <link href="https://arxiv.org/abs/2308.06742v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2308.06742v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper proposes a non-linear Model Predictive Contouring Control (MPCC) for obstacle avoidance in automated vehicles driven at the limit of handling. The proposed controller integrates motion planning, path tracking and vehicle stability objectives, prioritising obstacle avoidance in emergencies. The controller's prediction model is a non-linear single-track vehicle model with the Fiala tyre to capture the vehicle's non-linear behaviour. The MPCC computes the optimal steering angle and brake torques to minimise tracking error in safe situations and maximise the vehicle-to-obstacle distance in emergencies. Furthermore, the MPCC is extended with the tyre friction circle to fully exploit the vehicle's manoeuvrability and stability. The MPCC controller is tested using real-time rapid prototyping hardware to prove its real-time capability. The performance is compared with a state-of-the-art Model Predictive Control (MPC) in a high-fidelity simulation environment. The double lane change scenario results demonstrate a significant improvement in successfully avoiding obstacles and maintaining vehicle stability.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-08-13T10:23:47Z</published>
+    <arxiv:comment>Accepted to the 28th IAVSD International Symposium on Dynamics of Vehicles on Roads and Tracks</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Alberto Bertipaglia</name>
+    </author>
+    <author>
+      <name>Mohsen Alirezaei</name>
+    </author>
+    <author>
+      <name>Riender Happee</name>
+    </author>
+    <author>
+      <name>Barys Shyrokau</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2605.06042v3</id>
+    <title>Accurate Trajectory Tracking with Model Predictive Contouring Control for Bird-Scale Flapping-Wing MAVs</title>
+    <updated>2026-08-07T14:09:18Z</updated>
+    <link href="https://arxiv.org/abs/2605.06042v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2605.06042v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Flapping-wing micro aerial vehicles offer quieter and safer operation than rotary-wing drones, yet achieving precise autonomous control of bird-scale ornithopters remains challenging: lift, airspeed, and turning authority are tightly coupled and governed by only a few control inputs. Conventional cascaded controllers treat altitude, speed, and heading independently, producing persistent tracking errors during complex maneuvers, while time-parameterized trajectory tracking requires predefined speed profiles that existing methods cannot robustly produce for these coupled dynamics. We address both limitations simultaneously with a Model Predictive Contouring Control (MPCC) approach that tracks arc-length-parameterized trajectories while optimizing progress online, eliminating the need for predefined timing. However, MPCC requires a dynamical model that captures the coupled aerodynamics without exceeding the computational budget of real-time nonlinear optimization. Here, we propose a compact, continuously differentiable model that captures the dominant couplings of bird-scale ornithopters, enabling real-time predictive control. We validated the method with the XFly ornithopter flying along circular and three-dimensional racing trajectories and achieved a mean deviation from the reference trajectory between 6.5 and 9 cm at speeds up to 3 m/s, which represents an 8.5x improvement over prior ornithopter control methods.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-05-07T11:31:34Z</published>
+    <arxiv:comment>9 pages, 7 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Charbel Toumieh</name>
+    </author>
+    <author>
+      <name>Jack Zeng</name>
+    </author>
+    <author>
+      <name>Niel Mistry</name>
+    </author>
+    <author>
+      <name>Dario Floreano</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2308.00119v1</id>
+    <title>Overtaking Moving Obstacles with Digit: Path Following for Bipedal Robots via Model Predictive Contouring Control</title>
+    <updated>2023-07-31T19:37:45Z</updated>
+    <link href="https://arxiv.org/abs/2308.00119v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2308.00119v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Humanoid robots are expected to navigate in changing environments and perform a variety of tasks. Frequently, these tasks require the robot to make decisions online regarding the speed and precision of following a reference path. For example, a robot may want to decide to temporarily deviate from its path to overtake a slowly moving obstacle that shares the same path and is ahead. In this case, path following performance is compromised in favor of fast path traversal. Available global trajectory tracking approaches typically assume a given -- specified in advance -- time parametrization of the path and seek to minimize the norm of the Cartesian error. As a result, when the robot should be where on the path is fixed and temporary deviations from the path are strongly discouraged. Given a global path, this paper presents a Model Predictive Contouring Control (MPCC) approach to selecting footsteps that maximize path traversal while simultaneously allowing the robot to decide between faithful versus fast path following. The method is evaluated in high-fidelity simulations of the bipedal robot Digit in terms of tracking performance of curved paths under disturbances and is also applied to the case where Digit overtakes a moving obstacle.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-07-31T19:37:45Z</published>
+    <arxiv:comment>Accepted for publication in 2023 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Kunal S. Narkhede</name>
+    </author>
+    <author>
+      <name>Dhruv A. Thanki</name>
+    </author>
+    <author>
+      <name>Abhijeet M. Kulkarni</name>
+    </author>
+    <author>
+      <name>Ioannis Poulakakis</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2411.00668v1</id>
+    <title>Model Predictive Contouring Control with Barrier and Lyapunov Functions for Stable Path-Following in UAV systems</title>
+    <updated>2024-11-01T15:31:36Z</updated>
+    <link href="https://arxiv.org/abs/2411.00668v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2411.00668v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this study, we propose a novel method that integrates Nonlinear Model Predictive Contour Control (NMPCC) with an Exponentially Stabilizing Control Lyapunov Function (ES-CLF) and Exponential Higher-Order Control Barrier Functions to achieve stable path-following and obstacle avoidance in UAV systems. This framework enables unmanned aerial vehicles (UAVs) to safely navigate around both static and dynamic obstacles while strictly adhering to desired paths. The quaternion-based formulation ensures precise orientation and attitude control, while a robust optimization solver enforces the constraints imposed by the Control Lyapunov Function (CLF) and Control Barrier Functions (CBF), ensuring reliable real-time performance. The method was validated in a Model-in-the-Loop (MiL) environment, demonstrating effective path tracking and obstacle avoidance. The results highlight the framework's ability to minimize both orthogonal and tangential errors, ensuring stability and safety in complex environments.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-11-01T15:31:36Z</published>
+    <arxiv:comment>Submitted to IEEE Access for review</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Bryan S. Guevara</name>
+    </author>
+    <author>
+      <name>Viviana Moya</name>
+    </author>
+    <author>
+      <name>Luis F. Recalde</name>
+    </author>
+    <author>
+      <name>David Pozo-Espin</name>
+    </author>
+    <author>
+      <name>Daniel C. Gandolfo</name>
+    </author>
+    <author>
+      <name>Juan M. Toibero</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2405.10847v1</id>
+    <title>Model Predictive Contouring Control for Vehicle Obstacle Avoidance at the Limit of Handling Using Torque Vectoring</title>
+    <updated>2024-05-17T15:22:34Z</updated>
+    <link href="https://arxiv.org/abs/2405.10847v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2405.10847v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents an original approach to vehicle obstacle avoidance. It involves the development of a nonlinear Model Predictive Contouring Control, which uses torque vectoring to stabilise and drive the vehicle in evasive manoeuvres at the limit of handling. The proposed algorithm combines motion planning, path tracking and vehicle stability objectives, prioritising collision avoidance in emergencies. The controller's prediction model is a nonlinear double-track vehicle model based on an extended Fiala tyre to capture the nonlinear coupled longitudinal and lateral dynamics. The controller computes the optimal steering angle and the longitudinal forces per each of the four wheels to minimise tracking error in safe situations and maximise the vehicle-to-obstacle distance in emergencies. Thanks to the optimisation of the longitudinal tyre forces, the proposed controller can produce an extra yaw moment, increasing the vehicle's lateral agility to avoid obstacles while keeping the vehicle stable. The optimal forces are constrained in the tyre friction circle not to exceed the tyres and vehicle capabilities. In a high-fidelity simulation environment, we demonstrate the benefits of torque vectoring, showing that our proposed approach is capable of successfully avoiding obstacles and keeping the vehicle stable while driving a double-lane change manoeuvre, in comparison to baselines lacking torque vectoring or collision avoidance prioritisation.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-05-17T15:22:34Z</published>
+    <arxiv:comment>Accepted at IEEE/ASME International Conference on Advanced Intelligent Mechatronics, Boston, USA, 2024</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Alberto Bertipaglia</name>
+    </author>
+    <author>
+      <name>Davide Tavernini</name>
+    </author>
+    <author>
+      <name>Umberto Montanaro</name>
+    </author>
+    <author>
+      <name>Mohsen Alirezaei</name>
+    </author>
+    <author>
+      <name>Riender Happee</name>
+    </author>
+    <author>
+      <name>Aldo Sorniotti</name>
+    </author>
+    <author>
+      <name>Barys Shyrokau</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2107.04314v1</id>
+    <title>Dynamic Modeling of Bucket-Soil Interactions Using Koopman-DFL Lifting Linearization for Model Predictive Contouring Control of Autonomous Excavators</title>
+    <updated>2021-07-09T09:07:32Z</updated>
+    <link href="https://arxiv.org/abs/2107.04314v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2107.04314v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A lifting-linearization method based on the Koopman operator and Dual Faceted Linearization is applied to the control of a robotic excavator. In excavation, a bucket interacts with the surrounding soil in a highly nonlinear and complex manner. Here, we propose to represent the nonlinear bucket-soil dynamics with a set of linear state equations in a higher-dimensional space. The space of independent state variables is augmented by adding variables associated with nonlinear elements involved in the bucket-soil dynamics. These include nonlinear resistive forces and moment acting on the bucket from the soil, and the effective inertia of the bucket that varies as the soil is captured into the bucket. Variables associated with these nonlinear resistive and inertia elements are treated as additional state variables, and their time evolution is represented as another set of linear differential equations. The lifted linear dynamic model is then applied to Model Predictive Contouring Control, where a cost functional is minimized as a convex optimization problem thanks to the linear dynamics in the lifted space. The lifted linear model is tuned based on a data-driven method by using a soil dynamics simulator. Simulation experiments verify the effectiveness of the proposed lifting linearization compared to its counterpart.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-07-09T09:07:32Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Filippos E. Sotiropoulos</name>
+    </author>
+    <author>
+      <name>H. Harry Asada</name>
+    </author>
+  </entry>
+</feed>

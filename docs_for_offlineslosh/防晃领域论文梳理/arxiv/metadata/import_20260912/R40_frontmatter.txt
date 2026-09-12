@@ -1,0 +1,134 @@
+                                            Towards Universal Shared Control in Teleoperation Without Haptic
+                                                                      Feedback
+                                                                             Max Grobbel1 , Tristan Schneider1 , Sören Hohmann2
+
+
+                                           Abstract— Teleoperation with non-haptic VR controllers de-             avoidance constraints. This optimal control problem implic-
+                                        prives human operators of critical motion feedback. We address            itly also solves the inverse kinematics. Initial measurements
+                                        this by embedding a multi-objective optimization problem that             show that the highly non-convex optimization problem is still
+                                        converts user input into collision-free UR5e joint trajectories
+                                        while actively suppressing liquid slosh in a glass. The controller        solved reliably in real-time and that the parameterization
+                                        maintains 13 ms average planning latency, confirming real-                influences the tradeoff between tracking performance and
+                                        time performance and motivating the augmentation of this                  liquid stabilization.
+arXiv:2506.23624v2 [cs.RO] 5 Jul 2025
+
+
+
+
+                                        teleoperation approach to further objectives.                                To showcase the extendability of this approach, the ob-
+                                                                                                                  jective function is augmented with a second objective to
+                                                                I. I NTRODUCTION
+                                                                                                                  stabilize liquid in a glass. In this scenario, the human
+                                           Teleoperation enables humans to interact with the envi-                operator is lacking proprioceptive information to stabilize the
+                                        ronment in remote places. Especially inaccessible hazardous               liquid himself.
+                                        environments have been named in research. Further, the lack
+                                        of human resources, and the need for precision in certain                      II. O PTIMAL C ONTROL BASED T ELEROBOTICS
+                                        applications require teleoperation systems [1]. Further fields               Trajectory planning formulated as an optimal control
+                                        of application include space exploration, handling hazardous              problem is a widely used approach in robot-manipulator
+                                        materials, surgery and even elder care. Another upcoming                  teleoperation [9 – 11]. Leveraging an explicit dynamic model
+                                        application for teleoperation is the collection of data for               and an objective function, it generates trajectories that both
+                                        imitation learning [2] or preference-based learning [3] of                minimize the objective and satisfy the system dynamics.
+                                        robots.                                                                   Embedded in a receding-horizon (model-predictive-control)
+                                           Recent research has shown that teleoperation performance               loop, the optimization is resolved at every sampling instant,
+                                        in terms of task completion times is one magnitude worse                  continuously computing new trajectories.
+                                        compared to human performing tasks directly [2]. With the                    A key constraint for MPC is meeting real-time dead-
+                                        perspective by neuroscientist Daniel Wolpert, that ”Move-                 lines. Advances in processor speed and in numerical solvers
+                                        ment is the only way you have of affecting the world around               have reduced this burden, and robotic implementations now
+                                        you” [4], high performant teleoperation systems might ben-                achieve update rates of 1 kHz—even for nonlinear prob-
+                                        efit all aforementioned applications.                                     lems—as reported in [12].
+                                           Most research in teleoperation focuses on displaying in-                  In teleoperation, MPC aids the human operator by embed-
+                                        formation on multiple feedback modalities to the human                    ding additional objectives and constraints in the optimization.
+                                        operator [5]. A specific focus has been on providing haptic               Collision avoidance, for instance, is enforced by distance
+                                        feedback, which leads to significantly higher task perfor-                constraints [9, 10]. Liquid handling poses another case: by
+                                        mance in tasks with physical interaction [6]. One downside                modelling the fluid and adding a spill penalty to the cost, the
+                                        of such systems is the high cost of up to 40,000 $ [2].                   controller yields slosh-free motions [8]. Because the human
+                                        Alternatively, motion tracking devices as cameras or VR                   and the automation jointly execute the task, these approaches
+                                        (Virtual Reality) controllers are available at lower cost.                are referred to as shared control [7, 13].
+                                           A common approach to increase task performance in
+                                        teleoperation is the utilization of shared control algorithms                       III. T ELEOPERATION ARCHITECTURE
+                                        [7]. The overall task is decomposed between the human                        System architectures for teleoperation have been described
+                                        operator (e.g., commanding the end effector pose) and an                  frequently in literature (e.g. [14, 15]). Typically, those sys-
+                                        automation algorithm (e.g., handling joint-level redundancy               tems are classified by the type of input device. Haptic input
+                                        or collision avoidance) [8].                                              devices provide a feedback channel to the human operator, by
+                                           This paper contributes a holistic control approach to shared           applying forces and torque to the human operator and come
+                                        teleoperation by formulating an optimal control problem that              with a higher cost. Those devices usually are some kind of
+                                        contains the robot joints as system states, tracking error and            higher dimensional joystick or manipulator. Non-haptic input
+                                        stabilization terms in the objective function, and collision              devices, such as motion capturing devices or cameras, lack
+                                                                                                                  the additional feedback channel but come with much lower
+                                           1 Max Grobbel and Tristan Schneider are with FZI - Forschungszentrum
+                                                                                                                  cost.
+                                        Informatik, 76135 Karlsruhe, Germany grobbel@fzi.de
+                                           2 Sören Hohmann is with the Department of Electrical Engineering,        The system under consideration is based on a non-haptic
+                                        Karlsruhe Institute of Technology, Karlsruhe, Germany                     VR-controller. The system architecture is shown in Figure
+                                                                         objectives and constraints, and the resulting optimization
+                                                                         problem for the teleoperation task are described.
+                                                Motion Retargeting
+
+                                                                         A. Robot State Space Modeling
+                                                                            Previous work has shown that low level controllers of in-
+                         State Estimation &     Optimal Trajectory       dustrial robotic manipulators provide sufficient performance
+                             Prediction              Planner
+                                                                         to neglect the dynamics of the physical system in trajectory
+                                                                         planning tasks [12]. This allows for a linear kinematic system
+                                                                         model                          
+                                                                                             d q           q
+                                                                                                    =A        + Bu                   (1)
+          Feedback
+                                                 Robot Controller
+                                                                                            dt q̇          q̇
+           Channel
+
+                                                                         with the joint accelerations as control inputs u = q̈, u ∈ Rnq
+                                                                         and
+                                                                                                                        
+                                                                                           0      I                       0
+Fig. 1. System Architecture of the Shared Control Teleoperation. The                A=                    and      B=        ,
+central parts of the system are the Motion Retargeting and the Optimal                     0      0                       I
+Trajectory Planner. The robot itself interacts with the environment.
+                                                                         where I ∈ Rnq ×nq denotes   the identity
+                                                                                                             T      matrix and 0 ∈
+                                                                         Rnq ×nq . The state vector qT q̇T       consists of the con-
+1. The connections between the parts of the system depict                catenation of joint angles q and velocities q̇.
+information flow.                                                           An UR5e robot with six rotational joints is
+   The human operator is enabled to communicate goals to                 used
+                                                                               in this work. The   T joint vector thus becomes
+the robot through a VR-controller. The process of mapping                 q0 q1 q2 q3 q4 q5 . The pose of the end effector
+the pose of the input device onto a desired pose for the robot           is given with the transformation T0M e (q) [18], which is
+end effector is referred to as motion retargeting [16]. This is          defined through the forward kinematics using the D-H
+the first central part of the system architecture, as task and           parameters for the UR5e taken from [19]. In the following,
+view point dependent strategies have a huge impact on the                the position of the end effector is denoted with p(q) and
+overall task performance.                                                indices are omitted. The orientation of the end effector is
+   The second central part of the system architecture is the             given by the rotation matrix R(q).
+optimal trajectory controller. Including an objective func-
+tion with multiple goals (tracking and stabilizing a liquid),            B. Human Movement Prediction
+knowledge about the system dynamics and its constraints,                    A prediction of the human reference movement is nec-
+this controller shares the workload with the human operator.             essary for a predictive control approach. For this work, a
+The human operator can focus on completing the task in the               constant velocity along a straight line over the prediction
+task space, while the controller solves the inverse kinematics,          horizon is assumed, leading to a reference of positions
+respects constraints and provides stabilization assistance,              Pref = [pref,1 , ..., pref,N ]. To exclude infeasible reference
+which requires local proprioceptive information.                         trajectories, predictions extending over the robotic manipula-
+   The trajectory controller generates joint angle trajectories          tor’s reach are clipped. The reference trajectory of orientation
+for high frequency tracking controllers, which are embedded              Rref in the same manner assumes constant angular velocity.
+on the robot. Feedback is provided by a state estimation,                More sophisticated approaches like [20], which also consider
+which utilizes sensory information on the robot. The robot               the variability in human movement, might be utilized for
+itself interacts with the environment.                                   future experiments.
+   The human operator observes the robot and its environ-
+ment through multiple feedback channels. In the considered               C. Objective Function
+setup, the operator has a fixed view point. An overview of
+                                                                            The main objectives Oi of the trajectory planning task
+the impact on task performance by modality and quality of
+                                                                         are incorporated in the objective function J of the optimal
+the feedback channels is given in [17].
+                                                                         control problem and defined in the following. In this case,
+                                                                         only stage costs li are applied.
+  IV. C OOPERATIVE O PTIMAL C ONTROL T RAJECTORY
+                                                                              a) O1 : Tracking: The main objective of a teleoperation
+                     P LANNING
+                                                                         system is to follow the reference pose given by the operator.
+   An Optimal Control Problem consists of an objective func-             The pose can be separated into the position p and the
+tion J, system dynamic constraints, and further constraints              orientation, given in the form of a rotation matrix R. The
+on the input and state variables. The objective of the control           prediction of the human motion combined with the motion
+task is given through the objective function, namely reference           mapping leads to the reference position trajectory pref (t)
+tracking, liquid stabilization and further stabilization terms.          in the manipulator task space. The squared weighted error
+In this section, the modeling of the robot, the selection of             is commonly used for position tracking objectives. Thus,
+

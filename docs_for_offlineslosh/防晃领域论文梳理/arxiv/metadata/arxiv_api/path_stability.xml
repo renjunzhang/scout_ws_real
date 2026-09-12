@@ -1,0 +1,38 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/ujwBKUQCp0IMINEuMt48iNx+O5A</id>
+  <title>arXiv Query: search_query=ti:"Nonlinear Model Predictive Path-Following Control"&amp;id_list=&amp;start=0&amp;max_results=10</title>
+  <updated>2026-09-11T14:16:47Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=ti:%22Nonlinear+Model+Predictive+Path-Following+Control%22&amp;start=0&amp;max_results=10&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>10</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1506.09084v2</id>
+    <title>Implementation of Nonlinear Model Predictive Path-Following Control for an Industrial Robot</title>
+    <updated>2016-08-18T21:13:04Z</updated>
+    <link href="https://arxiv.org/abs/1506.09084v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1506.09084v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Many robotic applications, such as milling, gluing, or high precision measurements, require the exact following of a pre-defined geometric path. In this paper, we investigate the real-time feasible implementation of model predictive path-following control for an industrial robot. We consider constrained output path following with and without reference speed assignment. We present results from an implementation of the proposed model predictive path-following controller on a KUKA LWR IV robot.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2015-06-30T13:40:34Z</published>
+    <arxiv:comment>8 pages, 3 figures; final revised version</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <arxiv:journal_ref>IEEE Transactions on Control System Technology, 2017 25(4), 1505-1511</arxiv:journal_ref>
+    <author>
+      <name>Timm Faulwasser</name>
+    </author>
+    <author>
+      <name>Tobias Weber</name>
+    </author>
+    <author>
+      <name>Juan Pablo Zometa</name>
+    </author>
+    <author>
+      <name>Rolf Findeisen</name>
+    </author>
+    <arxiv:doi>10.1109/TCST.2016.2601624</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TCST.2016.2601624" title="doi"/>
+  </entry>
+</feed>

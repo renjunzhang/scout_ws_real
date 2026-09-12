@@ -1,0 +1,109 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/ICRA46639.2022.9812077",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/icra46639.2022.9812077",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/icra46639.2022.9812077",
+    "title": [
+      "Learning Model Predictive Control for Quadrotors"
+    ],
+    "author": [
+      {
+        "given": "Guanrui",
+        "family": "Li",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "New York University, Tandon School of Engineering,Brooklyn,NY,USA,11201"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Alex",
+        "family": "Tunchez",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "New York University, Tandon School of Engineering,Brooklyn,NY,USA,11201"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Giuseppe",
+        "family": "Loianno",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "New York University, Tandon School of Engineering,Brooklyn,NY,USA,11201"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2022 International Conference on Robotics and Automation (ICRA)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          5,
+          23
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2022,
+          5,
+          23
+        ]
+      ]
+    },
+    "page": "5872-5878",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/icra46639.2022.9812077",
+    "event": {
+      "name": "2022 IEEE International Conference on Robotics and Automation (ICRA)",
+      "start": {
+        "date-parts": [
+          [
+            2022,
+            5,
+            23
+          ]
+        ]
+      },
+      "location": "Philadelphia, PA, USA",
+      "end": {
+        "date-parts": [
+          [
+            2022,
+            5,
+            27
+          ]
+        ]
+      }
+    }
+  }
+}

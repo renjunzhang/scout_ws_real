@@ -1,0 +1,66 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=A+predictive+safety+filter+for+learning-based+control+of+constrained+nonlinear+dynamical+systems&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1016/j.automatica.2021.109597",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1016/j.automatica.2021.109597",
+    "title": [
+      "A predictive safety filter for learning-based control of constrained nonlinear dynamical systems"
+    ],
+    "author": [
+      {
+        "given": "Kim Peter",
+        "family": "Wabersich",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Melanie N.",
+        "family": "Zeilinger",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "Automatica"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021,
+          7
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021,
+          7
+        ]
+      ]
+    },
+    "volume": "129",
+    "page": "109597",
+    "article-number": "109597",
+    "publisher": "Elsevier BV",
+    "URL": "https://doi.org/10.1016/j.automatica.2021.109597",
+    "ISSN": [
+      "0005-1098"
+    ]
+  }
+}

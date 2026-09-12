@@ -1,0 +1,134 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Safe+Learning+Reference+Governor%3A+Theory+and+Application+to+Fuel+Truck+Rollover+Avoidance&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1115/1.4053244",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1115/1.4053244",
+    "title": [
+      "Safe Learning Reference Governor: Theory and Application to Fuel Truck Rollover Avoidance"
+    ],
+    "author": [
+      {
+        "given": "Kaiwen",
+        "family": "Liu",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Department of Aerospace Engineering, University of Michigan, Ann Arbor, MI 48109"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Nan",
+        "family": "Li",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Aerospace Engineering, University of Michigan, Ann Arbor, MI 48109"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Ilya",
+        "family": "Kolmanovsky",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Aerospace Engineering, University of Michigan, Ann Arbor, MI 48109"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Denise",
+        "family": "Rizzo",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "U.S. Army DEVCOM Ground Vehicle Systems Center, Warren, MI 48397"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Anouck",
+        "family": "Girard",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Aerospace Engineering, University of Michigan, Ann Arbor, MI 48109"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "Journal of Autonomous Vehicles and Systems"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021,
+          10,
+          1
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2022,
+          2,
+          4
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021,
+          10,
+          1
+        ]
+      ]
+    },
+    "volume": "1",
+    "issue": "4",
+    "article-number": "041003",
+    "publisher": "ASME International",
+    "URL": "https://doi.org/10.1115/1.4053244",
+    "ISSN": [
+      "2690-702X",
+      "2690-7038"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "checked_on": "2026-09-11",
+  "pdf_count": 37,
+  "unique_arxiv_works": 32,
+  "other_source_pdfs": 5,
+  "formal_publication_metadata_matches": 34,
+  "preprints_publication_not_verified": 3,
+  "file_headers_sizes_sha256": "pass",
+  "all_pdfinfo_pdftotext": "pass",
+  "original_30_paths_and_hashes_preserved": "pass",
+  "taxonomy_coverage": 37,
+  "general_foundations_not_counted_as_direct_slosh": "pass",
+  "roles": {
+    "direct_liquid_method": 13,
+    "liquid_model_or_physics": 2,
+    "general_method_foundation": 22
+  },
+  "markdown_local_links_checked": 193,
+  "markdown_links_fences_whitespace": "pass",
+  "bibtex_unique_entries_and_balanced_braces": 37,
+  "pending_fulltexts_excluded_from_count": 5,
+  "pdf_total_pages": 577,
+  "pdf_total_bytes": 148797568,
+  "reading_scope": "Abstract/frontmatter and selected passages screened; full reading pending"
+}

@@ -1,0 +1,78 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Output-Feedback+Control+of+Viscous+Liquid-Tank+System+and+its+Numerical+Approximation&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1016/j.automatica.2022.110827",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1016/j.automatica.2022.110827",
+    "title": [
+      "Output-feedback control of viscous liquid–tank system and its numerical approximation"
+    ],
+    "author": [
+      {
+        "given": "Iasson",
+        "family": "Karafyllis",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Filippos",
+        "family": "Vokos",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Miroslav",
+        "family": "Krstic",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "Automatica"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2023,
+          3
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2023,
+          3
+        ]
+      ]
+    },
+    "volume": "149",
+    "page": "110827",
+    "article-number": "110827",
+    "publisher": "Elsevier BV",
+    "URL": "https://doi.org/10.1016/j.automatica.2022.110827",
+    "ISSN": [
+      "0005-1098"
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1007/978-3-031-59257-7_41",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1007/978-3-031-59257-7_41",
+    "title": [
+      "Time-Optimal Transport of Loosely Placed Liquid Filled Cups Along Prescribed Paths"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0009-0006-3572-1213",
+        "authenticated-orcid": false,
+        "given": "Klaus",
+        "family": "Zauner",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-8846-9051",
+        "authenticated-orcid": false,
+        "given": "Hubert",
+        "family": "Gattringer",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-5033-340X",
+        "authenticated-orcid": false,
+        "given": "Andreas",
+        "family": "Müller",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "book-chapter",
+    "container-title": [
+      "Mechanisms and Machine Science",
+      "Advances in Service and Industrial Robotics"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2024,
+          5,
+          11
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2024
+        ]
+      ]
+    },
+    "page": "411-419",
+    "publisher": "Springer Nature Switzerland",
+    "URL": "https://doi.org/10.1007/978-3-031-59257-7_41",
+    "link": [
+      {
+        "URL": "https://link.springer.com/content/pdf/10.1007/978-3-031-59257-7_41",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

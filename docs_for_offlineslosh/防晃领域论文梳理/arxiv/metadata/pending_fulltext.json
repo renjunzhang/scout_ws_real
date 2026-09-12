@@ -1,0 +1,68 @@
+{
+  "updated_on": "2026-09-11",
+  "papers": [
+    {
+      "title": "Anti‐sloshing control: Flatness‐based trajectory planning and tracking control with an integrated extended state observer",
+      "doi": "10.1049/csy2.12121",
+      "legacy_id_confirmed": "C06",
+      "provisional_families": [
+        "4.4",
+        "4.6",
+        "4.7"
+      ],
+      "status": "metadata_verified_fulltext_pending",
+      "reason": "Wiley public article/PDF endpoints returned HTTP 403",
+      "source_record": "metadata/followup_20260911/C06_crossref.json",
+      "counted_in_downloaded_collection": false
+    },
+    {
+      "title": "Preshaping Command Inputs to Reduce System Vibration",
+      "doi": "10.1115/1.2894142",
+      "legacy_id_confirmed": null,
+      "provisional_families": [
+        "4.3"
+      ],
+      "status": "metadata_verified_fulltext_pending",
+      "reason": "MIT repository located; PDF request returned HTTP 405",
+      "source_record": "metadata/followup_20260911/classic_crossref.json",
+      "counted_in_downloaded_collection": false
+    },
+    {
+      "title": "Path design and trace control of a wheeled mobile robot to damp liquid sloshing in a cylindrical container",
+      "doi": "10.1109/icma.2005.1626862",
+      "legacy_id_confirmed": null,
+      "provisional_families": [
+        "4.3",
+        "4.6"
+      ],
+      "status": "metadata_verified_fulltext_pending",
+      "reason": "Publication metadata located; full text not acquired",
+      "source_record": "metadata/followup_20260911/wheeled_crossref.json",
+      "counted_in_downloaded_collection": false
+    },
+    {
+      "title": "Input shaping control to suppress sloshing on liquid container transfer using multi-joint robot arm",
+      "doi": "10.1109/iros.2010.5650412",
+      "legacy_id_confirmed": null,
+      "provisional_families": [
+        "4.3"
+      ],
+      "status": "metadata_verified_fulltext_pending",
+      "reason": "Publication metadata located; public PDF not acquired",
+      "source_record": "metadata/followup_20260911/inputshape_crossref.json",
+      "counted_in_downloaded_collection": false
+    },
+    {
+      "title": "Damping Control of Sloshing in Liquid Container in Cart With Active Vibration Reducer: The Case of a Curved Path on a Horizontal Plane",
+      "doi": "10.1109/tmech.2019.2892089",
+      "legacy_id_confirmed": null,
+      "provisional_families": [
+        "4.2"
+      ],
+      "status": "metadata_verified_fulltext_pending",
+      "reason": "Publication metadata located; full text not acquired",
+      "source_record": "metadata/followup_20260911/shaped_path_crossref.json",
+      "counted_in_downloaded_collection": false
+    }
+  ]
+}

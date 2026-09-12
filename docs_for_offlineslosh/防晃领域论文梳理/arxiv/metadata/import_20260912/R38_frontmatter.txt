@@ -1,0 +1,152 @@
+                                                         Uncertainty-aware Planning with Inaccurate Models for
+                                                                       Robotized Liquid Handling
+                                                                      Marco Faroni, Carlo Odesco, Andrea M. Zanchettin, Paolo Rocco
+
+
+                                            Abstract— Physics-based simulations and learning-based
+                                         models are vital for complex robotics tasks like deformable
+                                         object manipulation and liquid handling. However, these models
+                                         often struggle with accuracy due to epistemic uncertainty or the
+                                         sim-to-real gap. For instance, accurately pouring liquid from
+                                         one container to another poses challenges, particularly when
+                                         models are trained on limited demonstrations and may perform
+arXiv:2507.20861v1 [cs.RO] 28 Jul 2025
+
+
+
+
+                                         poorly in novel situations. This paper proposes an uncertainty-
+                                         aware Monte Carlo Tree Search (MCTS) algorithm designed to
+                                         mitigate these inaccuracies. By incorporating estimates of model
+                                         uncertainty, the proposed MCTS strategy biases the search to-
+                                         wards actions with lower predicted uncertainty. This approach
+                                         enhances the reliability of planning under uncertain conditions.
+                                         Applied to a liquid pouring task, our method demonstrates
+                                         improved success rates even with models trained on minimal
+                                         data, outperforming traditional methods and showcasing its
+                                         potential for robust decision-making in robotics.
+
+                                                                  I. I NTRODUCTION
+                                            Physics-based simulations and learning-based models are
+                                         extensively used in robotics to perform complex tasks such
+                                         as deformable object manipulation [1]–[5], contact-rich ma-
+                                         nipulation [6]–[8], control of soft robots [9], [10], and liquid
+                                         handling [11], [12]. These models are often inaccurate in
+                                         predicting the outcome of actions (e.g., because of the
+                                         epistemic uncertainty of learned models or the sim-to-real                   Fig. 1: A robotized pouring task: the robot arm shall pour liquid
+                                         gap of physics simulators). A notable example is the liquid                  from one container to another until it reaches a reference level.
+                                         handling scenario in Fig. 1: A robot has to pour liquid
+                                                                                                                      variance of the predictions of Neural Network ensembles
+                                         from one container to another until it reaches a certain
+                                                                                                                      measures the consensus of the networks: if the variance is
+                                         level. Ideally, one could accurately model the quantity of
+                                                                                                                      large, the average prediction is likely to be inaccurate.
+                                         poured liquid based on the robot’s tool motion (e.g., via
+                                                                                                                         This work proposes an uncertainty-aware Monte Carlo
+                                         fluid simulation), but this requires a deep understanding of
+                                                                                                                      Tree Search (MCTS) algorithm that uses such uncertainty
+                                         the geometry and dynamics properties of the problem or the
+                                                                                                                      information to cope with model inaccuracy. We use the
+                                         collection of large experimental datasets. Suppose a pouring
+                                                                                                                      uncertainty value of each prediction to inform the MCTS
+                                         model is built from a handful of pouring demonstrations.
+                                                                                                                      search and bias it towards transitions with small uncertainty.
+                                         The model will be very inaccurate, especially for states and
+                                                                                                                      As a result, the planner is likely to choose accurate states
+                                         actions that are far from those seen in the training set.
+                                                                                                                      and actions, leading to more accurate task executions.
+                                            If an estimate of the inaccuracy of the model predictions is
+                                                                                                                         We demonstrate the approach with a liquid pouring prob-
+                                         available, this information can be embedded in the planning
+                                                                                                                      lem. To do so, we model pourings with Gaussian Process
+                                         algorithm to avoid inaccurate states and actions [3], [13].
+                                                                                                                      Regression (GPR) and use the variance of GPs as an
+                                         Interestingly, machine learning techniques commonly used
+                                                                                                                      accuracy index for the model predictions. Then, we use
+                                         for dynamics modeling in robotics come with an estimate
+                                                                                                                      the uncertainty-aware MCTS to choose the sequence of
+                                         of the model epistemic uncertainty at a given point. For
+                                                                                                                      pouring actions to reach a given filling level. We show that
+                                         example, the variance of a Gaussian Process (GPs) is often
+                                                                                                                      our approach performs pouring tasks even when the model
+                                         seen as a proxy of the prediction uncertainty. Similarly, the
+                                                                                                                      uncertainty is very large (e.g., a GP with a handful of points),
+                                           This study was partially carried out within the MICS (Made in Italy –      leading to a much higher success rate than the baselines.
+                                         Circular and Sustainable) Extended Partnership and received funding from
+                                         Next-Generation EU (Italian PNRR – M4 C2, Invest 1.3 – D.D. 1551.11-                              II. R ELATED W ORKS
+                                         10-2022, PE00000004). CUP MICS D43C22003120001.
+                                           The authors are with the Department of Electronics, Information and Bio-     Planning under uncertainty gathers all those planning
+                                         engineering, Politecnico di Milano, Italy. marco.faroni@polimi.it            methods that explicitly reason about the difference between
+the model and the true system. The goal of these methods           They devised a one-shot domain adaptation technique to
+is to find a sequence of actions that brings the system from       reduce the sim-to-real gap between simulations and real-
+an initial to a final state even though the model and the true     world environments. This led to a higher success rate in
+dynamics differ.                                                   execution compared to non-adaptive methods. Babaians et
+   If such a difference is due to the inherent randomness of       al. [30] explored a deep reinforcement learning approach:
+the system (i.e., aleatoric uncertainty), a common approach is     the policy is learned in a simulated environment modeling
+to propagate the uncertainty on the search tree. The planner       the interaction between liquids and robots.
+will search for a robust solution that reaches the goal despite       The main drawback of all these methods is that they rely
+the transitions’ randomness [14]–[16]. If the model error is       on the availability of accurate models, whose computation
+caused by the limited dataset or the lack of expressivity of       requires a large data collection or long computational times.
+the model, we are dealing with epistemic uncertainty. This         We do not rely on precise modeling of the liquid dynamics.
+last case is less studied and is the focus of this work.           On the contrary, we aim to leverage the uncertainty of the
+   In the realm of sampling-based motion planning, existing        model owing to limited data availability and show that the
+approaches estimate a Model Deviation Estimate (MDE)               robot is still able to perform tasks accurately.
+predicting the accuracy of a transition and use it to bias            Other than planning-based methods, the most common
+the search. Mitrano et al. [3] train a classifier to deem state-   approach to robotized pouring uses feedback control to
+and-action pairs accurate or inaccurate during the search.         continuously monitor the liquid level in the output container
+Inaccurate transitions are not added to the tree in a sampling-    and regulate the pouring rate accordingly [31]–[33]. This
+based path planner. Faroni et al. [17] use the MDE as a cost       approach can achieve very accurate results but assumes the
+function within an asymptotically optimal planner so that          liquid’s level is measured at a high sampling rate and without
+the resulting path should minimize the cumulative model            interruptions. On the contrary, we measure the liquid’s level
+mismatch. Other approaches limit the search space to a             only between discrete pouring actions, thus performing each
+trusted region after an offline analysis of the model perfor-      action in open loop. Therefore, our assumption is less restric-
+mance [18]. All these approaches rely on a computationally         tive, especially when camera occlusions may happen or the
+expensive training phase to learn which actions can be trusted     robot has an in-hand camera (not allowing for simultaneous
+and use such information in a general motion planning              action and perception).
+algorithm. Considering graph-based search, Vemula et al.                            III. P ROBLEM S TATEMENT
+[19], [20] use A∗ to plan robot movements and, after the
+execution of each action, assign a high cost to transitions           Consider a dynamical system, xk+1 = f (xk , uk ) where
+whose deviation from the model is larger than a given              f : X × U → X and X and U are the state space and the
+threshold.                                                         action space, respectively. Ideally, we aim to find a sequence
+   MCTS is becoming popular in robotics planning. Recent           of actions, u = (u0 , . . . , uN ), N ∈ N, that brings the system
+applications include path planning with Partially Observable       from its initial state, xstart , to a desired goal set, Xgoal .
+Markov Decision Processes (POMDP) [21], [22], multi-robot          Possibly, we aim to minimize the number of actions to reach
+task allocation [23] and path planning [24], and rearrange-        the goal. We can write this problem as follows:
+ment planning [25]. Existing works typically leverage MCTS                         minimize      N
+                                                                                      u∈U
+to account for multi-agent decision-making, by modeling the
+multi-agency as a POMDP and using MCTS to solve the                                subject to    xN ∈ Xgoal
+                                                                                                                                  (1)
+resulting problem. Unlike previous works, ours uses MCTS                                         x0 = xstart
+to explicitly reason through model uncertainty in the context                                    xk+1 = f (xk , uk )
+of robotics planning. Compared to existing sampling-based
+                                                                      In real-world problems, f is approximated by a dynamical
+and graph-based planners, MCTS can be easily extended to
+                                                                   model. We consider the deterministic model fˆ : X ×U → X
+account for uncertainty [26].
+                                                                   that approximates f , and define a Model Deviation Estimate,
+   Specific to robotized liquid pouring, most existing works
+                                                                   MDE(xk , uk ) ∝ ||f (xk , uk ) − fˆ(xk , uk )||2 , which outputs an
+focus on accurate modeling of the liquids’ dynamics via
+                                                                   estimate of the model mismatch when action uk is applied
+deep learning or fluid simulation. For example, Pan et
+                                                                   from state xk . The model deviation estimate can be derived
+al. [27] combined a fine-grained fluid simulation with an
+                                                                   from real data [3], analytically [17] or correlated to the model
+optimization-based planner to achieve the pouring task. The
+                                                                   epistemic uncertainty.
+motion planning problem was formulated as a continuous
+                                                                      Under the assumption that x can be measured without
+numerical optimization problem in the high-dimensional
+                                                                   uncertainty (i.e., xstart is known), we can solve the following
+robot trajectory space, following an objective function that
+                                                                   approximation of (1):
+accounts for object avoidance, smoothness, and a target goal
+that ensures fluid particles enter the target container. Simi-                     minimize      N
+                                                                                      u∈U
+larly, Schober et al. [28] segment the image of the container,
+                                                                                   subject to    x̂N ∈ Xgoal
+simulate possible pourings and select the best action to                                                                          (2)
+perform in the real-world. Zhang et al. [29] used imitation                                      x̂0 = xstart
+learning to learn pouring tasks from human demonstrations.                                       x̂k+1 = fˆ(x̂k , uk )
+

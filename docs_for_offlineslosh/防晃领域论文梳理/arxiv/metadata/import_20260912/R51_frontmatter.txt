@@ -1,0 +1,75 @@
+   Response Regimes in Equivalent Mechanical Model of Strongly
+
+                           Nonlinear Liquid Sloshing
+
+                           M. Farid and O. V. Gendelman*
+
+    Faculty of Mechanical Engineering, Technion – Israel Institute of Technology
+
+       *contacting author, ovgend@tx.technion.ac.il
+
+
+Abstract
+
+We consider equivalent mechanical model of liquid sloshing in partially-filled
+cylindrical vessel both for free vibrations case and for horizontal harmonic ground
+excitation. The model treats both the regime of linear sloshing, and strongly non-
+linear sloshing regime; the latter is related to hydraulic impacts applied to the vessel
+walls. These hydraulic impacts are commonly simulated with the help of high-power
+potential and dissipation functions. For the sake of analytic exploration, we substitute
+this traditional approach by treatment of an idealized vibro-impact system with
+velocity-dependent restitution coefficient. Parameters of the vibro-impact model are
+derived from the high-power potential and dissipation functions. The obtained
+reduced model is similar to recently explored system of linear primary oscillator with
+attached vibro-impact energy sink. Analysis is based on a multiple – scale approach;
+the ratio of modal mass of the first sloshing mode to the total mass of the liquid and
+the tank serves as a natural small parameter. In the case of external ground forcing,
+steady-state responses and chaotic strongly modulated responses are revealed.
+Besides, the system response to horizontal periodic excitation with additional
+Gaussian white noise, and corresponding dynamics on the slow invariant manifold are
+explored. All analytical predictions of the reduced vibro-impact model are validated
+against direct numerical simulations of “initial” equivalent model with high-power
+smooth potential and dissipation functions, and good agreement is observed.
+
+
+
+
+                                           1
+1.     Introduction
+
+Cylindrical vessels filled with liquid are used in many fields of engineering, including
+nuclear, vehicle and aerospace industries, for storage of chemicals, gasoline, water,
+and other possibly hazardous liquids. Oscillations of the liquid in the vessel (liquid
+sloshing) may be dangerous for the vessel safety. So far, detailed analytical
+explorations are limited to small-amplitude sloshing in rectangular and cylindrical
+vessels. While being most interesting and potentially hazardous, high-amplitude
+liquid sloshing in cylindrical tanks still lacks complete analytic description. High-
+amplitude sloshing can cause hydraulic jumps. In this case major hydraulic impacts
+can act on the vessel structure walls [1]. Hydraulic jumps and wave collisions with
+vessel shells are the source of strong non-linearities in the system.
+
+In this paper we adopt the equivalent mechanical model of the high-amplitude
+sloshing. This well-known model simulates the effects of hydraulic impacts with the
+help of    high-order smooth potential and damping functions [2–4], following
+Pilipchuk and Ibrahim [5]. These functions are suitable for numeric simulations, but
+hardly applicable for analytic treatment. In order to pursue the analytic approach, we
+further simplify the model and substitute the high-order potential and damping
+functions by inelastic vibro-impact interactions. So, the resulting model includes both
+linear coupling and the vibro—impact constraints. In many previous studies the
+impact-induced dissipation was modeled by Newton method, which invokes
+traditional constant restitution coefficient [6,7]. However, this assumption is not valid
+for high impact velocities [8], and, of course, not for fluids. In the current work we
+demonstrate that the high-power potential and damping model allows extension of the
+Newton approach. The effective restitution coefficient can be expressed as a function
+of impact velocity, material properties and tank geometry. Under these assumptions,
+the model turns out to be treatable analytically, similarly to recently explored
+dynamics of linear oscillator with attached vibro—impact nonlinear energy sink
+[7,9,10]. To validate the results, direct numeric simulations with high-power potential
+and damping functions are used.
+
+In traditional phenomenological models, the sloshing dynamics in a partially-filled
+liquid tank is modeled by a mass-spring-dashpot system or a pendulum, when each
+sloshing mode is modeled by a different modal mass. One can easily understand that
+
+                                            2
+

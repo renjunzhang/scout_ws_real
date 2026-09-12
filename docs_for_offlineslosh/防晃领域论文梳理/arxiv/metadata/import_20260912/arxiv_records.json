@@ -1,0 +1,462 @@
+{
+  "2102.11907": {
+    "api_arxiv_id": "2102.11907v1",
+    "title": "A predictive safety filter for learning-based racing control",
+    "authors": [
+      "Ben Tearle",
+      "Kim P. Wabersich",
+      "Andrea Carron",
+      "Melanie N. Zeilinger"
+    ],
+    "summary": "The growing need for high-performance controllers in safety-critical applications like autonomous driving has been motivating the development of formal safety verification techniques. In this paper, we design and implement a predictive safety filter that is able to maintain vehicle safety with respect to track boundaries when paired alongside any potentially unsafe control signal, such as those found in learning-based methods. A model predictive control (MPC) framework is used to create a minimally invasive algorithm that certifies whether a desired control input is safe and can be applied to the vehicle, or that provides an alternate input to keep the vehicle in bounds. To this end, we provide a principled procedure to compute a safe and invariant set for nonlinear dynamic bicycle models using efficient convex approximation techniques. To fully support an aggressive racing performance without conservative safety interventions, the safe set is extended in real-time through predictive control backup trajectories. Applications for assisted manual driving and deep imitation learning on a miniature remote-controlled vehicle demonstrate the safety filter's ability to ensure vehicle safety during aggressive maneuvers.",
+    "published": "2021-02-23T19:36:14Z",
+    "updated": "2021-02-23T19:36:14Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "2001.11602": {
+    "api_arxiv_id": "2001.11602v2",
+    "title": "Safe Trajectory Tracking in Uncertain Environments",
+    "authors": [
+      "Ivo Batkovic",
+      "Mohammad Ali",
+      "Paolo Falcone",
+      "Mario Zanon"
+    ],
+    "summary": "In Model Predictive Control (MPC) formulations of trajectory tracking problems, infeasible reference trajectories and a-priori unknown constraints can lead to cumbersome designs, aggressive tracking, and loss of recursive feasibility. This is the case, for example, in trajectory tracking applications for mobile systems in the presence of constraints which are not fully known a-priori. In this paper, we propose a new framework called Model Predictive Flexible trajectory Tracking Control (MPFTC), which relaxes the trajectory tracking requirement. Additionally, we accommodate recursive feasibility in the presence of a-priori unknown constraints, which might render the reference trajectory infeasible. In the proposed framework, constraint satisfaction is guaranteed at all times while the reference trajectory is tracked as good as constraint satisfaction allows, thus simplifying the controller design and reducing possibly aggressive tracking behavior. The proposed framework is illustrated with three numerical examples.",
+    "published": "2020-01-30T23:16:41Z",
+    "updated": "2021-04-02T15:58:49Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "13 pages, 6 figures, submitted to IEEE Transactions on Automatic Control, code available"
+  },
+  "2410.06590": {
+    "api_arxiv_id": "2410.06590v2",
+    "title": "Experimental Characterization of Non-Isothermal Sloshing in Microgravity",
+    "authors": [
+      "Francisco Monteiro",
+      "Pedro Marques",
+      "Alessia Simonini",
+      "Louis Carbonnelle",
+      "Miguel Alfonso Mendez"
+    ],
+    "summary": "Sloshing of cryogenic liquid propellants can significantly impact a spacecraft's mission safety and performance by unpredictably altering the center of mass and producing large pressure fluctuations due to the increased heat and mass transfer within the tanks. This study, conducted as part of the NT-SPARGE (Non-isoThermal Sloshing PARabolic FliGht Experiment) project, provides a detailed experimental investigation of the thermodynamic evolution of a partially filled upright cylindrical tank undergoing non-isothermal sloshing in microgravity. Sloshing was induced by a step reduction in gravity during the 83rd European Space Agency (ESA) parabolic flight, resulting in a chaotic reorientation of the free surface under inertia-dominated conditions. To investigate the impact of heat and mass transfer on the sloshing dynamics, two identical test cells operating with a representative fluid, HFE-7000, in single-species were considered simultaneously. One cell was maintained in isothermal conditions, while the other started with initially thermally stratified conditions. Flow visualization, pressure, and temperature measurements were acquired for both cells. The results highlight the impact of thermal mixing on liquid dynamics coupled with the significant pressure and temperature fluctuations produced by the destratification. The comprehensive experimental data gathered provide a unique opportunity to validate numerical simulations and simplified models for non-isothermal sloshing in microgravity, thus contributing to improved cryogenic fluid management technologies.",
+    "published": "2024-10-09T06:39:37Z",
+    "updated": "2024-10-10T07:24:17Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "2604.12505": {
+    "api_arxiv_id": "2604.12505v1",
+    "title": "Data-driven Learning of LPV Surrogate Models of Fuel Sloshing",
+    "authors": [
+      "E. Javier Olucha",
+      "Valentin Preda",
+      "Amritam Das",
+      "Roland Tóth"
+    ],
+    "summary": "This paper aims to enhance the efficiency of validation and verification campaigns involving fuel sloshing phenomena. Our first contribution is the development of an open-source, high-fidelity and computationally efficient two-dimensional smoothed-particle hydrodynamics-based fuel sloshing simulator that reproduces the dynamics of a spacecraft with a partially filled tank with liquid propellant. Implemented in Python using Jax, the simulator leverages GPU parallelization and supports automatic differentiation, enabling rapid generation of simulation data and system linearizations for general surrogate modelling purposes. Our second contribution is the demonstration of a practical methodology for constructing surrogate models of fuel sloshing from input--output data generated by the simulator, targeting rapid simulation and model-based control applications. The surrogate model employs a Linear Parameter-Varying (LPV) state-space structure with affine dependence on the scheduling variables, providing an accurate yet computationally efficient approximation of the sloshing dynamics. The capabilities of the proposed approach are demonstrated through closed-loop simulations of a rigid spacecraft with a partially filled fuel tank for two manoeuvre profiles under zero-gravity conditions. The identified surrogate enables simulations that are two orders of magnitude faster than the high-fidelity model.",
+    "published": "2026-04-14T09:28:23Z",
+    "updated": "2026-04-14T09:28:23Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Preprint submitted to the CEAS EuroGNC 2026"
+  },
+  "1807.01547": {
+    "api_arxiv_id": "1807.01547v1",
+    "title": "Effect of baffles on pressurization and thermal stratification in a LN2 tank under micro-gravity",
+    "authors": [
+      "Zhongqi Zuo",
+      "Wenbing Jiang",
+      "Yonghua Huang"
+    ],
+    "summary": "Researches on the impact of existing baffles on sloshing suppression of two-phase fluids in storage tanks have been widely conducted in literature. However, few studies focus on the effect of the baffles on self-pressurization or thermal stratification of the fluids in containers. This paper uses Volume of Fluid (VOF) method to simulate the thermodynamic and fluid dynamic behavior of liquid nitrogen in a tank with different baffle structures under microgravity environment. Groups of gravity levels, fill levels and distances, angles and gaps of baffles, are compared and analyzed. Up to 54\\% difference in pressurization can be observed by optimizing the baffle structure and metrics, which is significant to achieve the highest performance of storage fluid control in the tank.",
+    "published": "2018-07-04T12:46:52Z",
+    "updated": "2018-07-04T12:46:52Z",
+    "doi": "10.1016/j.cryogenics.2018.10.017",
+    "journal_ref": "",
+    "comment": "21 figures, 14 pages"
+  },
+  "2107.09501": {
+    "api_arxiv_id": "2107.09501v1",
+    "title": "Sloshing in vertical cylinders with circular walls: the effect of radial baffles",
+    "authors": [
+      "Nikolay Kuznetsov",
+      "Oleg Motygin"
+    ],
+    "summary": "The behaviour of sloshing eigenvalues and eigenfunctions is studied for vertical cylindrical containers that have circular walls and constant (possibly infinite) depth. The effect of breaking the axial symmetry due to the presence of radial baffles is analysed. It occurs that the lowest eigenvalues are substantially smaller for containers with baffles going throughout the depth; moreover, all eigenvalues are simple in this case. On the other hand, the lowest eigenvalue has multiplicity two in the absence of baffle. It is shown how these properties affect the location of maxima and minima of the free surface elevation and the location of its nodes.",
+    "published": "2021-07-18T14:00:50Z",
+    "updated": "2021-07-18T14:00:50Z",
+    "doi": "10.1063/5.0064549",
+    "journal_ref": "",
+    "comment": "16 pages, 8 figures"
+  },
+  "1603.06931": {
+    "api_arxiv_id": "1603.06931v1",
+    "title": "Internal resonances and dynamic responses in equivalent mechanical model of partially liquid-filled vessel",
+    "authors": [
+      "Maor Farid",
+      "Oleg V. Gendelman"
+    ],
+    "summary": "The paper treats oscillations of a liquid in partially filled vessel under horizontal harmonic ground excitation. Such excitation may lead to hydraulic impacts. The liquid sloshing mass is modeled by equivalent pendulum, which can impact the vessel walls. We use parameters of the equivalent pendulum for well-explored case of cylindrical vessels. The hydraulic impacts are modeled by high-power potential function. Conditions for internal resonances are presented. A non-resonant behavior and dynamic response related to 3:1 internal resonance are explored. When the excitation amplitude exceeds a critical value, the system exhibits multiple steady state solutions. Quasi-periodic solutions appear in relatively narrow range of parameters. Numerical continuation links between resonant regimes found asymptotically for small excitation amplitude, and high-amplitude responses with intensive impacts.",
+    "published": "2016-03-22T19:43:05Z",
+    "updated": "2016-03-22T19:43:05Z",
+    "doi": "10.1016/j.jsv.2016.05.046",
+    "journal_ref": "",
+    "comment": "40 pages, 17 figures"
+  },
+  "2505.02354": {
+    "api_arxiv_id": "2505.02354v1",
+    "title": "Sloshing suppression with a controlled elastic baffle via deep reinforcement learning and SPH simulation",
+    "authors": [
+      "Mai Ye",
+      "Yaru Ren",
+      "Silong Zhang",
+      "Hao Ma",
+      "Xiangyu Hu",
+      "Oskar J. Haidn"
+    ],
+    "summary": "This study employed smoothed particle hydrodynamics (SPH) as the numerical environment, integrated with deep reinforcement learning (DRL) real-time control algorithms to optimize the sloshing suppression in a tank with a centrally positioned vertical elastic baffle. Compared to rigid baffle movement and active strain control methods, the active-controlled movable elastic baffle, which remains undeformed at its base, achieved the best performance with an 81.63% reduction in mean free surface amplitude. A cosine-based expert policy derived from DRL data is also extracted, resulting in a comparable 76.86% reduction in a three-dimensional (3D) numerical simulation. Energy analyses showed that elastic baffle motion effectively decreased system energy by performing negative work on the fluid, reducing kinetic and potential energy. The DRL-based and expert policies also demonstrated robust performance across varying excitation frequencies and water depths. Specifically, rigid baffles proved more effective at frequencies below the system's first natural frequency, while elastic baffles exhibited superior performance at higher frequencies. Changes in water depth minimally affected the effectiveness of control policies, though they significantly influenced elastic baffle deformation behavior. Overall, the sloshing suppression efficiency consistently ranged between 70% and 80%, confirming DRL-informed control methods' versatility and effectiveness under diverse operating conditions.",
+    "published": "2025-05-05T04:32:03Z",
+    "updated": "2025-05-05T04:32:03Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "59 pages, 55 figures"
+  },
+  "1411.6542": {
+    "api_arxiv_id": "1411.6542v2",
+    "title": "Damping of liquid sloshing by foams",
+    "authors": [
+      "Alban Sauret",
+      "François Boulogne",
+      "Jean Cappello",
+      "Emilie Dressaire",
+      "Howard A. Stone"
+    ],
+    "summary": "When a container is set in motion, the free surface of the liquid starts to oscillate or slosh. Such effects can be observed when a glass of water is handled carelessly and the fluid sloshes or even spills over the rims of the container. However, beer does not slosh as readily as water, which suggests that foam could be used to damp sloshing. In this work, we study experimentally the effect on sloshing of a liquid foam placed on top of a liquid bath. We generate a monodisperse two-dimensional liquid foam in a rectangular container and track the motion of the foam. The influence of the foam on the sloshing dynamics is experimentally characterized: only a few layers of bubbles are sufficient to significantly damp the oscillations. We rationalize our experimental findings with a model that describes the foam contribution to the damping coefficient through viscous dissipation on the walls of the container. Then we extend our study to confined three-dimensional liquid foam and observe that the behavior of 2D and confined 3D systems are very similar. Thus we conclude that only the bubbles close to the walls have a significant impact on the dissipation of energy. The possibility to damp liquid sloshing using foam is promising in numerous industrial applications such as the transport of liquefied gas in tankers or for propellants in rocket engines.",
+    "published": "2014-11-24T17:36:45Z",
+    "updated": "2015-02-01T22:34:04Z",
+    "doi": "10.1063/1.4907048",
+    "journal_ref": "",
+    "comment": "17 pages, accepted in Physics of Fluids"
+  },
+  "1412.0919": {
+    "api_arxiv_id": "1412.0919v1",
+    "title": "Surface wave dynamics in orbital shaken cylindrical containers",
+    "authors": [
+      "Martino Reclari",
+      "Matthieu Dreyer",
+      "Stéphanie Tissot",
+      "Danail Obreschkow",
+      "Florian Maria Wurm",
+      "Mohamed Farhat"
+    ],
+    "summary": "Be it to aerate a glass of wine before tasting, to accelerate a chemical reaction or to cultivate cells in suspension, the \"swirling\" (or orbital shaking) of a container ensures good mixing and gas exchange in an efficient and simple way. Despite being used in a large range of applications this intuitive motion is far from being understood and presents a richness of patterns and behaviors which has not yet been reported. The present research charts the evolution of the waves with the operating parameters identifying a large variety of patterns, ranging from single and multiple crested waves to breaking waves. Free surface and velocity fields measurements are compared to a potential sloshing model, highlighting the existence of various flow regimes. Our research assesses the importance of the modal response of the shaken liquids, laying the foundations for a rigorous mixing optimization of the orbital agitation in its applications. Copyright (2014) American Institute of Physics. This article may be downloaded for personal use only. Any other use requires prior permission of the author and the American Institute of Physics. The following article appeared in Physics of Fluids 26, 052104 (2014) and may be found at http://dx.doi.org/10.1063/1.4874612",
+    "published": "2014-12-02T14:03:23Z",
+    "updated": "2014-12-02T14:03:23Z",
+    "doi": "10.1063/1.4874612",
+    "journal_ref": "Physics of Fluids 26, 052104 (2014)",
+    "comment": "19 pages, 7 figures"
+  },
+  "1608.06358": {
+    "api_arxiv_id": "1608.06358v1",
+    "title": "Vibration Mitigation in Partially Liquid-Filled Vessel using Passive Energy Absorbers",
+    "authors": [
+      "Maor Farid",
+      "Nissim Levy",
+      "O. V. Gendelman"
+    ],
+    "summary": "This paper treats possible solutions for vibration mitigation in reduced-order model of partially-filled liquid tank under impulsive forcing. Such excitation may lead to hydraulic impacts applied on the tank inner walls. Finite stiffness of the tank walls is taken into account. We explore both linear (Tuned Mass Damper) and nonlinear (Nonlinear Energy Sink) passive vibration absorbers; mitigation performances are examined numerically. The liquid sloshing mass is modeled by equivalent massspring-dashpot system, which can both perform small-amplitude linear oscillations and impact the vessel walls. We use parameters of the equivalent mass-spring-dashpot system for well-explored case of cylindrical tanks. The hydraulic impacts are modeled by high-power potential and dissipation functions. Critical location in the tank structure is determined and expression of the corresponding local mechanical stress is derived. We use finite-elemet approach to assess the natural frequencies for specific system parameters and to figure out possibilities for internal resonances. Numerical evaluation criteria are suggested to determine the energy absorption performance.",
+    "published": "2016-08-23T02:03:28Z",
+    "updated": "2016-08-23T02:03:28Z",
+    "doi": "10.1016/j.jsv.2017.06.013",
+    "journal_ref": "",
+    "comment": "43 pages"
+  },
+  "1801.10017": {
+    "api_arxiv_id": "1801.10017v1",
+    "title": "Model Based Active Slosh Damping Experiment",
+    "authors": [
+      "Christina Jetzschmann",
+      "Hans Strauch",
+      "Samir Bennani"
+    ],
+    "summary": "This paper presents a model based experimental investigation to demonstrate the usefulness of an active damping strategy to manage fluid sloshing motion in spacecraft tanks. The active damping strategy is designed to reduce the degrading impact on maneuvering and pointing performance via a force feedback strategy. Many problems have been encountered until now, such as instability of the closed loop system, excessive consumption in the attitude propellant or problems for engine re-ignition in upper stages. Mostly, they have been addressed in a passive way via the design of baffles and membranes, which on their own have mass and constructive impacts. Active management of propellant motion in launchers and satellites has the potential to increase performance on various levels. This paper demonstrates active slosh management using force feedback for the compensation of the slosh resonances. Force sensors between tank and the carrying structure provide information of the fluid motion via the reaction force. The control system is designed to generate an appropriate acceleration profile that leads to desired attenuation profiles in amplitude, frequency and time. Two robust control design methods, one based on $μ$ design and the other on parametric structured design based on non-smooth optimization of the worst-case $H_{\\infty}$ norm, are applied. The controller is first tested with a computational fluid dynamics simulation in the loop. Finally a water tank mounted on a Hexapod with up to $1100$ liter is used to evaluate the control performance. The paper illustrates that is possible to actively influence sloshing via closed loop.",
+    "published": "2018-01-30T14:46:04Z",
+    "updated": "2018-01-30T14:46:04Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "ESA GNC 2017: 10th International ESA Conference on Guidance, Navigation and Control Systems, Salzburg, Austria, 29.May - 2 June 2017"
+  },
+  "2212.12246": {
+    "api_arxiv_id": "2212.12246v1",
+    "title": "Experimental analysis of heat and mass transfer in non-isothermal sloshing using a model-based inverse method",
+    "authors": [
+      "Pedro Marques",
+      "Alessia Simonini",
+      "Laura Peveroni",
+      "Miguel Alfonso Mendez"
+    ],
+    "summary": "Nonisothermal liquid sloshing in partially filled reservoirs can significantly enhance heat and mass transfer between liquid and ullage gasses. This can result in large temperature and pressure fluctuations, producing thrust oscillations in spacecraft and challenging thermal management control systems. This work presents an experimental characterization of the thermodynamic evolution of a cylindrical reservoir undergoing sloshing-induced thermal de-stratification. We use a 0D model-based inverse method to retrieve the heat and mass transfer coefficients in planar and swirl sloshing conditions from the temperature and pressure measurements in the liquid and the ullage gas. The experiments were carried out in the SHAKESPEARE shaking table of the von Karman Institute in a cuboid quartz cell with a cylindrical cut-out of 80 mm diameter in the centre, filled up to 60mm with the cryogenic replacement fluid HFE-7200. A thermal stratification with 25 K difference between the ullage gas and liquid was set as the initial conditions. A pressure drop of 90% in the ullage gas was documented in swirling conditions. Despite its simplicity, the model could predict the system's thermodynamic evolution once the proper transfer coefficients were derived.",
+    "published": "2022-12-23T10:39:55Z",
+    "updated": "2022-12-23T10:39:55Z",
+    "doi": "10.1016/j.applthermaleng.2023.120871",
+    "journal_ref": "",
+    "comment": "18 pages, 14 figures, 4 tables"
+  },
+  "2505.10215": {
+    "api_arxiv_id": "2505.10215v1",
+    "title": "Extension of the consistent $δ^{+}$-SPH model for multiphase flows considering the compressibility of different phases",
+    "authors": [
+      "Xiao-Ting Huang",
+      "Peng-Nan Sun",
+      "Hong-Guan Lyu",
+      "Andrea Colagrossi",
+      "A-Man Zhang"
+    ],
+    "summary": "In hydrodynamic problems involving wave impact on structures, air compressibility is crucial for accurate pressure prediction when an air bubble is entrapped. In this work, the consistent $δ^{+}$-SPH model, originally developed for single-phase scenarios, is extended to multiphase contexts. Although the consistent $δ^{+}$-SPH model shows good performance for single phase and viscous flow simulations, extending it to multiphase scenarios presents challenges, such as proper implementation of particle shifting for multiphase interfaces. Therefore, within the framework of the consistent $δ^{+}$-SPH, we introduce the following enhancements: firstly, new strategy for handling $δ\\boldmath{u}$-terms given by the particle shifting technique at multiphase interfaces are proposed to maintain stability and conservation. Secondly, for modeling of incompressible phases, like water, an acoustic damper term is introduced to alleviate acoustic waves resulting from the weakly-compressible assumption, which is expected to achieve smooth pressure field comparable to truly-incompressible hypothesis, thereby reducing the nonphysical pressure wave during the violent impact state; for modeling compressible phases like air, a physical sound speed is adopted in the equation of state to accurately model real gas phase compressibility. To test and validate the present multiphase SPH model, simulations were conducted for six scenarios. In particular, except for sloshing with two-layer liquids, the other scenarios fully consider air pressure oscillations when air is entrapped, compressed, or expanded by surrounding flows. The results demonstrate significant advantages of the present SPH model in simulating multiphase problems involving strong liquid impact and different phase compressibility.",
+    "published": "2025-05-15T12:20:01Z",
+    "updated": "2025-05-15T12:20:01Z",
+    "doi": "10.1016/j.jcp.2025.114031",
+    "journal_ref": "Journal of Computational Physics 535 (2025) 114031",
+    "comment": "49 pages, 33 figures"
+  },
+  "2507.20861": {
+    "api_arxiv_id": "2507.20861v1",
+    "title": "Uncertainty-aware Planning with Inaccurate Models for Robotized Liquid Handling",
+    "authors": [
+      "Marco Faroni",
+      "Carlo Odesco",
+      "Andrea Zanchettin",
+      "Paolo Rocco"
+    ],
+    "summary": "Physics-based simulations and learning-based models are vital for complex robotics tasks like deformable object manipulation and liquid handling. However, these models often struggle with accuracy due to epistemic uncertainty or the sim-to-real gap. For instance, accurately pouring liquid from one container to another poses challenges, particularly when models are trained on limited demonstrations and may perform poorly in novel situations. This paper proposes an uncertainty-aware Monte Carlo Tree Search (MCTS) algorithm designed to mitigate these inaccuracies. By incorporating estimates of model uncertainty, the proposed MCTS strategy biases the search towards actions with lower predicted uncertainty. This approach enhances the reliability of planning under uncertain conditions. Applied to a liquid pouring task, our method demonstrates improved success rates even with models trained on minimal data, outperforming traditional methods and showcasing its potential for robust decision-making in robotics.",
+    "published": "2025-07-28T14:15:10Z",
+    "updated": "2025-07-28T14:15:10Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Accepted at IEEE/RSJ IROS 2025"
+  },
+  "2506.23624": {
+    "api_arxiv_id": "2506.23624v2",
+    "title": "Towards Universal Shared Control in Teleoperation Without Haptic Feedback",
+    "authors": [
+      "Max Grobbel",
+      "Tristan Schneider",
+      "Sören Hohmann"
+    ],
+    "summary": "Teleoperation with non-haptic VR controllers deprives human operators of critical motion feedback. We address this by embedding a multi-objective optimization problem that converts user input into collision-free UR5e joint trajectories while actively suppressing liquid slosh in a glass. The controller maintains 13 ms average planning latency, confirming real-time performance and motivating the augmentation of this teleoperation approach to further objectives.",
+    "published": "2025-06-30T08:40:52Z",
+    "updated": "2025-07-05T21:45:40Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "5 pages, submitted to IEEE Telepresence 2025 conference"
+  },
+  "1307.6064": {
+    "api_arxiv_id": "1307.6064v2",
+    "title": "Mechanical energy dissipation induced by sloshing and wave breaking in a fully coupled angular motion system. Part I: Theoretical formulation and Numerical Investigation",
+    "authors": [
+      "Benjamin Bouscasse",
+      "Andrea Colagrossi",
+      "Antonio Souto-Iglesias",
+      "José Luis Cercós Pita"
+    ],
+    "summary": "A dynamical system involving a driven pendulum filled with liquid, is analyzed in the present paper series. The study of such a system is conducted in order to understand energy dissipation resulting from the shallow water sloshing and induced wave breaking. This analysis is relevant for the design of Tuned Liquid Damper devices. The complexity and violence of the flow generated by the roll motion results in the impossibility of using an analytical approach, requiring in turn the use of a suitable numerical solver. In Part I, the coupled dynamical system is thoroughly described, revealing its nonlinear features associated with the large amplitude of the forcing, both in terms of mechanical and fluid dynamical aspects. A smoothed particle hydrodynamics (SPH) model, largely validated in literature, is used to calculate the frequency behavior of the whole system. For small rotation angles, a semi-analytical model of the energy dissipated by the fluid, based on a hydraulic jump solution, is developed; the energy transfer is numerically calculated in order to extend the analysis to large oscillation angles. The experimental part of the investigation is carried out in Part II of this work.",
+    "published": "2013-07-23T13:27:38Z",
+    "updated": "2014-04-01T13:48:13Z",
+    "doi": "10.1063/1.4869233",
+    "journal_ref": "Physics of Fluids (1994-present) > Volume 26 Number 3 - 033103 - 2014",
+    "comment": "20 pages, The following article has been published in Physics of Fluids http://dx.doi.org/10.1063/1.4869233"
+  },
+  "2208.13856": {
+    "api_arxiv_id": "2208.13856v1",
+    "title": "Delay-aware Robust Control for Safe Autonomous Driving and Racing",
+    "authors": [
+      "Dvij Kalaria",
+      "Qin Lin",
+      "John M. Dolan"
+    ],
+    "summary": "Delays endanger safety of autonomous systems operating in a rapidly changing environment, such as nondeterministic surrounding traffic participants in autonomous driving and high-speed racing. Unfortunately, delays are typically not considered during the conventional controller design or learning-enabled controller training phases prior to deployment in the physical world. In this paper, the computation delay from nonlinear optimization for motion planning and control, as well as other unavoidable delays caused by actuators, are addressed systematically and unifiedly. To deal with all these delays, in our framework: 1) we propose a new filtering approach with no prior knowledge of dynamics and disturbance distribution to adaptively and safely estimate the time-variant computation delay; 2) we model actuation dynamics for steering delay; 3) all the constrained optimization is realized in a robust tube model predictive controller. For the application merits, we demonstrate that our approach is suitable for both autonomous driving and autonomous racing. Our approach is a novel design for a standalone delay compensation controller. In addition, in the case that a learning-enabled controller assuming no delay works as a primary controller, our approach serves as the primary controller's safety guard.",
+    "published": "2022-08-29T19:54:16Z",
+    "updated": "2022-08-29T19:54:16Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Under review at IEEE TIV"
+  },
+  "2201.11663": {
+    "api_arxiv_id": "2201.11663v1",
+    "title": "A Machine Learning-based Characterization Framework for Parametric Representation of Nonlinear Sloshing",
+    "authors": [
+      "Xihaier Luo",
+      "Ahsan Kareem",
+      "Liting Yu",
+      "Shinjae Yoo"
+    ],
+    "summary": "The growing interest in creating a parametric representation of liquid sloshing inside a container stems from its practical applications in modern engineering systems. The resonant excitation, on the other hand, can cause unstable and nonlinear water waves, resulting in chaotic motions and non-Gaussian signals. This paper presents a novel machine learning-based framework for nonlinear liquid sloshing representation learning. The proposed method is a parametric modeling technique that is based on sequential learning and sparse regularization. The dynamics are categorized into two parts: linear evolution and nonlinear forcing. The former advances the dynamical system in time on an embedded manifold, while the latter causes divergent behaviors in temporal evolution, such as bursting and switching. The proposed framework's merit is demonstrated using an experimental dataset of liquid sloshing in a tank under horizontal excitation with a wide frequency range and various vertical slat screen settings.",
+    "published": "2022-01-25T15:20:27Z",
+    "updated": "2022-01-25T15:20:27Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "30 pages, 13 figures"
+  },
+  "2302.14579": {
+    "api_arxiv_id": "2302.14579v2",
+    "title": "Swirling against the forcing: evidence of stable counter-directed sloshing waves in orbital-shaken reservoirs",
+    "authors": [
+      "Alice Marcotte",
+      "François Gallaire",
+      "Alessandro Bongarzone"
+    ],
+    "summary": "We study the free surface response in a cylindrical container undergoing an elliptic periodic orbit. For small forcing amplitudes and deep liquid layers, we quantify the effect of orbit's aspect ratio onto the surface dynamics in the vicinity of the fluid system's lowest natural frequency. We provide experimental evidences of the existence of a frequency range where stable swirling can be either co- or counter-directed with respect to the container's direction of motion. Our findings are successfully predicted by an inviscid asymptotic model, amended with a heuristic damping.",
+    "published": "2023-02-28T14:02:33Z",
+    "updated": "2023-03-03T19:27:26Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "2203.05775": {
+    "api_arxiv_id": "2203.05775v2",
+    "title": "A Thermodynamics-informed Active Learning Approach to Perception and Reasoning about Fluids",
+    "authors": [
+      "Beatriz Moya",
+      "Alberto Badias",
+      "David Gonzalez",
+      "Francisco Chinesta",
+      "Elias Cueto"
+    ],
+    "summary": "Learning and reasoning about physical phenomena is still a challenge in robotics development, and computational sciences play a capital role in the search for accurate methods able to provide explanations for past events and rigorous forecasts of future situations. We propose a thermodynamics-informed active learning strategy for fluid perception and reasoning from observations. As a model problem, we take the sloshing phenomena of different fluids contained in a glass. Starting from full-field and high-resolution synthetic data for a particular fluid, we develop a method for the tracking (perception) and analysis (reasoning) of any previously unseen liquid whose free surface is observed with a commodity camera. This approach demonstrates the importance of physics and knowledge not only in data-driven (grey box) modeling but also in the correction for real physics adaptation in low data regimes and partial observations of the dynamics. The method presented is extensible to other domains such as the development of cognitive digital twins, able to learn from observation of phenomena for which they have not been trained explicitly.",
+    "published": "2022-03-11T07:01:23Z",
+    "updated": "2022-09-09T10:57:39Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "15 pages, 8 figures"
+  },
+  "1605.09648": {
+    "api_arxiv_id": "1605.09648v1",
+    "title": "Response Regimes in Equivalent Mechanical Model of Strongly Nonlinear Liquid Sloshing",
+    "authors": [
+      "M. Farid",
+      "O. V. Gendelman"
+    ],
+    "summary": "We consider equivalent mechanical model of liquid sloshing in partially-filled cylindrical vessel; the model treats both the regime of linear sloshing, and strongly nonlinear sloshing regime. The latter is related to hydraulic impacts applied to the vessel walls. These hydraulic impacts are commonly simulated with the help of high-power potential and dissipation functions. For the sake of analytic exploration, we substitute this traditional approach by treatment of an idealized vibro-impact system with velocity-dependent restitution coefficient. The obtained reduced model is similar to recently explored system of linear primary oscillator with attached vibro-impact energy sink. The ratio of modal mass of the first sloshing mode to the total mass of the liquid and the tank serves as a natural small parameter for multiple-scale analysis. In the case of external ground forcing, steady-state responses and chaotic strongly modulated responses are revealed. All analytical predictions of the reduced vibro-impact model are validated against direct numerical simulations of initial equivalent model with high-power smooth potential and dissipation functions, and good agreement is observed.",
+    "published": "2016-05-31T14:44:03Z",
+    "updated": "2016-05-31T14:44:03Z",
+    "doi": "10.1016/j.ijnonlinmec.2017.04.006",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "2310.11399": {
+    "api_arxiv_id": "2310.11399v2",
+    "title": "Real-time data assimilation for the thermodynamic modeling of cryogenic storage tanks",
+    "authors": [
+      "Pedro Afonso Marques",
+      "Samuel Ahizi",
+      "Miguel Alfonso Mendez"
+    ],
+    "summary": "The thermal management of cryogenic storage tanks requires advanced control strategies to minimize the boil-off losses produced by heat leakages and sloshing-enhanced heat and mass transfer. This work presents a data-assimilation approach to calibrate a 0D thermodynamic model for cryogenic fuel tanks from data collected in real time from multiple tanks. The model combines energy and mass balance between three control volumes (the ullage vapor, the liquid, and the solid tank) with an Artificial Neural Network (ANN) for predicting the heat transfer coefficients from the current tank state. The proposed approach combines ideas from traditional data assimilation and multi-environment reinforcement learning, where an agent's training (model assimilation) is carried out simultaneously on multiple environments (systems). The real-time assimilation uses a mini-batch version of the Limited-memory Broyden-Fletcher-Goldfarb-Shanno with bounds (L-BFGS-B) and adjoint-based gradient computation for solving the underlying optimization problem. The approach is tested on synthetic datasets simulating multiple tanks undergoing different operation phases (pressurization, hold, long-term storage, and sloshing). The results show that the assimilation is robust against measurement noise and uses it to explore the parameter space further. Moreover, we show that sampling from multiple environments simultaneously accelerates the assimilation.",
+    "published": "2023-10-17T17:07:20Z",
+    "updated": "2023-10-20T07:42:41Z",
+    "doi": "10.1016/j.energy.2024.131739",
+    "journal_ref": "",
+    "comment": "21 pages, 18 figures, preprint submitted to Energy"
+  },
+  "2510.08121": {
+    "api_arxiv_id": "2510.08121v1",
+    "title": "Closed-loop control of sloshing fuel in a spinning spacecraft",
+    "authors": [
+      "Umberto Zucchelli",
+      "Miguel Alfonso Mendez",
+      "Annafederica Urbano",
+      "Sebastien Vincent-Bonnieu",
+      "Piotr Wenderski",
+      "Francesco Sanfedino"
+    ],
+    "summary": "New-generation space missions require satellites to carry substantial amounts of liquid propellant, making it essential to analyse the coupled control-structure-propellant dynamics in detail. While Computational Fluid Dynamics (CFD) offers high-fidelity predictions, its computational cost limits its use in iterative design. Equivalent Mechanical Models (EMMs) provide a faster alternative, though their predictive performance, especially in closed-loop scenarios, remains largely unexplored. This work presents a comparative analysis of a spacecraft under feedback control, using both CFD and a reduced-order sloshing model. Results show good agreement, validating the simplified model for the manoeuvrer considered. This validation enables efficient sensitivity and stability studies, offering a practical tool for early-stage spacecraft design.",
+    "published": "2025-10-09T12:06:21Z",
+    "updated": "2025-10-09T12:06:21Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "1712.08248": {
+    "api_arxiv_id": "1712.08248v1",
+    "title": "Explicit Reference Governor for the Constrained Control of Time-Delayed Linear Systems",
+    "authors": [
+      "Marco M. Nicotra",
+      "Tam Nguyen",
+      "Emanuele Garone",
+      "Ilya V. Kolmanovsky"
+    ],
+    "summary": "This paper introduces an explicit reference governor approach for controlling time delay linear systems subject to state and input constraints. The proposed framework relies on suitable invariant sets that can be built using both Lyapunov-Razumikhin and Lyapunov-Krasovskii arguments. The proposed method is validated both numerically and experimentally using several alternative formulations.",
+    "published": "2017-12-21T23:22:48Z",
+    "updated": "2017-12-21T23:22:48Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "1703.02017": {
+    "api_arxiv_id": "1703.02017v1",
+    "title": "Response Regimes in Equivalent Mechanical Model of Moderately Nonlinear Liquid Sloshing",
+    "authors": [
+      "M. Farid",
+      "O. V. Gendelman"
+    ],
+    "summary": "The paper considers non-stationary responses in reduced-order model of partially liquid-filled tank under external forcing. The model involves one common degree of freedom for the tank and the non-sloshing portion of the liquid, and the other one -- for the sloshing portion of the liquid. The coupling between these degrees of freedom is nonlinear, with the lowest-order potential dictated by symmetry considerations. Since the mass of the sloshing liquid in realistic conditions does not exceed 10% of the total mass of the system, the reduced-order model turns to be formally equivalent to well-studied oscillatory systems with nonlinear energy sinks (NES). Exploiting this analogy, and applying the methodology known from the studies of the systems with the NES, we predict a multitude of possible non-stationary responses in the considered model. These responses conform, at least on the qualitative level, to the responses observed in experimental sloshing settings, multi-modal theoretical models and full-scale numeric simulations.",
+    "published": "2017-03-06T18:39:27Z",
+    "updated": "2017-03-06T18:39:27Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": ""
+  },
+  "1307.6063": {
+    "api_arxiv_id": "1307.6063v2",
+    "title": "Mechanical energy dissipation induced by sloshing and wave breaking in a fully coupled angular motion system. Part II: Experimental Investigation",
+    "authors": [
+      "Benjamin Bouscasse",
+      "Andrea Colagrossi",
+      "Antonio Souto-Iglesias",
+      "José Luis Cercós Pita"
+    ],
+    "summary": "In Part I of this paper series, a theoretical and numerical model for a a driven pendulum filled with liquid was developed. The system was analyzed in the framework of tuned liquid dampers (TLD) and hybrid mass liquid dampers (HMLD) theory. In this Part II, in order to measure the energy dissipation resulting from shallow water sloshing, an experimental investigation is conducted. Accurate evaluations of energy transfers are obtained through the recorded kinematics of the system. A set of experiments is conducted with three different liquids: water, sunflower oil and glycerine. Coherently with the results of Part I, the energy dissipation obtained when the tank is filled with water can mainly be explained by the breaking waves. For all three liquids, the effects of varying the external excitation amplitude are discussed.",
+    "published": "2013-07-23T13:27:10Z",
+    "updated": "2014-04-01T13:47:25Z",
+    "doi": "10.1063/1.4869234",
+    "journal_ref": "Physics of Fluids (1994-present) > Volume 26 Number 3 - 033104",
+    "comment": "22 pages, The following article has been published in Physics of Fluids http://dx.doi.org/10.1063/1.4869234"
+  },
+  "2509.21045": {
+    "api_arxiv_id": "2509.21045v1",
+    "title": "MPC-based Deep Reinforcement Learning Method for Space Robotic Control with Fuel Sloshing Mitigation",
+    "authors": [
+      "Mahya Ramezani",
+      "M. Amin Alandihallaj",
+      "Barış Can Yalçın",
+      "Miguel Angel Olivares Mendez",
+      "Holger Voos"
+    ],
+    "summary": "This paper presents an integrated Reinforcement Learning (RL) and Model Predictive Control (MPC) framework for autonomous satellite docking with a partially filled fuel tank. Traditional docking control faces challenges due to fuel sloshing in microgravity, which induces unpredictable forces affecting stability. To address this, we integrate Proximal Policy Optimization (PPO) and Soft Actor-Critic (SAC) RL algorithms with MPC, leveraging MPC's predictive capabilities to accelerate RL training and improve control robustness. The proposed approach is validated through Zero-G Lab of SnT experiments for planar stabilization and high-fidelity numerical simulations for 6-DOF docking with fuel sloshing dynamics. Simulation results demonstrate that SAC-MPC achieves superior docking accuracy, higher success rates, and lower control effort, outperforming standalone RL and PPO-MPC methods. This study advances fuel-efficient and disturbance-resilient satellite docking, enhancing the feasibility of on-orbit refueling and servicing missions.",
+    "published": "2025-09-25T11:51:07Z",
+    "updated": "2025-09-25T11:51:07Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Pre-print version submitted to IEEE IROS"
+  },
+  "2510.19540": {
+    "api_arxiv_id": "2510.19540v3",
+    "title": "Real-time identification of parametric sloshing-induced heat and mass transfer in a horizontally oriented cylindrical tank",
+    "authors": [
+      "Samuel Akatchi Ahizi",
+      "Francisco Monteiro",
+      "Ramon Abarca",
+      "Miguel Alfonso Mendez"
+    ],
+    "summary": "Vertical forcing of partially filled tanks can induce parametric sloshing. Under non-isothermal conditions, the resulting mixing can disrupt the thermal stratification between liquid and vapor, leading to enhanced heat and mass transfer and large pressure fluctuations. This work presents an experimental investigation of sloshing-induced heat and mass transfer in a horizontally oriented cylindrical tank under vertical harmonic excitation. This configuration is particularly relevant for cryogenic fuel storage in aircraft and ground transportation, yet its thermodynamic response under parametric sloshing remains largely uncharacterized. The present study provides the first experimental characterization of the sloshing-induced pressure drop and associated heat and mass transfer in this geometry. Decoupled isothermal and non-isothermal experimental campaigns are carried out across multiple fill levels and forcing amplitudes, near resonance of the first longitudinal symmetric mode $(2,0)$, using a hydrofluoroether fluid (3M Novec HFE-7000). To quantify heat and mass transfer, a lumped thermodynamic model is combined with an Augmented-state Extended Kalman Filter (AEKF), enabling real-time, time-resolved inference of Nusselt numbers. A critical forcing threshold is identified: below it, the fluid remains quiescent and thermally stratified; above it, parametric resonance drives strong sloshing, complete thermal destratification, and a rapid pressure drop. At 50% fill, the dominant (2,0) response intermittently alternates with a planar $(1,0)$ mode, indicating subharmonic mode interaction. The inferred Nusselt numbers increase by several orders of magnitude after destratification, and pressure-rate analysis confirms that condensation governs the pressure evolution.",
+    "published": "2025-10-22T12:46:33Z",
+    "updated": "2026-02-10T18:27:05Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Submitted to International Journal of Heat and Mass Transfer"
+  }
+}

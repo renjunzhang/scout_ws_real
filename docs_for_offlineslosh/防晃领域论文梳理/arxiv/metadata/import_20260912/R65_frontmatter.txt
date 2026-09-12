@@ -1,0 +1,145 @@
+                                         IEEE TRANSACTIONS ON INTELLIGENT VEHICLES                                                                                                        1
+
+
+
+
+                                           Delay-aware Robust Control for Safe Autonomous
+                                                         Driving and Racing
+                                                                                       Dvij Kalaria1 , Qin Lin2∗ , and John M. Dolan3
+
+
+
+                                            Abstract—Delays endanger safety of autonomous systems op-
+                                         erating in a rapidly changing environment, such as nondeter-
+                                         ministic surrounding traffic participants in autonomous driving
+arXiv:2208.13856v1 [cs.RO] 29 Aug 2022
+
+
+
+
+                                         and high-speed racing. Unfortunately, delays are typically not
+                                         considered during the conventional controller design or learning-
+                                         enabled controller training phases prior to deployment in the
+                                         physical world. In this paper, the computation delay from
+                                         nonlinear optimization for motion planning and control, as well
+                                         as other unavoidable delays caused by actuators, are addressed
+                                         systematically and unifiedly. To deal with all these delays, in
+                                         our framework: 1) we propose a new filtering approach with
+                                         no prior knowledge of dynamics and disturbance distribution
+                                         to adaptively and safely estimate the time-variant computation
+                                         delay; 2) we model actuation dynamics for steering delay; 3) all                Fig. 1: An illustration comparing a conventional control and
+                                         the constrained optimization is realized in a robust tube model
+                                         predictive controller. For the application merits, we demonstrate               a delay-aware control. The conventional method, as shown in
+                                         that our approach is suitable for both autonomous driving                       case A, always uses the current state of the vehicle to compute
+                                         and autonomous racing. Our approach is a novel design for                       the future control action. Due to a delay, the calculated action
+                                         a standalone delay compensation controller. In addition, in the                 will not be instantaneously executed (see the shifted steering
+                                         case that a learning-enabled controller assuming no delay works                 wheel signs from black to blue). Our controller is aware of
+                                         as a primary controller, our approach serves as the primary
+                                         controller’s safety guard. The video demonstration is available                 the delay factor, thus in the earliest time step (see the leftmost
+                                         online 1 .                                                                      calculated command in case B), a steering command has been
+                                            Index Terms—Autonomous driving, autonomous racing, delay                     calculated. The movements in case A with the orange color
+                                         compensation, robust control, safe control                                      are from the late steering command sequence shown in the
+                                                                                                                         first row of blue steering wheel signs. Clearly, the movements
+                                                                    I. I NTRODUCTION                                     in case B with the blue color are safer.
+                                            The need for high-resolution sensors and powerful onboard                    controller takes a safe action earlier (e.g., earlier steering for
+                                         computing represent a significant barrier to achieving inex-                    an evasive maneuver with the blue color). Our approach deals
+                                         pensive autonomous vehicles. While much has been done to                        with three types of delay in a unified manner: 1) actuator
+                                         improve the efficiency of algorithms, the required computa-                     dynamics delay; 2) control action processing delay; and 3)
+                                         tion time is unavoidable. The motion planning and control                       computation time delay. First, we augment the commonly used
+                                         component of a self-driving car requires heavy computation                      vehicle dynamic modeling by including steering action delay.
+                                         in highly complex traffic environments (usually nonlinear and                   Second, we propose a novel adaptive Kalman filter variant:
+                                         non-convex). Because any non-negligible delay is risky in fast-                 INFLUENCE (adaptIve kalmaN FiLter with Unknown process
+                                         changing conditions, e.g., highway and autonomous racing,                       modEl and Noise CovariancE) to probabilistically and safely
+                                         the frequently held premise that the optimal control action is                  estimate the control action processing delay and computation
+                                         produced instantaneously from an optimization program and                       time delay caused by online optimization. INFLUENCE si-
+                                         executed on the plant is erroneous.                                             multaneously identifies an unknown process model and noise
+                                            Fig. 1 illustrates the motivation of our work in a collision                 covariances. Third, we extend robust tube model predictive
+                                         avoidance scenario. The sequential movements in orange color                    control (MPC) theory by adding a new delay-aware feature
+                                         result from a traditional controller without considering any                    for optimizing control.
+                                         delay, which could be hazardous in a highly dynamic environ-                       The first controller design is proposed as a standalone delay-
+                                         ment (e.g., high-speed scenario). However, our delay-aware                      aware robust control framework, while the other design aims
+                                            1 Dvij Kalaria is with the Department of Computer Science and Engineering,
+                                                                                                                         at compensating delays for an existing learning-enabled (LE)
+                                         IIT Kharagpur, India dvij@iitkgp.ac.in
+                                                                                                                         controller for a provable safety guarantee, which aligns with
+                                            2 Qin Lin is with the EECS Department, Cleveland State University            the safe artificial intelligence (AI) theme. Naive delay-free
+                                         q.lin80@csuohio.edu                                                             assumptions are frequently made when the LE control policy is
+                                           3 John M. Dolan is with the Robotics Institute, Carnegie Mellon University
+                                                                                                                         trained in a simulation environment. Such a simulation-to-real
+                                         jdolan@andrew.cmu.edu
+                                           ∗ Corresponding author                                                        (sim-to-real) gap hinders reliable deployment of safety-critical
+                                           1 https://youtu.be/bWNpzMi3RlI                                                autonomous systems like self-driving cars. The LE controller
+IEEE TRANSACTIONS ON INTELLIGENT VEHICLES                                                                                               2
+
+
+
+is treated as a high-level reference and allows a low-level          For control action processing delay, which is usually time-
+refinement. We use delay compensation to actively regulate its       invariant, [5] proposes to compensate for such a delay by
+unsafe control. We validate our framework in two challenging         transitioning the initial state in a preview controller. [6] further
+scenarios: the first one is on-road autonomous driving in a          extends the idea and considers actuator saturation. The major
+dynamic and uncertain traffic environment. The surrounding           disadvantage of the preview controller is that it is not flexible
+traffic participants have non-deterministic behaviors such as        enough to simultaneously consider multiple constraints such
+unexpected braking. The second is autonomous racing, which           as dynamics, state, and control limits. Note that our work deals
+can reach high speed up to 180 km/h.                                 with delays and all constraints of state and control in a unified
+   We make the following contributions:                              robust MPC optimization.
+   1) We extend the conventional robust tube MPC framework             3) Provable safety using CBFs
+       with the new capacity to deal with various types of
+       practical delays.                                                Wieland and Allower [7] in 2007 first proposed the CBF-
+   2) Unlike many existing filters, INFLUENCE does not               based method which describes an admissible control space
+       require prior knowledge of model dynamics and noise           capable of rendering forward invariance of a safe set. Later,
+       distribution. In addition, its probabilistic and adaptive     Aaron et al. [8] extended CBF to a minimally restrictive setting
+       estimation mitigates overconservatism.                        and applied it to the lane-keeping and adaptive cruise control
+   3) We propose a safety guard component to compensate for          problem.
+       delays of a LE controller without considering any delays.         [9] presents a unique proof for the stability and safety of
+       In addition, in our control optimization framework,           time delay state systems. However, it does not account for
+       the delay compensator can be combined with barrier            control systems. Later, [10] proposed safety of control barrier
+       functions (CBFs) for collision avoidance.                     functions for sampled-data systems where the control signal
+                                                                     is updated in discrete steps as regular time intervals but the
+   We have the following two substantial improvements over
+                                                                     system is evolved continuously. Such systems are close to real
+the preliminary version [1]: 1) In this study, we use a dynamic
+                                                                     systems, as we can only update the control signal in discrete
+vehicle model rather than a kinematic model. We demonstrate
+                                                                     steps. It proves validity of control barrier functions under such
+the scalability of our algorithm with a higher state dimension.
+                                                                     a setting. It later exploits the formulation to extend the proof
+2) Collision avoidance is not taken into account in the com-
+                                                                     to systems with constant known input delays. However, in
+pensation control of a learning-enabled controller in [1]. In our
+                                                                     our case we require validity for time-varying input delay. [11]
+current work, we combine our control strategy with an MPC
+                                                                     describes an approach for designing safety-critical controllers
+embedded with CBFs. The novel integration can be called a
+                                                                     involving control barrier functions for nonlinear systems with
+delay-aware robust quadratic programming with control barrier
+                                                                     time-varying input delay. It combines a state predictor that
+functions (DR-QP-CBFs).
+                                                                     compensates for the time-varying input delay with a CBF-
+   The rest of this paper is organized into the following            based feedback law for the nominal system, which is delay-
+sections. A review of some relevant related works is presented       free. However, this is for continuous systems with continuous
+in Section II. The methodology is described in Section III.          control. In our case, the system is discretely controllable with
+The experiments and their results are presented in Section IV.       variable delay time. Also, we use the CBF accounting for
+Section V contains the conclusions.                                  variable input delay in conjunction with MPC to account for
+                     II. R ELATED WORK                               uncertainties in the system model and environment due to
+                                                                     dynamic obstacles.
+   In this section, we will briefly review the most important
+related work on how to deal with delays and some CBFs work                                 III. M ETHODOLOGY
+for safe control.                                                    A. Notation
+  1) General delay compensation control                                 A polytope is the convex hull of finite points in Eu-
+    [2] considers a discrete control problem: it proposes to shift   clidean d-dimensional space with vertices of the form Rd .
+one discrete step ahead for the initial state in MPC, for the        The Minkowski sum of two polytopes, A and B, is another
+particularly simple one-step delay problem. [3] uses a cache         polytope in d-dimensional space defined as A ⊕ B := {a +
+mechanism for buffering previously computed control actions.         b|a ∈ A, b ∈ B}. The Pontryagin difference between two
+However, their approach only works for static scenarios with         polytopes, A and B, is another polytope in d-dimensional
+fixed horizon length, which leads to a less responsive con-          space defined as A B := {x|x + b ∈ A, ∀b ∈ B}.
+troller. The first significant improvement in our work is that
+                                                                     B. Optimal racing line
+our filtering approach actively estimates a time-variant local
+upper bound of the computation delay.                                  During a race, professional drivers follow a racing line while
+                                                                     using specific maneuvers that allow them to use the limits of
+  2) Actuation delay compensation control                            the car’s tire forces. This path can be used as a reference
+  To deal with delays in actuator dynamics, [4] proposes to          by the autonomous racing motion planner to effectively fol-
+augment the original state space model with an extra first-order     low time-optimal trajectories while avoiding collision, among
+ordinary differential equation (ODE) for the delay behavior.         other objectives. Many recent works have proposed motion
+The particular application in their work is braking control.         planners on top of optimal racing lines including sampling-
+

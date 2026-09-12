@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/sD1EGH9XBUd6sZBBqVW5Dumz8gc</id>
+  <title>arXiv Query: search_query=(ti:"reference governor" AND (all:learning OR all:liquid OR all:sloshing) ) AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=12</title>
+  <updated>2026-09-11T14:09:05Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(ti:%22reference+governor%22+AND+(all:learning+OR+(all:liquid+OR+all:sloshing)))+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=12&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>12</opensearch:itemsPerPage>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2101.09298v2</id>
+    <title>Safe Learning Reference Governor: Theory and Application to Fuel Truck Rollover Avoidance</title>
+    <updated>2021-09-08T20:16:20Z</updated>
+    <link href="https://arxiv.org/abs/2101.09298v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2101.09298v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper proposes a learning reference governor (LRG) approach to enforce state and control constraints in systems for which an accurate model is unavailable, and this approach enables the reference governor to gradually improve command tracking performance through learning while enforcing the constraints during learning and after learning is completed. The learning can be performed either on a black-box type model of the system or directly on the hardware. After introducing the LRG algorithm and outlining its theoretical properties, this paper investigates LRG application to fuel truck (tank truck) rollover avoidance. Through simulations based on a fuel truck model that accounts for liquid fuel sloshing effects, we show that the proposed LRG can effectively protect fuel trucks from rollover accidents under various operating conditions.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-01-22T19:13:11Z</published>
+    <arxiv:comment>16 pages, 18 figures</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Kaiwen Liu</name>
+    </author>
+    <author>
+      <name>Nan Li</name>
+    </author>
+    <author>
+      <name>Ilya Kolmanovsky</name>
+    </author>
+    <author>
+      <name>Denise Rizzo</name>
+    </author>
+    <author>
+      <name>Anouck Girard</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.03894v2</id>
+    <title>A Machine Learning-Based Reference Governor for Nonlinear Systems With Application to Automotive Fuel Cells</title>
+    <updated>2025-07-13T14:44:01Z</updated>
+    <link href="https://arxiv.org/abs/2410.03894v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.03894v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The prediction-based nonlinear reference governor (PRG) is an add-on algorithm to enforce constraints on pre-stabilized nonlinear systems by modifying, whenever necessary, the reference signal. The implementation of PRG carries a heavy computational burden, as it may require multiple numerical simulations of the plant model at each sample time. To this end, this paper proposes an alternative approach based on machine learning, where we first use a regression neural network (NN) to approximate the input-output map of the PRG from a set of training data. During the real-time operation, at each sample time, we use the trained NN to compute a nominal reference command, which may not be constraint admissible due to training errors and limited data. We adopt a novel sensitivity-based approach to minimally adjust the nominal reference while ensuring constraint enforcement. We thus refer to the resulting control strategy as the modified neural network reference governor (MNN-RG), which is significantly more computationally efficient than the PRG. The computational and theoretical properties of MNN-RG are presented. Finally, the effectiveness and limitations of the proposed method are studied by applying it as a load governor for constraint management in automotive fuel cell systems through simulation-based case studies.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-04T19:52:19Z</published>
+    <arxiv:comment>Accepted for publication in IEEE Transactions on Control Systems Technology. DOI: 10.1109/TCST.2025.3579514. This version incorporates all peer-review revisions</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <arxiv:journal_ref>IEEE Transactions on Control Systems Technology, Early Access, 2025</arxiv:journal_ref>
+    <author>
+      <name>Mostafaali Ayubirad</name>
+    </author>
+    <author>
+      <name>Hamid R. Ossareh</name>
+    </author>
+    <arxiv:doi>10.1109/TCST.2025.3579514</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TCST.2025.3579514" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2309.08813v2</id>
+    <title>Control Barrier Function for Linearizable Systems with High Relative Degrees from Signal Temporal Logics: A Reference Governor Approach</title>
+    <updated>2024-07-09T14:34:23Z</updated>
+    <link href="https://arxiv.org/abs/2309.08813v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2309.08813v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper considers the safety-critical navigation problem with Signal Temporal Logic (STL) tasks. We developed an explicit reference governor-guided control barrier function (ERG-guided CBF) method that enables the application of first-order CBFs to high-order linearizable systems. This method significantly reduces the conservativeness of the existing CBF approaches for high-order systems. Furthermore, our framework provides safety-critical guarantees in the sense of obstacle avoidance by constructing the margin of safety and updating direction of safe evolution in the agent's state space. To improve control performance and enhance STL satisfaction, we employ efficient gradient-based methods for iteratively learning optimal parameters of ERG-guided CBF. We validate the algorithm through both high-order linear and nonlinear systems. A video demonstration can be found on: \url{https://youtu.be/ZRmsA2FeFR4}</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-09-15T23:52:11Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Kaier Liang</name>
+    </author>
+    <author>
+      <name>Mingyu Cai</name>
+    </author>
+    <author>
+      <name>Cristian-Ioan Vasile</name>
+    </author>
+  </entry>
+</feed>

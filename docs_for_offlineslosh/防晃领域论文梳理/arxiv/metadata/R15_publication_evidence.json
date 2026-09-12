@@ -1,0 +1,109 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Generalizing+Trajectory+Retiming+to+Quadratic+Objective+Functions&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/icra57147.2024.10610854",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/icra57147.2024.10610854",
+    "title": [
+      "Generalizing Trajectory Retiming to Quadratic Objective Functions"
+    ],
+    "author": [
+      {
+        "given": "Gerry",
+        "family": "Chen",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Georgia Institute of Technology,Atlanta,GA,USA,30332"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Frank",
+        "family": "Dellaert",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Georgia Institute of Technology,Atlanta,GA,USA,30332"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Seth",
+        "family": "Hutchinson",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Georgia Institute of Technology,Atlanta,GA,USA,30332"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2024 IEEE International Conference on Robotics and Automation (ICRA)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024,
+          5,
+          13
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2024,
+          5,
+          13
+        ]
+      ]
+    },
+    "page": "9823-9829",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/icra57147.2024.10610854",
+    "event": {
+      "name": "2024 IEEE International Conference on Robotics and Automation (ICRA)",
+      "start": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            13
+          ]
+        ]
+      },
+      "location": "Yokohama, Japan",
+      "end": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            17
+          ]
+        ]
+      }
+    }
+  }
+}

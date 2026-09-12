@@ -1,0 +1,32 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Equivalent+Mechanical+Models+for+Sloshing&rows=5",
+  "match_review": "No matching formal publication identified in this targeted search; not evidence that no publication exists.",
+  "top_results": [
+    {
+      "title": [
+        "Equivalent mechanical models"
+      ],
+      "DOI": "10.1017/cbo9780511536656.007",
+      "container-title": [
+        "Liquid Sloshing Dynamics"
+      ]
+    },
+    {
+      "title": [
+        "Reduced-Order and Equivalent Mechanical Models for Sloshing in Arbitrarily Shaped Containers"
+      ],
+      "DOI": "10.2139/ssrn.5310304",
+      "container-title": null
+    },
+    {
+      "title": [
+        "Representation of liquid sloshing in elastic 3D tanks by equivalent mechanical systems and symmetric reduced models"
+      ],
+      "DOI": "10.1016/b978-008044046-0/50367-5",
+      "container-title": [
+        "Computational Fluid and Solid Mechanics 2003"
+      ]
+    }
+  ]
+}

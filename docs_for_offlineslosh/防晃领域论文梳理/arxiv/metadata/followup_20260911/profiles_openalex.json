@@ -1,0 +1,963 @@
+{
+  "id": "https://openalex.org/W4220997516",
+  "doi": "https://doi.org/10.1115/1.4054224",
+  "title": "Antisloshing Trajectories for High-Acceleration Motions in Automatic Machines",
+  "display_name": "Antisloshing Trajectories for High-Acceleration Motions in Automatic Machines",
+  "publication_year": 2022,
+  "publication_date": "2022-03-31",
+  "ids": {
+    "openalex": "https://openalex.org/W4220997516",
+    "doi": "https://doi.org/10.1115/1.4054224"
+  },
+  "language": "en",
+  "primary_location": {
+    "id": "doi:10.1115/1.4054224",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1115/1.4054224",
+    "pdf_url": null,
+    "source": {
+      "id": "https://openalex.org/S182161918",
+      "display_name": "Journal of Dynamic Systems Measurement and Control",
+      "issn_l": "0022-0434",
+      "issn": [
+        "0022-0434",
+        "1528-9028"
+      ],
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": true,
+      "host_organization": "https://openalex.org/P4310316053",
+      "host_organization_name": "ASM International",
+      "host_organization_lineage": [
+        "https://openalex.org/P4310316053"
+      ],
+      "host_organization_lineage_names": [
+        "ASM International"
+      ],
+      "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Journal of Dynamic Systems, Measurement, and Control",
+    "raw_type": "journal-article"
+  },
+  "type": "article",
+  "indexed_in": [
+    "crossref"
+  ],
+  "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "https://hdl.handle.net/11585/889873",
+    "any_repository_has_fulltext": true
+  },
+  "authorships": [
+    {
+      "author_position": "first",
+      "author": {
+        "id": "https://openalex.org/A5067830108",
+        "display_name": "Luca Guagliumi",
+        "orcid": "https://orcid.org/0000-0002-8343-4546"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I9360294",
+          "display_name": "University of Bologna",
+          "ror": "https://ror.org/01111rn36",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Luca Guagliumi",
+      "raw_affiliation_strings": [
+        "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy",
+          "institution_ids": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ]
+    },
+    {
+      "author_position": "middle",
+      "author": {
+        "id": "https://openalex.org/A5101506719",
+        "display_name": "Alessandro Berti",
+        "orcid": "https://orcid.org/0000-0003-1830-4013"
+      },
+      "institutions": [],
+      "countries": [],
+      "is_corresponding": false,
+      "raw_author_name": "Alessandro Berti",
+      "raw_affiliation_strings": [
+        "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy",
+          "institution_ids": []
+        }
+      ]
+    },
+    {
+      "author_position": "middle",
+      "author": {
+        "id": "https://openalex.org/A5044285605",
+        "display_name": "Eros Monti",
+        "orcid": "https://orcid.org/0000-0002-0536-5485"
+      },
+      "institutions": [],
+      "countries": [],
+      "is_corresponding": false,
+      "raw_author_name": "Eros Monti",
+      "raw_affiliation_strings": [
+        "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy",
+          "institution_ids": []
+        }
+      ]
+    },
+    {
+      "author_position": "last",
+      "author": {
+        "id": "https://openalex.org/A5074104066",
+        "display_name": "Marco Carricato",
+        "orcid": "https://orcid.org/0000-0002-1528-4304"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I9360294",
+          "display_name": "University of Bologna",
+          "ror": "https://ror.org/01111rn36",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Marco Carricato",
+      "raw_affiliation_strings": [
+        "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy",
+          "institution_ids": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ]
+    }
+  ],
+  "institutions": [],
+  "countries_distinct_count": 1,
+  "institutions_distinct_count": 1,
+  "corresponding_author_ids": [],
+  "corresponding_institution_ids": [],
+  "apc_list": null,
+  "apc_paid": null,
+  "fwci": 1.4153,
+  "has_fulltext": false,
+  "cited_by_count": 19,
+  "citation_normalized_percentile": {
+    "value": 0.76172259,
+    "is_in_top_1_percent": false,
+    "is_in_top_10_percent": false
+  },
+  "cited_by_percentile_year": {
+    "min": 89,
+    "max": 100
+  },
+  "biblio": {
+    "volume": "144",
+    "issue": "7",
+    "first_page": null,
+    "last_page": null
+  },
+  "is_retracted": false,
+  "is_paratext": false,
+  "is_xpac": false,
+  "primary_topic": {
+    "id": "https://openalex.org/T11694",
+    "display_name": "Fluid Dynamics Simulations and Interactions",
+    "score": 0.9998999834060669,
+    "subfield": {
+      "id": "https://openalex.org/subfields/2206",
+      "display_name": "Computational Mechanics"
+    },
+    "field": {
+      "id": "https://openalex.org/fields/22",
+      "display_name": "Engineering"
+    },
+    "domain": {
+      "id": "https://openalex.org/domains/3",
+      "display_name": "Physical Sciences"
+    }
+  },
+  "topics": [
+    {
+      "id": "https://openalex.org/T11694",
+      "display_name": "Fluid Dynamics Simulations and Interactions",
+      "score": 0.9998999834060669,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2206",
+        "display_name": "Computational Mechanics"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T12206",
+      "display_name": "Vibration and Dynamic Analysis",
+      "score": 0.9991999864578247,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2207",
+        "display_name": "Control and Systems Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T11394",
+      "display_name": "Dynamics and Control of Mechanical Systems",
+      "score": 0.998199999332428,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2207",
+        "display_name": "Control and Systems Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    }
+  ],
+  "keywords": [
+    {
+      "id": "https://openalex.org/keywords/infinite-impulse-response",
+      "display_name": "Infinite impulse response",
+      "score": 0.7202735543251038
+    },
+    {
+      "id": "https://openalex.org/keywords/control-theory",
+      "display_name": "Control theory (sociology)",
+      "score": 0.6926677227020264
+    },
+    {
+      "id": "https://openalex.org/keywords/impulse",
+      "display_name": "Impulse (physics)",
+      "score": 0.6109884977340698
+    },
+    {
+      "id": "https://openalex.org/keywords/computer-science",
+      "display_name": "Computer science",
+      "score": 0.5760068297386169
+    },
+    {
+      "id": "https://openalex.org/keywords/feed-forward",
+      "display_name": "Feed forward",
+      "score": 0.5113120079040527
+    },
+    {
+      "id": "https://openalex.org/keywords/impulse-response",
+      "display_name": "Impulse response",
+      "score": 0.48718518018722534
+    },
+    {
+      "id": "https://openalex.org/keywords/finite-impulse-response",
+      "display_name": "Finite impulse response",
+      "score": 0.46409764885902405
+    },
+    {
+      "id": "https://openalex.org/keywords/acceleration",
+      "display_name": "Acceleration",
+      "score": 0.43961861729621887
+    },
+    {
+      "id": "https://openalex.org/keywords/control-engineering",
+      "display_name": "Control engineering",
+      "score": 0.363636314868927
+    },
+    {
+      "id": "https://openalex.org/keywords/mathematics",
+      "display_name": "Mathematics",
+      "score": 0.26918864250183105
+    },
+    {
+      "id": "https://openalex.org/keywords/algorithm",
+      "display_name": "Algorithm",
+      "score": 0.25004318356513977
+    },
+    {
+      "id": "https://openalex.org/keywords/engineering",
+      "display_name": "Engineering",
+      "score": 0.24874871969223022
+    },
+    {
+      "id": "https://openalex.org/keywords/artificial-intelligence",
+      "display_name": "Artificial intelligence",
+      "score": 0.17693033814430237
+    },
+    {
+      "id": "https://openalex.org/keywords/physics",
+      "display_name": "Physics",
+      "score": 0.1704103648662567
+    },
+    {
+      "id": "https://openalex.org/keywords/mathematical-analysis",
+      "display_name": "Mathematical analysis",
+      "score": 0.15338429808616638
+    },
+    {
+      "id": "https://openalex.org/keywords/digital-filter",
+      "display_name": "Digital filter",
+      "score": 0.1317462921142578
+    },
+    {
+      "id": "https://openalex.org/keywords/classical-mechanics",
+      "display_name": "Classical mechanics",
+      "score": 0.11509755253791809
+    },
+    {
+      "id": "https://openalex.org/keywords/control",
+      "display_name": "Control (management)",
+      "score": 0.1096486747264862
+    },
+    {
+      "id": "https://openalex.org/keywords/filter",
+      "display_name": "Filter (signal processing)",
+      "score": 0.09557414054870605
+    },
+    {
+      "id": "https://openalex.org/keywords/computer-vision",
+      "display_name": "Computer vision",
+      "score": 0.07152211666107178
+    }
+  ],
+  "concepts": [
+    {
+      "id": "https://openalex.org/C183816354",
+      "wikidata": "https://www.wikidata.org/wiki/Q665617",
+      "display_name": "Infinite impulse response",
+      "level": 4,
+      "score": 0.7202735543251038
+    },
+    {
+      "id": "https://openalex.org/C47446073",
+      "wikidata": "https://www.wikidata.org/wiki/Q5165890",
+      "display_name": "Control theory (sociology)",
+      "level": 3,
+      "score": 0.6926677227020264
+    },
+    {
+      "id": "https://openalex.org/C70836080",
+      "wikidata": "https://www.wikidata.org/wiki/Q837940",
+      "display_name": "Impulse (physics)",
+      "level": 2,
+      "score": 0.6109884977340698
+    },
+    {
+      "id": "https://openalex.org/C41008148",
+      "wikidata": "https://www.wikidata.org/wiki/Q21198",
+      "display_name": "Computer science",
+      "level": 0,
+      "score": 0.5760068297386169
+    },
+    {
+      "id": "https://openalex.org/C38858127",
+      "wikidata": "https://www.wikidata.org/wiki/Q5441228",
+      "display_name": "Feed forward",
+      "level": 2,
+      "score": 0.5113120079040527
+    },
+    {
+      "id": "https://openalex.org/C72279823",
+      "wikidata": "https://www.wikidata.org/wiki/Q1139726",
+      "display_name": "Impulse response",
+      "level": 2,
+      "score": 0.48718518018722534
+    },
+    {
+      "id": "https://openalex.org/C198386975",
+      "wikidata": "https://www.wikidata.org/wiki/Q117785",
+      "display_name": "Finite impulse response",
+      "level": 2,
+      "score": 0.46409764885902405
+    },
+    {
+      "id": "https://openalex.org/C117896860",
+      "wikidata": "https://www.wikidata.org/wiki/Q11376",
+      "display_name": "Acceleration",
+      "level": 2,
+      "score": 0.43961861729621887
+    },
+    {
+      "id": "https://openalex.org/C133731056",
+      "wikidata": "https://www.wikidata.org/wiki/Q4917288",
+      "display_name": "Control engineering",
+      "level": 1,
+      "score": 0.363636314868927
+    },
+    {
+      "id": "https://openalex.org/C33923547",
+      "wikidata": "https://www.wikidata.org/wiki/Q395",
+      "display_name": "Mathematics",
+      "level": 0,
+      "score": 0.26918864250183105
+    },
+    {
+      "id": "https://openalex.org/C11413529",
+      "wikidata": "https://www.wikidata.org/wiki/Q8366",
+      "display_name": "Algorithm",
+      "level": 1,
+      "score": 0.25004318356513977
+    },
+    {
+      "id": "https://openalex.org/C127413603",
+      "wikidata": "https://www.wikidata.org/wiki/Q11023",
+      "display_name": "Engineering",
+      "level": 0,
+      "score": 0.24874871969223022
+    },
+    {
+      "id": "https://openalex.org/C154945302",
+      "wikidata": "https://www.wikidata.org/wiki/Q11660",
+      "display_name": "Artificial intelligence",
+      "level": 1,
+      "score": 0.17693033814430237
+    },
+    {
+      "id": "https://openalex.org/C121332964",
+      "wikidata": "https://www.wikidata.org/wiki/Q413",
+      "display_name": "Physics",
+      "level": 0,
+      "score": 0.1704103648662567
+    },
+    {
+      "id": "https://openalex.org/C134306372",
+      "wikidata": "https://www.wikidata.org/wiki/Q7754",
+      "display_name": "Mathematical analysis",
+      "level": 1,
+      "score": 0.15338429808616638
+    },
+    {
+      "id": "https://openalex.org/C36390408",
+      "wikidata": "https://www.wikidata.org/wiki/Q1163067",
+      "display_name": "Digital filter",
+      "level": 3,
+      "score": 0.1317462921142578
+    },
+    {
+      "id": "https://openalex.org/C74650414",
+      "wikidata": "https://www.wikidata.org/wiki/Q11397",
+      "display_name": "Classical mechanics",
+      "level": 1,
+      "score": 0.11509755253791809
+    },
+    {
+      "id": "https://openalex.org/C2775924081",
+      "wikidata": "https://www.wikidata.org/wiki/Q55608371",
+      "display_name": "Control (management)",
+      "level": 2,
+      "score": 0.1096486747264862
+    },
+    {
+      "id": "https://openalex.org/C106131492",
+      "wikidata": "https://www.wikidata.org/wiki/Q3072260",
+      "display_name": "Filter (signal processing)",
+      "level": 2,
+      "score": 0.09557414054870605
+    },
+    {
+      "id": "https://openalex.org/C31972630",
+      "wikidata": "https://www.wikidata.org/wiki/Q844240",
+      "display_name": "Computer vision",
+      "level": 1,
+      "score": 0.07152211666107178
+    }
+  ],
+  "mesh": [],
+  "locations_count": 2,
+  "locations": [
+    {
+      "id": "doi:10.1115/1.4054224",
+      "is_oa": false,
+      "landing_page_url": "https://doi.org/10.1115/1.4054224",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S182161918",
+        "display_name": "Journal of Dynamic Systems Measurement and Control",
+        "issn_l": "0022-0434",
+        "issn": [
+          "0022-0434",
+          "1528-9028"
+        ],
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": true,
+        "host_organization": "https://openalex.org/P4310316053",
+        "host_organization_name": "ASM International",
+        "host_organization_lineage": [
+          "https://openalex.org/P4310316053"
+        ],
+        "host_organization_lineage_names": [
+          "ASM International"
+        ],
+        "type": "journal"
+      },
+      "license": null,
+      "license_id": null,
+      "version": "publishedVersion",
+      "is_accepted": true,
+      "is_published": true,
+      "raw_source_name": "Journal of Dynamic Systems, Measurement, and Control",
+      "raw_type": "journal-article"
+    },
+    {
+      "id": "pmh:oai:cris.unibo.it:11585/889873",
+      "is_oa": true,
+      "landing_page_url": "https://hdl.handle.net/11585/889873",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S4306402579",
+        "display_name": "Archivio istituzionale della ricerca (Alma Mater Studiorum Università di Bologna)",
+        "issn_l": null,
+        "issn": null,
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": false,
+        "host_organization": "https://openalex.org/I4210117483",
+        "host_organization_name": "Istituto di Ematologia di Bologna",
+        "host_organization_lineage": [
+          "https://openalex.org/I4210117483"
+        ],
+        "host_organization_lineage_names": [],
+        "type": "repository"
+      },
+      "license": "cc-by",
+      "license_id": "https://openalex.org/licenses/cc-by",
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": "",
+      "raw_type": "info:eu-repo/semantics/article"
+    }
+  ],
+  "best_oa_location": {
+    "id": "pmh:oai:cris.unibo.it:11585/889873",
+    "is_oa": true,
+    "landing_page_url": "https://hdl.handle.net/11585/889873",
+    "pdf_url": null,
+    "source": {
+      "id": "https://openalex.org/S4306402579",
+      "display_name": "Archivio istituzionale della ricerca (Alma Mater Studiorum Università di Bologna)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "host_organization": "https://openalex.org/I4210117483",
+      "host_organization_name": "Istituto di Ematologia di Bologna",
+      "host_organization_lineage": [
+        "https://openalex.org/I4210117483"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+    },
+    "license": "cc-by",
+    "license_id": "https://openalex.org/licenses/cc-by",
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": "",
+    "raw_type": "info:eu-repo/semantics/article"
+  },
+  "sustainable_development_goals": [],
+  "awards": [],
+  "funders": [],
+  "has_content": {
+    "grobid_xml": false,
+    "pdf": false
+  },
+  "content_urls": null,
+  "referenced_works_count": 26,
+  "referenced_works": [
+    "https://openalex.org/W1510460520",
+    "https://openalex.org/W1990727235",
+    "https://openalex.org/W1999177683",
+    "https://openalex.org/W1999279964",
+    "https://openalex.org/W2018159317",
+    "https://openalex.org/W2029497546",
+    "https://openalex.org/W2030237931",
+    "https://openalex.org/W2067704779",
+    "https://openalex.org/W2070221100",
+    "https://openalex.org/W2080476943",
+    "https://openalex.org/W2110644419",
+    "https://openalex.org/W2130772759",
+    "https://openalex.org/W2132901532",
+    "https://openalex.org/W2139747245",
+    "https://openalex.org/W2140530315",
+    "https://openalex.org/W2289086291",
+    "https://openalex.org/W2765945009",
+    "https://openalex.org/W2785701199",
+    "https://openalex.org/W2846201370",
+    "https://openalex.org/W3004271040",
+    "https://openalex.org/W3045676840",
+    "https://openalex.org/W3084131480",
+    "https://openalex.org/W3085595308",
+    "https://openalex.org/W3198963837",
+    "https://openalex.org/W4206575338",
+    "https://openalex.org/W4211222831"
+  ],
+  "related_works": [
+    "https://openalex.org/W4312785053",
+    "https://openalex.org/W2142009384",
+    "https://openalex.org/W3140661709",
+    "https://openalex.org/W2072565115",
+    "https://openalex.org/W3138047207",
+    "https://openalex.org/W2129450128",
+    "https://openalex.org/W3007580271",
+    "https://openalex.org/W2134470750",
+    "https://openalex.org/W2810377961",
+    "https://openalex.org/W4283697728"
+  ],
+  "abstract_inverted_index": {
+    "Abstract": [
+      0
+    ],
+    "This": [
+      1
+    ],
+    "paper": [
+      2
+    ],
+    "studies": [
+      3
+    ],
+    "the": [
+      4,
+      39,
+      54,
+      75,
+      99
+    ],
+    "design": [
+      5
+    ],
+    "of": [
+      6,
+      38,
+      53,
+      98
+    ],
+    "antisloshing": [
+      7,
+      50,
+      101
+    ],
+    "trajectories": [
+      8,
+      102
+    ],
+    "for": [
+      9,
+      14
+    ],
+    "application": [
+      10
+    ],
+    "in": [
+      11,
+      44
+    ],
+    "automatic": [
+      12
+    ],
+    "machines": [
+      13
+    ],
+    "packaging": [
+      15
+    ],
+    "liquid": [
+      16
+    ],
+    "products,": [
+      17
+    ],
+    "with": [
+      18,
+      87
+    ],
+    "specific": [
+      19
+    ],
+    "reference": [
+      20
+    ],
+    "to": [
+      21,
+      48,
+      82,
+      93
+    ],
+    "cylindrical": [
+      22
+    ],
+    "containers": [
+      23
+    ],
+    "and": [
+      24,
+      42,
+      64,
+      68
+    ],
+    "emphasis": [
+      25
+    ],
+    "on": [
+      26,
+      33
+    ],
+    "prescribed": [
+      27
+    ],
+    "motion": [
+      28,
+      85
+    ],
+    "durations.": [
+      29
+    ],
+    "Different": [
+      30
+    ],
+    "strategies,": [
+      31
+    ],
+    "based": [
+      32
+    ],
+    "a": [
+      34
+    ],
+    "discrete": [
+      35
+    ],
+    "linear": [
+      36
+    ],
+    "model": [
+      37
+    ],
+    "sloshing": [
+      40
+    ],
+    "phenomenon": [
+      41
+    ],
+    "applicable": [
+      43
+    ],
+    "real-time,": [
+      45
+    ],
+    "are": [
+      46,
+      80
+    ],
+    "analyzed": [
+      47
+    ],
+    "perform": [
+      49
+    ],
+    "feedforward": [
+      51
+    ],
+    "control": [
+      52
+    ],
+    "container": [
+      55
+    ],
+    "motion:": [
+      56
+    ],
+    "finite": [
+      57
+    ],
+    "impulse": [
+      58,
+      70
+    ],
+    "response": [
+      59,
+      71
+    ],
+    "(FIR)": [
+      60
+    ],
+    "filters": [
+      61
+    ],
+    "(input": [
+      62
+    ],
+    "shapers": [
+      63
+    ],
+    "others),": [
+      65
+    ],
+    "dynamic-model": [
+      66
+    ],
+    "inversion,": [
+      67
+    ],
+    "infinite": [
+      69
+    ],
+    "(IIR)": [
+      72
+    ],
+    "filters.": [
+      73
+    ],
+    "Unlike": [
+      74
+    ],
+    "previous": [
+      76
+    ],
+    "literature,": [
+      77
+    ],
+    "these": [
+      78
+    ],
+    "strategies": [
+      79
+    ],
+    "applied": [
+      81
+    ],
+    "highly": [
+      83
+    ],
+    "dynamical": [
+      84
+    ],
+    "laws,": [
+      86
+    ],
+    "maximum": [
+      88
+    ],
+    "accelerations": [
+      89
+    ],
+    "from": [
+      90
+    ],
+    "4": [
+      91
+    ],
+    "m/s2": [
+      92
+    ],
+    "13": [
+      94
+    ],
+    "m/s2.": [
+      95
+    ],
+    "The": [
+      96
+    ],
+    "effectiveness": [
+      97
+    ],
+    "proposed": [
+      100
+    ],
+    "is": [
+      103
+    ],
+    "assessed": [
+      104
+    ],
+    "by": [
+      105
+    ],
+    "experiments.": [
+      106
+    ]
+  },
+  "counts_by_year": [
+    {
+      "year": 2026,
+      "cited_by_count": 9
+    },
+    {
+      "year": 2025,
+      "cited_by_count": 3
+    },
+    {
+      "year": 2024,
+      "cited_by_count": 3
+    },
+    {
+      "year": 2023,
+      "cited_by_count": 1
+    },
+    {
+      "year": 2022,
+      "cited_by_count": 3
+    }
+  ],
+  "updated_date": "2026-09-01T08:31:24.195828",
+  "created_date": "2022-04-03T00:00:00"
+}

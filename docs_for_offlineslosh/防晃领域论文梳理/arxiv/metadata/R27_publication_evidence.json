@@ -1,0 +1,109 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Shared+Telemanipulation+with+VR+controllers+in+an+anti+slosh+scenario&rows=5",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/smc53992.2023.10393900",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/smc53992.2023.10393900",
+    "title": [
+      "Shared Telemanipulation with VR Controllers in an Anti Slosh Scenario"
+    ],
+    "author": [
+      {
+        "given": "Max",
+        "family": "Grobbel",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "FZI - Forschungszentrum Informatik,Karlsruhe,Germany,76131"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Balint",
+        "family": "Varga",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Institute of Control Systems, Karlsruhe Institute of Technology,Karlsruhe,Germany,76131"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Sören",
+        "family": "Hohmann",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Institute of Control Systems, Karlsruhe Institute of Technology,Karlsruhe,Germany,76131"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2023 IEEE International Conference on Systems, Man, and Cybernetics (SMC)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2023,
+          10,
+          1
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2023,
+          10,
+          1
+        ]
+      ]
+    },
+    "page": "4405-4410",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/smc53992.2023.10393900",
+    "event": {
+      "name": "2023 IEEE International Conference on Systems, Man, and Cybernetics (SMC)",
+      "location": "Honolulu, Oahu, HI, USA",
+      "start": {
+        "date-parts": [
+          [
+            2023,
+            10,
+            1
+          ]
+        ]
+      },
+      "end": {
+        "date-parts": [
+          [
+            2023,
+            10,
+            4
+          ]
+        ]
+      }
+    }
+  }
+}

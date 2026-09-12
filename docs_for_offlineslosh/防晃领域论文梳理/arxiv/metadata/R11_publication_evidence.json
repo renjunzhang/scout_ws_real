@@ -1,0 +1,91 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/TCST.2016.2601624",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tcst.2016.2601624",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tcst.2016.2601624",
+    "title": [
+      "Implementation of Nonlinear Model Predictive Path-Following Control for an Industrial Robot"
+    ],
+    "author": [
+      {
+        "given": "Timm",
+        "family": "Faulwasser",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Tobias",
+        "family": "Weber",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Pablo",
+        "family": "Zometa",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Rolf",
+        "family": "Findeisen",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Control Systems Technology"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2017,
+          7
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2017,
+          7
+        ]
+      ]
+    },
+    "volume": "25",
+    "issue": "4",
+    "page": "1505-1511",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tcst.2016.2601624",
+    "ISSN": [
+      "1063-6536",
+      "1558-0865"
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+                                                                Experimental Characterization of Non-Isothermal Sloshing in Microgravity
+
+                                                                                    F. Monteiroa,∗, P. A. Marquesa,b , A. Simoninia , L. Carbonnellea , M. A. Méndeza
+                                                                                    a von Karman Institute for Fluid Dynamics, Waterloosesteenweg 72, Sint-Genesius-Rode, Belgium
+                                                                     b Transferts, Interfaces Et Procédés (TIPs), Université Libre de Bruxelles, Av. Franklin Roosevelt 50, Brussels, 1050, Belgium
+
+
+
+
+                                                   Abstract
+                                                   Sloshing of cryogenic liquid propellants can significantly impact a spacecraft’s mission safety and performance by unpredictably
+arXiv:2410.06590v2 [physics.flu-dyn] 10 Oct 2024
+
+
+
+
+                                                   altering the center of mass and producing large pressure fluctuations due to the increased heat and mass transfer within the tanks.
+                                                   This study, conducted as part of the NT-SPARGE (Non-isoThermal Sloshing PARabolic FliGht Experiment) project, provides a
+                                                   detailed experimental investigation of the thermodynamic evolution of a partially filled upright cylindrical tank undergoing non-
+                                                   isothermal sloshing in microgravity. Sloshing was induced by a step reduction in gravity during the 83rd European Space Agency
+                                                   (ESA) parabolic flight, resulting in a chaotic reorientation of the free surface under inertia-dominated conditions. To investigate
+                                                   the impact of heat and mass transfer on the sloshing dynamics, two identical test cells operating with a representative fluid, HFE-
+                                                   7000, in single-species were considered simultaneously. One cell was maintained in isothermal conditions, while the other started
+                                                   with initially thermally stratified conditions. Flow visualization, pressure, and temperature measurements were acquired for both
+                                                   cells. The results highlight the impact of thermal mixing on liquid dynamics coupled with the significant pressure and temperature
+                                                   fluctuations produced by the destratification. The comprehensive experimental data gathered provide a unique opportunity to
+                                                   validate numerical simulations and simplified models for non-isothermal sloshing in microgravity, thus contributing to improved
+                                                   cryogenic fluid management technologies.
+                                                   Keywords: Sloshing, Microgravity, Parabolic Flight, Thermal Stratification, Pressure Fluctuations, and Sloshing-Induced Thermal
+                                                   Mixing.
+
+
+                                                   1. Introduction                                                                      dependency on the forcing conditions, which greatly vary from
+                                                                                                                                        hypergravity in the propulsive phase [13] to microgravity in the
+                                                      Recent advances in material science and rocket propulsion,                        ballistic phase [14].
+                                                   combined with increased competition and interest in space                               Much of the early literature on sloshing dynamics has
+                                                   exploration from nations and private entities, are propelling                        been driven by aerospace research during the 1960s and
+                                                   a new space race. Reusable and partially reusable launch                             has focused on the dynamics and regime identification in
+                                                   vehicles and economies of scale are progressively reducing                           isothermal conditions [8–10, 15–17].          Studies on non-
+                                                   costs and democratizing access to space [1]. Nevertheless,                           isothermal effects have later targeted the impact on the
+                                                   the development of deep space missions, space refueling,                             tank’s pressure evolution, particularly due to sloshing-induced
+                                                   and orbital launch stations still require significant advances                       evaporation or condensation [18–24]. Nevertheless, all of
+                                                   in propellant storage and management [2–5]. Cryogenic                                the aforementioned studies considered on-ground (i.e., gravity-
+                                                   propellants like liquid methane (LCH4 ) and liquid hydrogen                          dominated) conditions.
+                                                   (LH2 ) pose considerable challenges. These include losses from
+                                                                                                                                           The literature on non-isothermal sloshing in microgravity
+                                                   boil-off, the need for advanced thermal management systems,
+                                                                                                                                        is mainly limited to the investigations under the COMPERE
+                                                   and issues with sloshing. Notably, these propellants can make
+                                                                                                                                        program [11], which have provided extensive databases from
+                                                   up to 90 % of a spacecraft’s total mass [6, 7].
+                                                                                                                                        drop tower experiments [25–27].          Within this program,
+                                                      Liquid sloshing [8, 9] in partially filled tanks can                              SOURCE-I and -II projects carried out on sounding rockets
+                                                   significantly challenge the stability and maneuverability of                         have focused on the dynamics of wetting, the heat and mass
+                                                   spacecrafts [10]. Moreover, it can increase heat and mass                            transfer near the contact line, and the possible occurrence of
+                                                   transfer rates between liquid and ullage gasses, producing                           nucleate boiling in experiments [28–30].
+                                                   pressure fluctuations [11] that could develop into structural
+                                                   instabilities or thrust oscillations [12].       Understanding,                         Recently,     the National Aeronautics and Space
+                                                   predicting, and controlling sloshing is particularly challenging                     Administration (NASA) conducted a number of Zero Boil-Off
+                                                   because of its inherent nonlinear dynamics and its strong                            Tank (ZBOT, [31]) experiments within the Microgravity
+                                                                                                                                        Science Glovebox (MSG) on the International Space Station
+                                                                                                                                        (ISS). These experiments evaluated pressure control methods
+                                                      ∗ Corresponding author                                                            for managing non-isothermal environments within liquid
+                                                       Email address: francisco.monteiro@vki.ac.be (F. Monteiro)                        propellant tanks in microgravity.        The explored control
+                                                   Preprint submitted to Elsevier                                                                                                                        October 11, 2024
+Figure 1: Schematic of the NT-SPARGE concept. Two identical upright cylindrical tanks with radius R and height H were filled up to a level Hl . Cell I is in
+isothermal conditions, while cell N is in non-isothermal conditions, with the initial temperature profiles qualitatively sketched. In tank N, the stratification is set
+using a heater on the top at T̄ h and a cooler on the bottom at T̄ c , together with the injection of warm vapor ṁ pg from an external reservoir PR. Both cells are
+then subjected to a step-like reduction of gravity, producing chaotic sloshing in inertia-dominated conditions. Pressure and temperature profiles are monitored and
+complemented with high-speed recording.
+
+
+
+technique aims to reduce liquid sub-cooling through axial                             Experiment) experiment’s problem set and all the quantities
+jets, which improves temperature uniformity by promoting                              of interest. Section 3 reports on the methodology, describing
+mixing [32]. This pre-mixing decreases thermal destratification                       the experimental setup, including the isothermal and non-
+caused by sloshing, thus mitigating pressure fluctuations. The                        isothermal settings, the measurement chain, and measurement
+ZBOT studies are part of an extensive lineage of experimental                         uncertainties. Section 4 introduces the experiment preparation,
+campaigns initiated by the Tank Pressure Control Experiment                           including the degassing procedure to achieve a single-species
+(TPCE, [33–35]) carried out aboard the Space Shuttle, and                             environment. Section 5 describes the experimental environment
+followed by investigations on-ground with both experimental                           on board the 83rd ESA parabolic flight campaign, reporting
+[36, 37] and numerical studies [38]. This research has provided                       on the measured accelerations. Section 6 presents the results
+valuable data on self-pressurization and pressure management                          in three subsections. The first focuses on setting the initial
+under non-isothermal conditions, but only in scenarios where                          conditions for the sloshing experiments. The second reports on
+the liquid is quiescent or nearly quiescent. On the other                             the thermal mixing due to the gravity step reduction for different
+hand, to the author’s knowledge, all investigations on sloshing                       initial fill ratios, while the third compares the dimensionless
+in microgravity have considered isothermal conditions (see                            pressure response coupled to the acceleration profile variability.
+[39–41]), and no data could be found on sloshing-induced                              Conclusions and perspectives are presented in section 7.
+pressure fluctuations in microgravity conditions.
+    This work fills this gap by reporting on an extensive                             2. Concept and Goals of the NT-SPARGE Experiment
+experimental characterization of non-isothermal sloshing in
+microgravity, focusing on the case of a cylindrical upright tank                         The main components of the NT-SPARGE experiment are
+filled with HFE-7000 in equilibrium with its vapor and subject                        illustrated in Figure 1, together with the relevant quantities
+to a step-like reduction of gravity. The experiments were                             of interest. The reader is referred to Appendix A for the
+carried out on board the 83rd ESA parabolic flight campaign,                          nomenclature and list of symbols.
+reproducing a chaotic re-orientation of the gas-liquid interface.                        Two identical upright flat-bottom cylindrical tanks with
+The initial conditions replicate the classic thermally stratified                     radius R and height H are partially filled up to the same level Hl
+scenario one can expect at the end of a sufficiently long                             with a liquid and maintained in an environment with ambient
+gravity-dominated phase [42], with a superheated ullage vapor.                        pressure pa and temperature T a . Subscripts v and l are used
+This was accomplished using a dedicated experimental setup                            to distinguish variables in the vapor and liquid phases, while
+equipped with an active pressurization system. The setup                              the subscripts N and I refer to the different tanks: tank N
+allowed for high-speed flow visualization while simultaneously                        is in non-isothermal conditions (subsection 3.1) while tank I
+monitoring pressure and temperatures at multiple points. The                          (subsection 3.2) is in isothermal conditions. Both tanks are
+sloshing dynamics in non-isothermal conditions are compared                           single-species systems; hence the ullage volume Vv is occupied
+with an identical experiment in isothermal conditions.                                only by the liquid’s vapor at a pressure pv,I and pv,N and the
+    The article is structured as follows. Section 2 introduces                        gas-liquid interface is at the saturation temperature T sat,I (pv,I )
+the NT-SPARGE (Non-isoThermal Sloshing PARabolic FliGht                               and T sat,N (pv,N ) (section 4).
+                                                                                  2
+

@@ -1,0 +1,154 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/LRA.2025.3643281",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1109/lra.2025.3643281",
+    "title": [
+      "Time-Optimal Anti-Sloshing Trajectory Planning for Multiple Liquid-Filled Containers Subject to SCARA Motion"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0009-0008-7326-5380",
+        "authenticated-orcid": false,
+        "given": "Andrea",
+        "family": "Ferrari",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Department of Industrial Engineering, University of Bologna, Bologna, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-7469-0345",
+        "authenticated-orcid": false,
+        "given": "Roberto Di",
+        "family": "Leva",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Industrial Engineering, University of Bologna, Bologna, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0009-0002-6571-3899",
+        "authenticated-orcid": false,
+        "given": "Simone",
+        "family": "Soprani",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Electrical, Electronic and Information Engineering, University of Bologna, Bologna, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-2343-6929",
+        "authenticated-orcid": false,
+        "given": "Luigi",
+        "family": "Biagiotti",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Engineering, University of Modena and Reggio-Emilia, Modena, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-9457-4643",
+        "authenticated-orcid": false,
+        "given": "Gianluca",
+        "family": "Palli",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Electrical, Electronic and Information Engineering, University of Bologna, Bologna, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-1528-4304",
+        "authenticated-orcid": false,
+        "given": "Marco",
+        "family": "Carricato",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Industrial Engineering, University of Bologna, Bologna, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Robotics and Automation Letters"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2026,
+          2
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2026,
+          2
+        ]
+      ]
+    },
+    "volume": "11",
+    "issue": "2",
+    "page": "1762-1769",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/lra.2025.3643281",
+    "link": [
+      {
+        "URL": "http://xplorestaging.ieee.org/ielx8/7083369/11293803/11297810.pdf?arnumber=11297810",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

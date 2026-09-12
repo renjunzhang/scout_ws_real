@@ -1,0 +1,528 @@
+{
+  "request_url": "https://api.crossref.org/works/10.1115/1.4054224",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            9,
+            1
+          ]
+        ],
+        "date-time": "2026-09-01T02:12:08Z",
+        "timestamp": 1788228728536,
+        "version": "build-2803163510"
+      },
+      "reference-count": 32,
+      "publisher": "ASME International",
+      "issue": "7",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2022,
+                4,
+                22
+              ]
+            ],
+            "date-time": "2022-04-22T00:00:00Z",
+            "timestamp": 1650585600000
+          },
+          "content-version": "vor",
+          "delay-in-days": 0,
+          "URL": "https://www.asme.org/publications-submissions/publishing-information/legal-policies"
+        }
+      ],
+      "content-domain": {
+        "domain": [
+          "asmedigitalcollection.asme.org"
+        ],
+        "crossmark-restriction": true
+      },
+      "short-container-title": [],
+      "published-print": {
+        "date-parts": [
+          [
+            2022,
+            7,
+            1
+          ]
+        ]
+      },
+      "abstract": "<jats:title>Abstract</jats:title>\n               <jats:p>This paper studies the design of antisloshing trajectories for application in automatic machines for packaging liquid products, with specific reference to cylindrical containers and emphasis on prescribed motion durations. Different strategies, based on a discrete linear model of the sloshing phenomenon and applicable in real-time, are analyzed to perform antisloshing feedforward control of the container motion: finite impulse response (FIR) filters (input shapers and others), dynamic-model inversion, and infinite impulse response (IIR) filters. Unlike the previous literature, these strategies are applied to highly dynamical motion laws, with maximum accelerations from 4 m/s2 to 13 m/s2. The effectiveness of the proposed antisloshing trajectories is assessed by experiments.</jats:p>",
+      "DOI": "10.1115/1.4054224",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2022,
+            3,
+            31
+          ]
+        ],
+        "date-time": "2022-03-31T06:46:19Z",
+        "timestamp": 1648709179000
+      },
+      "update-policy": "https://doi.org/10.1115/crossmarkpolicy-asme",
+      "source": "Crossref",
+      "is-referenced-by-count": 18,
+      "title": [
+        "Antisloshing Trajectories for High-Acceleration Motions in Automatic Machines"
+      ],
+      "prefix": "10.1115",
+      "volume": "144",
+      "author": [
+        {
+          "given": "Luca",
+          "family": "Guagliumi",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Alessandro",
+          "family": "Berti",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Eros",
+          "family": "Monti",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Marco",
+          "family": "Carricato",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "33",
+      "published-online": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            22
+          ]
+        ]
+      },
+      "reference": [
+        {
+          "issue": "3",
+          "key": "2022042208022105600_bib1",
+          "doi-asserted-by": "crossref",
+          "first-page": "031002",
+          "DOI": "10.1115/1.4001329",
+          "article-title": "Motion Control of a Container With Slosh: Constrained Sliding Mode Approach",
+          "volume": "132",
+          "year": "2010",
+          "journal-title": "ASME J. Dyn. Syst., Meas., Control"
+        },
+        {
+          "key": "2022042208022105600_bib2",
+          "first-page": "1654",
+          "article-title": "Control of Liquid Slosh in and Industrial Packaging Machine",
+          "volume-title": "Proceedings of the 1999 IEEE International Conference on Control Applications",
+          "year": "1999"
+        },
+        {
+          "key": "2022042208022105600_bib3",
+          "first-page": "3427",
+          "article-title": "Iterative Optimal Control of Liquid Slosh in an Industrial Packaging Machine",
+          "volume-title": "Proceedings of the 39th IEEE Conference on Decision and Control",
+          "year": "2000"
+        },
+        {
+          "key": "2022042208022105600_bib4",
+          "first-page": "32",
+          "article-title": "Time-Optimal Trajectory Planning for Anti-Sloshing 2-Dimensional Motions of an Industrial Robot",
+          "volume-title": "20th International Conference on Advanced Robotics (ICAR 2021)",
+          "year": "2021"
+        },
+        {
+          "issue": "1",
+          "key": "2022042208022105600_bib5",
+          "doi-asserted-by": "crossref",
+          "first-page": "8",
+          "DOI": "10.1109/TMECH.2004.839033",
+          "article-title": "Sloshing Suppression Control of Liquid Transfer Systems Considering a 3-D Transfer Path",
+          "volume": "10",
+          "year": "2005",
+          "journal-title": "IEEE/ASME Trans. Mechatronics"
+        },
+        {
+          "key": "2022042208022105600_bib6",
+          "first-page": "3045",
+          "article-title": "Sloshing Suppression Control During Liquid Container Transfer Involving Dynamic Tilting Using Wigner Distribution Analysis",
+          "volume-title": "43rd IEEE Conference on Decision and Control (CDC), Nassau",
+          "year": "2004"
+        },
+        {
+          "key": "2022042208022105600_bib7",
+          "first-page": "2336",
+          "article-title": "A Dynamic Optimization Approach for Sloshing Free Transport of Liquid Filled Containers Using an Industrial Robot",
+          "volume-title": "IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+          "year": "2019"
+        },
+        {
+          "key": "2022042208022105600_bib8",
+          "first-page": "3489",
+          "article-title": "Input Shaping Control to Suppress Sloshing on Liquid Container Transfer Using Multi-Joint Robot Arm",
+          "volume-title": "IEEE/RSJ International Conference on Intelligent Robots and Systems",
+          "year": "2010"
+        },
+        {
+          "key": "2022042208022105600_bib9",
+          "first-page": "1",
+          "article-title": "Integrated Trajectory Planning and Sloshing Suppression for Three-Dimensional Motion of Liquid Container Transfer Robot Arm",
+          "volume": "2015",
+          "year": "2015",
+          "journal-title": "J. Rob."
+        },
+        {
+          "key": "2022042208022105600_bib10",
+          "doi-asserted-by": "crossref",
+          "first-page": "2316",
+          "DOI": "10.1109/CDC.2010.5717429",
+          "article-title": "Slosh Suppression by Robust Input Shaping",
+          "volume-title": "49th IEEE Conference on Decision and Control (CDC)",
+          "year": "2010"
+        },
+        {
+          "issue": "1",
+          "key": "2022042208022105600_bib11",
+          "doi-asserted-by": "crossref",
+          "first-page": "217",
+          "DOI": "10.1109/TMECH.2014.2311888",
+          "article-title": "Slosh Suppression for Infinite Modes in a Moving Liquid Container",
+          "volume": "20",
+          "year": "2015",
+          "journal-title": "IEEE/ASME Trans. Mechatronics"
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib12",
+          "doi-asserted-by": "crossref",
+          "first-page": "65",
+          "DOI": "10.2478/v10187-010-0010-y",
+          "article-title": "Slosh-Free Positioning of Containers With Liquids and Flexible Conveyor Belt",
+          "volume": "61",
+          "year": "2010",
+          "journal-title": "J. Elect. Eng."
+        },
+        {
+          "key": "2022042208022105600_bib13",
+          "first-page": "1",
+          "article-title": "Experimental Testing of Liquid Slosh Suppression in a Suspended Container With Compound-Pendulum Dynamics",
+          "volume-title": "Ninth Asian Control Conference (ASCC)",
+          "year": "2013"
+        },
+        {
+          "issue": "12",
+          "key": "2022042208022105600_bib14",
+          "doi-asserted-by": "crossref",
+          "first-page": "121003",
+          "DOI": "10.1115/1.4047957",
+          "article-title": "Command Shaping for Sloshing Suppression of a Suspended Liquid Container",
+          "volume": "142",
+          "year": "2020",
+          "journal-title": "ASME J. Dyn. Syst. Meas. Control"
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib15",
+          "doi-asserted-by": "crossref",
+          "first-page": "021005",
+          "DOI": "10.1115/1.4048357",
+          "article-title": "Optimal Command Shaping Design for a Liquid Slosh Suppression in Overhead Crane Systems",
+          "volume": "143",
+          "year": "2021",
+          "journal-title": "ASME J. Dyn. Syst. Meas. Control"
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib16",
+          "doi-asserted-by": "crossref",
+          "first-page": "278",
+          "DOI": "10.1177/0142331220949304",
+          "article-title": "A Smooth Polynomial Shaped Command for Sloshing Suppression of a Suspended Liquid Container",
+          "volume": "43",
+          "year": "2021",
+          "journal-title": "Trans. Inst. Meas. Control"
+        },
+        {
+          "issue": "8",
+          "key": "2022042208022105600_bib17",
+          "doi-asserted-by": "crossref",
+          "first-page": "081016",
+          "DOI": "10.1115/1.4039278",
+          "article-title": "Control of Three-Dimensional Nonlinear Slosh in Moving Rectangular Containers",
+          "volume": "140",
+          "year": "2018",
+          "journal-title": "ASME J. Dyn. Syst. Meas. Control"
+        },
+        {
+          "key": "2022042208022105600_bib18",
+          "doi-asserted-by": "crossref",
+          "first-page": "129",
+          "DOI": "10.1016/j.conengprac.2018.06.018",
+          "article-title": "Manipulating Liquids With Robots: A Sloshing-Free Solution",
+          "volume": "78",
+          "year": "2018",
+          "journal-title": "Control Eng. Pract."
+        },
+        {
+          "issue": "1",
+          "key": "2022042208022105600_bib19",
+          "doi-asserted-by": "crossref",
+          "first-page": "29",
+          "DOI": "10.1109/37.569711",
+          "article-title": "Control for Slosh-Free Motion of an Open Container",
+          "volume": "17",
+          "year": "1997",
+          "journal-title": "IEEE Control Syst. Mag."
+        },
+        {
+          "key": "2022042208022105600_bib20",
+          "doi-asserted-by": "crossref",
+          "first-page": "129347",
+          "DOI": "10.1109/ACCESS.2021.3113956",
+          "article-title": "A Simple Model-Based Method for Sloshing Estimation in Liquid Transfer in Automatic Machines",
+          "volume": "9",
+          "year": "2021",
+          "journal-title": "IEEE Access"
+        },
+        {
+          "key": "2022042208022105600_bib21",
+          "first-page": "80",
+          "article-title": "Sloshing Dynamics Estimation for Liquid-Filled Containers Under 2-Dimensional Excitation",
+          "volume-title": "10th ECCOMAS Thematic Conference on Multibody Dynamics",
+          "year": "2021"
+        },
+        {
+          "key": "2022042208022105600_bib22",
+          "volume-title": "Liquid Sloshing Dynamics: Theory and Applications",
+          "year": "2005"
+        },
+        {
+          "issue": "85",
+          "key": "2022042208022105600_bib23",
+          "first-page": "128",
+          "article-title": "Tables of Zeros of Cross Product Bessel Functions Jp′(ξ)Yp′(kξ)−Jp′(kξ)Yp′(ξ)=0",
+          "volume": "18",
+          "year": "1964",
+          "journal-title": "Math. Comput."
+        },
+        {
+          "key": "2022042208022105600_bib24",
+          "volume-title": "Trajectory Planning for Automatic Machines and Robots",
+          "year": "2008"
+        },
+        {
+          "issue": "1",
+          "key": "2022042208022105600_bib25",
+          "doi-asserted-by": "crossref",
+          "first-page": "76",
+          "DOI": "10.1115/1.2894142",
+          "article-title": "Preshaping Command Inputs to Reduce System Vibration",
+          "volume": "112",
+          "year": "1990",
+          "journal-title": "ASME, J. Dyn. Syst. Meas. Control"
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib26",
+          "doi-asserted-by": "crossref",
+          "first-page": "654",
+          "DOI": "10.1115/1.2919428",
+          "article-title": "Residual Vibration Reduction Using Vector Diagrams to Generate Shaped Inputs",
+          "volume": "116",
+          "year": "1994",
+          "journal-title": "ASME J. Mech. Des."
+        },
+        {
+          "key": "2022042208022105600_bib27",
+          "volume-title": "Flexible Robot Dynamics and Controls",
+          "year": "2002"
+        },
+        {
+          "key": "2022042208022105600_bib28",
+          "volume-title": "Digital Control of Dynamic Systems",
+          "year": "1998"
+        },
+        {
+          "issue": "12",
+          "key": "2022042208022105600_bib29",
+          "doi-asserted-by": "crossref",
+          "first-page": "1385",
+          "DOI": "10.1016/j.conengprac.2012.08.005",
+          "article-title": "Fir Filters for Online Trajectory Planning With Time—And Frequency—Domain Specifications",
+          "volume": "20",
+          "year": "2012",
+          "journal-title": "Control Eng. Pract."
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib30",
+          "first-page": "609",
+          "article-title": "Optimal Trajectories for Vibration Reduction Based on Exponential Filters",
+          "volume": "24",
+          "year": "2016",
+          "journal-title": "IEEE Trans. Control Syst. Technol."
+        },
+        {
+          "key": "2022042208022105600_bib31",
+          "doi-asserted-by": "crossref",
+          "first-page": "256",
+          "DOI": "10.1016/j.rcim.2017.10.001",
+          "article-title": "Robust Point-to-Point Trajectory Planning for Non-Linear Underactuated Systems: Theory and Experimental Assessment",
+          "volume": "50",
+          "year": "2018",
+          "journal-title": "Rob. Comput. Integr. Manuf."
+        },
+        {
+          "issue": "2",
+          "key": "2022042208022105600_bib32",
+          "doi-asserted-by": "crossref",
+          "first-page": "440",
+          "DOI": "10.2514/1.A32137",
+          "article-title": "Shaping Container Motion for Multi-Mode and Robust Slosh Suppression",
+          "volume": "50",
+          "year": "2013",
+          "journal-title": "AIAA J. Spacecr. Rockets"
+        }
+      ],
+      "container-title": [
+        "Journal of Dynamic Systems, Measurement, and Control"
+      ],
+      "original-title": [],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://asmedigitalcollection.asme.org/dynamicsystems/article-pdf/144/7/071006/6873645/ds_144_07_071006.pdf",
+          "content-type": "application/pdf",
+          "content-version": "vor",
+          "intended-application": "syndication"
+        },
+        {
+          "URL": "https://asmedigitalcollection.asme.org/dynamicsystems/article-pdf/144/7/071006/6873645/ds_144_07_071006.pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            22
+          ]
+        ],
+        "date-time": "2022-04-22T08:03:28Z",
+        "timestamp": 1650614608000
+      },
+      "score": 1,
+      "resource": {
+        "primary": {
+          "URL": "https://asmedigitalcollection.asme.org/dynamicsystems/article/144/7/071006/1139885/Antisloshing-Trajectories-for-High-Acceleration"
+        }
+      },
+      "subtitle": [],
+      "short-title": [],
+      "issued": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            22
+          ]
+        ]
+      },
+      "references-count": 32,
+      "journal-issue": {
+        "issue": "7",
+        "published-print": {
+          "date-parts": [
+            [
+              2022,
+              7,
+              1
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1115/1.4054224",
+      "relation": {},
+      "ISSN": [
+        "0022-0434",
+        "1528-9028"
+      ],
+      "issn-type": [
+        {
+          "value": "0022-0434",
+          "type": "print"
+        },
+        {
+          "value": "1528-9028",
+          "type": "electronic"
+        }
+      ],
+      "subject": [],
+      "published": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            22
+          ]
+        ]
+      },
+      "article-number": "071006"
+    }
+  ]
+}

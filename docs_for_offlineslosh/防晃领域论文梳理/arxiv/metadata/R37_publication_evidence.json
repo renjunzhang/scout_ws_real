@@ -1,0 +1,76 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1299/mej.2014dr0061",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1299/mej.2014dr0061",
+    "title": [
+      "Damping control of sloshing during liquid container transfer by active vibration reducer with 6-DOF parallel linkage (In the case of straight path on horizontal plane)"
+    ],
+    "author": [
+      {
+        "given": "Masafumi",
+        "family": "HAMAGUCHI",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Takao",
+        "family": "TANIGUCHI",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "Mechanical Engineering Journal"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2014
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2014
+        ]
+      ]
+    },
+    "volume": "1",
+    "issue": "6",
+    "page": "DR0061-DR0061",
+    "publisher": "Japan Society of Mechanical Engineers",
+    "URL": "https://doi.org/10.1299/mej.2014dr0061",
+    "link": [
+      {
+        "URL": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_pdf",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

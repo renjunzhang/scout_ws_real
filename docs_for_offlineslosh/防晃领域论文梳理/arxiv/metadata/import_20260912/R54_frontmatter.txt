@@ -1,0 +1,111 @@
+                                                   Mechanical energy dissipation induced by sloshing and wave breaking in a fully coupled angular
+                                                                        motion system. Part II: Experimental Investigation.
+                                                                                                                    B. Bouscasse∗
+                                                                                                                      CNR-INSEAN
+                                                                                                 Marine Technology Research Institute, Rome, Italy and
+                                                                                                          Aeronautics Department (ETSIA),
+                                                                                              Technical University of Madrid (UPM), 28040 Madrid, Spain
+
+                                                                                                                    A. Colagrosssi†
+                                                                                                                   CNR-INSEAN
+                                                                                                   Marine Technology Research Institute, Rome, Italy
+arXiv:1307.6063v2 [physics.flu-dyn] 1 Apr 2014
+
+
+
+
+                                                                                                    A. Souto-Iglesias‡ and J. L. Cercos-Pita§
+                                                                                                       Naval Architecture Department (ETSIN),
+                                                                                              Technical University of Madrid (UPM), 28040 Madrid, Spain
+                                                                                                                 (Dated: July 26, 2021)
+                                                                     In Part I of this paper series, a theoretical and numerical model for a a driven pendulum filled with liquid was
+                                                                  developed. The system was analyzed in the framework of tuned liquid dampers (TLD) and hybrid mass liquid
+                                                                  dampers (HMLD) theory. In this Part II, in order to measure the energy dissipation resulting from shallow water
+                                                                  sloshing, an experimental investigation is conducted. Accurate evaluations of energy transfers are obtained
+                                                                  through the recorded kinematics of the system. A set of experiments is conducted with three different liquids:
+                                                                  water, sunflower oil and glycerine. Coherently with the results of Part I, the energy dissipation obtained when
+                                                                  the tank is filled with water can mainly be explained by the breaking waves. For all three liquids, the effects of
+                                                                  varying the external excitation amplitude are discussed.
+
+                                                                  PACS numbers: 47.11.-j, 47.15.-x, 47.10.ad
+                                                                  Keywords: sloshing flows, dissipation, breaking waves, viscous effects, TLD, Tuned Liquid Dampers, Smoothed Particle
+                                                                  Hydrodynamics, shallow water
+
+
+
+
+                                                                                                               I.   INTRODUCTION
+
+                                                    A theoretical and numerical model for a fully coupled dynamical system, called hereinafter Pendulum-TLD, has been
+                                                 developed in Part I [? ] of the present work. The mechanical system is essentially a non-linear driven pendulum, where
+                                                 the pendulum is a rectangular tank rotating around a fixed pivot. The tank, partially filled with a liquid, receives torque from a
+                                                 mass sliding along a linear guide fixed to the tank. This torque is the external excitation for the system motion. Analogies with
+                                                 a tuned liquid damper (TLD) and a hybrid mass liquid dampers (HMLD) have been provided in Part I. in order to validate the
+                                                 models developed in Part I and to provide insight into energy dissipation mechanisms in sloshing dampers with a focus on wave
+                                                 breaking influence, an experimental investigation is conducted in this Part II .
+                                                    Much work has been done in order to assess the sloshing related loads that occur during forced harmonic motions (see e.g.
+                                                 ? ? ? ]). Concerning the coupling between a mechanical system and fluid dynamics, one of the most interesting experimental
+                                                 work is due to ? ] who carried out decay experiments with a free oscillating tank suspended as a bifilar pendulum in the shallow-
+                                                 water limit. The most attractive feature of this system is that friction effects are negligible. ? ] also tested several shapes for a
+                                                 free swaying tank. ? ? ] present other decay tests with egg shaped forms, claiming that they are close to optimum in motion
+                                                 dampening for a range of filling heights.
+                                                    Experiments for coupled roll motion in waves are found in e.g. ? ? ]. The effects of screens and baffles placed inside the tank,
+                                                 have been studied experimentally in the works of e.g. [? ? ? ]. The extra dissipation is achieved when viscous boundary layers
+                                                 separate from the many solid edges of a screen. There is a rapid generation of vorticity, and therefore an associated high rate of
+                                                 dissipation of mechanical energy by the viscous forces. ? ] carried out experimental tests to assess the efficiency of a rolling and
+
+
+
+                                                 ∗ Electronic address: benjamin.bouscasse@cnr.it
+                                                 † Electronic address: andrea.colagrossi@cnr.it
+                                                 ‡ Electronic address: antonio.souto@upm.es
+                                                 § Electronic address: jl.cercos@upm.es
+                                                                                                                                  2
+
+
+
+
+                                             FIG. 1: Tank dimensions and sliding device
+
+
+translating tank to dampen external vibrations. They performed a frequency analysis of the device, testing different filling levels
+and liquids with different viscosities.
+   In the present paper, the Pendulum-TLD, described in Part I [? ] and in [? ], is experimentally studied. Only one frequency of
+excitation is considered, forcing the system to roll at the mechanical linear resonant frequency (see discussion in Part I). In the
+designed system, forces and energy are retrieved from kinematic quantities. This avoids the use of sensors for the measurement
+of force and torque which introduces practical difficulties and measurement uncertainties. The accuracy of these results could
+make this work interesting for the validation of numerical models as well as to provide useful information for TLD or HMLD
+designers.
+   In order to investigate viscosity effects, three fluids are considered: water, sunflower oil and glycerine. They have a similar
+density but a very different viscosity. Using these three liquids makes possible the investigation of the influence of Reynolds
+number for both the time-periodic state dissipation and the transient dynamics of the motion. Particular attention is given to the
+dissipation linked to wave breaking.
+   This Part II paper is organized as follows: the second section is dedicated to the experimental setup, the third section presents
+experimental results for the empty tank, and in the fourth the results for water are discussed. This is a relevant case since it
+is the closest to an inviscid case, for which a theoretical model was developed in Part I. In the fifth section, results for more
+viscous liquids are analyzed. A summary of the energy dissipation measurements is presented considering the scales developed
+in Part I. Finally, a novel damping device, the hybrid pendulum mass liquid damper (HPMLD), is discussed before presenting
+conclusions.
+   This case is a benchmark for the SPHERIC SPH community and all data is available for reanalysis by third parties. See
+supplemental material at [URL will be inserted by AIP] for videos of the experiments. Watching them across together with
+reading the paper is recommendable.
+
+
+                                                  II.   EXPERIMENTAL SETUP
+
+   The experiments were conducted with the tank testing device of the CEHINAV - UPM research group. It is a single degree of
+freedom angular motion sloshing rig used for a number of experimental campaigns documented in the literature, e.g. [? ? ? ?
+] and described thoroughly in [? ]. The tank chosen for the simulations is depicted with its dimensions in Fig. 1. In particular,
+the tank length L is 0.90 m, and the width B is 0.062 m. The length l = 0.1 m is defined as a characteristic length of the system,
+indeed, the filling height adopted will be of this magnitude (almost shallow water regime) as well as the amplitude of the sliding
+mass motion. The distance H between the center of rotation and the tank bottom is set equal to 0.47 m. The rotation center is
+above the center of gravity of the whole system, implying that the system is stable at the equilibrium position.
+   The tank is intentionally narrow along the z-direction, i.e. the direction perpendicular to the paper, in comparison with
+the horizontal and vertical dimensions, in order to have a predominantly two dimensional flow. A 0.60 m long linear guide
+is mounted parallel to the tank bottom passing though the rotation center. A controllable electrical engine slides a mass,
+m = 4.978 kg, along the guide with a specified motion. The weight and inertia of the mass generates a torque that acts as
+the external excitation to the system, and gives energy to the tank, which begins to roll. Consequently, sloshing is induced and
+influences the dynamics of the rigid body angular motion.
+   The sloshing tank rotates on a fixed plane around the fixed pivot O. The moment of inertia around O is I0 = 26.9 kg.m2 and
+the static moment of the rigid system around O is S G = mtank ηG = −29.2kg.m. The sliding mass moves with a defined harmonic
+

@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/g/Q6VUc8bbo4TgA5hnKyGQHtpgI</id>
+  <title>arXiv Query: search_query=(all:sloshing OR all:"slosh-free" OR all:"anti-slosh") AND (all:wheeled OR all:"mobile robot")&amp;id_list=&amp;start=0&amp;max_results=30</title>
+  <updated>2026-09-11T14:52:32Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(all:sloshing+OR+(all:%22slosh-free%22+OR+all:%22anti-slosh%22))+AND+(all:wheeled+OR+all:%22mobile+robot%22)&amp;start=0&amp;max_results=30&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>30</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2406.08893v1</id>
+    <title>Modeling Nonlinear Dynamics from Videos</title>
+    <updated>2024-06-13T07:45:58Z</updated>
+    <link href="https://arxiv.org/abs/2406.08893v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2406.08893v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We introduce a method for constructing reduced-order models directly from videos of dynamical systems. The method uses a non-intrusive tracking to isolate the motion of a user-selected part in the video of an autonomous dynamical system. In the space of delayed observations of this motion, we reconstruct a low-dimensional attracting spectral submanifold (SSM) whose internal dynamics serves as a mathematically justified reduced-order model for nearby motions of the full system. We obtain this model in a simple polynomial form that allows explicit identification of important physical system parameters, such as natural frequencies, linear and nonlinear damping and nonlinear stiffness. Beyond faithfully reproducing attracting steady states and limit cycles, our SSM-reduced models can also uncover hidden motion not seen in the video, such as unstable fixed points and unstable limit cycles forming basin boundaries. We demonstrate all these features on experimental videos of five physical systems: a double pendulum, an inverted flag in counter-flow, water sloshing in tank, a wing exhibiting aeroelastic flutter and a shimmying wheel.</summary>
+    <category term="math.DS" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-06-13T07:45:58Z</published>
+    <arxiv:primary_category term="math.DS"/>
+    <author>
+      <name>Antony Yang</name>
+    </author>
+    <author>
+      <name>Joar Axås</name>
+    </author>
+    <author>
+      <name>Fanni Kádár</name>
+    </author>
+    <author>
+      <name>Gábor Stépán</name>
+    </author>
+    <author>
+      <name>George Haller</name>
+    </author>
+  </entry>
+</feed>

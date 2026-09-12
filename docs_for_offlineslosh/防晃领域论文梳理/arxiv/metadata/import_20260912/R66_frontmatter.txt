@@ -1,0 +1,164 @@
+                                                                             Explicit Reference Governor for the
+                                                                   Constrained Control of Time-Delayed Linear Systems
+
+                                                                      Marco M. Nicotra, Tam Nguyen, Emanuele Garone, Ilya V. Kolmanovsky
+
+                                            Abstract— This paper introduces an explicit reference governor                                            Pre-stabilized System
+                                         approach for controlling time delay linear systems subject to state and      𝑟
+                                         input constraints. The proposed framework relies on suitable invariant                            𝑣
+                                         sets that can be built using both Lyapunov-Razumikhin and Lyapunov-              𝑥    ERG                   Primary          𝑢                     𝑥
+                                                                                                                                                 𝑥                           System
+                                         Krasovskii arguments. The proposed method is validated both numer-                                          Control
+                                         ically and experimentally using several alternative formulations.
+arXiv:1712.08248v1 [cs.SY] 21 Dec 2017
+
+
+
+
+                                                                  I. I NTRODUCTION
+                                                                                                                    Fig. 1. General architecture used by the ERG framework: the system is pre-
+                                            Time delay systems are a class of dynamic systems in which the          stabilized using a primary control loop and the ERG is used as an add-on
+                                         reaction to an exogenous input is not instantaneous. This behavior is      unit that provides constraint handling capabilities.
+                                         often encountered due to the presence of propagation and transport
+                                         phenomena affecting the sensors, actuators, or communication
+                                         channels. The stability and stabilization of time delay systems has                             II. P ROBLEM S TATEMENT
+                                         been studied extensively in the literature, see e.g. [1]–[4].                 In this paper we consider linear systems with input delay of the
+                                            In the presence of input saturation constraints, [5]–[7] propose        form,             (
+                                         control design methods that ensure a satisfactory basin of attraction.                        ẋ(t) = Ax(t) + Bu(t − τ ),
+                                         To address the presence of state constraints, [8], [9] illustrate how to                                                                   (1)
+                                                                                                                                       y(t) = Cx(t) + Du(t − τ ),
+                                         construct polyhedral forward-invariant sets for a given pre-stabilized
+                                         system. Although these a posteriori analyses can be useful for             where x(t) ∈ Rn is the state, u(t) ∈ Rm is the control input, y(t) ∈
+                                         tuning the feedback gain and increasing the set of admissible initial      Rp is the output, τ > 0 is a constant delay, and (A, B, C, D) are
+                                         conditions, the resulting control laws do not actively guarantee           suitably dimensioned matrices such that the system is stabilizable.
+                                         constraint satisfaction.                                                   System (1) is subject to linear inequality constraints on both the
+                                            For what concerns control methods that actively enforce con-            state and input vectors,
+                                         straints, the typical approach consists in formulating an optimal
+                                         control problem and solving it in real-time. Model Predictive                        hTx,i x(t) + hTu,i u(t) + gi ≥ 0,       i = 1, . . . , nc .   (2)
+                                         Control (MPC) schemes for time delay system subject to input con-                                                        p
+                                                                                                                    Given an output reference signal r(t) ∈ R and given suitable initial
+                                         straints have been proposed in [10]–[13]. Additionally, Reference          conditions, the objective of this paper is to design a closed-form
+                                         Governor (RG) schemes have been proposed in [14]–[18]. The main            control strategy such that
+                                         difference between MPC and RG is that the former generates the
+                                                                                                                    1. For any piece-wise continuous signal r(t), not known in ad-
+                                         control input based on the predicted system trajectories, whereas
+                                                                                                                       vance, constraints (2) are satisfied at all times;
+                                         the latter generates a reference for the pre-stabilized system and is
+                                                                                                                    2. If there exists t1 such that r(t) = r for t ≥ t1 , and if
+                                         typically less computationally expensive due to its formulation [19].
+                                                                                                                       the reference r is consistent with the constraints (2), then
+                                         The main drawback of these approaches is that the computational
+                                                                                                                       limt→∞ y(t) = r.
+                                         cost of solving the optimal control problem is non negligible and
+                                         may sometimes be prohibitive for embedded hardware.                                              III. C ONTROL S TRATEGY
+                                            This paper introduces an Explicit Reference Governor (ERG)
+                                                                                                                       Following the reference governor philosophy, this paper proposes
+                                         scheme that actively enforces state and input constraints without
+                                                                                                                    a two-step approach for performing the constrained control of a
+                                         the need to solve an optimization problem. As detailed in [20], the
+                                                                                                                    time delay system. The first step consists in pre-stabilizing the
+                                         main idea behind the ERG approach is that it is possible to ensure
+                                                                                                                    system dynamics using a primary control loop. The second step then
+                                         constraint satisfaction by pre-stabilizing the system and introducing
+                                                                                                                    ensures constraint enforcement with the aid of an auxiliary control
+                                         an add-on unit that suitably manipulates the derivative of the applied
+                                                                                                                    loop based on the ERG. Referring to Figure 1, this is achieved by
+                                         reference. Since the ERG is based on set invariance principles, this
+                                                                                                                    introducing an auxiliary reference signal v(t) ∈ Rp to decouple the
+                                         paper investigates the behavior that can be obtained using different
+                                                                                                                    two control loops. The objective of the primary control loop is to
+                                         Lyapunov-Razumikhin and Lyapunov-Krasovskii level-sets. The
+                                                                                                                    solve the following control problem.
+                                         proposed scheme is validated both numerically and experimentally.
+                                                                                                                       Problem 1: Consider a constant reference v ∈ Rp , and let x̄v ,
+                                            This research is supported by the National Science Foundation, award    ūv be a steady-state equilibrium satisfying
+                                         number CMMI 1562209, and the FNRS MIS research grant number
+                                         F.4526.17 F.                                                                                          Ax̄v + B ūv = 0,                            (3)
+                                            M.M. Nicotra and I.V. Kolmanovsky are with the Department of
+                                         Aerospace Engineering at the University of Michigan, Ann Arbor (MI),
+                                                                                                                                               C x̄v + Dūv = v.                            (4)
+                                         United States. Email: {mnicotra,ilya}@umich.edu.
+                                            E. Garone and T. Nguyen are with the Service d’Automatique et
+                                                                                                                    The objective of the primary control loop is to design a control
+                                         d’Analyse des Systèmes at the Université Libre de Bruxelles, Brussels,   feedback such that the equilibrium point x̄v , ūv is Globally Asymp-
+                                         Belgium. Email: {egarone,tanguyen}@ulb.ac.be.                              totically Stable (GAS).                                            
+   The objective of the auxiliary control loop is to augment the         where
+primary control law by providing constraint handling capabilities.                      eτ (t) = {e(t + θ)},          θ ∈ [−τ, 0],          (11)
+This is achieved by solving the following control problem.                                                       1
+                                                                         is a Lyapunov-Krasovskii functional for the pre-stabilized system.
+   Problem 2: Given the pre-stabilized system obtained as the so-
+                                                                            Unlike the case τ = 0, the LMI (9) is only a sufficient condition
+lution to Problem 1, and given suitable initial conditions xτ (0),
+                                                                         for proving GAS. As a result, it may be possible to prove stability
+v(0), construct an auxiliary reference signal v(t) such that:
+                                                                         for a wider range of systems by using more complex functions. A
+1. For any piecewise continuous reference signal r(t) ∈ Rp , the         possible example is the Lyapunov-Krasovkii functional
+    trajectories of x(t), u(t) satisfy constraints (2).                                                        Z t
+2. For any constant reference signal r(t) = r ∈ Rp , that strictly                 V (eτ (t)) = e(t)T P e(t) +     e(s)T Q e(s)ds,       (12)
+    satisfies constraints (2), v(t) asymptotically tends to r.                                                      t−τ
+
+   The following section addresses the design of the primary control     with P > 0, Q > 0 satisfying the LMI
+loop using well-known results from the existing literature. Particular                  T                      
+                                                                                        A P + P A + Q P BK
+emphasis is given to the characterization of suitable Lyapunov level-                                             < 0.                      (13)
+                                                                                                 ∗           −Q
+sets for the resulting pre-stabilized system. This will be used in
+Section V which addresses the design of the auxiliary control loop.      The idea behind equation (12) is that the fluctuations of the classical
+                                                                         quadratic term are compensated by the integral term to ensure that
+                     IV. P RIMARY C ONTROL                               V (eτ (t)) is monotonically time-decreasing. The advantage of this
+   The stabilization of Linear Time-Delayed (LTD) systems not            method is that (13) is less restrictive with respect to the Razumikhin
+subject to constraints is the subject of an extensive literature and     conditions (9) since (13) also admits the solution Q = qP .
+can be addressed using a variety of existing tools. Given a constant
+                                                                             It is worth noting that both the LMIs (9) and (13) can only
+reference v and a linear control law in the form
+                                                                         be satisfied if there exists S > 0 such that AT S + SA < 0.
+                    u(t) = ūv + K(x(t) − x̄v ),                   (5)   This implies that both methods require the open-loop system (1) to
+                                                                         be GAS. Although fairly restrictive, an appealing aspect of these
+the dynamics of the closed-loop system satisfy                           methods is that (9) and (13) do not depend on the actual value of
+                   ė(t) = Ae(t) + BKe(t − τ ),                    (6)   τ , and hence they yield GAS for arbitrarily large time delays.
+
+where e(t) = x(t) − x̄v . Problem 1 can therefore be reduced             C. Delay-Dependent Conditions
+to finding a control gain K such that the origin of (6) is GAS.             In many applications, it is common to observe that a closed-loop
+Techniques for the stability analysis of time-delayed systems are        system may become unstable given an excessive time delay. As a
+described in, e.g. [21] and references therein. For the reader’s         result, it is reasonable to assume that, for many LTD systems, the
+convenience, the following subsections provide a brief summary           stability conditions should also depend on the value of τ . In this
+of some of these results and characterizes the associated invariance     setting, a well-known (albeit simple) approach for proving GAS is
+properties.                                                              the use of the Lyapunov-Krasovskii functional
+A. Stability Conditions without Delay                                                                    Z t
+                                                                           V (eτ (t)) = e(t)TP e(t) + (θ − t + τ ) ė(θ)TR ė(θ)dθ, (14)
+  In the absence of delays, i.e. τ = 0, it is well-known that the                                          t−τ
+equilibrium point x̄v is GAS if and only if it is possible to compute
+                                                                         with P > 0, R > 0 satisfying the LMI
+a quadratic function
+                          W (e) = eT P e,                                      Φ P − ΨT2 + (A + BK)T Ψ3 −τ ΨT2 BK
+                                                                                                                       
+                                                                  (7)
+                                                                             ∗       −Ψ3 − ΨT3 + τ R         −τ ΨT3 BK  < 0,              (15)
+such that P > 0 satisfies the Linear Matrix Inequality (LMI)
+                                                                               ∗              ∗                 −τ R
+                (A + BK)TP + P (A + BK) < 0.                       (8)
+                                                                         where Φ = (A + BK)T Ψ2 + ΨT2 (A + BK), and Ψ2 , Ψ3 are
+Indeed, the satisfaction of (8) is a sufficient (and necessary)          slack variables. Once again, it is worth noting that the existence
+condition for ensuring the Lyapunov criterion Ẇ (e) ≤ −γ(kek),          of a Lyapunov-Krasovskii functional in the form (14) is only a
+where γ is a class K∞ function.                                          sufficient condition for GAS. As a result, the literature on time-
+                                                                         delayed systems presents several extensions aimed at reducing
+B. Delay-Independent Conditions                                          the restrictiveness of the stability conditions (15), see e.g. [22].
+  In the presence of a time delay τ > 0, it is not possible to           Although this paper will not address other Lyapunov-Krasovskii
+construct a quadratic function (7) which is monotonically time-          functionals for the sake of simplicity, it is worth noting that the
+decreasing. However, if there exists P > 0 and q > 0 satisfying          constraint enforcement strategy presented in the next section can
+the LMI         T                                                      be easily extended to other LTD stability results.
+                A P + P A + qP P BK
+                                             < 0,           (9)
+                         ∗            −qP                                                     V. AUXILIARY C ONTROL
+it can be proven, see e.g. [4, Theorem 3.2], that (7) satisfies the         The objective of this section is to augment the pre-stabilized
+Lyapunov-Razumikhin criterion                                            system with an add-on control loop that ensures constraint sat-
+                                                                         isfaction. Motivated by the delay-free case derived in [20], the
+Ẇ (e(t)) ≤ −γ(ke(t)k), if W (e(t+θ)) ≤ ρW (e(t)), ∀θ ∈ [−τ, 0],
+                                                                         Explicit Reference Governor is a constraint enforcement strategy
+for some ρ > 1. This implies that (7) is a Razumikhin function and
+                                                                            1 The notation V (e (t)) is used as V is not simply a function of the
+that                                                                                            τ
+                                                                         current state e(t), but rather is a functional that depends on the state
+           V (eτ (t)) = max {e(t+θ)T P e(t+θ)},               (10)       trajectories e(θ) within the past interval [t − τ, t].
+                          θ∈[−τ,0]
+

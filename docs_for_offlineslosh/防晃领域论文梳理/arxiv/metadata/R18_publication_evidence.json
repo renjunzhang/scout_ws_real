@@ -1,0 +1,79 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1007/978-3-031-21090-7_9",
+  "doi_api_url": "https://api.crossref.org/works/10.1007/978-3-031-21090-7_9",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1007/978-3-031-21090-7_9",
+    "title": [
+      "PiP-X: Funnel-Based Online Feedback Motion Planning/Replanning in Dynamic Environments"
+    ],
+    "author": [
+      {
+        "given": "Mohamed Khalid M",
+        "family": "Jaffar",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Michael",
+        "family": "Otte",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "book-chapter",
+    "container-title": [
+      "Springer Proceedings in Advanced Robotics",
+      "Algorithmic Foundations of Robotics XV"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          12,
+          15
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2022,
+          12,
+          15
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2023
+        ]
+      ]
+    },
+    "page": "132-148",
+    "publisher": "Springer International Publishing",
+    "URL": "https://doi.org/10.1007/978-3-031-21090-7_9",
+    "ISBN": [
+      "9783031210891",
+      "9783031210907"
+    ],
+    "ISSN": [
+      "2511-1256",
+      "2511-1264"
+    ]
+  }
+}

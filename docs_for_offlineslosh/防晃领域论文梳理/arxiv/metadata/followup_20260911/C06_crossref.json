@@ -1,0 +1,456 @@
+{
+  "request_url": "https://api.crossref.org/works/10.1049/csy2.12121",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            6,
+            10
+          ]
+        ],
+        "date-time": "2026-06-10T11:44:47Z",
+        "timestamp": 1781091887020,
+        "version": "3.54.1"
+      },
+      "reference-count": 30,
+      "publisher": "Institution of Engineering and Technology (IET)",
+      "issue": "3",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2024,
+                8,
+                25
+              ]
+            ],
+            "date-time": "2024-08-25T00:00:00Z",
+            "timestamp": 1724544000000
+          },
+          "content-version": "vor",
+          "delay-in-days": 0,
+          "URL": "http://creativecommons.org/licenses/by-nd/4.0/"
+        }
+      ],
+      "funder": [
+        {
+          "DOI": "10.13039/100019600",
+          "name": "Trường Đại học Bách Khoa Hà Nội",
+          "doi-asserted-by": "publisher",
+          "award": [
+            "T2023‐TĐ‐002"
+          ],
+          "award-info": [
+            {
+              "award-number": [
+                "T2023‐TĐ‐002"
+              ]
+            }
+          ],
+          "id": [
+            {
+              "id": "10.13039/100019600",
+              "id-type": "DOI",
+              "asserted-by": "publisher"
+            }
+          ]
+        }
+      ],
+      "content-domain": {
+        "domain": [
+          "ietresearch.onlinelibrary.wiley.com"
+        ],
+        "crossmark-restriction": true
+      },
+      "short-container-title": [
+        "IET Cyber-Syst and Robotics"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2024,
+            9
+          ]
+        ]
+      },
+      "abstract": "<jats:title>Abstract</jats:title>\n                  <jats:p>The phenomenon of sloshing causes a significantly negative impact on a wide range of industries. A time‐optimal flatness‐based trajectory planning and Lyapunov‐based model predictive control (LMPC) is proposed for trajectory tracking of a transmitting cylindrical container filled with liquid. Firstly, this research presents an equivalent discrete model based on a mass‐spring‐damper system. Subsequently, after the flatness of the adopted non‐linear model for 2D is established, time‐optimal trajectories are introduced. A control method called LMPC is shown to solve the problem of orbital tracking, which allows setting limits for state variables. In addition, to ensure system performance, a linear extended state observer (LESO) is integrated to cope with system uncertainties. Finally, the efficiency of the proposed approach for liquid sloshing suppression and tracking is illustrated by simulations.</jats:p>",
+      "DOI": "10.1049/csy2.12121",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2024,
+            8,
+            25
+          ]
+        ],
+        "date-time": "2024-08-25T23:54:31Z",
+        "timestamp": 1724630071000
+      },
+      "update-policy": "https://doi.org/10.1002/crossmark_policy",
+      "source": "Crossref",
+      "is-referenced-by-count": 3,
+      "title": [
+        "Anti‐sloshing control: Flatness‐based trajectory planning and tracking control with an integrated extended state observer"
+      ],
+      "prefix": "10.1049",
+      "volume": "6",
+      "author": [
+        {
+          "given": "Khanh Nguyen",
+          "family": "Viet",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "School of Electrical and Electronic Engineering Hanoi University of Science and Technology  Hanoi Vietnam"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Minh Do",
+          "family": "Duc",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "School of Electrical and Electronic Engineering Hanoi University of Science and Technology  Hanoi Vietnam"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Thanh Cao",
+          "family": "Duc",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Vietnam Maritime University  Haiphong Vietnam"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "ORCID": "https://orcid.org/0000-0003-4108-8275",
+          "authenticated-orcid": false,
+          "given": "Tung Lam",
+          "family": "Nguyen",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "School of Electrical and Electronic Engineering Hanoi University of Science and Technology  Hanoi Vietnam"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "265",
+      "published-online": {
+        "date-parts": [
+          [
+            2024,
+            8,
+            25
+          ]
+        ]
+      },
+      "reference": [
+        {
+          "key": "e_1_2_11_2_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.2514/3.3752"
+        },
+        {
+          "key": "e_1_2_11_3_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/access.2021.3113956"
+        },
+        {
+          "key": "e_1_2_11_4_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1115/1.4054224"
+        },
+        {
+          "key": "e_1_2_11_5_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICAR53236.2021.9659383"
+        },
+        {
+          "key": "e_1_2_11_6_1",
+          "first-page": "819",
+          "volume-title": "Mechanisms and Machine Science",
+          "author": "Guagliumi L.",
+          "year": "2022"
+        },
+        {
+          "key": "e_1_2_11_7_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1080/00207179508921959"
+        },
+        {
+          "key": "e_1_2_11_8_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/9.763209"
+        },
+        {
+          "key": "e_1_2_11_9_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1007/978-3-642-00839-9"
+        },
+        {
+          "key": "e_1_2_11_10_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1080/002071700219452"
+        },
+        {
+          "key": "e_1_2_11_11_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1137/0313029"
+        },
+        {
+          "key": "e_1_2_11_12_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.23919/ECC.1997.7082475"
+        },
+        {
+          "key": "e_1_2_11_13_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/s0167‐6911(02)00257‐8"
+        },
+        {
+          "key": "e_1_2_11_14_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1007/s10846‐018‐0802‐z"
+        },
+        {
+          "key": "e_1_2_11_15_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/tie.2021.3135640"
+        },
+        {
+          "key": "e_1_2_11_16_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1002/rnc.7358"
+        },
+        {
+          "key": "e_1_2_11_17_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.51316/jst.168.ssad.2023.33.3.6"
+        },
+        {
+          "key": "e_1_2_11_18_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1201/9781498701822"
+        },
+        {
+          "key": "e_1_2_11_19_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/tac.1977.1101446"
+        },
+        {
+          "key": "e_1_2_11_20_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/5.4400"
+        },
+        {
+          "key": "e_1_2_11_21_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1007/978-0-85729-501-9"
+        },
+        {
+          "key": "e_1_2_11_22_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICCAIS59597.2023.10382349"
+        },
+        {
+          "key": "e_1_2_11_23_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.ifacol.2018.11.050"
+        },
+        {
+          "key": "e_1_2_11_24_1",
+          "first-page": "507",
+          "volume-title": "Proceedings of the 9th International Conference on Informatics in Control, Automation and Robotics (ICINCO‐2012)",
+          "author": "Okatsuka H.",
+          "year": "2012"
+        },
+        {
+          "key": "e_1_2_11_25_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ACC.2012.6314811"
+        },
+        {
+          "key": "e_1_2_11_26_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/tac.2005.858692"
+        },
+        {
+          "key": "e_1_2_11_27_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.ejcon.2023.100913"
+        },
+        {
+          "key": "e_1_2_11_28_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.3311/ECCOMASMBD2021-274"
+        },
+        {
+          "key": "e_1_2_11_29_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/access.2021.3113956"
+        },
+        {
+          "key": "e_1_2_11_30_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.sysconle.2011.03.008"
+        },
+        {
+          "key": "e_1_2_11_31_1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1080/00207179.2018.1475750"
+        }
+      ],
+      "container-title": [
+        "IET Cyber-Systems and Robotics"
+      ],
+      "original-title": [],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://ietresearch.onlinelibrary.wiley.com/doi/pdf/10.1049/csy2.12121",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2025,
+            10,
+            28
+          ]
+        ],
+        "date-time": "2025-10-28T06:37:51Z",
+        "timestamp": 1761633471000
+      },
+      "score": 1,
+      "resource": {
+        "primary": {
+          "URL": "https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/csy2.12121"
+        }
+      },
+      "subtitle": [],
+      "short-title": [],
+      "issued": {
+        "date-parts": [
+          [
+            2024,
+            8,
+            25
+          ]
+        ]
+      },
+      "references-count": 30,
+      "journal-issue": {
+        "issue": "3",
+        "published-print": {
+          "date-parts": [
+            [
+              2024,
+              9
+            ]
+          ]
+        }
+      },
+      "alternative-id": [
+        "10.1049/csy2.12121"
+      ],
+      "URL": "https://doi.org/10.1049/csy2.12121",
+      "archive": [
+        "Portico"
+      ],
+      "relation": {},
+      "ISSN": [
+        "2097-3608",
+        "2631-6315"
+      ],
+      "issn-type": [
+        {
+          "value": "2097-3608",
+          "type": "print"
+        },
+        {
+          "value": "2631-6315",
+          "type": "electronic"
+        }
+      ],
+      "subject": [],
+      "published": {
+        "date-parts": [
+          [
+            2024,
+            8,
+            25
+          ]
+        ]
+      },
+      "assertion": [
+        {
+          "value": "2023-12-30",
+          "order": 0,
+          "name": "received",
+          "label": "Received",
+          "group": {
+            "name": "publication_history",
+            "label": "Publication History"
+          }
+        },
+        {
+          "value": "2024-05-27",
+          "order": 2,
+          "name": "accepted",
+          "label": "Accepted",
+          "group": {
+            "name": "publication_history",
+            "label": "Publication History"
+          }
+        },
+        {
+          "value": "2024-08-25",
+          "order": 3,
+          "name": "published",
+          "label": "Published",
+          "group": {
+            "name": "publication_history",
+            "label": "Publication History"
+          }
+        }
+      ],
+      "article-number": "e12121"
+    }
+  ]
+}

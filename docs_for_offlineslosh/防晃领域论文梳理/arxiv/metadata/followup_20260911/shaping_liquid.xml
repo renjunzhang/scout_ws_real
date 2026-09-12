@@ -1,0 +1,84 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/2b73wAFIEZ1tN5Eklxi5tXvIpOY</id>
+  <title>arXiv Query: search_query=all:"input shaping" AND (all:liquid OR all:sloshing OR all:transportation)&amp;id_list=&amp;start=0&amp;max_results=30</title>
+  <updated>2026-09-11T14:52:37Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=all:%22input+shaping%22+AND+(all:liquid+OR+(all:sloshing+OR+all:transportation))&amp;start=0&amp;max_results=30&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>30</opensearch:itemsPerPage>
+  <opensearch:totalResults>3</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2607.26717v2</id>
+    <title>Global Sensitive-Based Input Shaping for UAV-Payload Precision Motion Control</title>
+    <updated>2026-08-11T18:53:22Z</updated>
+    <link href="https://arxiv.org/abs/2607.26717v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2607.26717v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This work presents a comprehensive analysis and design of global sensitivity-based input shapers for a 3D Unmanned Aerial Vehicle-payload system, emphasizing robustness against uncertainties in payload mass and rope length. The proposed approach also leverages the Shapley value concept in controller design to systematically account for uncertainties, thereby reducing the controller's sensitivity to unknown parameters. To validate the effectiveness of the methodology, numerical simulations are conducted, comparing the proposed controller against non-robust, robust, and minimax designs. The results demonstrate that the standard global sensitivity or Shapley-based input shapers improve performance and offer a promising framework for uncertainty-aware control in aerial payload transport.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-07-29T10:07:13Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Karan Baker</name>
+    </author>
+    <author>
+      <name>Sanjay Maharjan</name>
+    </author>
+    <author>
+      <name>Tariq Hlayel</name>
+    </author>
+    <author>
+      <name>Oladapo Ogunbodede</name>
+    </author>
+    <author>
+      <name>Dutch Dunphy</name>
+    </author>
+    <author>
+      <name>Adrian Stein</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2305.05944v1</id>
+    <title>Stealth Shaper: Reflectivity Optimization as Surface Stylization</title>
+    <updated>2023-05-10T07:31:36Z</updated>
+    <link href="https://arxiv.org/abs/2305.05944v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2305.05944v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present a technique to optimize the reflectivity of a surface while preserving its overall shape. The naive optimization of the mesh vertices using the gradients of reflectivity simulations results in undesirable distortion. In contrast, our robust formulation optimizes the surface normal as an independent variable that bridges the reflectivity term with differential rendering, and the regularization term with as-rigid-as-possible elastic energy. We further adaptively subdivide the input mesh to improve the convergence. Consequently, our method can minimize the retroreflectivity of a wide range of input shapes, resulting in sharply creased shapes ubiquitous among stealth aircraft and Sci-Fi vehicles. Furthermore, by changing the reward for the direction of the outgoing light directions, our method can be applied to other reflectivity design tasks, such as the optimization of architectural walls to concentrate light in a specific region. We have tested the proposed method using light-transport simulations and real-world 3D-printed objects.</summary>
+    <category term="cs.GR" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-05-10T07:31:36Z</published>
+    <arxiv:primary_category term="cs.GR"/>
+    <author>
+      <name>Kenji Tojo</name>
+    </author>
+    <author>
+      <name>Ariel Shamir</name>
+    </author>
+    <author>
+      <name>Bernd Bickel</name>
+    </author>
+    <author>
+      <name>Nobuyuki Umetani</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2104.06373v2</id>
+    <title>Density control of large-scale particles swarm through PDE-constrained optimization</title>
+    <updated>2022-01-19T18:29:16Z</updated>
+    <link href="https://arxiv.org/abs/2104.06373v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2104.06373v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We describe in this paper an optimal control strategy for shaping a large-scale swarm of particles using boundary global actuation. This problem arises as a key challenge in many swarm robotics applications, especially when the robots are passive particles that need to be guided by external control fields. The system is large-scale and underactuated, making the control strategy at the microscopic particle level infeasible. We consider the Kolmogorov forward equation associated to the stochastic process of the single particle to encode the macroscopic behaviour of the particles swarm. The control inputs shape the velocity field of the density dynamics according to the physical model of the actuators. We find the optimal actuation considering an optimal control problem whose state dynamics is governed by a linear parabolic advection-diffusion equation where the control induces a transport field. From a theoretical standpoint, we show the existence of a solution to the resulting nonlinear optimal control problem. From a numerical standpoint, we employ the discrete adjoint method to accurately compute the reduced gradient and we show how it commutes with the optimize-then-discretize approach. Finally, numerical simulations show the effectiveness of the control strategy in driving the density sufficiently close to the target.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-04-13T17:28:23Z</published>
+    <arxiv:comment>19 pages, 12 figures, submitted to IEEE Transactions on Robotics</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Carlo Sinigaglia</name>
+    </author>
+    <author>
+      <name>Andrea Manzoni</name>
+    </author>
+    <author>
+      <name>Francesco Braghin</name>
+    </author>
+  </entry>
+</feed>

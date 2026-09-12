@@ -1,0 +1,124 @@
+                                                         A predictive safety filter for learning-based racing control
+                                                               Ben Tearle and Kim P. Wabersich and Andrea Carron and Melanie N. Zeilinger
+
+
+                                              Abstract— The growing need for high-performance con-                                               Desired control
+                                           trollers in safety-critical applications like autonomous driving                                      signal ud (x(k))
+                                           has been motivating the development of formal safety veri-                      x(k)                                                    ud (k)
+                                           fication techniques. In this paper, we design and implement
+                                           a predictive safety filter that is able to maintain vehicle                              System              u(k)        Safety filter
+                                           safety with respect to track boundaries when paired alongside
+                                                                                                                                f (x(k), u(k))                    πs (x(k), ud (k))
+arXiv:2102.11907v1 [eess.SY] 23 Feb 2021
+
+
+
+
+                                           any potentially unsafe control signal, such as those found in
+                                           learning-based methods. A model predictive control (MPC)
+                                           framework is used to create a minimally invasive algorithm                                                   Safe system fs (x(k), ud (k))
+                                           that certifies whether a desired control input is safe and
+                                           can be applied to the vehicle, or that provides an alternate              Fig. 1. Concept of predictive safety filter: Based on the current state x(k),
+                                           input to keep the vehicle in bounds. To this end, we provide              an arbitrary control algorithm provides a desired control input ud (k) ∈ Rm ,
+                                           a principled procedure to compute a safe and invariant set                which is processed by the safety filter u(k) = πs (x(k), ud (k)) and applied
+                                           for nonlinear dynamic bicycle models using efficient convex               to the real system.
+                                           approximation techniques. To fully support an aggressive racing
+                                           performance without conservative safety interventions, the safe
+                                           set is extended in real-time through predictive control backup            relevant safety mechanism. Racing requires the utilization of
+                                           trajectories. Applications for assisted manual driving and deep
+                                           imitation learning on a miniature remote-controlled vehicle               a vehicle’s full nonlinear dynamics, providing a challenging
+                                           demonstrate the safety filter’s ability to ensure vehicle safety          domain in which safety must be guaranteed.
+                                           during aggressive maneuvers.                                                 To provide safety for arbitrary control policies, we rely
+                                                                                                                     on a modular safety framework as shown in Figure 1. This
+                                                                 I. INTRODUCTION                                     approach allows the framework to be used in conjunction
+                                              The development of robotic systems has led to an ever                  with any potentially unsafe control signal, such as those
+                                           increasing number of applications that go beyond the isolated             from learning-based controllers. The basic idea is to design
+                                           task spaces found in legacy industries such as automotive or              a safety filter, which analyzes the desired control signal and
+                                           electronics production. More recent applications encompass                decides in real-time whether it can be applied to the system,
+                                           dynamic and learning-based interactions with humans in                    or if it has to be modified to ensure safety. For the racing
+                                           complex task spaces, as is the case with autonomous driving,              application considered in this work, this consists of verifying
+                                           and therefore require advanced safety mechanisms [1], [2], to             if the vehicle is able to stay within track boundaries in the
+                                           prevent potentially dangerous situations. Maintaining safety              future given the current steering and drivetrain commands.
+                                           at the physical limits for highly dynamic systems often                      This is achieved by finding safe backup control sequences
+                                           requires a task-specific trade-off between performance and                that lead the vehicle towards a set of known safe states, where
+                                           conservatism to ensure safe system operation. As a result,                the first input of the sequence is as close as possible to the
+                                           there is an increasing interest in developing theoretically               desired control signal. This approach allows for verifying the
+                                           sound safety frameworks with a reduced degree of conser-                  safety of the desired input while at the same time providing
+                                           vatism that enable safety in a modular fashion, independent               an alternative safe input otherwise.
+                                           of a task-specific objective.
+                                              While some of these methods have been demonstrated                     A. Related Work
+                                           in practice, the considered applications are often small-                    The concept of using a safety controller in a closed-loop
+                                           scale or nearly linear control systems that are only operated             system was first introduced in [4], where the system can
+                                           within conservative regions of their state space [3]. Motivated           switch between an experimental controller and a reliable
+                                           by the strict safety requirements in autonomous driving,                  safety controller in the case of software faults. Developments
+                                           we consider the problem of safe autonomous and assisted                   on the theoretic use of barrier certificates for verifying system
+                                           racing as a benchmark application for deriving a practically              safety were later proposed in [5], which was further extended
+                                                                                                                     to the idea of control barrier functions (CBFs) [6]. More
+                                              1 The authors are with the Institute for Dynamical Systems and Con-
+                                                                                                                     recent work has revisited the notion of using CBFs for safety-
+                                           trol, ETH Zurich, ZH-8092, Switzerland: bentearle@gmail.com,
+                                           [wkim|carrona|mzeilinger]@ethz.ch. This work was sup-                     critical control of robotic systems, see [1] for an overview.
+                                           ported by the Swiss National Science Foundation under grant no. PP00P2    This approach has been combined with a machine-learning
+                                           157601 / 1. The research of Andrea Carron was supported by the Swiss      framework in [7] to safely learn model discrepancies of a
+                                           National Centre of Competence in Research NCCR Digital Fabrication. The
+                                           work of Ben Tearle and Andrea Carron was supported by the ETH Career      Segway robot while limiting the operational space during
+                                           Seed Grant 19-18-2.                                                       training. Although these methods build off strong theoretical
+results from control Lyapunov function theory, they rely on       based invariant set computation using convex approximations
+the ability to explicitly model a system’s safety requirements    to obtain an enlarged terminal safe set for the nonlinear
+as a CBF, which is not generally trivial to design.               dynamic bicycle model, which is valid over a range of
+   Given the inherent lack of safety guarantees in traditional    constant road curvatures.
+machine learning methods, the reinforcement learning (RL)            The physical miniature racing application demonstrates
+field has become increasingly interested in enforcing con-        the proposed safety filter’s performance with both human-
+straints for training black-box control policies. A general-      in-the-loop racing and deep imitation learning. This work
+purpose policy search algorithm for constrained reinforce-        presents, to the best of our knowledge, the first application of
+ment learning is introduced in [8], which approximately           a predictive safety filter to a complex and highly dynamical
+enforces safety constraints at every policy update. Using         nonlinear system demonstrated in experimental results.
+a learning-based system model, [9] proposes a method for
+determination of a safe set of system states under a spe-                      II. PROBLEM FORMULATION
+cific learning-based policy. Although these methods allow            Notation: The set of integers in the interval [a, b] ⊂ R
+for approximately safe policy training, they are limited in       is denoted by I[a,b] , and the set of integers in the interval
+that they remain tied to task-specific reinforcement learning     [a, ∞) ⊂ R is I≥a . The i-th row of a matrix M ∈ Rn×m
+algorithms, whereas the safety filter presented in this work      is denoted by [M ]i .
+is able to function independent of a specific task and thereby       The goal of this work is to design a safety filter that
+enables modular safety.                                           certifies whether or not a desired control input, ud (k), is safe
+   An approach for providing system safety based on confin-       for a vehicle system, and provides an alternative safe control
+ing a system to a pre-computed set of safe states is introduced   input at any time. We consider a discrete-time nonlinear
+in [10]. This uses reachability-based techniques to find a safe   system of the form
+set for a given system together with a corresponding control
+policy that provides invariance within the safe set. The idea                 x(k + 1) = f (x(k), u(k)), ∀k ∈ I≥0 ,             (1)
+is expanded in [3] to perform online updates of the safe
+set using a non-parametric system dynamics estimate. These        subject to state and input constraints, x(k) ∈ X , u(k) ∈ U,
+approaches suffer from limited scalability in the offline safe    where the dynamics f : X × U → Rn . System safety is
+set computation required. Recent work attempts to address         defined with respect to ensuring constraint satisfaction at all
+this by approximating the reachable sets using data-based         times, as follows.
+methods [11], sum-of-squares programming [12], and active         Definition 1. A system (1) is considered safe if
+learning [13].
+   Closely related to these ideas, a method for establishing                     x(k) ∈ X , u(k) ∈ U, ∀k ∈ I≥0 .                (2)
+safety using an MPC-based control law is derived in [14].
+A continuously updating control policy is computed online            In order to guarantee this notion of safety for a given
+to find backup trajectories towards safe states, resulting in     ud (k), a safety control policy, πS (x(k), ud (k)), is provided
+the implicit representation of the safe set and corresponding     that guarantees constraint satisfaction for all future timesteps
+safe control law via the MPC optimization problem. This           if applied to the vehicle. If a safety policy exists with ud (k)
+method is extended to consider nonlinear stochastic systems       as the current input of the policy, then ud (k) can be certified
+formulated with chance-constraints or parametric uncertain-       as safe and applied to the system. More formally:
+ties in [15], [16], and provides the foundation for the task of   Definition 2. A desired input ud (k̄) is certified as safe for
+autonomous racing considered in this work.                        system (1), at a given timestep k̄, if the safety control policy
+B. Contributions                                                  yields πS (x(k̄), ud (k̄)) = ud (k̄), and application of u(k) =
+                                                                  πS (x(k), ud (k)) to the system results in safety according to
+   The main contribution of this paper is the design and
+                                                                  Definition 1 for all k ≥ k̄.
+implementation of a permissive safety filter for autonomous
+racing that can be combined with any desired control signal,         Using a safety policy in accordance with Definition 2
+ensuring closed-loop vehicle safety with respect to a track       provides a safety filter that can be brought into a closed-
+for a diverse range of applications. To this end, we use          loop system as shown in Figure 1. Since the safety policy
+the concept of predictive safety filters as presented in [14],    can be updated at each time step to consider the incoming
+[16]. To achieve a minimally invasive safety filter supporting    desired input, this allows the desired control signal to have
+aggressive maneuvers, we use a nonlinear dynamic bicycle          control authority over the system whenever possible, i.e.
+model with a Pacejka model of the tire forces [17] to             πS (x(k), ud (k)) = ud (k). However, if the desired control
+simultaneously predict and optimize accurate backup control       signal would put the system at risk of violating its constraints
+trajectories. In addition to a high-fidelity system model,        in the future, then alternate inputs, πS (x(k), ud (k)) 6= ud (k),
+the safety filter performance can be improved by using            must be available that ensure safety for the system.
+either a longer planning horizon or a larger terminal set.           The next section discusses an approach to compute πS
+As the planning horizon is typically limited by memory and        online using an MPC framework that minimizes interference
+processing requirements, we derive an iterative optimization-     while still ensuring safety for the system.
+

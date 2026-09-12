@@ -1,0 +1,88 @@
+                                         A Machine Learning-based Characterization Framework
+                                          for Parametric Representation of Nonlinear Sloshing
+                                                       Xihaier Luoa,∗, Ahsan Kareemb , Liting Yub , Shinjae Yooa
+                                         a
+                                            Computational Science Initiative, Brookhaven National Laboratory, Upton, NY 11973,
+arXiv:2201.11663v1 [cs.LG] 25 Jan 2022
+
+
+
+
+                                                                               United States.
+                                         b
+                                           NatHaz Modeling Laboratory, University of Notre Dame, Notre Dame, IN 46556, United
+                                                                                  States.
+
+
+
+
+                                         Abstract
+                                         The growing interest in creating a parametric representation of liquid sloshing
+                                         inside a container stems from its practical applications in modern engineer-
+                                         ing systems. The resonant excitation, on the other hand, can cause unstable
+                                         and nonlinear water waves, resulting in chaotic motions and non-Gaussian
+                                         signals. This paper presents a novel machine learning-based framework for
+                                         nonlinear liquid sloshing representation learning. The proposed method is
+                                         a parametric modeling technique that is based on sequential learning and
+                                         sparse regularization. The dynamics are categorized into two parts: linear
+                                         evolution and nonlinear forcing. The former advances the dynamical system
+                                         in time on an embedded manifold, while the latter causes divergent behav-
+                                         iors in temporal evolution, such as bursting and switching. The proposed
+                                         framework’s merit is demonstrated using an experimental dataset of liquid
+                                         sloshing in a tank under horizontal excitation with a wide frequency range
+                                         and various vertical slat screen settings.
+                                         Keywords: Sparse Regression, Nonlinear System Identification, Time-delay
+                                         Embedding, Liquid sloshing, Non-Gaussian Signals
+
+
+                                         1. Introduction
+                                            Sloshing liquid in a partially filled tank is a source of concern in many
+                                         engineering fields [1, 2]. When the external excitation amplitude is large,
+
+                                             ∗
+                                                 Corresponding author.
+                                                 Email address: xluo@bnl.gov (Xihaier Luo)
+
+
+                                         Preprint submitted to Elsevier                                      January 28, 2022
+or the excitation frequency is close to the natural sloshing frequencies, an
+unrestrained free liquid surface is prone to violent wave motions. Excessive
+water motions escalate the hydrodynamic forces acting on the tank walls,
+resulting in severe structural damage, for instance, an oil leak or gas explo-
+sion [3]. Vertical slat screens are one of the devices developed to suppress
+resonantly forced sloshing. These perforated plate-based screens effectively
+provide efficient wave damping by promoting vortexes in water motions and
+dissipating energy via turbulence cascade. Understanding and mastering the
+fundamental principles governing liquid-plate interactions is a necessary first
+step toward the development of the next generation of offshore platforms,
+gas containers, and other naval systems [4, 5, 6, 7, 8].
+     Partial differential equations (PDEs) are frequently used to describe the
+principles that govern physical systems in the modern world. These specified
+PDEs, also known as governing equations, aid in the establishment of scien-
+tific fields and the rapid advancement of technology. In the context of liquid
+sloshing, potential flow theory was used to simulate small-amplitude sloshing
+motion in a regular-configuration container [9, 10]. The Laplace equation was
+later used to analyze nonlinear sloshing problems in two/three dimensions for
+more turbulent scenarios. When solved using the finite element method or
+the boundary element method, the computed results can capture free surface
+sloshing motions in various liquid storage tanks [11, 12, 13]. Another possibil-
+ity is to use Navier Stokes equations to solve the problem. To simulate viscous
+liquid sloshing in a baffled tank with possibly broken free surfaces, several
+turbulence models, including Reynolds averaged Navier–Stokes (RANS) and
+large-eddy simulation (LES), were evaluated [14, 15, 16]. However, when
+large amplitude sloshing occurs traditional finite element-based methods fre-
+quently fail to provide accurate results. To address this issue, advanced
+numerical methods such as arbitrary Lagrangian-Eulerian elements [17, 18]
+and smoothed particle hydrodynamics [19, 20] are introduced, where the for-
+mer focuses on maintaining a high-quality mesh throughout an analysis when
+large deformation occurs and the latter is meshless and uses a collection of
+pseudo-particles to represent a given body. While knowing these equations
+and using advanced numerical methods allow us to simulate liquid sloshing
+in a variety of tanks, reliable and high-fidelity PDE-governed models remain
+elusive in many tank and baffle settings.
+     Fortunately, the unprecedented availability of data today promises a re-
+naissance in the analysis and understanding of physical systems. This begs
+the question of whether we can extract governing equations from data [21,
+
+                                       2
+

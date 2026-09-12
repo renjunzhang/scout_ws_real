@@ -1,0 +1,88 @@
+                                                 Surface wave dynamics in orbital shaken cylindrical containers
+                                                       M. Reclari,1 M. Dreyer,1 S. Tissot,2 D. Obreschkow,3 F. M. Wurm,2 and M. Farhat1
+                                                       1)
+                                                            EPFL, Laboratoire des Machines Hydrauliques, 1007 Lausanne,
+                                                       Switzerland
+                                                       2)
+                                                            EPFL, Laboratory of Cellular Biotechnology, 1015 Lausanne,
+                                                       Switzerland
+arXiv:1412.0919v1 [physics.flu-dyn] 2 Dec 2014
+
+
+
+
+                                                       3)
+                                                            International Centre for Radio Astronomy Research (ICRAR), M468,
+                                                       University of Western Australia, 35 Stirling Hwy, Crawley, WA 6009,
+                                                       Australia
+
+                                                       Be it to aerate a glass of wine before tasting, to accelerate a chemical reaction or to
+                                                       cultivate cells in suspension, the “swirling” (or orbital shaking) of a container ensures
+                                                       good mixing and gas exchange in an efficient and simple way. Despite being used
+                                                       in a large range of applications this intuitive motion is far from being understood
+                                                       and presents a richness of patterns and behaviors which has not yet been reported.
+                                                       The present research charts the evolution of the waves with the operating parameters
+                                                       identifying a large variety of patterns, ranging from single and multiple crested waves
+                                                       to breaking waves. Free surface and velocity fields measurements are compared to
+                                                       a potential sloshing model, highlighting the existence of various flow regimes. Our
+                                                       research assesses the importance of the modal response of the shaken liquids, laying
+                                                       the foundations for a rigorous mixing optimization of the orbital agitation in its
+                                                       applications.
+
+
+
+                                                       Copyright (2014) American Institute of Physics. This article may be downloaded for personal use
+
+                                                       only. Any other use requires prior permission of the author and the American Institute of Physics.
+
+
+
+
+                                                       The following article appeared in Physics of Fluids 26, 052104 (2014) and may be found at http:
+
+                                                       // scitation. aip. org/ content/ aip/ journal/ pof2/ 26/ 5/ 10. 1063/ 1. 4874612 .
+
+
+
+
+                                                                                                 1
+                          M. Reclari et.al., Phys. Fluids 26, 052104 (2014).
+
+
+I.    INTRODUCTION
+
+
+     The “orbital shaking” is the displacement of a container, maintaining a fixed orientation
+with respect to an inertial frame of reference, along a circular trajectory at a constant angular
+velocity. This motion is used in many applications, ranging from wine swirling for tasting
+purposes to biological and chemical industrial applications, e.g. bacterial1 and more recently
+cellular cultures2 . Cells are cultivated in suspensions of liquid medium, where they multiply
+and produce the required protein. The motion of the liquid guarantees the suspension and
+homogenizes the concentration of cells consumables (oxygen and nutrient) and products
+(proteins and carbon dioxide). Although at large scale this is usually achieved using stirred
+tanks, where the agitation is provided by an impeller and the aeration by oxygen spargers
+from the container bottom3 , it was found that bursting of bubbles at the free surface4 and
+excessive shear stresses5,6 may damage the cells. These reasons kindled the interest in the
+use of large scale orbital shaken devices up to thousand liters7–9 . Thus, a large number of
+researches have been performed on the gas exchange10–13 , mixing14–17 and volumetric power
+consumption18 of the bioreactors. In some cases, correlations have been proposed in order
+to quantify the variation of those quantities during scale-up of the culture size. Although
+few studies focused on the measurement of the velocity fields19,20 , no significant effort has
+been dedicated so far to the understanding of the motion of the liquid carrying the cells,
+and of its influence on the scaling of the cultures.
+
+     On the other hand, the physics of free surface liquids in laterally shaken containers has
+been extensively studied, especially from the analytical point of view, with potential flows
+theory (inviscid, incompressible and irrotational)21 . Early works focused on sloshing of
+spacecraft propellent in cylindrical22,23 , conical24 or rectangular tanks25 , while more recent
+investigations involved the transport of liquids in naval carriers26,27 . Moreover, swirling and
+unsteady flow regimes have been observed in linear forced sloshing at shaking frequencies
+close to the first natural frequency28,29 . Extensive study determined the stability regions of
+those flows26,30,31 , while the persistence of swirling regime due to orbital shaking has also
+been investigated32 . Surprisingly, the hydrodynamics generated by orbital excitation and its
+application for mixing and oxygenation purposes received little attention so far. This work
+bridges the gap between the biological and hydrodynamic fields of investigation, explicitly
+establishing a potential model for the case of orbital shaken liquids. We also conducted an
+
+                                                  2
+

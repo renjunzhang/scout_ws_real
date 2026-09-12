@@ -1,0 +1,845 @@
+{
+  "source": "../液体防晃方法分类与领域分析.md",
+  "family_titles": {
+    "4.1": "被动容器、结构与载荷接口",
+    "4.2": "主动辅助机构、悬架与平台原生姿态补偿",
+    "4.3": "输入整形、滤波与运动剖面",
+    "4.4": "离线路径、时间律与整段轨迹优化",
+    "4.5": "在线前馈与几何防晃生成",
+    "4.6": "反馈稳定化、观测器与给定参考闭环跟踪",
+    "4.7": "MPC/GPC 预测控制与急停安全层",
+    "4.8": "障碍环境中的防洒规划",
+    "4.9": "学习、数字孪生与混合模型"
+  },
+  "role_labels": {
+    "direct_liquid_method": "直接液体方法",
+    "general_method_foundation": "通用方法基础",
+    "liquid_model_or_physics": "液体建模／物理基础"
+  },
+  "papers": {
+    "R01": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.4",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "预计算整段防晃轨迹优化；有真实液体运输验证。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R02": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.5",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "依据合加速度生成防晃姿态并解单周期 QP，非滚动液体 MPC。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R03": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.7",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "含液体动态的滚动急停控制；发表状态与安全保证另行核验。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R04": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.6",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "液罐 PDE–ODE 的反馈稳定与不洒状态域；理论工作也是直接液体方法，非实物证据。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R05": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.6",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.3"
+      ],
+      "rationale": "液罐输出反馈与观测器；理论与数值研究。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R06": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.4",
+        "3.5"
+      ],
+      "rationale": "实验液体相位与模型适用域研究，不提出机器人防晃规划器。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R07": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.6",
+      "secondary_families": [
+        "4.9"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "罐车含晃液仿真的学习参考调节器；对应原文 4.6 中 AR07，附学习标签。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R08": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6",
+        "4.7"
+      ],
+      "basis_sections": [],
+      "rationale": "通用 MPCC 的在线进度与运动控制；没有液体模型。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R09": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "通用 MPCC 约束、终端组件与学习动力学残差；没有液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R10": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.8"
+      ],
+      "basis_sections": [],
+      "rationale": "移动机器人 MPCC 与碰撞处理骨架；没有液体状态。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R11": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6",
+        "4.7"
+      ],
+      "basis_sections": [],
+      "rationale": "工业机器人非线性路径跟随 MPC；不是防晃试验。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R12": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.8"
+      ],
+      "basis_sections": [],
+      "rationale": "反应式机械臂 MPCC 与碰撞／奇异性约束；没有液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R13": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.4"
+      ],
+      "basis_sections": [],
+      "rationale": "固定几何路径的时间参数化基础；路径速度可控集不是液体可恢复域。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R14": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.3",
+        "4.4"
+      ],
+      "basis_sections": [],
+      "rationale": "三阶约束下的时间参数化基础；jerk 限制不是液体防晃模型。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R15": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.4"
+      ],
+      "basis_sections": [],
+      "rationale": "二次目标时间参数化工具；不包含有记忆的液体状态。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R16": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.4",
+        "4.6",
+        "4.8"
+      ],
+      "basis_sections": [],
+      "rationale": "反馈运动规划与 funnel 的基础；不是液体运输结果。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R17": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.4",
+        "4.6",
+        "4.8"
+      ],
+      "basis_sections": [],
+      "rationale": "规划／跟踪模型差异和鲁棒跟踪界的基础；没有液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R18": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6",
+        "4.8"
+      ],
+      "basis_sections": [],
+      "rationale": "基于 funnel 的动态环境反馈运动重规划；没有液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R19": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "学习对象是成功后续轨迹、安全集合与终端价值；不是液体动力学模型。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R20": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "输出提升 LMPC 的终端集合／价值学习；不能默认本题满足输出重建条件。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R21": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "鲁棒输出提升 LMPC 基础；非液体且正式发表未核实。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R22": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "四旋翼重复任务的学习 MPC；非液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R23": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "预测安全过滤与数据模型不确定性；通用约束控制，非直接防晃。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R24": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7"
+      ],
+      "basis_sections": [],
+      "rationale": "高效非线性 tube MPC 的基础；非液体。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R25": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "可微鲁棒 MPC 和参数调节；学习对象不等于液体状态。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R26": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.8",
+      "secondary_families": [
+        "4.4",
+        "4.9"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "静态障碍中执行前路径／时间规划与学习防洒分类；不是滚动局部液体规划。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R27": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.7",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "液体任务的在线共享控制 NMPC；不是普通固定参考跟踪。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R28": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "Learning MPC 的安全集合和终端价值基础；区别于 C06 的 Lyapunov-based MPC。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R29": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "信息论学习 MPC 与历史价值；非液体，安全条件需精读。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R30": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.2"
+      ],
+      "rationale": "等效摆／质量弹簧阻尼建模基础；没有提出本题的机器人防晃控制方法。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R31": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.3"
+      ],
+      "basis_sections": [],
+      "rationale": "Ruckig 是 jerk 受限在线轨迹生成基线；平滑不等于防晃，也不应归为离线整段液体优化。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R32": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.4",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.2"
+      ],
+      "rationale": "多杯 SCARA 运动的路径／时间律优化，有真实液体实验；执行前求解。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R33": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.4",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "给定路径上联合处理液体和松置杯接触约束的时间最优规划。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R34": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.3"
+      ],
+      "basis_sections": [],
+      "rationale": "指数 jerk／滤波的一般振动控制基础，未据此计为机器人液体闭环。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R35": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.5",
+      "secondary_families": [
+        "4.3"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "在线动态滤波和主动容器重定向共同生成位置／姿态参考，非 MPC。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R36": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.3",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "以规定运动时长为条件比较 FIR、输入整形、逆动态和 IIR 防晃前馈；不等同于当前液面反馈。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R37": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.2",
+      "secondary_families": [
+        "4.6"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "专用六自由度主动减振机构配合 LQR 闭环；与普通轮式底盘软件控制不同。",
+      "classification_status": "screened_mapping; fine_grained_model_and_feedback_labels_pending_full_read"
+    },
+    "R38": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.4",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "倒液任务的 GP 不确定度与 MCTS 方法基础；不是运输防晃结果。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R39": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.7",
+      "secondary_families": [
+        "4.9"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "航天器 MPC 与 RL 的含晃液仿真；实物段没有燃料晃动。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R40": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.7",
+      "secondary_families": [
+        "4.8"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "机械臂共享控制联合液体目标与碰撞约束；并非 WMR 进度优化。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R41": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.2",
+      "secondary_families": [
+        "4.6"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "专用 Hexapod 配合反作用力反馈主动减振。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R42": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.6",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "航天器晃液闭环中的 ROM 与 CFD 校验，非实液闭环。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R43": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.9"
+      ],
+      "basis_sections": [
+        "3.2"
+      ],
+      "rationale": "SPH 到 LPV 的快速晃液代理，按建模基础收录。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R44": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.1",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "径向隔板改变模态和固有频率；不等于证明阻尼增加。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R45": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.1"
+      ],
+      "basis_sections": [
+        "3.2",
+        "3.5"
+      ],
+      "rationale": "隔板热流耦合的邻近物理证据；指标不是开口运输防洒。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R46": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.1",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "泡沫覆盖的被动耗散机制。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R47": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.1",
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "液罐结构中 TMD 与 NES 被动吸振的数值比较。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R48": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "direct_liquid_method",
+      "primary_family": "4.2",
+      "secondary_families": [
+        "4.9"
+      ],
+      "related_families": [],
+      "basis_sections": [],
+      "rationale": "主动弹性隔板的 DRL 与 SPH 数值方案。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R49": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R50": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R51": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R52": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R53": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R54": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R55": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.1",
+        "3.5"
+      ],
+      "rationale": "非线性模态、能量耗散或自由面响应的物理基础，非机器人规划器。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R56": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.9"
+      ],
+      "basis_sections": [
+        "3.2",
+        "3.3"
+      ],
+      "rationale": "热质传递、辨识或低温晃液的物理与测量基础，非运输防晃控制。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R57": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.2",
+        "3.3"
+      ],
+      "rationale": "热质传递、辨识或低温晃液的物理与测量基础，非运输防晃控制。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R58": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.2",
+        "3.3"
+      ],
+      "rationale": "热质传递、辨识或低温晃液的物理与测量基础，非运输防晃控制。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R59": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.2",
+        "3.3"
+      ],
+      "rationale": "热质传递、辨识或低温晃液的物理与测量基础，非运输防晃控制。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R60": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [],
+      "basis_sections": [
+        "3.2",
+        "3.5"
+      ],
+      "rationale": "多相高保真 SPH 建模基础，非在线 MPC 直接模型。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R61": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.9"
+      ],
+      "basis_sections": [
+        "3.2",
+        "3.3",
+        "3.5"
+      ],
+      "rationale": "液体辨识、学习或自由面重建基础；未验证本题在线控制收益。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R62": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "liquid_model_or_physics",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.9"
+      ],
+      "basis_sections": [
+        "3.2",
+        "3.3",
+        "3.5"
+      ],
+      "rationale": "液体辨识、学习或自由面重建基础；未验证本题在线控制收益。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R63": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6",
+        "4.7"
+      ],
+      "basis_sections": [],
+      "rationale": "灵活参考跟踪与约束可行性；可借鉴时间自由度的表达，没有液体模型。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R64": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.7",
+        "4.9"
+      ],
+      "basis_sections": [],
+      "rationale": "赛车预测安全过滤与安全后续；没有液体状态。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R65": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6",
+        "4.7"
+      ],
+      "basis_sections": [],
+      "rationale": "计算延迟、转向执行器与 tube MPC；需另查对 Scout 共同时间点模型的适用条件。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    },
+    "R66": {
+      "source": "../液体防晃方法分类与领域分析.md",
+      "role": "general_method_foundation",
+      "primary_family": null,
+      "secondary_families": [],
+      "related_families": [
+        "4.6"
+      ],
+      "basis_sections": [],
+      "rationale": "时滞线性系统的约束参考调节器；液体与非线性车体适用条件待核查。",
+      "classification_status": "provisional_from_imported_notes_and_frontmatter; full_read_pending"
+    }
+  }
+}

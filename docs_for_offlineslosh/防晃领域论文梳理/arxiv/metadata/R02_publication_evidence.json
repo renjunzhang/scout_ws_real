@@ -1,0 +1,157 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Geometric+Slosh-Free+Tracking+for+Robotic+Manipulators&rows=5",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/icra57147.2024.10610813",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/icra57147.2024.10610813",
+    "title": [
+      "Geometric Slosh-Free Tracking for Robotic Manipulators"
+    ],
+    "author": [
+      {
+        "given": "Jon",
+        "family": "Arrizabalaga",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Autonomous Aerial Systems, School of Engineering and Design,Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Lukas",
+        "family": "Pries",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Autonomous Aerial Systems, School of Engineering and Design,Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Riddhiman",
+        "family": "Laha",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Munich Institute of Robotics and Machine Intelligence (MIRMI)"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Runkang",
+        "family": "Li",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Munich Institute of Robotics and Machine Intelligence (MIRMI)"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Sami",
+        "family": "Haddadin",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Munich Institute of Robotics and Machine Intelligence (MIRMI)"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Markus",
+        "family": "Ryll",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Technical University of Munich,Autonomous Aerial Systems, School of Engineering and Design,Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2024 IEEE International Conference on Robotics and Automation (ICRA)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024,
+          5,
+          13
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2024,
+          5,
+          13
+        ]
+      ]
+    },
+    "page": "1226-1232",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/icra57147.2024.10610813",
+    "event": {
+      "name": "2024 IEEE International Conference on Robotics and Automation (ICRA)",
+      "location": "Yokohama, Japan",
+      "start": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            13
+          ]
+        ]
+      },
+      "end": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            17
+          ]
+        ]
+      }
+    }
+  }
+}

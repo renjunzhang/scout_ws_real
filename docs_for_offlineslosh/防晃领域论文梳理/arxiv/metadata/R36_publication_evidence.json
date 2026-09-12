@@ -1,0 +1,127 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1115/1.4054224",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1115/1.4054224",
+    "title": [
+      "Antisloshing Trajectories for High-Acceleration Motions in Automatic Machines"
+    ],
+    "author": [
+      {
+        "given": "Luca",
+        "family": "Guagliumi",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Alessandro",
+        "family": "Berti",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Eros",
+        "family": "Monti",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "R&D departement Marchesini Group S.p.a., Pianoro (BO) 40065, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Marco",
+        "family": "Carricato",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Industrial Engineering, University of Bologna, Bologna 40137, Italy"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "Journal of Dynamic Systems, Measurement, and Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          4,
+          22
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2022,
+          4,
+          22
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2022,
+          7,
+          1
+        ]
+      ]
+    },
+    "volume": "144",
+    "issue": "7",
+    "article-number": "071006",
+    "publisher": "ASME International",
+    "URL": "https://doi.org/10.1115/1.4054224",
+    "link": [
+      {
+        "URL": "https://asmedigitalcollection.asme.org/dynamicsystems/article-pdf/144/7/071006/6873645/ds_144_07_071006.pdf",
+        "content-type": "application/pdf",
+        "content-version": "vor",
+        "intended-application": "syndication"
+      },
+      {
+        "URL": "https://asmedigitalcollection.asme.org/dynamicsystems/article-pdf/144/7/071006/6873645/ds_144_07_071006.pdf",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

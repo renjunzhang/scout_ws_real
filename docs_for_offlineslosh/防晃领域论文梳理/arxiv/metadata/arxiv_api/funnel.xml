@@ -1,0 +1,352 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/d3j1uxG9Q3SFRddhmriUqsstwwg</id>
+  <title>arXiv Query: search_query=( (ti:funnel AND all:planning) OR ti:FaSTrack) AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=20</title>
+  <updated>2026-09-11T14:08:49Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=((ti:funnel+AND+all:planning)+OR+ti:FaSTrack)+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=20&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>20</opensearch:itemsPerPage>
+  <opensearch:totalResults>14</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2503.23795v1</id>
+    <title>Trajectory Planning for Automated Driving using Target Funnels</title>
+    <updated>2025-03-31T07:15:55Z</updated>
+    <link href="https://arxiv.org/abs/2503.23795v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2503.23795v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Self-driving vehicles rely on sensory input to monitor their surroundings and continuously adapt to the most likely future road course. Predictive trajectory planning is based on snapshots of the (uncertain) road course as a key input. Under noisy perception data, estimates of the road course can vary significantly, leading to indecisive and erratic steering behavior. To overcome this issue, this paper introduces a predictive trajectory planning algorithm with a novel objective function: instead of targeting a single reference trajectory based on the most likely road course, tracking a series of target reference sets, called a target funnel, is considered. The proposed planning algorithm integrates probabilistic information about the road course, and thus implicitly considers regular updates to road perception. Our solution is assessed in a case study using real driving data collected from a prototype vehicle. The results demonstrate that the algorithm maintains tracking accuracy and substantially reduces undesirable steering commands in the presence of noisy road perception, achieving a 56% reduction in input costs compared to a certainty equivalent formulation.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-03-31T07:15:55Z</published>
+    <arxiv:comment>accepted to European Control Conference 2025 (ECC25)</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Benjamin Bogenberger</name>
+    </author>
+    <author>
+      <name>Johannes Bürger</name>
+    </author>
+    <author>
+      <name>Vladislav Nenchev</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1601.04037v3</id>
+    <title>Funnel Libraries for Real-Time Robust Feedback Motion Planning</title>
+    <updated>2017-04-29T20:33:11Z</updated>
+    <link href="https://arxiv.org/abs/1601.04037v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1601.04037v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We consider the problem of generating motion plans for a robot that are guaranteed to succeed despite uncertainty in the environment, parametric model uncertainty, and disturbances. Furthermore, we consider scenarios where these plans must be generated in real-time, because constraints such as obstacles in the environment may not be known until they are perceived (with a noisy sensor) at runtime. Our approach is to pre-compute a library of "funnels" along different maneuvers of the system that the state is guaranteed to remain within (despite bounded disturbances) when the feedback controller corresponding to the maneuver is executed. We leverage powerful computational machinery from convex optimization (sums-of-squares programming in particular) to compute these funnels. The resulting funnel library is then used to sequentially compose motion plans at runtime while ensuring the safety of the robot. A major advantage of the work presented here is that by explicitly taking into account the effect of uncertainty, the robot can evaluate motion plans based on how vulnerable they are to disturbances.
+  We demonstrate and validate our method using extensive hardware experiments on a small fixed-wing airplane avoiding obstacles at high speed (~12 mph), along with thorough simulation experiments of ground vehicle and quadrotor models navigating through cluttered environments. To our knowledge, these demonstrations constitute one of the first examples of provably safe and robust control for robotic systems with complex nonlinear dynamics that need to plan in real-time in environments with complex geometric constraints.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.DS" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2016-01-15T19:22:09Z</published>
+    <arxiv:comment>International Journal of Robotics Research (To Appear)</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Anirudha Majumdar</name>
+    </author>
+    <author>
+      <name>Russ Tedrake</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2308.00130v2</id>
+    <title>Kinodynamic Motion Planning via Funnel Control for Underactuated Unmanned Surface Vehicles</title>
+    <updated>2024-04-26T16:38:46Z</updated>
+    <link href="https://arxiv.org/abs/2308.00130v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2308.00130v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We develop an algorithm to control an underactuated unmanned surface vehicle (USV) using kinodynamic motion planning with funnel control (KDF). KDF has two key components: motion planning used to generate trajectories with respect to kinodynamic constraints, and funnel control, also referred to as prescribed performance control, which enables trajectory tracking in the presence of uncertain dynamics and disturbances. We extend prescribed performance control to address the challenges posed by underactuation and control-input saturation present on the USV. The proposed scheme guarantees stability under user-defined prescribed performance functions where model parameters and exogenous disturbances are unknown. Furthermore, we present an optimization problem to obtain smooth, collision-free trajectories while respecting kinodynamic constraints. We deploy the algorithm on a USV and verify its efficiency in real-world open-water experiments.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-07-31T19:53:55Z</published>
+    <arxiv:comment>12 pages, 10 figures, submitted to IEEE T-CST</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Dženan Lapandić</name>
+    </author>
+    <author>
+      <name>Christos K. Verginis</name>
+    </author>
+    <author>
+      <name>Dimos V. Dimarogonas</name>
+    </author>
+    <author>
+      <name>Bo Wahlberg</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1911.01532v1</id>
+    <title>Real-time Funnel Generation for Restricted Motion Planning</title>
+    <updated>2019-11-04T23:26:01Z</updated>
+    <link href="https://arxiv.org/abs/1911.01532v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1911.01532v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In autonomous systems, a motion planner generates reference trajectories which are tracked by a low-level controller. For safe operation, the motion planner should account for inevitable controller tracking error when generating avoidance trajectories. In this article we present a method for generating provably safe tracking error bounds, while reducing over-conservatism that exists in existing methods. We achieve this goal by restricting possible behaviors for the motion planner. We provide an algebraic method based on sum-of-squares programming to define restrictions on the motion planner and find small bounds on the tracking error. We demonstrate our method on two case studies and show how we can integrate the method into already developed motion planning techniques. Results suggest that our method can provide acceptable tracking error wherein previous work were not applicable.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-11-04T23:26:01Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Hadi Ravanbakhsh</name>
+    </author>
+    <author>
+      <name>Forrest Laine</name>
+    </author>
+    <author>
+      <name>Sanjit A. Seshia</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2104.11917v1</id>
+    <title>KDF: Kinodynamic Motion Planning via Geometric Sampling-based Algorithms and Funnel Control</title>
+    <updated>2021-04-24T09:50:39Z</updated>
+    <link href="https://arxiv.org/abs/2104.11917v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2104.11917v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We integrate sampling-based planning techniques with funnel-based feedback control to develop KDF, a new framework for solving the kinodynamic motion-planning problem via funnel control. The considered systems evolve subject to complex, nonlinear, and uncertain dynamics (aka differential constraints). Firstly, we use a geometric planner to obtain a high-level safe path in a user-defined extended free space. Secondly, we develop a low-level funnel control algorithm that guarantees safe tracking of the path by the system. Neither the planner nor the control algorithm use information on the underlying dynamics of the system, which makes the proposed scheme easily distributable to a large variety of different systems and scenarios. Intuitively, the funnel control module is able to implicitly accommodate the dynamics of the system, allowing hence the deployment of purely geometrical motion planners. Extensive computer simulations and experimental results with a 6-DOF robotic arm validate the proposed approach.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-04-24T09:50:39Z</published>
+    <arxiv:comment>Under submission</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Christos K. Verginis</name>
+    </author>
+    <author>
+      <name>Dimos V. Dimarogonas</name>
+    </author>
+    <author>
+      <name>Lydia E. Kavraki</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2202.00772v3</id>
+    <title>PiP-X: Online feedback motion planning/replanning in dynamic environments using invariant funnels</title>
+    <updated>2024-06-13T16:46:43Z</updated>
+    <link href="https://arxiv.org/abs/2202.00772v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2202.00772v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Computing kinodynamically feasible motion plans and repairing them on-the-fly as the environment changes is a challenging, yet relevant problem in robot-navigation. We propose a novel online single-query sampling-based motion re-planning algorithm - PiP-X, using finite-time invariant sets - funnels. We combine concepts from sampling-based methods, nonlinear systems analysis and control theory to create a single framework that enables feedback motion re-planning for any general nonlinear dynamical system in dynamic workspaces.
+  A volumetric funnel-graph is constructed using sampling-based methods, and an optimal funnel-path from robot configuration to a desired goal region is then determined by computing the shortest-path subtree in it. Analysing and formally quantifying the stability of trajectories using Lyapunov level-set theory ensures kinodynamic feasibility and guaranteed set-invariance of the solution-paths. The use of incremental search techniques and a pre-computed library of motion-primitives ensure that our method can be used for quick online rewiring of controllable motion plans in densely cluttered and dynamic environments.
+  We represent traversability and sequencibility of trajectories together in the form of an augmented directed-graph, helping us leverage discrete graph-based replanning algorithms to efficiently recompute feasible and controllable motion plans that are volumetric in nature. We validate our approach on a simulated 6DOF quadrotor platform in a variety of scenarios within a maze and random forest environment. From repeated experiments, we analyse the performance in terms of algorithm-success and length of traversed-trajectory.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-02-01T21:37:29Z</published>
+    <arxiv:comment>An abridged version of this paper appeared in the conference proceedings of the International Workshop on the Algorithmic Foundations of Robotics (WAFR) 2022</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <arxiv:journal_ref>Algorithmic Foundations of Robotics (WAFR 2022)</arxiv:journal_ref>
+    <author>
+      <name>Mohamed Khalid M Jaffar</name>
+    </author>
+    <author>
+      <name>Michael Otte</name>
+    </author>
+    <arxiv:doi>10.1007/978-3-031-21090-7_9</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1007/978-3-031-21090-7_9" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2208.02006v2</id>
+    <title>Funnel Control Under Hard and Soft Output Constraints (extended version)</title>
+    <updated>2026-03-19T17:46:02Z</updated>
+    <link href="https://arxiv.org/abs/2208.02006v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2208.02006v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper proposes a funnel control method under time-varying hard and soft output constraints. First, an online funnel planning scheme is designed that generates a constraint consistent funnel, which always respects hard (safety) constraints, and soft (performance) constraints are met only when they are not conflicting with the hard constraints. Next, the prescribed performance control method is employed for designing a robust low-complexity funnel-based controller for uncertain nonlinear Euler-Lagrangian systems such that the outputs always remain within the planned constraint consistent funnels. Finally, the results are verified with a simulation example of a mobile robot tracking a moving object while staying in a box-constrained safe space.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-08-03T12:22:15Z</published>
+    <arxiv:comment>9 pages, 7 figures. Minor revisions: corrected text and mathematical typos, expanded discussion in Section III.A, and added a short appendix on relaxation of an assumption; main results unchanged</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Farhad Mehdifar</name>
+    </author>
+    <author>
+      <name>Charalampos P. Bechlioulis</name>
+    </author>
+    <author>
+      <name>Dimos V. Dimarogonas</name>
+    </author>
+    <arxiv:doi>10.1109/CDC51059.2022.9992628</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/CDC51059.2022.9992628" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2109.11420v2</id>
+    <title>Computing Funnels Using Numerical Optimization Based Falsifiers</title>
+    <updated>2022-03-07T13:44:47Z</updated>
+    <link href="https://arxiv.org/abs/2109.11420v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2109.11420v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper, we present an~algorithm that computes funnels along trajectories of systems of ordinary differential equations. A funnel is a time-varying set of states containing the given trajectory, for which the evolution from within the set at any given time stays in the funnel. Hence it generalizes the behavior of single trajectories to sets around them, which is an important task, for example, in robot motion planning.
+  In contrast to approaches based on sum-of-squares programming, which poorly scale to high dimensions, our approach is based on falsification and tackles the funnel computation task directly, through numerical optimization. This approach computes accurate funnel estimates far more efficiently and leaves formal verification to the end, outside all funnel size optimization loops.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-09-23T15:02:23Z</published>
+    <arxiv:comment>11 pages, 4 figures. Accepted to 2022 IEEE International Conference on Robotics and Automation (ICRA)</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Jiří Fejlek</name>
+    </author>
+    <author>
+      <name>Stefan Ratschan</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2402.15629v3</id>
+    <title>Funnel Synthesis via LMI Copositivity Conditions for Nonlinear Systems</title>
+    <updated>2025-10-26T05:21:10Z</updated>
+    <link href="https://arxiv.org/abs/2402.15629v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2402.15629v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Funnel synthesis refers to a procedure for synthesizing a time-varying controlled invariant set and an associated control law around a nominal trajectory. The computation of the funnel involves solving a continuous-time differential equation or inequality, ensuring the invariance of the funnel. Previous approaches often compromise the invariance property of the funnel; for example, they may enforce the equation or the inequality only at discrete temporal nodes and do not have a formal guarantee of invariance at all times. This paper proposes a computational funnel synthesis method that can satisfy the invariance of the funnel without such compromises. We derive a finite number of linear matrix inequalities (LMIs) that imply the satifaction of a continuous-time differential linear matrix inequality guaranteeing the invariance of the funnel at all times from the initial to the final time. To this end, we utilize LMI conditions ensuring matrix copositivity, which then imply continuous-time invariance. The primary contribution of the paper is to prove that the resulting funnel is indeed invariant over a finite time horizon. We validate the proposed method via a three-dimensional trajectory planning and control problem with obstacle avoidance constraints, and a six-degree-of-freedom powered descent guidance.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-02-23T22:21:02Z</published>
+    <arxiv:comment>Initially rejected by IEEE Control Systems Letters and subsequently accepted by the European Journal of Control</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Taewan Kim</name>
+    </author>
+    <author>
+      <name>Behçet Açıkmeşe</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2404.07431v1</id>
+    <title>Parameterized Fast and Safe Tracking (FaSTrack) using Deepreach</title>
+    <updated>2024-04-11T02:13:27Z</updated>
+    <link href="https://arxiv.org/abs/2404.07431v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2404.07431v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Fast and Safe Tracking (FaSTrack) is a modular framework that provides safety guarantees while planning and executing trajectories in real time via value functions of Hamilton-Jacobi (HJ) reachability. These value functions are computed through dynamic programming, which is notorious for being computationally inefficient. Moreover, the resulting trajectory does not adapt online to the environment, such as sudden disturbances or obstacles. DeepReach is a scalable deep learning method to HJ reachability that allows parameterization of states, which opens up possibilities for online adaptation to various controls and disturbances. In this paper, we propose Parametric FaSTrack, which uses DeepReach to approximate a value function that parameterizes the control bounds of the planning model. The new framework can smoothly trade off between the navigation speed and the tracking error (therefore maneuverability) while guaranteeing obstacle avoidance in a priori unknown environments. We demonstrate our method through two examples and a benchmark comparison with existing methods, showing the safety, efficiency, and faster solution times of the framework.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-04-11T02:13:27Z</published>
+    <arxiv:comment>12 pages, 6 figures, 1 table, to be published in L4DC</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Hyun Joe Jeong</name>
+    </author>
+    <author>
+      <name>Zheng Gong</name>
+    </author>
+    <author>
+      <name>Somil Bansal</name>
+    </author>
+    <author>
+      <name>Sylvia Herbert</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.15240v1</id>
+    <title>Fastrack: Fast IO for Secure ML using GPU TEEs</title>
+    <updated>2024-10-20T01:00:33Z</updated>
+    <link href="https://arxiv.org/abs/2410.15240v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.15240v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>As cloud-based ML expands, ensuring data security during training and inference is critical. GPU-based Trusted Execution Environments (TEEs) offer secure, high-performance solutions, with CPU TEEs managing data movement and GPU TEEs handling authentication and computation. However, CPU-to-GPU communication overheads significantly hinder performance, as data must be encrypted, authenticated, decrypted, and verified, increasing costs by 12.69 to 33.53 times. This results in GPU TEE inference becoming 54.12% to 903.9% slower and training 10% to 455% slower than non-TEE systems, undermining GPU TEE advantages in latency-sensitive applications.
+  This paper analyzes Nvidia H100 TEE protocols and identifies three key overheads: 1) redundant CPU re-encryption, 2) limited authentication parallelism, and 3) unnecessary operation serialization. We propose Fastrack, optimizing with 1) direct GPU TEE communication, 2) parallelized authentication, and 3) overlapping decryption with PCI-e transmission. These optimizations cut communication costs and reduce inference/training runtime by up to 84.6%, with minimal overhead compared to non-TEE systems.</summary>
+    <category term="cs.CR" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AR" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-20T01:00:33Z</published>
+    <arxiv:primary_category term="cs.CR"/>
+    <author>
+      <name>Yongqin Wang</name>
+    </author>
+    <author>
+      <name>Rachit Rajat</name>
+    </author>
+    <author>
+      <name>Jonghyun Lee</name>
+    </author>
+    <author>
+      <name>Tingting Tang</name>
+    </author>
+    <author>
+      <name>Murali Annavaram</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2404.02472v1</id>
+    <title>Safe Returning FaSTrack with Robust Control Lyapunov-Value Functions</title>
+    <updated>2024-04-03T05:28:44Z</updated>
+    <link href="https://arxiv.org/abs/2404.02472v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2404.02472v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Real-time navigation in a priori unknown environment remains a challenging task, especially when an unexpected (unmodeled) disturbance occurs. In this paper, we propose the framework Safe Returning Fast and Safe Tracking (SR-F) that merges concepts from 1) Robust Control Lyapunov-Value Functions (R-CLVF), and 2) the Fast and Safe Tracking (FaSTrack) framework. The SR-F computes an R-CLVF offline between a model of the true system and a simplified planning model. Online, a planning algorithm is used to generate a trajectory in the simplified planning space, and the R-CLVF is used to provide a tracking controller that exponentially stabilizes to the planning model. When an unexpected disturbance occurs, the proposed SR-F algorithm provides a means for the true system to recover to the planning model. We take advantage of this mechanism to induce an artificial disturbance by ``jumping'' the planning model in open environments, forcing faster navigation. Therefore, this algorithm can both reject unexpected true disturbances and accelerate navigation speed. We validate our framework using a 10D quadrotor system and show that SR-F is empirically 20\% faster than the original FaSTrack while maintaining safety.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-04-03T05:28:44Z</published>
+    <arxiv:comment>6 pages, 4 figures, 1 table, 2 algorithms. Submitted to LCSS on 03/06</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Zheng Gong</name>
+    </author>
+    <author>
+      <name>Boyang Li</name>
+    </author>
+    <author>
+      <name>Sylvia Herbert</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1703.07373v2</id>
+    <title>FaSTrack: a Modular Framework for Fast and Guaranteed Safe Motion Planning</title>
+    <updated>2021-02-14T00:35:07Z</updated>
+    <link href="https://arxiv.org/abs/1703.07373v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1703.07373v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Fast and safe navigation of dynamical systems through a priori unknown cluttered environments is vital to many applications of autonomous systems. However, trajectory planning for autonomous systems is computationally intensive, often requiring simplified dynamics that sacrifice safety and dynamic feasibility in order to plan efficiently. Conversely, safe trajectories can be computed using more sophisticated dynamic models, but this is typically too slow to be used for real-time planning. We propose a new algorithm FaSTrack: Fast and Safe Tracking for High Dimensional systems. A path or trajectory planner using simplified dynamics to plan quickly can be incorporated into the FaSTrack framework, which provides a safety controller for the vehicle along with a guaranteed tracking error bound. This bound captures all possible deviations due to high dimensional dynamics and external disturbances. Note that FaSTrack is modular and can be used with most current path or trajectory planners. We demonstrate this framework using a 10D nonlinear quadrotor model tracking a 3D path obtained from an RRT planner.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2017-03-21T18:11:36Z</published>
+    <arxiv:comment>Published in the Proceedings of the IEEE Conference on Decision and Control, 2017</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Sylvia L. Herbert</name>
+    </author>
+    <author>
+      <name>Mo Chen</name>
+    </author>
+    <author>
+      <name>SooJean Han</name>
+    </author>
+    <author>
+      <name>Somil Bansal</name>
+    </author>
+    <author>
+      <name>Jaime F. Fisac</name>
+    </author>
+    <author>
+      <name>Claire J. Tomlin</name>
+    </author>
+    <arxiv:doi>10.1109/CDC.2017.8263867</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/CDC.2017.8263867" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2102.07039v2</id>
+    <title>FaSTrack: a Modular Framework for Real-Time Motion Planning and Guaranteed Safe Tracking</title>
+    <updated>2021-03-13T18:14:56Z</updated>
+    <link href="https://arxiv.org/abs/2102.07039v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2102.07039v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Real-time, guaranteed safe trajectory planning is vital for navigation in unknown environments. However, real-time navigation algorithms typically sacrifice robustness for computation speed. Alternatively, provably safe trajectory planning tends to be too computationally intensive for real-time replanning. We propose FaSTrack, Fast and Safe Tracking, a framework that achieves both real-time replanning and guaranteed safety. In this framework, real-time computation is achieved by allowing any trajectory planner to use a simplified \textit{planning model} of the system. The plan is tracked by the system, represented by a more realistic, higher-dimensional \textit{tracking model}. We precompute the tracking error bound (TEB) due to mismatch between the two models and due to external disturbances. We also obtain the corresponding tracking controller used to stay within the TEB. The precomputation does not require prior knowledge of the environment. We demonstrate FaSTrack using Hamilton-Jacobi reachability for precomputation and three different real-time trajectory planners with three different tracking-planning model pairs.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-02-14T00:40:44Z</published>
+    <arxiv:comment>Published in the IEEE Transactions on Automatic Control</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Mo Chen</name>
+    </author>
+    <author>
+      <name>Sylvia L. Herbert</name>
+    </author>
+    <author>
+      <name>Haimin Hu</name>
+    </author>
+    <author>
+      <name>Ye Pu</name>
+    </author>
+    <author>
+      <name>Jaime F. Fisac</name>
+    </author>
+    <author>
+      <name>Somil Bansal</name>
+    </author>
+    <author>
+      <name>SooJean Han</name>
+    </author>
+    <author>
+      <name>Claire J. Tomlin</name>
+    </author>
+    <arxiv:doi>10.1109/TAC.2021.3059838</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TAC.2021.3059838" title="doi"/>
+  </entry>
+</feed>

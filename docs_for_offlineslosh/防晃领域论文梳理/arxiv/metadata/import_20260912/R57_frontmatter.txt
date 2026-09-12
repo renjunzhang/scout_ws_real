@@ -1,0 +1,122 @@
+                                                         Experimental analysis of heat and mass transfer in non-isothermal sloshing using a
+                                                                                   model-based inverse method
+
+                                                                                 Pedro A. Marquesa,b,˚, Alessia Simoninia , Laura Peveronia , Miguel A. Mendeza
+                                                                               a von Karman Institute for Fluid Dynamics, Waterloosesteenweg 72, 1640 Sint-Genesius-Rode, Belgium
+                                                                                        b Université Libre de Bruxelles, Av. Franklin Roosevelt 50, 1050 Bruxelles, Belgium
+
+
+
+
+                                                   Abstract
+arXiv:2212.12246v1 [physics.flu-dyn] 23 Dec 2022
+
+
+
+
+                                                       Nonisothermal liquid sloshing in partially filled reservoirs can significantly enhance heat and mass transfer between liquid
+                                                   and ullage gasses. This can result in large temperature and pressure fluctuations, producing thrust oscillations in spacecraft and
+                                                   challenging thermal management control systems. This work presents an experimental characterization of the thermodynamic evo-
+                                                   lution of a cylindrical reservoir undergoing sloshing-induced thermal de-stratification. We use a 0D model-based inverse method to
+                                                   retrieve the heat and mass transfer coefficients in planar and swirl sloshing conditions from the temperature and pressure measure-
+                                                   ments in the liquid and the ullage gas. The experiments were carried out in the SHAKESPEARE shaking table of the von Karman
+                                                   Institute in a cuboid quartz cell with a cylindrical cut-out of 80 mm diameter in the centre, filled up to 60mm with the cryogenic
+                                                   replacement fluid HFE-7200. A thermal stratification with ∆T “ 25 K difference between the ullage gas and liquid was set as
+                                                   the initial conditions. A pressure drop of 90% in the ullage gas was documented in swirling conditions. Despite its simplicity, the
+                                                   model could predict the system’s thermodynamic evolution once the proper transfer coefficients were derived.
+                                                   Keywords: Sloshing, non-isothermal, pressure drop, thermal destratification, 0D model, inverse method, data assimilation
+
+
+                                                   1. Introduction                                                                      In typical operating conditions, the ullage gasses tend to be
+                                                                                                                                    warmer than the liquid. This is due to the pressurization, typ-
+                                                       Cryogenic fuels such as LH2 , LCH4 and LNG are gaseous                       ically up to 2 ´ 12 bar [1, 14], and the heat fluxes with the
+                                                   in ambient conditions but must often be transported and stored                   environment [15, 16]. As a result, thermal stratification is pro-
+                                                   in the liquid state to have cost-competitive volumetric energy                   duced in the tank if this is left in quiescent conditions. Sloshing
+                                                   densities [1]. This requires challenging cryogenic conditions,                   produces a thermal mixing that can level the stratification and
+                                                   especially for hydrogen, which can only exist as a liquid (LH2 )                 suddenly reduce the temperature at the gas-liquid interface [17].
+                                                   under 33 K. While these fuels are already employed in aerospace                  Since the interface naturally sets the saturation condition of the
+                                                   propulsion [2], significant technological advances are still re-                 tank, a decrease in its temperature produces a decrease in the
+                                                   quired to make them economically viable for other applications                   saturation pressure, hence condensation [18]. This is known in
+                                                   on a global scale [3, 4, 5].                                                     the literature as the ‘pressure drop effect’ [17, 19].
+                                                       The efficient storage of cryogenic liquids requires complex                      The opposite mechanism can also occur when heat exchange
+                                                   thermal management systems. Since no insulating system can                       across the wall increases the interface temperature near the con-
+                                                   entirely prevent heat exchange with the surrounding [6], it is                   tact line and thus enhances evaporation [20], increasing the
+                                                   impossible to prevent some of the fuel from boiling off and thus                 tank’s pressure [21]. The pressure fluctuations due to sloshing-
+                                                   the tank pressure from rising over time [7, 8, 9]. The simplest                  induced evaporation or condensation can produce thrust oscil-
+                                                   way to control the tank pressure is venting, but this brings a high              lation in a spacecraft and force thermal management systems to
+                                                   cost of energy and mass loss. Additional liquefaction steps can                  react with venting or re-pressurization; both operations bring a
+                                                   be used to recover the vented fuel, but this further increase the                cost that must be minimized.
+                                                   operational costs.                                                                   The literature on the sloshing phenomenon is abundant and
+                                                       Thermal losses increase significantly in fuel tanks installed                has been significantly fostered by the aerospace industry during
+                                                   on vehicles, whether these travel on sea, land, air, or space be-                the 1960s [22, 23, 24]. These works focused on the (isother-
+                                                   cause external accelerations induce sloshing. Besides challeng-                  mal) wave dynamics and the damping rates of several fluids
+                                                   ing the vehicle’s stability and manoeuvrability [10], sloshing                   under many excitation conditions and tank shapes. More re-
+                                                   can significantly increase heat and mass transfer rate between                   cently, the interest in the pressure drop effect has shifted to-
+                                                   liquid and ullage gasses, leading to significant variations of the               wards characterizing the non-isothermal consequences of slosh-
+                                                   tank’s pressure [11, 12, 13].                                                    ing [11, 17, 18, 21, 25, 26, 27]. These works have focused on
+                                                                                                                                    the thermodynamic response of partially filled tanks under dif-
+                                                     ˚ Corresponding author.                                                        ferent sloshing regimes, pressurization techniques, pressurant
+                                                   E-mail address: pedro.marques@vki.ac.be                                          gasses and tank designs (e.g. with or without baffles). The
+                                                   Preprint submitted to Applied Thermal Engineering                                                                                  December 26, 2022
+data retrieved in these experiments allowed several authors to          thermal stratification. The underlying thermodynamic model
+develop and validate simplified models to predict the thermo-           is a classic 0D formulation of the energy and mass balance
+dynamic changes in fuel tanks due to sloshing. The simplest             between three control volumes (liquid, ullage gas and solid),
+and yet most popular approach is a quasi-dimensional (0D) for-          while the optimization was carried out with the Basinhopping
+mulation [1, 28, 29, 30] in which the fuel tank system is com-          algorithm, complemented with a Monte Carlo approach for es-
+posed of three control volumes (CVs): the ullage gas, the liquid,       timating model uncertainties.
+and the solid walls. Under this lumped formulation, the model               The rest of the article is structured as follows. Section 2
+equations are derived from each volume’s energy and mass bal-           presents an overview of the physical problem alongside all mod-
+ances, using mass-averaged thermodynamic properties for each            elling assumptions and approximations. Section 3 summarizes
+volume. This results in a coupled system of Ordinary Differen-          the experimental test cases and the theoretical aspects used to
+tial Equations (ODEs) which can be solved for a given set of            reproduce different sloshing conditions in the laboratory. Sec-
+inputs and initial states to predict evaporation and condensation       tion 4 reports on the methodology, including a detailed descrip-
+rate and hence the thermodynamic evolution of the fuel tank.            tions of the experimental setup and procedure, the 0D model,
+Since these models are simple to derive and computationally             and the inverse method. The results are shown and discussed
+inexpensive to evaluate, they can be easily integrated with other       in Section 5. Conclusions and future outlook are presented in
+sub-models to perform system simulations [31] in real time.             Section 6.
+     However, these models must rely on closure laws for heat
+and mass transfer coefficients to close the system of equations.
+                                                                        2. Problem Statement and Objectives
+While several empirical correlations have been proposed for
+stationary/long-term storage conditions [14, 28, 29], their esti-           The problem considered in this work is schematically illus-
+mation during sloshing events remains an open problem. More-            trated Figure 1. A cylindrical tank of radius R and height H,
+over, no established methodology has been proposed in the lit-          with a flat top and bottom surfaces, is filled with liquid until a
+erature for driving these closure laws in dynamic conditions.           height Hl . The tank is closed and pressurized until the ullage
+     A natural approach is to ‘tune’ these coefficients such that       gas is at a pressure pg . The ullage is composed of a mixture of
+numerical prediction match well with experimental data (see             two species: an inert gas at partial pressure pa and the liquid’s
+[1] and [30]). This can provide useful orders of magnitude,             vapour at partial pressure pv .
+but it can hardly account for the time variation of these coef-             The tank walls are adiabatic with mass mw and specific heat
+ficients. To the authors’ knowledge, the only correlation cur-          capacity cw . Because of the tank’s pressurization, the system
+rently available for modelling the sloshing-enhanced thermal            tends towards a thermally stratified configuration in which the
+mixing has been proposed by Ludwig & Dreyer [32]. These au-             liquid is colder than the gas. More specifically, to a first approx-
+thors have proposed an empirical law for the sloshing-induced           imation, one might expect an axisymmetric temperature field
+‘effective diffusivity’, which depends on the system’s initial          T pr, zq, with r the radial coordinate and z the vertical one, as
+condition and the maximum pressure variation measured in the            sketched in the right-hand side of Figure 1. Subscripts l, g w
+tank. Their correlation, expressed in terms of a sloshing-based         denote variables linked to the liquid, the gas and the walls. The
+Nusselt number, proved valid for their experimental data and            gas-liquid interface is at the saturation temperature T sat ppv q cor-
+the experiments of Das & Hopfinger [33] and Moran et. al [11].          responding to the gas pressure, and a positive temperature gra-
+However, the agreement was limited to the initial stages of the         dient Bz T develops at the interface (cf. Figure 1). No mass
+sloshing excitation.                                                    transfer occurs between liquid and gas if the ullage gas is satu-
+     This work presents an experimental characterization of the         rated with the liquid vapour.
+sloshing-induced heat and mass transfer and proposes a model-               In this work, we focus on the perturbation of this state due
+based inverse method to derive empirical correlations from the          to lateral sloshing of the tank. We consider an harmonic dis-
+measurements of pressure and temperatures in the tank. The              placement along x with amplitude A0 and angular frequency Ω:
+inverse method sets an optimization problem in which the clo-
+sure terms are automatically tuned to minimize the discrepancy                                       Xptq “ A0 sinpΩtq.                                  (1)
+between experimental data and a model’s prediction. This data-
+driven approach, common in data-assimilation literature [34],               Sloshing induces the mixing of the liquid interface, thus a
+has been used in the calibration of constitutive laws [35], mod-        destratification of the thermal field. This reduces the (average)
+elling of dynamic menisci [36], thermal turbulence closure [37],        interface temperature T i , which in turn leads to an increase in
+flow control [38] and modelling closure for stagnation line flow        the heat transfer and mass transfer at the interface. Both mech-
+in hypersonic reentry [39].                                             anisms lead to a pressure drop. We here seek to analyze ex-
+     This work gives a promising proof of concept on using such         perimentally whether a simple 0D model of the heat and mass
+a model-based inverse method to derive empirical laws for slosh-        transfer can describe the thermodynamic evolution of the ullage
+ing-induced heat and mass transfer from pressure and temper-            gas after a sloshing event. Furthermore, let
+ature measurements in the tank. We consider a reduced-scale                                                                            Q9 gi ptq
+                                                                                                 Q9 li ptq
+upright cylindrical tank using the non-cryogenic replacement                   hli ptq “                           , hgi ptq “                           (2)
+                                                                                           S pT l ptq ´ T i ptqq                 S pT g ptq ´ T i ptqq
+fluid HFE-7200 [40]. The experiments were carried out under
+different lateral sloshing excitation in the presence of an axial
+                                                                    2
+

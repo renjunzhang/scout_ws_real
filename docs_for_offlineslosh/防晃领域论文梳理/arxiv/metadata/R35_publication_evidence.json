@@ -1,0 +1,92 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/IROS.2018.8593962",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1109/iros.2018.8593962",
+    "title": [
+      "A Plug-In Feed-Forward Control for Sloshing Suppression in Robotic Teleoperation Tasks"
+    ],
+    "author": [
+      {
+        "given": "Luigi",
+        "family": "Biagiotti",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Davide",
+        "family": "Chiaravalli",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Lorenzo",
+        "family": "Moriello",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Claudio",
+        "family": "Melchiorri",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2018,
+          10
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2018,
+          10
+        ]
+      ]
+    },
+    "page": "5855-5860",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/iros.2018.8593962",
+    "link": [
+      {
+        "URL": "http://xplorestaging.ieee.org/ielx7/8574473/8593358/08593962.pdf?arnumber=8593962",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

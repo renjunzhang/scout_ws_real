@@ -1,0 +1,322 @@
+[
+  {
+    "arxiv_id": "2406.08893v1",
+    "title": "Modeling Nonlinear Dynamics from Videos",
+    "authors": [
+      "Antony Yang",
+      "Joar Axås",
+      "Fanni Kádár",
+      "Gábor Stépán",
+      "George Haller"
+    ],
+    "summary": "We introduce a method for constructing reduced-order models directly from videos of dynamical systems. The method uses a non-intrusive tracking to isolate the motion of a user-selected part in the video of an autonomous dynamical system. In the space of delayed observations of this motion, we reconstruct a low-dimensional attracting spectral submanifold (SSM) whose internal dynamics serves as a mathematically justified reduced-order model for nearby motions of the full system. We obtain this model in a simple polynomial form that allows explicit identification of important physical system parameters, such as natural frequencies, linear and nonlinear damping and nonlinear stiffness. Beyond faithfully reproducing attracting steady states and limit cycles, our SSM-reduced models can also uncover hidden motion not seen in the video, such as unstable fixed points and unstable limit cycles forming basin boundaries. We demonstrate all these features on experimental videos of five physical systems: a double pendulum, an inverted flag in counter-flow, water sloshing in tank, a wing exhibiting aeroelastic flutter and a shimmying wheel.",
+    "published": "2024-06-13T07:45:58Z",
+    "updated": "2024-06-13T07:45:58Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "wheeled_slosh"
+    ]
+  },
+  {
+    "arxiv_id": "2607.26717v2",
+    "title": "Global Sensitive-Based Input Shaping for UAV-Payload Precision Motion Control",
+    "authors": [
+      "Karan Baker",
+      "Sanjay Maharjan",
+      "Tariq Hlayel",
+      "Oladapo Ogunbodede",
+      "Dutch Dunphy",
+      "Adrian Stein"
+    ],
+    "summary": "This work presents a comprehensive analysis and design of global sensitivity-based input shapers for a 3D Unmanned Aerial Vehicle-payload system, emphasizing robustness against uncertainties in payload mass and rope length. The proposed approach also leverages the Shapley value concept in controller design to systematically account for uncertainties, thereby reducing the controller's sensitivity to unknown parameters. To validate the effectiveness of the methodology, numerical simulations are conducted, comparing the proposed controller against non-robust, robust, and minimax designs. The results demonstrate that the standard global sensitivity or Shapley-based input shapers improve performance and offer a promising framework for uncertainty-aware control in aerial payload transport.",
+    "published": "2026-07-29T10:07:13Z",
+    "updated": "2026-08-11T18:53:22Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shaping_liquid",
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2305.05944v1",
+    "title": "Stealth Shaper: Reflectivity Optimization as Surface Stylization",
+    "authors": [
+      "Kenji Tojo",
+      "Ariel Shamir",
+      "Bernd Bickel",
+      "Nobuyuki Umetani"
+    ],
+    "summary": "We present a technique to optimize the reflectivity of a surface while preserving its overall shape. The naive optimization of the mesh vertices using the gradients of reflectivity simulations results in undesirable distortion. In contrast, our robust formulation optimizes the surface normal as an independent variable that bridges the reflectivity term with differential rendering, and the regularization term with as-rigid-as-possible elastic energy. We further adaptively subdivide the input mesh to improve the convergence. Consequently, our method can minimize the retroreflectivity of a wide range of input shapes, resulting in sharply creased shapes ubiquitous among stealth aircraft and Sci-Fi vehicles. Furthermore, by changing the reward for the direction of the outgoing light directions, our method can be applied to other reflectivity design tasks, such as the optimization of architectural walls to concentrate light in a specific region. We have tested the proposed method using light-transport simulations and real-world 3D-printed objects.",
+    "published": "2023-05-10T07:31:36Z",
+    "updated": "2023-05-10T07:31:36Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shaping_liquid"
+    ]
+  },
+  {
+    "arxiv_id": "2104.06373v2",
+    "title": "Density control of large-scale particles swarm through PDE-constrained optimization",
+    "authors": [
+      "Carlo Sinigaglia",
+      "Andrea Manzoni",
+      "Francesco Braghin"
+    ],
+    "summary": "We describe in this paper an optimal control strategy for shaping a large-scale swarm of particles using boundary global actuation. This problem arises as a key challenge in many swarm robotics applications, especially when the robots are passive particles that need to be guided by external control fields. The system is large-scale and underactuated, making the control strategy at the microscopic particle level infeasible. We consider the Kolmogorov forward equation associated to the stochastic process of the single particle to encode the macroscopic behaviour of the particles swarm. The control inputs shape the velocity field of the density dynamics according to the physical model of the actuators. We find the optimal actuation considering an optimal control problem whose state dynamics is governed by a linear parabolic advection-diffusion equation where the control induces a transport field. From a theoretical standpoint, we show the existence of a solution to the resulting nonlinear optimal control problem. From a numerical standpoint, we employ the discrete adjoint method to accurately compute the reduced gradient and we show how it commutes with the optimize-then-discretize approach. Finally, numerical simulations show the effectiveness of the control strategy in driving the density sufficiently close to the target.",
+    "published": "2021-04-13T17:28:23Z",
+    "updated": "2022-01-19T18:29:16Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "19 pages, 12 figures, submitted to IEEE Transactions on Robotics",
+    "groups": [
+      "shaping_liquid"
+    ]
+  },
+  {
+    "arxiv_id": "2210.12614v1",
+    "title": "A Solution to Slosh-free Robot Trajectory Optimization",
+    "authors": [
+      "Rafael I. Cabral Muchacho",
+      "Riddhiman Laha",
+      "Luis F. C. Figueredo",
+      "Sami Haddadin"
+    ],
+    "summary": "This paper is about fast slosh free fluid transportation. Existing approaches are either computationally heavy or only suitable for specific robots and container shapes. We model the end effector as a point mass suspended by a spherical pendulum and study the requirements for slosh free motion and the validity of the point mass model. In this approach, slosh free trajectories are generated by controlling the pendulum's pivot and simulating the motion of the point mass. We cast the trajectory optimization problem as a quadratic program; this strategy can be used to obtain valid control inputs. Through simulations and experiments on a 7 DoF Franka Emika Panda robot we validate the effectiveness of the proposed approach.",
+    "published": "2022-10-23T04:11:41Z",
+    "updated": "2022-10-23T04:11:41Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "IEEE/RSJ IROS 2022",
+    "groups": [
+      "transport_suppress"
+    ]
+  },
+  {
+    "arxiv_id": "2510.25255v1",
+    "title": "Time-Optimal Transport of Loosely Placed Liquid Filled Cups along Prescribed Paths",
+    "authors": [
+      "Klaus Zauner",
+      "Hubert Gattringer",
+      "Andreas Mueller"
+    ],
+    "summary": "Handling loosely placed objects with robotic manipulators is a difficult task from the point of view of trajectory planning and control. This becomes even more challenging when the object to be handled is a container filled with liquid. This paper addresses the task of transporting a liquid-filled cup placed on a tray along a prescribed path in shortest time. The objective is to minimize swapping, thus avoiding spillage of the fluid. To this end, the sloshing dynamics is incorporated into the dynamic model used within the optimal control problem formulation. The optimization problem is solved using a direct multiple shooting approach.",
+    "published": "2025-10-29T08:09:32Z",
+    "updated": "2025-10-29T08:09:32Z",
+    "doi": "10.1007/978-3-031-59257-7_41",
+    "journal_ref": "Advances in Service and Industrial Robotics. RAAD 2024. Mechanisms and Machine Science, vol. 157, pp. 411-419",
+    "comment": "",
+    "groups": [
+      "transport_suppress"
+    ]
+  },
+  {
+    "arxiv_id": "1808.03667v1",
+    "title": "User oriented assessment of vibration suppression by command shaping in a supernumerary wearable robotic arm",
+    "authors": [
+      "Roozbeh Khodambashi",
+      "Gil Weinberg",
+      "William Singhose",
+      "Shima Rishmawi",
+      "Varun Murali",
+      "Euisun Kim"
+    ],
+    "summary": "Supernumerary Robotic Limbs (SRLs) exhibit inherently compliant behavior due to the elasticity present at the intersection of human tissue and the robot. This compliance, can prominently influence the operation of some SRLs, depending on the application. In order to control the residual vibrations of SRLs, we have used an input-shaping method which is a computationally inexpensive approach. The effectiveness of this method in controlling the residual vibrations of a SRL has been proven using robustness analysis. User studies show that reducing the vibrations using input shaping directly increases the user satisfaction and comfort by at least 9%. It is also observed that 36% of the users preferred unshaped commands. We hypothesize that the shaped commands put a higher cognitive load on the user compared to unshaped commands. This shows that when dealing with human-robot interaction, user satisfaction becomes an equally important parameter as traditional performance criteria and should be taken into account while evaluating the success of any vibration-control method.",
+    "published": "2018-08-10T18:35:27Z",
+    "updated": "2018-08-10T18:35:27Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2010.11676v1",
+    "title": "Input-Shaping for Feed-Forward Control of Cable-Driven Parallel Robots",
+    "authors": [
+      "Sana Baklouti",
+      "Eric Courteille",
+      "Philippe Lemoine",
+      "Centrale Nantes",
+      "Stéphane Caro"
+    ],
+    "summary": "This paper deals with the use of input-shaping filters in conjunction with a feed-forward control of Cable-Driven Parallel Robots (CDPRs), while integrating cable tension calculation to satisfy positive cable tensions along the prescribed trajectory of the moving-platform. This method aims to attenuate the oscillatory motions of the moving-platform. Thus, the input signal is modified to make it self-cancel residual vibrations. 5 The effectiveness, in terms of moving-platform oscillation attenuation, of the proposed closed-loop control method combined with shaping inputs is experimentally studied on a suspended and non-redundant CDPR prototype. This confirms residual vibration reduction improvement with respect to the unshaped control in terms of Peak-to-Peak amplitude of velocity error, which can achieve 72 % while using input-shaping filters.",
+    "published": "2020-09-09T07:17:39Z",
+    "updated": "2020-09-09T07:17:39Z",
+    "doi": "10.1115/1.4048354",
+    "journal_ref": "",
+    "comment": "Journal of Dynamic Systems, Measurement, and Control, American Society of Mechanical Engineers, 2020",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2512.11228v2",
+    "title": "Mitigating Dynamic Tip-Over during Mobile Crane Slewing using Input Shaping",
+    "authors": [
+      "Navneet Kaur",
+      "Christopher J. Adams",
+      "William E. Singhose",
+      "Santosh Devasia"
+    ],
+    "summary": "Payload swing during rapid slewing of mobile cranes poses a safety risk, as it generates overturning moments that can lead to tip-over accidents of mobile cranes. Currently, to limit the risk of tip-over, mobile crane operators are forced to either reduce the slewing speed (which lowers productivity) or reduce the load being carried to reduce the induced moments. Both of these approaches reduce productivity. This paper seeks to enable rapid slewing without compromising safety by applying input shaping to the crane-slewing commands generated by the operator. A key advantage of this approach is that the input shaper requires only the information about the rope length, and does not require detailed mobile crane dynamics. Simulations and experiments show that the proposed method reduces residual payload swing and enables significantly higher slewing speeds without tip over, reducing slewing completion time by at least 38% compared to unshaped control. Human control with input shaping improves task completion time by 13%, reduces the peak swing by 18%, and reduces the potential of collisions by 82% when compared to unshaped control. Moreover, shaped control with a human had no tip-over, whereas large swing led to tip-over without input shaping. Thereby, the proposed method substantially recovers the operational-safety envelope of mobile cranes (designed to avoid tip-over using static analysis) that would otherwise be lost in dynamic conditions. Videos and demonstrations are available at https://youtu.be/dVy3bbIhrBU.",
+    "published": "2025-12-12T02:28:34Z",
+    "updated": "2026-02-10T19:04:14Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Submitted to conference",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2507.01460v1",
+    "title": "Robust Input Shaping Control for Flexible Structures Based on Unscented Kalman Filter",
+    "authors": [
+      "Weiyi Yang",
+      "Yu Yuan",
+      "Mingsheng Shang"
+    ],
+    "summary": "With the rapid development of industrial automation and smart manufacturing, the control of flexible structures and underactuated systems has become a critical research focus. Residual vibrations in these systems not only degrade operational efficiency but also pose risks to structural integrity and longevity. Traditional input shaping techniques, while effective, often suffer from performance degradation due to parameter inaccuracies and environmental disturbances. To address these challenges, this paper introduces an innovative unscented Kalman filter-based zero vibration derivative input shaping (UZS) method. The proposed approach combines two key innovations: 1) a data-driven Unscented Kalman Filterfor real-time system parameter identification, and 2) a zero-vibration derivative (ZVD) input shaper for robust vibration suppression. To validate the effectiveness of UZS, we conducted extensive experiments on a vertical flexible beam platform, and the results demonstrate significant improvements over state-of-the-art methods. Additionally, we have made the experimental datasets publicly available to facilitate further research. The findings highlight UZS's potential for practical applications in industrial automation, robotics, and precision engineering.",
+    "published": "2025-07-02T08:19:11Z",
+    "updated": "2025-07-02T08:19:11Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2607.25071v1",
+    "title": "Input Shaping for Point-to-Point Motion with a Continuum Robot Arm",
+    "authors": [
+      "Rodolfo Hdz. Ibarra",
+      "Karan Baker",
+      "Parsa Molaei",
+      "Adrian Stein",
+      "Hunter B. Gilbert"
+    ],
+    "summary": "A cable-driven continuum robot arm is an underactuated mechanism and may suffer residual vibration at the end of a rest-to-rest maneuver. In this work, a time-delay filter is applied as an input shaper to the system to eliminate the excitation of vibratory modes. A non-robust and a robust time-delay filter are designed based on a linear system model and demonstrate improved response compared to a velocity-driven pulse input. Experimental results using the continuum robot validate the application of the input shaper, with reduced overshoot and settling time exemplifying the reduction in oscillation at the end of the maneuver. It is also shown that utilizing the robust shaper further improves the response of the arm in comparison to applying the non-robust shaper. These results are significant towards the precise and robust implementation of continuum robots in applications involving arbitrary end-effector trajectories.",
+    "published": "2026-07-27T21:05:32Z",
+    "updated": "2026-07-27T21:05:32Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2408.12126v1",
+    "title": "Robust Input Shaping Vibration Control via Extended Kalman Filter-Incorporated Residual Neural Network",
+    "authors": [
+      "Weiyi Yang",
+      "Shuai Li",
+      "Xin Luo"
+    ],
+    "summary": "With the rapid development of industry, the vibration control of flexible structures and underactuated systems has been increasingly gaining attention. Input shaping technology enables stable performance for high-speed motion in industrial motion systems. However, existing input shapers generally suffer from the ineffective control performance due to the neglect of observation errors. To address this critical issue, this paper proposes an Extended Kalman Filter-incorporated Residual Neural Network-based input Shaping (ERS) model for vibration control. Its main ideas are two-fold: a) adopting an extended Kalman filter to address a vertical flexible beam's model errors; and b) adopting a residual neural network to cascade with the extended Kalman filter for eliminating the remaining observation errors. Detailed experiments on a real dataset collected from a vertical flexible beam demonstrate that the proposed ERS model has achieved significant vibration control performance over several state-of-the-art models.",
+    "published": "2024-08-22T04:39:10Z",
+    "updated": "2024-08-22T04:39:10Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2506.14405v1",
+    "title": "Data Driven Approach to Input Shaping for Vibration Suppression in a Flexible Robot Arm",
+    "authors": [
+      "Jarkko Kotaniemi",
+      "Janne Saukkoriipi",
+      "Shuai Li",
+      "Markku Suomalainen"
+    ],
+    "summary": "This paper presents a simple and effective method for setting parameters for an input shaper to suppress the residual vibrations in flexible robot arms using a data-driven approach. The parameters are adaptively tuned in the workspace of the robot by interpolating previously measured data of the robot's residual vibrations. Input shaping is a simple and robust technique to generate vibration-reduced shaped commands by a convolution of an impulse sequence with the desired input command. The generated impulses create waves in the material countering the natural vibrations of the system. The method is demonstrated with a flexible 3D-printed robot arm with multiple different materials, achieving a significant reduction in the residual vibrations.",
+    "published": "2025-06-17T11:07:28Z",
+    "updated": "2025-06-17T11:07:28Z",
+    "doi": "10.1109/RoboSoft63089.2025.11020930",
+    "journal_ref": "2025 IEEE 8th International Conference on Soft Robotics (RoboSoft), Lausanne, Switzerland, 2025, pp. 1-6",
+    "comment": "6 pages, 11 figures, robosoft2025 conference",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "1807.01479v1",
+    "title": "Homeostatic plasticity and external input shape neural network dynamics",
+    "authors": [
+      "Johannes Zierenberg",
+      "Jens Wilting",
+      "Viola Priesemann"
+    ],
+    "summary": "In vitro and in vivo spiking activity clearly differ. Whereas networks in vitro develop strong bursts separated by periods of very little spiking activity, in vivo cortical networks show continuous activity. This is puzzling considering that both networks presumably share similar single-neuron dynamics and plasticity rules. We propose that the defining difference between in vitro and in vivo dynamics is the strength of external input. In vitro, networks are virtually isolated, whereas in vivo every brain area receives continuous input. We analyze a model of spiking neurons in which the input strength, mediated by spike rate homeostasis, determines the characteristics of the dynamical state. In more detail, our analytical and numerical results on various network topologies show consistently that under increasing input, homeostatic plasticity generates distinct dynamic states, from bursting, to close-to-critical, reverberating and irregular states. This implies that the dynamic state of a neural network is not fixed but can readily adapt to the input strengths. Indeed, our results match experimental spike recordings in vitro and in vivo: the in vitro bursting behavior is consistent with a state generated by very low network input (< 0.1%), whereas in vivo activity suggests that on the order of 1% recorded spikes are input-driven, resulting in reverberating dynamics. Importantly, this predicts that one can abolish the ubiquitous bursts of in vitro preparations, and instead impose dynamics comparable to in vivo activity by exposing the system to weak long-term stimulation, thereby opening new paths to establish an in vivo-like assay in vitro for basic as well as neurological studies.",
+    "published": "2018-07-04T08:30:38Z",
+    "updated": "2018-07-04T08:30:38Z",
+    "doi": "10.1103/PhysRevX.8.031018",
+    "journal_ref": "Phys. Rev. X 8, 031018 (2018)",
+    "comment": "14 pages, 8 figures, accepted at Phys. Rev. X",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2410.06768v1",
+    "title": "Patterns of Creativity: How User Input Shapes AI-Generated Visual Diversity",
+    "authors": [
+      "Maria-Teresa De Rosa Palmini",
+      "Eva Cetinic"
+    ],
+    "summary": "Recent critiques of Artificial-intelligence (AI)-generated visual content highlight concerns about the erosion of artistic originality, as these systems often replicate patterns from their training datasets, leading to significant uniformity and reduced diversity. Our research adopts a novel approach by focusing on user behavior during interactions with Text-to-Image models. Instead of solely analyzing training data patterns, we examine how users' tendencies to create original prompts or rely on common templates influence content homogenization. We developed three originality metrics -- lexical, thematic, and word-sequence originality -- and applied them to user-generated prompts from two datasets, DiffusionDB and Civiverse. Additionally, we explored how characteristics such as topic choice, language originality, and the presence of NSFW content affect image popularity, using a linear regression model to predict user engagement. Our research enhances the discourse on AI's impact on creativity by emphasizing the critical role of user behavior in shaping the diversity of AI-generated visual content.",
+    "published": "2024-10-09T10:57:05Z",
+    "updated": "2024-10-09T10:57:05Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2410.16123v2",
+    "title": "Spike-timing-dependent plasticity and random inputs shape interspike interval regularity of model STN neurons",
+    "authors": [
+      "Thoa Thieu",
+      "Roderick Melnik"
+    ],
+    "summary": "Neuronal oscillations are closely related to the symptoms of Parkinson's disease (PD). In this study, we explore how random fluctuations (or \"stochastic inputs\") affect these oscillations in brain states, which reflect the collective activity of interconnected neurons. These random inputs are modeled in the context of the subthalamic nucleus (STN), a brain region implicated in PD, and their interaction with synaptic dynamics and spike-timing-dependent plasticity (STDP) in both healthy and PD-affected neurons. Specifically, we investigate the effects of random synaptic inputs and their correlations on the membrane potential of STN neurons. Our results show that these random inputs significantly influence the firing patterns of STN neurons, both in healthy cells and in those affected by PD under deep brain stimulation (DBS) treatment. We also find that STDP increases the regularity of the interspike intervals (ISI) in spike trains of output neurons. However, the introduction of random refractory periods and fluctuating input currents can induce greater irregularity in the spike trains. Furthermore, when random inputs and STDP are combined, the correlation between the activity of different neurons increases. These findings suggest that the stochastic dynamics of STN neurons, in conjunction with STDP, could offer insights into the mechanisms underlying PD symptoms and their potential management.",
+    "published": "2024-10-21T15:50:39Z",
+    "updated": "2025-02-21T03:10:15Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "25 pages, 8 figures",
+    "groups": [
+      "shape_exact"
+    ]
+  },
+  {
+    "arxiv_id": "2105.04830v2",
+    "title": "Jerk-limited Real-time Trajectory Generation with Arbitrary Target States",
+    "authors": [
+      "Lars Berscheid",
+      "Torsten Kröger"
+    ],
+    "summary": "We present Ruckig, an algorithm for Online Trajectory Generation (OTG) respecting third-order constraints and complete kinematic target states. Given any initial state of a system with multiple Degrees of Freedom (DoFs), Ruckig calculates a time-optimal trajectory to an arbitrary target state defined by its position, velocity, and acceleration limited by velocity, acceleration, and jerk constraints. The proposed algorithm and implementation allows three contributions: (1) To the best of our knowledge, we derive the first time-optimal OTG algorithm for arbitrary, multi-dimensional target states, in particular including non-zero target acceleration. (2) This is the first open-source prototype of time-optimal OTG with limited jerk and complete time synchronization for multiple DoFs. (3) Ruckig allows for directional velocity and acceleration limits, enabling robots to better use their dynamical resources. We evaluate the robustness and real-time capability of the proposed algorithm on a test suite with over 1,000,000,000 random trajectories as well as in real-world applications.",
+    "published": "2021-05-11T07:38:40Z",
+    "updated": "2021-06-23T15:14:49Z",
+    "doi": "",
+    "journal_ref": "",
+    "comment": "Robotics: Science and Systems (RSS), 2021",
+    "groups": [
+      "known_ruckig"
+    ]
+  }
+]

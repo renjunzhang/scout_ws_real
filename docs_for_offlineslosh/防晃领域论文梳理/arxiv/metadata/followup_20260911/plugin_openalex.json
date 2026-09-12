@@ -1,0 +1,1358 @@
+{
+  "id": "https://openalex.org/W2909258394",
+  "doi": "https://doi.org/10.1109/iros.2018.8593962",
+  "title": "A Plug-In Feed-Forward Control for Sloshing Suppression in Robotic Teleoperation Tasks",
+  "display_name": "A Plug-In Feed-Forward Control for Sloshing Suppression in Robotic Teleoperation Tasks",
+  "publication_year": 2018,
+  "publication_date": "2018-10-01",
+  "ids": {
+    "openalex": "https://openalex.org/W2909258394",
+    "doi": "https://doi.org/10.1109/iros.2018.8593962",
+    "mag": "2909258394"
+  },
+  "language": "en",
+  "primary_location": {
+    "id": "doi:10.1109/iros.2018.8593962",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1109/iros.2018.8593962",
+    "pdf_url": null,
+    "source": null,
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+    "raw_type": "proceedings-article"
+  },
+  "type": "conference-paper",
+  "indexed_in": [
+    "crossref"
+  ],
+  "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "https://iris.unimore.it/bitstream/11380/1169606/1/HarmonicFilter4Sloshing_IROS2018_final.pdf",
+    "any_repository_has_fulltext": true
+  },
+  "authorships": [
+    {
+      "author_position": "first",
+      "author": {
+        "id": "https://openalex.org/A5070487792",
+        "display_name": "Luigi Biagiotti",
+        "orcid": "https://orcid.org/0000-0002-2343-6929"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I122346577",
+          "display_name": "University of Modena and Reggio Emilia",
+          "ror": "https://ror.org/02d4c4y02",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I122346577"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Luigi Biagiotti",
+      "raw_affiliation_strings": [
+        "Department of Engineering “Enzo Ferrari”, University of Modena and Reggio Emilia, Modena, Italy",
+        "Department of Engineering \"Enzo Ferrari\", University of Modena and Reggio Emilia, Modena, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Engineering “Enzo Ferrari”, University of Modena and Reggio Emilia, Modena, Italy",
+          "institution_ids": [
+            "https://openalex.org/I122346577"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Engineering \"Enzo Ferrari\", University of Modena and Reggio Emilia, Modena, Italy",
+          "institution_ids": [
+            "https://openalex.org/I122346577"
+          ]
+        }
+      ]
+    },
+    {
+      "author_position": "middle",
+      "author": {
+        "id": "https://openalex.org/A5077700273",
+        "display_name": "Davide Chiaravalli",
+        "orcid": "https://orcid.org/0000-0002-7171-7629"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I2801039369",
+          "display_name": "Marconi University",
+          "ror": "https://ror.org/00j0rk173",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I2801039369"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I4210098188",
+          "display_name": "Laboratori Guglielmo Marconi (Italy)",
+          "ror": "https://ror.org/01r3vad87",
+          "country_code": "IT",
+          "type": "company",
+          "lineage": [
+            "https://openalex.org/I4210098188"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I9360294",
+          "display_name": "University of Bologna",
+          "ror": "https://ror.org/01111rn36",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Davide Chiaravalli",
+      "raw_affiliation_strings": [
+        "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+        "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ]
+    },
+    {
+      "author_position": "middle",
+      "author": {
+        "id": "https://openalex.org/A5077116339",
+        "display_name": "Lorenzo Moriello",
+        "orcid": "https://orcid.org/0000-0003-1727-7914"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I2801039369",
+          "display_name": "Marconi University",
+          "ror": "https://ror.org/00j0rk173",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I2801039369"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I4210098188",
+          "display_name": "Laboratori Guglielmo Marconi (Italy)",
+          "ror": "https://ror.org/01r3vad87",
+          "country_code": "IT",
+          "type": "company",
+          "lineage": [
+            "https://openalex.org/I4210098188"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I9360294",
+          "display_name": "University of Bologna",
+          "ror": "https://ror.org/01111rn36",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Lorenzo Moriello",
+      "raw_affiliation_strings": [
+        "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+        "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ]
+    },
+    {
+      "author_position": "last",
+      "author": {
+        "id": "https://openalex.org/A5082136401",
+        "display_name": "Claudio Melchiorri",
+        "orcid": "https://orcid.org/0000-0002-8475-6782"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I2801039369",
+          "display_name": "Marconi University",
+          "ror": "https://ror.org/00j0rk173",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I2801039369"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I4210098188",
+          "display_name": "Laboratori Guglielmo Marconi (Italy)",
+          "ror": "https://ror.org/01r3vad87",
+          "country_code": "IT",
+          "type": "company",
+          "lineage": [
+            "https://openalex.org/I4210098188"
+          ]
+        },
+        {
+          "id": "https://openalex.org/I9360294",
+          "display_name": "University of Bologna",
+          "ror": "https://ror.org/01111rn36",
+          "country_code": "IT",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ],
+      "countries": [
+        "IT"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "Claudio Melchiorri",
+      "raw_affiliation_strings": [
+        "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+        "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering “Guglielmo Marconi”, University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Electrical, Electronic and Information Engineering \"Guglielmo Marconi\", University of Bologna, Bologna, Italy",
+          "institution_ids": [
+            "https://openalex.org/I2801039369",
+            "https://openalex.org/I4210098188",
+            "https://openalex.org/I9360294"
+          ]
+        }
+      ]
+    }
+  ],
+  "institutions": [],
+  "countries_distinct_count": 1,
+  "institutions_distinct_count": 4,
+  "corresponding_author_ids": [],
+  "corresponding_institution_ids": [],
+  "apc_list": null,
+  "apc_paid": null,
+  "fwci": 2.9313,
+  "has_fulltext": true,
+  "cited_by_count": 24,
+  "citation_normalized_percentile": {
+    "value": 0.95576378,
+    "is_in_top_1_percent": false,
+    "is_in_top_10_percent": true
+  },
+  "cited_by_percentile_year": {
+    "min": 89,
+    "max": 99
+  },
+  "biblio": {
+    "volume": null,
+    "issue": null,
+    "first_page": "5855",
+    "last_page": "5860"
+  },
+  "is_retracted": false,
+  "is_paratext": false,
+  "is_xpac": false,
+  "primary_topic": {
+    "id": "https://openalex.org/T11694",
+    "display_name": "Fluid Dynamics Simulations and Interactions",
+    "score": 0.9994999766349792,
+    "subfield": {
+      "id": "https://openalex.org/subfields/2206",
+      "display_name": "Computational Mechanics"
+    },
+    "field": {
+      "id": "https://openalex.org/fields/22",
+      "display_name": "Engineering"
+    },
+    "domain": {
+      "id": "https://openalex.org/domains/3",
+      "display_name": "Physical Sciences"
+    }
+  },
+  "topics": [
+    {
+      "id": "https://openalex.org/T11694",
+      "display_name": "Fluid Dynamics Simulations and Interactions",
+      "score": 0.9994999766349792,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2206",
+        "display_name": "Computational Mechanics"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T11192",
+      "display_name": "Underwater Vehicles and Communication Systems",
+      "score": 0.9980000257492065,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2212",
+        "display_name": "Ocean Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T11394",
+      "display_name": "Dynamics and Control of Mechanical Systems",
+      "score": 0.9970999956130981,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2207",
+        "display_name": "Control and Systems Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    }
+  ],
+  "keywords": [
+    {
+      "id": "https://openalex.org/keywords/teleoperation",
+      "display_name": "Teleoperation",
+      "score": 0.7153364419937134
+    },
+    {
+      "id": "https://openalex.org/keywords/slosh-dynamics",
+      "display_name": "Slosh dynamics",
+      "score": 0.6967422962188721
+    },
+    {
+      "id": "https://openalex.org/keywords/control-theory",
+      "display_name": "Control theory (sociology)",
+      "score": 0.692512035369873
+    },
+    {
+      "id": "https://openalex.org/keywords/acceleration",
+      "display_name": "Acceleration",
+      "score": 0.6789662837982178
+    },
+    {
+      "id": "https://openalex.org/keywords/trajectory",
+      "display_name": "Trajectory",
+      "score": 0.6186828017234802
+    },
+    {
+      "id": "https://openalex.org/keywords/orientation",
+      "display_name": "Orientation (vector space)",
+      "score": 0.5660154819488525
+    },
+    {
+      "id": "https://openalex.org/keywords/container",
+      "display_name": "Container (type theory)",
+      "score": 0.5593443512916565
+    },
+    {
+      "id": "https://openalex.org/keywords/position",
+      "display_name": "Position (finance)",
+      "score": 0.5545677542686462
+    },
+    {
+      "id": "https://openalex.org/keywords/computer-science",
+      "display_name": "Computer science",
+      "score": 0.5442403554916382
+    },
+    {
+      "id": "https://openalex.org/keywords/robot",
+      "display_name": "Robot",
+      "score": 0.47922924160957336
+    },
+    {
+      "id": "https://openalex.org/keywords/motion",
+      "display_name": "Motion (physics)",
+      "score": 0.47044745087623596
+    },
+    {
+      "id": "https://openalex.org/keywords/controller",
+      "display_name": "Controller (irrigation)",
+      "score": 0.4600195288658142
+    },
+    {
+      "id": "https://openalex.org/keywords/compensation",
+      "display_name": "Compensation (psychology)",
+      "score": 0.44470396637916565
+    },
+    {
+      "id": "https://openalex.org/keywords/control-engineering",
+      "display_name": "Control engineering",
+      "score": 0.3399273455142975
+    },
+    {
+      "id": "https://openalex.org/keywords/simulation",
+      "display_name": "Simulation",
+      "score": 0.33197277784347534
+    },
+    {
+      "id": "https://openalex.org/keywords/engineering",
+      "display_name": "Engineering",
+      "score": 0.27429747581481934
+    },
+    {
+      "id": "https://openalex.org/keywords/computer-vision",
+      "display_name": "Computer vision",
+      "score": 0.2714155316352844
+    },
+    {
+      "id": "https://openalex.org/keywords/artificial-intelligence",
+      "display_name": "Artificial intelligence",
+      "score": 0.2624591588973999
+    },
+    {
+      "id": "https://openalex.org/keywords/control",
+      "display_name": "Control (management)",
+      "score": 0.19145652651786804
+    },
+    {
+      "id": "https://openalex.org/keywords/physics",
+      "display_name": "Physics",
+      "score": 0.16353502869606018
+    },
+    {
+      "id": "https://openalex.org/keywords/mathematics",
+      "display_name": "Mathematics",
+      "score": 0.15321257710456848
+    },
+    {
+      "id": "https://openalex.org/keywords/mechanical-engineering",
+      "display_name": "Mechanical engineering",
+      "score": 0.0936238169670105
+    }
+  ],
+  "concepts": [
+    {
+      "id": "https://openalex.org/C161759796",
+      "wikidata": "https://www.wikidata.org/wiki/Q3982902",
+      "display_name": "Teleoperation",
+      "level": 3,
+      "score": 0.7153364419937134
+    },
+    {
+      "id": "https://openalex.org/C142784634",
+      "wikidata": "https://www.wikidata.org/wiki/Q1129460",
+      "display_name": "Slosh dynamics",
+      "level": 2,
+      "score": 0.6967422962188721
+    },
+    {
+      "id": "https://openalex.org/C47446073",
+      "wikidata": "https://www.wikidata.org/wiki/Q5165890",
+      "display_name": "Control theory (sociology)",
+      "level": 3,
+      "score": 0.692512035369873
+    },
+    {
+      "id": "https://openalex.org/C117896860",
+      "wikidata": "https://www.wikidata.org/wiki/Q11376",
+      "display_name": "Acceleration",
+      "level": 2,
+      "score": 0.6789662837982178
+    },
+    {
+      "id": "https://openalex.org/C13662910",
+      "wikidata": "https://www.wikidata.org/wiki/Q193139",
+      "display_name": "Trajectory",
+      "level": 2,
+      "score": 0.6186828017234802
+    },
+    {
+      "id": "https://openalex.org/C16345878",
+      "wikidata": "https://www.wikidata.org/wiki/Q107472979",
+      "display_name": "Orientation (vector space)",
+      "level": 2,
+      "score": 0.5660154819488525
+    },
+    {
+      "id": "https://openalex.org/C2781018962",
+      "wikidata": "https://www.wikidata.org/wiki/Q5164884",
+      "display_name": "Container (type theory)",
+      "level": 2,
+      "score": 0.5593443512916565
+    },
+    {
+      "id": "https://openalex.org/C198082294",
+      "wikidata": "https://www.wikidata.org/wiki/Q3399648",
+      "display_name": "Position (finance)",
+      "level": 2,
+      "score": 0.5545677542686462
+    },
+    {
+      "id": "https://openalex.org/C41008148",
+      "wikidata": "https://www.wikidata.org/wiki/Q21198",
+      "display_name": "Computer science",
+      "level": 0,
+      "score": 0.5442403554916382
+    },
+    {
+      "id": "https://openalex.org/C90509273",
+      "wikidata": "https://www.wikidata.org/wiki/Q11012",
+      "display_name": "Robot",
+      "level": 2,
+      "score": 0.47922924160957336
+    },
+    {
+      "id": "https://openalex.org/C104114177",
+      "wikidata": "https://www.wikidata.org/wiki/Q79782",
+      "display_name": "Motion (physics)",
+      "level": 2,
+      "score": 0.47044745087623596
+    },
+    {
+      "id": "https://openalex.org/C203479927",
+      "wikidata": "https://www.wikidata.org/wiki/Q5165939",
+      "display_name": "Controller (irrigation)",
+      "level": 2,
+      "score": 0.4600195288658142
+    },
+    {
+      "id": "https://openalex.org/C2780023022",
+      "wikidata": "https://www.wikidata.org/wiki/Q1338171",
+      "display_name": "Compensation (psychology)",
+      "level": 2,
+      "score": 0.44470396637916565
+    },
+    {
+      "id": "https://openalex.org/C133731056",
+      "wikidata": "https://www.wikidata.org/wiki/Q4917288",
+      "display_name": "Control engineering",
+      "level": 1,
+      "score": 0.3399273455142975
+    },
+    {
+      "id": "https://openalex.org/C44154836",
+      "wikidata": "https://www.wikidata.org/wiki/Q45045",
+      "display_name": "Simulation",
+      "level": 1,
+      "score": 0.33197277784347534
+    },
+    {
+      "id": "https://openalex.org/C127413603",
+      "wikidata": "https://www.wikidata.org/wiki/Q11023",
+      "display_name": "Engineering",
+      "level": 0,
+      "score": 0.27429747581481934
+    },
+    {
+      "id": "https://openalex.org/C31972630",
+      "wikidata": "https://www.wikidata.org/wiki/Q844240",
+      "display_name": "Computer vision",
+      "level": 1,
+      "score": 0.2714155316352844
+    },
+    {
+      "id": "https://openalex.org/C154945302",
+      "wikidata": "https://www.wikidata.org/wiki/Q11660",
+      "display_name": "Artificial intelligence",
+      "level": 1,
+      "score": 0.2624591588973999
+    },
+    {
+      "id": "https://openalex.org/C2775924081",
+      "wikidata": "https://www.wikidata.org/wiki/Q55608371",
+      "display_name": "Control (management)",
+      "level": 2,
+      "score": 0.19145652651786804
+    },
+    {
+      "id": "https://openalex.org/C121332964",
+      "wikidata": "https://www.wikidata.org/wiki/Q413",
+      "display_name": "Physics",
+      "level": 0,
+      "score": 0.16353502869606018
+    },
+    {
+      "id": "https://openalex.org/C33923547",
+      "wikidata": "https://www.wikidata.org/wiki/Q395",
+      "display_name": "Mathematics",
+      "level": 0,
+      "score": 0.15321257710456848
+    },
+    {
+      "id": "https://openalex.org/C78519656",
+      "wikidata": "https://www.wikidata.org/wiki/Q101333",
+      "display_name": "Mechanical engineering",
+      "level": 1,
+      "score": 0.0936238169670105
+    },
+    {
+      "id": "https://openalex.org/C11171543",
+      "wikidata": "https://www.wikidata.org/wiki/Q41630",
+      "display_name": "Psychoanalysis",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C74650414",
+      "wikidata": "https://www.wikidata.org/wiki/Q11397",
+      "display_name": "Classical mechanics",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C86803240",
+      "wikidata": "https://www.wikidata.org/wiki/Q420",
+      "display_name": "Biology",
+      "level": 0,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C162324750",
+      "wikidata": "https://www.wikidata.org/wiki/Q8134",
+      "display_name": "Economics",
+      "level": 0,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C10138342",
+      "wikidata": "https://www.wikidata.org/wiki/Q43015",
+      "display_name": "Finance",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C1276947",
+      "wikidata": "https://www.wikidata.org/wiki/Q333",
+      "display_name": "Astronomy",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C15744967",
+      "wikidata": "https://www.wikidata.org/wiki/Q9418",
+      "display_name": "Psychology",
+      "level": 0,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C6557445",
+      "wikidata": "https://www.wikidata.org/wiki/Q173113",
+      "display_name": "Agronomy",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C2524010",
+      "wikidata": "https://www.wikidata.org/wiki/Q8087",
+      "display_name": "Geometry",
+      "level": 1,
+      "score": 0.0
+    },
+    {
+      "id": "https://openalex.org/C146978453",
+      "wikidata": "https://www.wikidata.org/wiki/Q3798668",
+      "display_name": "Aerospace engineering",
+      "level": 1,
+      "score": 0.0
+    }
+  ],
+  "mesh": [],
+  "locations_count": 3,
+  "locations": [
+    {
+      "id": "doi:10.1109/iros.2018.8593962",
+      "is_oa": false,
+      "landing_page_url": "https://doi.org/10.1109/iros.2018.8593962",
+      "pdf_url": null,
+      "source": null,
+      "license": null,
+      "license_id": null,
+      "version": "publishedVersion",
+      "is_accepted": true,
+      "is_published": true,
+      "raw_source_name": "2018 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+      "raw_type": "proceedings-article"
+    },
+    {
+      "id": "pmh:oai:iris.unimore.it:11380/1169606",
+      "is_oa": true,
+      "landing_page_url": "http://hdl.handle.net/11380/1169606",
+      "pdf_url": "https://iris.unimore.it/bitstream/11380/1169606/1/HarmonicFilter4Sloshing_IROS2018_final.pdf",
+      "source": {
+        "id": "https://openalex.org/S4306400718",
+        "display_name": "IRIS UNIMORE (University of Modena and Reggio Emilia)",
+        "issn_l": null,
+        "issn": null,
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": false,
+        "host_organization": "https://openalex.org/I122346577",
+        "host_organization_name": "University of Modena and Reggio Emilia",
+        "host_organization_lineage": [
+          "https://openalex.org/I122346577"
+        ],
+        "host_organization_lineage_names": [],
+        "type": "repository"
+      },
+      "license": "cc-by",
+      "license_id": "https://openalex.org/licenses/cc-by",
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": null,
+      "raw_type": "info:eu-repo/semantics/conferenceObject"
+    },
+    {
+      "id": "pmh:oai:cris.unibo.it:11585/658469",
+      "is_oa": false,
+      "landing_page_url": "http://hdl.handle.net/11585/658469",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S4306402579",
+        "display_name": "Archivio istituzionale della ricerca (Alma Mater Studiorum Università di Bologna)",
+        "issn_l": null,
+        "issn": null,
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": false,
+        "host_organization": "https://openalex.org/I4210117483",
+        "host_organization_name": "Istituto di Ematologia di Bologna",
+        "host_organization_lineage": [
+          "https://openalex.org/I4210117483"
+        ],
+        "host_organization_lineage_names": [],
+        "type": "repository"
+      },
+      "license": null,
+      "license_id": null,
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": "",
+      "raw_type": "info:eu-repo/semantics/conferenceObject"
+    }
+  ],
+  "best_oa_location": {
+    "id": "pmh:oai:iris.unimore.it:11380/1169606",
+    "is_oa": true,
+    "landing_page_url": "http://hdl.handle.net/11380/1169606",
+    "pdf_url": "https://iris.unimore.it/bitstream/11380/1169606/1/HarmonicFilter4Sloshing_IROS2018_final.pdf",
+    "source": {
+      "id": "https://openalex.org/S4306400718",
+      "display_name": "IRIS UNIMORE (University of Modena and Reggio Emilia)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "host_organization": "https://openalex.org/I122346577",
+      "host_organization_name": "University of Modena and Reggio Emilia",
+      "host_organization_lineage": [
+        "https://openalex.org/I122346577"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+    },
+    "license": "cc-by",
+    "license_id": "https://openalex.org/licenses/cc-by",
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": "info:eu-repo/semantics/conferenceObject"
+  },
+  "sustainable_development_goals": [],
+  "awards": [
+    {
+      "id": "https://openalex.org/G4082817382",
+      "display_name": null,
+      "funder_award_id": "FAR2017",
+      "funder_id": "https://openalex.org/F4320311022",
+      "funder_display_name": "Università Degli Studi di Modena e Reggio Emila"
+    }
+  ],
+  "funders": [
+    {
+      "id": "https://openalex.org/F4320311022",
+      "display_name": "Università Degli Studi di Modena e Reggio Emila",
+      "ror": "https://ror.org/02d4c4y02"
+    }
+  ],
+  "has_content": {
+    "grobid_xml": true,
+    "pdf": true
+  },
+  "content_urls": {
+    "pdf": "https://content.openalex.org/works/W2909258394.pdf",
+    "grobid_xml": "https://content.openalex.org/works/W2909258394.grobid-xml"
+  },
+  "referenced_works_count": 14,
+  "referenced_works": [
+    "https://openalex.org/W1510460520",
+    "https://openalex.org/W1988367364",
+    "https://openalex.org/W2029497546",
+    "https://openalex.org/W2067704779",
+    "https://openalex.org/W2099430249",
+    "https://openalex.org/W2120123096",
+    "https://openalex.org/W2127454360",
+    "https://openalex.org/W2134929934",
+    "https://openalex.org/W2139747245",
+    "https://openalex.org/W2140530315",
+    "https://openalex.org/W2168950505",
+    "https://openalex.org/W2738610736",
+    "https://openalex.org/W2846201370",
+    "https://openalex.org/W2903296098"
+  ],
+  "related_works": [
+    "https://openalex.org/W878535506",
+    "https://openalex.org/W2377481243",
+    "https://openalex.org/W2378307623",
+    "https://openalex.org/W2014455655",
+    "https://openalex.org/W2166909890",
+    "https://openalex.org/W4313218093",
+    "https://openalex.org/W2026015939",
+    "https://openalex.org/W2037449261",
+    "https://openalex.org/W82738333",
+    "https://openalex.org/W2604439793"
+  ],
+  "abstract_inverted_index": {
+    "In": [
+      0,
+      78,
+      121
+    ],
+    "this": [
+      1,
+      122
+    ],
+    "paper,": [
+      2
+    ],
+    "the": [
+      3,
+      25,
+      29,
+      33,
+      38,
+      51,
+      55,
+      80,
+      84,
+      89,
+      95,
+      106,
+      114,
+      117,
+      124,
+      163,
+      166,
+      169,
+      172,
+      178
+    ],
+    "problem": [
+      4
+    ],
+    "of": [
+      5,
+      28,
+      54,
+      67,
+      86,
+      88,
+      94,
+      97,
+      105,
+      116,
+      155,
+      158
+    ],
+    "suppressing": [
+      6
+    ],
+    "sloshing": [
+      7
+    ],
+    "dynamics": [
+      8
+    ],
+    "in": [
+      9,
+      119,
+      138,
+      161,
+      177
+    ],
+    "liquid": [
+      10,
+      30,
+      61,
+      173
+    ],
+    "handling": [
+      11
+    ],
+    "robotic": [
+      12
+    ],
+    "systems": [
+      13
+    ],
+    "has": [
+      14,
+      75,
+      150
+    ],
+    "been": [
+      15,
+      76,
+      151
+    ],
+    "faced": [
+      16
+    ],
+    "by": [
+      17,
+      70,
+      144,
+      153,
+      174,
+      188
+    ],
+    "designing": [
+      18
+    ],
+    "a": [
+      19,
+      42,
+      46,
+      71,
+      103,
+      145,
+      156,
+      189
+    ],
+    "dynamic": [
+      20
+    ],
+    "filter": [
+      21
+    ],
+    "that": [
+      22,
+      49,
+      58,
+      101,
+      134
+    ],
+    "starting": [
+      23
+    ],
+    "from": [
+      24
+    ],
+    "desired": [
+      26
+    ],
+    "motion": [
+      27,
+      57,
+      190
+    ],
+    "container": [
+      31,
+      73,
+      170
+    ],
+    "calculates": [
+      32
+    ],
+    "complete": [
+      34
+    ],
+    "position/orientation": [
+      35
+    ],
+    "trajectory": [
+      36
+    ],
+    "for": [
+      37
+    ],
+    "robot": [
+      39,
+      167
+    ],
+    "end-effector.": [
+      40
+    ],
+    "Specifically,": [
+      41
+    ],
+    "design": [
+      43
+    ],
+    "philosophy": [
+      44
+    ],
+    "mixing": [
+      45
+    ],
+    "filtering": [
+      47
+    ],
+    "technique": [
+      48
+    ],
+    "suppresses": [
+      50
+    ],
+    "frequency": [
+      52
+    ],
+    "contributions": [
+      53
+    ],
+    "reference": [
+      56,
+      90,
+      132
+    ],
+    "may": [
+      59
+    ],
+    "cause": [
+      60
+    ],
+    "oscillations": [
+      62
+    ],
+    "and": [
+      63
+    ],
+    "an": [
+      64,
+      98
+    ],
+    "active": [
+      65
+    ],
+    "compensation": [
+      66
+    ],
+    "lateral": [
+      68
+    ],
+    "accelerations": [
+      69
+    ],
+    "proper": [
+      72
+    ],
+    "re-orientation": [
+      74
+    ],
+    "adopted.": [
+      77
+    ],
+    "principle,": [
+      79
+    ],
+    "latter": [
+      81
+    ],
+    "contribution": [
+      82
+    ],
+    "requires": [
+      83
+    ],
+    "knowledge": [
+      85
+    ],
+    "acceleration": [
+      87,
+      118
+    ],
+    "trajectory,": [
+      91
+    ],
+    "but": [
+      92
+    ],
+    "because": [
+      93
+    ],
+    "use": [
+      96
+    ],
+    "harmonic": [
+      99
+    ],
+    "smoother": [
+      100
+    ],
+    "performs": [
+      102
+    ],
+    "shaping": [
+      104
+    ],
+    "original": [
+      107
+    ],
+    "motion,": [
+      108
+    ],
+    "it": [
+      109
+    ],
+    "is": [
+      110,
+      186
+    ],
+    "possible": [
+      111
+    ],
+    "to": [
+      112,
+      131
+    ],
+    "obtain": [
+      113
+    ],
+    "value": [
+      115
+    ],
+    "runtime.": [
+      120
+    ],
+    "way,": [
+      123
+    ],
+    "proposed": [
+      125
+    ],
+    "methods": [
+      126
+    ],
+    "can": [
+      127
+    ],
+    "be": [
+      128
+    ],
+    "applied": [
+      129
+    ],
+    "also": [
+      130
+    ],
+    "motions": [
+      133
+    ],
+    "are": [
+      135
+    ],
+    "not": [
+      136
+    ],
+    "known": [
+      137
+    ],
+    "advance,": [
+      139
+    ],
+    "e.g.": [
+      140
+    ],
+    "commands": [
+      141
+    ],
+    "directly": [
+      142
+    ],
+    "provided": [
+      143
+    ],
+    "human": [
+      146
+    ],
+    "operator.": [
+      147
+    ],
+    "This": [
+      148
+    ],
+    "possibility": [
+      149
+    ],
+    "demonstrated": [
+      152
+    ],
+    "means": [
+      154
+    ],
+    "number": [
+      157
+    ],
+    "experimental": [
+      159
+    ],
+    "tests": [
+      160
+    ],
+    "which": [
+      162
+    ],
+    "user": [
+      164
+    ],
+    "teleoperates": [
+      165
+    ],
+    "carrying": [
+      168
+    ],
+    "with": [
+      171
+    ],
+    "simply": [
+      175
+    ],
+    "moving": [
+      176
+    ],
+    "free": [
+      179
+    ],
+    "space": [
+      180
+    ],
+    "its": [
+      181
+    ],
+    "hand,": [
+      182
+    ],
+    "whose": [
+      183
+    ],
+    "3D": [
+      184
+    ],
+    "position": [
+      185
+    ],
+    "detected": [
+      187
+    ],
+    "capture": [
+      191
+    ],
+    "system.": [
+      192
+    ]
+  },
+  "counts_by_year": [
+    {
+      "year": 2026,
+      "cited_by_count": 5
+    },
+    {
+      "year": 2025,
+      "cited_by_count": 3
+    },
+    {
+      "year": 2024,
+      "cited_by_count": 2
+    },
+    {
+      "year": 2023,
+      "cited_by_count": 3
+    },
+    {
+      "year": 2022,
+      "cited_by_count": 3
+    },
+    {
+      "year": 2021,
+      "cited_by_count": 5
+    },
+    {
+      "year": 2020,
+      "cited_by_count": 2
+    },
+    {
+      "year": 2019,
+      "cited_by_count": 1
+    }
+  ],
+  "updated_date": "2026-08-27T14:10:00.468798",
+  "created_date": "2025-10-10T00:00:00"
+}

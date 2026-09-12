@@ -1,0 +1,83 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/ICRA.2017.7989084",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/icra.2017.7989084",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/icra.2017.7989084",
+    "title": [
+      "On the structure of the time-optimal path parameterization problem with third-order constraints"
+    ],
+    "author": [
+      {
+        "given": "Hung",
+        "family": "Pham",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Quang-Cuong",
+        "family": "Pham",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2017 IEEE International Conference on Robotics and Automation (ICRA)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2017,
+          5
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2017,
+          5
+        ]
+      ]
+    },
+    "page": "679-686",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/icra.2017.7989084",
+    "event": {
+      "name": "2017 IEEE International Conference on Robotics and Automation (ICRA)",
+      "location": "Singapore, Singapore",
+      "start": {
+        "date-parts": [
+          [
+            2017,
+            5,
+            29
+          ]
+        ]
+      },
+      "end": {
+        "date-parts": [
+          [
+            2017,
+            6,
+            3
+          ]
+        ]
+      }
+    }
+  }
+}

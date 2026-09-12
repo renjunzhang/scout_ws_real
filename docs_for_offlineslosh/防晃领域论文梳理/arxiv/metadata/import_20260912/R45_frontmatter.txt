@@ -1,0 +1,95 @@
+                                                  Effect of baffles on pressurization and thermal stratification in
+                                                                   a LN2 tank under micro-gravity
+                                                                        Zuo Zhongqi, Jiang Wenbing, Huang Yonghua∗
+arXiv:1807.01547v1 [physics.flu-dyn] 4 Jul 2018
+
+
+
+
+                                                  ABSTRACT
+                                                       Researches on the impact of existing baffles on sloshing suppression of two-phase fluids in
+                                                  storage tanks have been widely conducted in literature. However, few studies focus on the effect
+                                                  of the baffles on self-pressurization or thermal stratification of the fluids in containers. This paper
+                                                  uses Volume of Fluid (VOF) method to simulate the thermodynamic and fluid dynamic behavior of
+                                                  liquid nitrogen in a tank with different baffle structures under microgravity environment. Groups
+                                                  of gravity levels, fill levels and distances, angles and gaps of baffles, are compared and analyzed. Up
+                                                  to 54% difference in pressurization can be observed by optimizing the baffle structure and metrics,
+                                                  which is significant to achieve the highest performance of storage fluid control in the tank.
+
+                                                      Keyword: Baffles, Self-pressurization, Thermal stratification, Microgravity
+
+
+                                                  1    INTRODUCTION
+                                                       Liquid hydrogen or oxygen fuel tanks are important parts in a space vehicle. Baffle structures
+                                                  have been widely adopted to avoid liquid sloshing in these tanks no matter on ground in normal
+                                                  gravity or on orbit in microgravity. The baffles are very effective in mitigating strong shaking of
+                                                  liquid when the tank is impacted by a sudden external force. There are many experiments and
+                                                  simulations performed in normal gravity.
+                                                       Panzarella [1] states that researches on cryogenic fluid storage in tanks generally concern three
+                                                  aspects: self-pressurization, fluid flow/convection and thermal stratification, and behavior and evo-
+                                                  lution of liquid-vapor interface. Sloshing behavior in a tank has been studied since 1960s [2].
+                                                  Chintalapati [3] found that baffles mitigate the peak slosh height and if there is a small hole on
+                                                  baffle, the peak slosh height will increase 10-25%. Hasheminejad [4] [5]investigated the transverse
+                                                  two-dimensional sloshing modes in both circular and elliptical tanks using a simple semi-analytic
+                                                  approach based on linearized theory. The tank is partially filled and have a vertical baffle stand in
+                                                  the bottom of the tank. Yoon [6] investigated effect of baffles on mitigating sloshing with arrays
+                                                  of holes on the baffle. Behavior of propellant in a baffled tank in microgravity is attacking more
+                                                  researchers’ concern, including NASA [7]. Kannapel [8] analyzed sloshing behavior of liquid oxygen
+                                                  in space shuttle external tanks. All these researches shows the important roles of baffles in tank
+                                                  design to reduce sloshing as well as mitigate impact force to the supporting structure of the tank.
+                                                       Other than the conditions with acceleration, baffles could also be useful to stationary storage of
+                                                  fluids in containers in perspective of hydrodynamics and thermodynamics. However, researches in
+
+
+                                                                                                    1
+                           Parameters              Group of setups
+                          Gravity level        10 g0 , 10−3 g0 , 10−5 g0
+                                                   −1
+
+                            Fill level      30%, 40%, 50%, 55%, 60%, 70%
+                           Distance(d)        0mm, 20mm, 40mm, 60mm
+                          Orientation(θ)       105&75, 75&105, 90&90
+                               Gap                0mm, 5mm, 10mm
+
+                             Table 1: Simulations executed in this paper
+
+
+this area is far more imperfect compared to dynamic study of baffles. Panzarella [1] systematically
+presented an analysis of self-pressurization process of cryogenics in a tank in normal gravity. Behruzi
+[9] studied the temperature difference during sloshing via both experiment and simulation, and bring
+up a simplified model to describe heat transfer in sloshing. But his model did not include a baffle
+structure. Ma [10] used CFD to investigate the no-vent filling process in a liquid hydrogen tank. Her
+study shows that the mixing in microgravity is more adequate, and results in a more steady pressure
+behavior. Adam [11] proposed a baffled tank used for aerial vehicles, whose baffles have multilayer
+structure. He considered the heat leak to the tank, but failed to concern the effect of heat leak to
+the fluid field in the tank. Grayson [12] conducted microgravity experiments on the effect of baffles
+on the convection of the ullage in the tank on the AS-203 satellite, and found that the baffles can
+promote vortex in the ullage of the tank by changing the velocity vector. He also emphasized that
+the effect of natural convection cannot be ignored in microgravity, although it is on low level. To
+our knowledge, there is a lack of investigation on how the baffles will affect the thermal stratification
+or pressurization of fluid in the tank. This paper focuses on the effect of different distances, angles
+and gaps of the baffles as well as the liquid fill levels and gravity levels on the temperature profiles
+and self-pressurization behavior of nitrogen in microgravity environment. Performances of baffles
+in different conditions are considered. A specialized structure can be constructed based on the
+results to have the highest performance for pressure and velocity suppression, which can be helpful
+in designing space cryogenic containers.
+
+
+2     COMPUTATION MODEL
+2.1    Setup
+     The modeling tank is in cylindrical shape with diameter and height of 201 mm and 213 mm, re-
+spectively, which is in accordance with the one without baffles from reference [13]. Simulations in 2D
+are conducted in various gravity environments and gravity level set includes 10−5 g0 ,10−3 g0 ,10−1 g0 .
+It is reasonable because the tank structure is symmetrical along its axis. Six different fill levels
+are set to check the performance of baffles during the reduction of liquid. Annular plane baffles
+are installed on the internal side of the tank as shown in Fig.1(a), where d is the distance between
+two baffles. The baffles are configured in the forms of single baffle and twin baffles with different
+included angles, where θ is the angle between baffles and tank wall. The parameters d, θ and gaps
+are varied to optimize the highest performance for pressure and velocity suppression by the baffles.
+All simulations in this paper are summarized in Table.1.
+     VOF (Volume of Fluid) method is adopted to track the interface between liquid and gaseous ni-
+trogen. Realizable k- model is used for the turbulence. This model adds mathematical restrictions
+
+
+                                                   2
+

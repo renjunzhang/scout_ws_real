@@ -1,0 +1,26 @@
+[
+  {
+    "code": "R36",
+    "url": "https://cris.unibo.it/bitstream/11585/889873/5/antisloshing%20trajectories%20post%20print.pdf",
+    "final_url": "https://cris.unibo.it/bitstream/11585/889873/5/antisloshing%20trajectories%20post%20print.pdf",
+    "http_status": 200,
+    "bytes": 2667293,
+    "pdf": true
+  },
+  {
+    "code": "R37",
+    "url": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_pdf",
+    "final_url": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_pdf",
+    "http_status": 200,
+    "bytes": 1959392,
+    "pdf": true
+  },
+  {
+    "code": "classic_candidate",
+    "url": "https://dspace.mit.edu/bitstreams/7b4c8c0f-77aa-4c7d-84ce-a8df98298742/download",
+    "final_url": "https://dspace.mit.edu/bitstreams/7b4c8c0f-77aa-4c7d-84ce-a8df98298742/download",
+    "http_status": 405,
+    "bytes": 2139,
+    "pdf": false
+  }
+]

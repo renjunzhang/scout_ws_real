@@ -1,0 +1,110 @@
+                                            A Thermodynamics-informed Active Learning Approach to Perception and
+                                                                  Reasoning about Fluids
+
+                                                   Beatriz Moya1 , Alberto Badias2 , David Gonzalez1 , Francisco Chinesta3 , Elias Cueto1
+                                                          1
+                                                              Aragon institute in Engineering Research. University of Zaragoza, Spain
+                                                                                 { beam, gonzal, ecueto}@unizar.es
+arXiv:2203.05775v2 [cs.CV] 9 Sep 2022
+
+
+
+
+                                                                               2
+                                                                                   Polytechnic University of Madrid, Spain
+                                                                                          alberto.badias@upm.es
+                                                              3
+                                                                  ESI Group chair. PIMM Lab, ENSAM Institute of Technology, France
+                                                                                     francisco.chinesta@ensam.eu
+
+
+                                                                    Abstract                             telligence (AGI) [3]. In this next step of AI, we approach
+                                                                                                         more anthropomorphic skills, independence and high-level
+                                            Learning and reasoning about physical phenomena is           reasoning for decision-making [4] and behavior learning [5]
+                                        still a challenge in robotics development, and computa-          [6]. One of the requirements to cross the boundary between
+                                        tional sciences play a capital role in the search for accu-      AI to AGI is to improve the development of sensory and
+                                        rate methods able to provide explanations for past events        physics perception in machine systems. Physics perception
+                                        and rigorous forecasts of future situations. We propose a        refers to the interpretation and reasoning skills that inter-
+                                        thermodynamics-informed active learning strategy for fluid       pret sensed data. These technologies play a capital role in
+                                        perception and reasoning from observations. As a model           robotics, especially for planning and control tasks [2]. To
+                                        problem, we take the sloshing phenomena of different flu-        develop systems able to reason about their surrounding en-
+                                        ids contained in a glass. Starting from full-field and high-     vironment we need interactive, real-time simulators of the
+                                        resolution synthetic data for a particular fluid, we develop a   real-world physics, constructed by a judicious mixing of
+                                        method for the tracking (perception) and analysis (reason-       theory, data, and computation [1].
+                                        ing) of any previously unseen liquid whose free surface is           In some sense, these systems resemble the now popular
+                                        observed with a commodity camera. This approach demon-           digital twins. However, these new systems, able to perceive
+                                        strates the importance of physics and knowledge not only         and reasoning about physics, are more aligned with the con-
+                                        in data-driven (grey box) modeling but also in the correc-       cept of cognitive or hybrid digital twin [7]. In these, sim-
+                                        tion for real physics adaptation in low data regimes and par-    ulation is enriched with new measurements to correct the
+                                        tial observations of the dynamics. The method presented          biased predictions that result from comparing the output of
+                                        is extensible to other domains such as the development of        the simulation with the ground truth, and to optimize the ac-
+                                        cognitive digital twins, able to learn from observation of       curacy of the solution in new scenarios that the user does not
+                                        phenomena for which they have not been trained explicitly.       control. This framework arises as a solution to complement
+                                                                                                         current techniques in the so-called smart data paradigm, to
+                                                                                                         profit from data and perform the desired update, adaptation,
+                                                                                                         and knowledge enrichment promoting the efficient use of
+                                        1   Introduction                                                 data.
+                                                                                                             This can be seen, alternatively, also as a particular case
+                                           The research community has witnessed great advances           of Dynamic Data Driven Applications Systems (DDDAS)
+                                        in deep learning and Artificial Intelligence (AI) concerning     [8] [9]. In this context, data is introduced dynamically
+                                        the imitation of human-like skills [1] [2]. However, despite     in a continuous learning loop to improve the performance
+                                        experiencing great flourishing, works are still transitioning    of the obtained forecasting. Data-driven physics-informed
+                                        to the development of the so-called Artificial General In-       simulators reach higher generalization than unconstrained
+models or purely theoretical approximations, merging the             learning strategy in a thermodynamics-informed setting to
+knowledge coming from data distributions and well-known              correct systematic deviations of the observed reality from
+physics priors. However, there are still difficulties to match       its predictions. Our approach ensures the compliance to
+the model outputs with an evolving real physical environ-            first principles—conservation of energy, non-negative en-
+ment [10]. For this reason, the learned simulator can be             tropy production—of the resulting simulations, even if they
+formulated as a hybrid twin, or more generally, a DDDAS,             are constructed from partial observations of the reality (in
+to adapt to new scenarios through continuous observation             our case, the observation of the free surface of the fluid).
+and measurement of labeled data.                                         Both the originally learned simulator and the active
+    Blakseth et al. propose the system CoSTA [11]. They              learning strategy are based on the leverage of the General
+develop a hybrid strategy to complement a physics-based              Equation for the Non-Equilibrium Reversible-Irreversible
+model with a second, data-driven, term that will be in charge        Coupling (GENERIC) formalism as an inductive bias to
+of learning the corrections. In [12], the authors proposed           guide the training by the laws of the thermodynamics [27].
+a hybrid twin of a hyperelastic beam with moving loads,              In addition, the imposition of inductive biases could be
+displayed by means of augmented reality. In the field of             found advantageous in the correction process to reduce er-
+perception and reasoning, [11] exploits DDDAs in scene-              ror bounds and adapt to new scenarios more efficiently [28].
+understanding in unknown scenarios, where the system pro-            The physical knowledge already gained in the source model
+vides classification or enriches the knowledge previously            is to be preserved for the sake of the physical interpretabil-
+acquired depending on its level of confidence. [13] proposes         ity of the results and the success of the adaptation. The pro-
+a system of physical intuition about liquids that is corrected       posed thermodynamics-informed scheme will adapt to the
+from observations but without restrictions of physical pri-          inherent dissipative nature of real phenomena. The model
+ors.                                                                 is to be corrected from the sole observation of the free sur-
+    Reinforcement learning (RL) also constitutes an inter-           face of the new liquid if biased deviations are noticed. As
+esting framework for the construction of perception strate-          a result, we obtain a corrected, augmented intelligence sys-
+gies from the interaction with the medium [14]. Its main             tem that performs the integration of the fluid dynamics in
+purpose is to reward those actions that lead to a bound ob-          real-time from the evaluation of the free surface evolution.
+jective. Reinforcement learning can also be applied to the           The output is the new state of the fluid, as the result of its
+optimization of learned simulators of complex dynamical              integration in time. This approach is coupled with a com-
+systems, thus mimicking the way we, humans, learn intu-              puter vision system to build a closed-loop algorithm that
+itive representations of the physical world that surrounds us,       learns liquid slosh from real measurements. The adapta-
+to interact with this environment. Examples of model con-            tion is performed in an offline phase to reward the cumula-
+trol for adaptation with reinforcement learning include the          tive improvement over online acquired data. After the cor-
+Burger’s Equation as a common benchmark [15] [16] [17],              rection, the simulation of the dynamics is accomplished in
+or the Kuramoto-Sivashinsky Equation [18]. In this con-              real-time, obtaining improved predictions of the phenomena
+text, this strategy also targets turbulence and flow control         taking place in the physical world.
+problems, where the object of the optimization is also the               The development of this method revolves around the
+physics simulator [19] [20] [21] [22] [23] [24] [20].                convergence of the aforementioned DDDAS, active learn-
+                                                                     ing, and transfer learning strategies. Transfer learning prof-
+    In this work we take a sloshing fluid in a glass as the          its from a model already learned to apply the gained knowl-
+model problem. Despite its apparent simplicity, the fluid is         edge to new tasks (in our case, previously unseen fluids).
+highly deformable (something always difficult for percep-            This technique has also been considered in the a-posteriori
+tion systems), highly non-linear, and dissipative (conserva-         correction of models such as manifold learning in reduce
+tive problems have been demonstrated to be much easier to            order modeling of fluids [29] and dynamical optimization
+learn). We develop a method for the perception (tracking of          [30] [31] [32].
+the free surface of the fluid) and reasoning (providing the
+user with full-field information—velocity, stress, ...) about
+the physical state of a sloshing fluid. While previous works         2   Problem formulation
+employ simulation as the engine of physical scene under-
+standing (see [25] or [26], for instance), thus needing previ-          We describe the evolution of a complex physical system
+ous knowledge of the physics of the scene and a pre-defined          as a function of a set of phase variables sn = s(n∆t),
+simulator, our method constructs on the fly a learned sim-           where t represents the time, that defines its state. Both
+ulator. This learned simulator is built by resorting initially       the source model and the correction algorithms are learned
+to synthetic full-field data, possibly coming from different         by employing the GENERIC equation as an inductive bias
+fluids. At runtime, when faced to video streams of a previ-          [27]. GENERIC proposes a mesoscopic formulation of dy-
+ously unseen surrounding reality, it makes use of an active          namical systems to describe their behavior in terms of the
+
+
+                                                                 2
+

@@ -1,0 +1,74 @@
+ Vibration Mitigation in Partially Liquid-Filled
+          Vessel using Passive Energy Absorbers
+                   Maor Farid1, Nissim Levy2 and Oleg Gendelman1,*
+   1
+       Faculty of Mechanical Engineering, Technion – Israel Institute of Technology
+                    2
+                        Nuclear Research Center of the Negev (NRCN)
+
+                 * - contacting author, e-mail:ovgend@tx.technion.ac.il
+
+
+
+
+Keywords: Vibration Mitigation, Partially Liquid-Filled Vessel, Passive Energy
+Absorber, Tuned Mass Damper, Nonlinear Energy Sink.
+
+
+
+
+Abstract
+This paper treats possible solutions for vibration mitigation in reduced-order model of
+partially-filled liquid tank under impulsive forcing. Such excitation may lead to
+hydraulic impacts applied on the tank inner walls. Finite stiffness of the tank walls is
+taken into account. We explore both linear (Tuned Mass Damper) and nonlinear
+(Nonlinear Energy Sink) passive vibration absorbers; mitigation performances are
+examined numerically. The liquid sloshing mass is modeled by equivalent mass-
+spring-dashpot system, which can both perform small-amplitude linear oscillations
+and impact the vessel walls. We use parameters of the equivalent mass-spring-dashpot
+system for well-explored case of cylindrical tanks. The hydraulic impacts are modeled
+by high-power potential and dissipation functions. Critical location in the tank
+structure is determined and expression of the corresponding local mechanical stress is
+derived. We usefinite-elemet approach to assess the natural frequencies for specific
+system parameters and to figure out possibilities for internal resonances. Numerical
+evaluation criteria are suggested to determine the energy absorption performance.
+
+
+                                            1
+   1. Introduction
+Vessels filled with liquid are used in many fields of engineering, including nuclear
+[1], vehicle[2,3] and aerospace industries[4], for storage of chemicals, gasoline,
+water, and different hazardous liquids[5]. External excitations may cause well-known
+dynamical effect of liquid sloshing. This effect can take place in liquid cargo on
+highways, cruises or in stationary vessels exposed to earthquake. Dynamic loads
+related to the liquid sloshing may have direct and rather strong hazardous effect on the
+vessel stability and robustness. Many methods of seismic analysis of tanks are
+currently used by researchers and have been adopted by a number of industry
+standards and guides such as ACI 350.3-06 and ACI 371R-08 covert seismic design,
+which are based on the simplified methods evolved from earlier analytical work by
+Housner 1960, A.S. Veletsos 1977-1984, M.A. Haroun 1981 and Shivakuinar 1997,
+and others. Of these, the best known is Housner's pioneering work, published in the
+early 1960s by the Atomic Energy Commission. Housner’s method was adopted by
+many codes in the world and by a number of industry standards and has served as a
+guideline for most seismic designs of liquid storage tanks. According to Housner's
+theory, which is a simplified method of analysis, the tank deformation is negligible
+with respect to the liquid motion. Hence, the analysis is taking into account only the
+liquid motion relative to the tank and assuming that the tank motion is proportional to
+the ground excitation. Housner observed that in certain parts of the tank structure, the
+sloshing of the water was the dominant factor, whereas for other parts, the sloshing
+had a small effect.
+
+So far, detailed analytical solutions are limited to small-amplitude sloshing in
+rectangular and cylindrical vessels. While being most interesting and potentially
+hazardous, high-amplitude liquid sloshing in cylindrical tanks still lacks complete
+analytic description. The reason is that the liquid in the tank is continuous system with
+infinite number of degrees of freedom, and its boundary conditions on the free surface
+are nonlinear and time-dependent. Nevertheless, loads created by high-amplitude
+liquid sloshing are so crucial for designing the containing vessel, its supports and
+payload limitations [6], that a number of approximate phenomenological models were
+developed in order to get at least qualitative insight into this phenomenon.
+
+
+
+                                           2
+

@@ -1,0 +1,34 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Robust+Output-Lifted+Learning+Model+Predictive+Control&rows=3",
+  "match_review": "No matching formal publication identified in this targeted search; not evidence that no publication exists.",
+  "top_results": [
+    {
+      "title": [
+        "Output-Lifted Learning Model Predictive Control"
+      ],
+      "DOI": "10.1016/j.ifacol.2021.08.571",
+      "container-title": [
+        "IFAC-PapersOnLine"
+      ]
+    },
+    {
+      "title": [
+        "Output Feedback Robust Model Predictive Control"
+      ],
+      "DOI": "10.1002/9781119471455.ch11",
+      "container-title": [
+        "Model Predictive Control"
+      ]
+    },
+    {
+      "title": [
+        "ROBUST MODEL PREDICTIVE CONTROL UNDER OUTPUT CONSTRAINTS"
+      ],
+      "DOI": "10.3182/20020721-6-es-1901.00575",
+      "container-title": [
+        "IFAC Proceedings Volumes"
+      ]
+    }
+  ]
+}

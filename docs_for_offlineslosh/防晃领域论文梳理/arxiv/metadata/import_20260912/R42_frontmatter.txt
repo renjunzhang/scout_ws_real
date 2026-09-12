@@ -1,0 +1,145 @@
+                                                      11th EUROPEAN CONFERENCE FOR AERONAUTICS AND AEROSPACE SCIENCES (EUCASS)
+
+                                          DOI: ADD DOINUMBER HERE
+
+
+
+
+                                            Closed-loop control of sloshing fuel in a spinning spacecraft
+                                                      U. Zucchelli ⋆† , M. A. Mendez ⋆⋆ , A. Urbano ⋆ , S. V. Bonnieu ⋆⋆⋆ , P. Wenderski ⋆⋆⋆ , F. Sanfedino⋆
+                                           ⋆
+                                               Fédération ENAC ISAE-SUPAERO ONERA, Université de Toulouse, 10 Av. Marc Pélegrin, 31055, Toulouse, France
+                                                    ⋆⋆
+                                                       von Karman Institute for Fluid Dynamics, Environmental and Applied Fluid Dynamics Department
+                                                                        ⋆⋆⋆
+                                                                            European Space Agency, ESTEC, Noordwijk, the Netherlands
+                                                                                     umberto.zucchelli2@isae-supaero.fr
+                                                                                             †
+                                                                                               Corresponding author
+arXiv:2510.08121v1 [eess.SY] 9 Oct 2025
+
+
+
+
+                                                 Abstract
+                                                 New-generation space missions require satellites to carry substantial amounts of liquid propellant, mak-
+                                                 ing it essential to analyse the coupled control-structure-propellant dynamics in detail. While Compu-
+                                                 tational Fluid Dynamics (CFD) offers high-fidelity predictions, its computational cost limits its use in
+                                                 iterative design. Equivalent Mechanical Models (EMMs) provide a faster alternative, though their predic-
+                                                 tive performance–especially in closed-loop scenarios–remains largely unexplored. This work presents a
+                                                 comparative analysis of a spacecraft under feedback control, using both CFD and a reduced-order sloshing
+                                                 model. Results show good agreement, validating the simplified model for the manoeuvrer considered.
+                                                 This validation enables efficient sensitivity and stability studies, offering a practical tool for early-stage
+                                                 spacecraft design.
+                                                 1. Introduction
+
+                                          The prediction and control of liquid sloshing in spacecraft have become key topics in recent years. Propellant motion
+                                          can significantly affect the centre of mass and attitude dynamics, particularly in next-generation systems carrying large
+                                          fuel loads, deploying flexible appendages, and operating in long-duration missions. In such cases, the non-linear
+                                          coupling between rigid-body motion, sloshing in microgravity, structural vibrations, and actuator forces cannot be
+                                          neglected.1–3 Managing this coupling is crucial during control system design to ensure structural integrity and attitude
+                                          performance.
+                                                 While high-fidelity Computational Fluid Dynamics (CFD) simulations can provide accurate force predictions,
+                                          their computational cost often limits their use in control design or system-level studies. To address this, researchers
+                                          rely on reduced-order Equivalent Mechanical Models (EMMs), or mechanical analog models, which approximate
+                                          sloshing dynamics using simplified systems with few degrees of freedom. These include spring-mass systems,4–7
+                                          pendulum models,8–11 constraint surface models,12, 13 and pulsating ball models.14, 15 Each model has specific strengths
+                                          and limitations, with the constraint surface model showing promising agreement for large-amplitude sloshing in low-
+                                          g environments. EMMs are typically calibrated using open-loop high-fidelity data and then applied to closed-loop
+                                          performance evaluations. However, their reliability under feedback control remains largely untested, raising concerns
+                                          about their fidelity in such conditions.
+                                                 This study addresses this gap by introducing a simulation framework to analyse the coupled sloshing-structure-
+                                          control dynamics of a spacecraft. We model a rigid spacecraft with sloshing propellant under angular velocity feedback
+                                          control, using an EMM based on a particle constrained to a revolute surface.12, 13 Model predictions are compared
+                                          with high-fidelity CFD simulations performed using the DIVA software, previously validated against microgravity
+                                          experiments.16 The comparison evaluates whether the EMM can replicate the sloshing-induced dynamics observed in
+                                          the CFD results under closed-loop control. The following sections present the simulation tools, modelling approach,
+                                          and the integrated framework used to assess control-structure-sloshing interactions.
+
+                                                 2. Methodology
+
+                                          2.1 CFD Numerical Solver
+
+                                          The isothermal sloshing simulations in this study were carried out using the Direct Numerical Simulation solver DIVA
+                                          (Dynamics of Interface for Vaporisation and Atomization). The code was originally developed for high-fidelity two-
+                                          phase flow simulations and has been extensively validated for isothermal configurations,17, 18 as well as for two-phase
+
+
+                                          Copyright © 2025 by U.Zucchelli, M. A. Mendez, A. Urbano, S. V. Bonnieu, P.Wenderski, F. Sanfedino. Published by the
+                                          EUCASS association with permission.
+CLOSED-LOOP CONTROL OF SLOSHING FUEL IN A SPINNING SPACECRAFT
+
+
+
+flows with phase change, including droplet impact in the Leidenfrost regime19 and nucleate boiling.20, 21 In particular,
+Dalmon et al.16 validated DIVA against experimental measurements of isothermal sloshing in microgravity conditions,
+using data from the FLUIDICS experiment on the International Space Station.22
+       In the present work, DIVA is used to simulate the fluid dynamics of a spacecraft tank undergoing prescribed
+manoeuvrers. The computational domain includes both fluid and solid regions, with the fluid domain further divided
+into liquid and gas subdomains. The motion of the liquid-gas interface is tracked using the Level-Set method,23, 24
+where the interface is defined as the zero level of a signed distance function ϕ. A separate level-set function ϕ s is used
+to represent the static solid boundary. The evolution of the interface is governed by the standard advection equation:
+
+                                                                       ∂ϕ
+                                                                          + u · ∇ϕ = 0                                              (1)
+                                                                       ∂t
+where u is the fluid velocity field. To maintain the distance property of ϕ throughout the simulation, this transport
+equation is coupled with the reinitialization algorithm of Sussman et al.24
+
+                                                     0.8
+         0.8 + (Liquid)
+             n                                                                           Tank wall
+                                                =0
+
+                     -0.2
+                                                0.0
+
+
+
+
+                                                                                                        Gas
+                                8
+                            -0.
+                                    (Gas)
+                     -0.5
+
+
+
+
+                                                                                                       Liquid
+                                                  0.2
+                                                           0.5
+                                                                 0.8
+            0.8
+
+Figure 1: Level Set Function for a circular liquid-gas in-                      Figure 2: Solid-Gas-Liquid interface in a circular tank
+terface.                                                                        with 0-contact angle. Snapshot shows 3M NOVEC 2704
+                                                                                (Liquid) and air (Gas) under constant acceleration gz =
+                                                                                −10−2 m/s2 , computed using DIVA.
+
+      To account for the three-phase contact line (liquid-solid-gas), additional boundary conditions are required for
+the scalar function ϕ.25, 26 Following the approach adopted in,16 this study imposes a zero contact angle condition to
+represent a perfectly wetting fluid. This is equivalent to assuming that a thin liquid layer remains in contact with the
+tank walls at all times (see Fig. 2).
+      The incompressible Navier-Stokes equations for two-phase flows are solved using the Ghost Fluid Conservative
+Viscous Method with an implicit time integration scheme (GFCMI).27 Given the velocity field un at time t = n∆t, the
+updated field un+1 is obtained through a three-step procedure.
+      First, an intermediate velocity field u∗ is computed at tn+1 by solving the momentum equation without the pres-
+sure gradient term, but including volume forces:
+
+                                                u∗ − un                Fvol
+                                                                            !           ∗
+                                            ρ           + (un · ∇)un −        = ∇ · (2µD ) ,                                        (2)
+                                                  ∆t                    ρ
+                                                                                                              ∗
+where ρ and µ are the density and viscosity, Fvol represents external volume forces, and D is the rate-of-deformation
+tensor for u∗ , treated implicitly to eliminate the timestep restriction from viscous terms.
+      Second, the pressure field pn+1 is obtained by solving a Poisson equation with Neumann boundary conditions:
+
+                                                    ∇pn+1     ∇ · u∗     σκnδΓ
+                                                          !                    !
+                                                 ∇·         =        +∇·         ,                                                  (3)
+                                                     ρ         ∆t          ρ
+
+2
+

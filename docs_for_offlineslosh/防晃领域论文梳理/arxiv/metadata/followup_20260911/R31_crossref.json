@@ -1,0 +1,716 @@
+{
+  "request_url": "https://api.crossref.org/works?query.title=Jerk-limited+Real-time+Trajectory+Generation+with+Arbitrary+Target+States&rows=3",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            27
+          ]
+        ],
+        "date-time": "2026-08-27T05:23:39Z",
+        "timestamp": 1787808219804,
+        "version": "build-2784847793"
+      },
+      "reference-count": 0,
+      "publisher": "Robotics: Science and Systems Foundation",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.15607/rss.2021.xvii.015",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2021,
+            6,
+            27
+          ]
+        ],
+        "date-time": "2021-06-27T09:30:56Z",
+        "timestamp": 1624786256000
+      },
+      "source": "Crossref",
+      "is-referenced-by-count": 83,
+      "title": [
+        "Jerk-limited Real-time Trajectory Generation with Arbitrary Target States"
+      ],
+      "prefix": "10.15607",
+      "author": [
+        {
+          "given": "Lars",
+          "family": "Berscheid",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Torsten",
+          "family": "Kroeger",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "6920",
+      "published-online": {
+        "date-parts": [
+          [
+            2021,
+            7,
+            12
+          ]
+        ]
+      },
+      "event": {
+        "name": "Robotics: Science and Systems 2021",
+        "acronym": "RSS2021"
+      },
+      "container-title": [
+        "Robotics: Science and Systems XVII"
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2021,
+            6,
+            27
+          ]
+        ],
+        "date-time": "2021-06-27T09:31:10Z",
+        "timestamp": 1624786270000
+      },
+      "score": 65.56604,
+      "resource": {
+        "primary": {
+          "URL": "http://www.roboticsproceedings.org/rss17/p015.pdf"
+        }
+      },
+      "proceedings-subject": "Robotics",
+      "issued": {
+        "date-parts": [
+          [
+            2021,
+            7,
+            12
+          ]
+        ]
+      },
+      "references-count": 0,
+      "URL": "https://doi.org/10.15607/rss.2021.xvii.015",
+      "published": {
+        "date-parts": [
+          [
+            2021,
+            7,
+            12
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            7,
+            4
+          ]
+        ],
+        "date-time": "2024-07-04T14:35:53Z",
+        "timestamp": 1720103753499
+      },
+      "reference-count": 0,
+      "publisher": "Korean Institute of Intelligent Systems",
+      "issue": "4",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "IJFIS"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2017,
+            12,
+            31
+          ]
+        ]
+      },
+      "DOI": "10.5391/ijfis.2017.17.4.264",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2018,
+            1,
+            17
+          ]
+        ],
+        "date-time": "2018-01-17T01:45:58Z",
+        "timestamp": 1516153558000
+      },
+      "page": "264-271",
+      "source": "Crossref",
+      "is-referenced-by-count": 5,
+      "title": [
+        "Jerk-Limited Time-Optimal Reference Trajectory Generation for Robot Actuators"
+      ],
+      "prefix": "10.5391",
+      "volume": "17",
+      "author": [
+        {
+          "given": "Byeong-Ju",
+          "family": "Park",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Hong-Jun",
+          "family": "Lee",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Kwang-Kyo",
+          "family": "Oh",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Chae-Joo",
+          "family": "Moon",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "3345",
+      "container-title": [
+        "INTERNATIONAL JOURNAL of FUZZY LOGIC and INTELLIGENT SYSTEMS"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "http://www.dbpia.co.kr/journal/articleDetail?nodeId=NODE07291574",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2020,
+            1,
+            28
+          ]
+        ],
+        "date-time": "2020-01-28T08:17:25Z",
+        "timestamp": 1580199445000
+      },
+      "score": 38.395317,
+      "resource": {
+        "primary": {
+          "URL": "http://www.ijfis.org/journal/view.html?uid=801&&vmd=Full"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2017,
+            12,
+            31
+          ]
+        ]
+      },
+      "references-count": 0,
+      "journal-issue": {
+        "issue": "4",
+        "published-print": {
+          "date-parts": [
+            [
+              2017,
+              12,
+              31
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.5391/ijfis.2017.17.4.264",
+      "ISSN": [
+        "1598-2645",
+        "2093-744X"
+      ],
+      "issn-type": [
+        {
+          "value": "1598-2645",
+          "type": "print"
+        },
+        {
+          "value": "2093-744X",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2017,
+            12,
+            31
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            31
+          ]
+        ],
+        "date-time": "2026-08-31T16:51:21Z",
+        "timestamp": 1788195081801,
+        "version": "build-2803163510"
+      },
+      "reference-count": 37,
+      "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+      "issue": "7",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2022,
+                7,
+                1
+              ]
+            ],
+            "date-time": "2022-07-01T00:00:00Z",
+            "timestamp": 1656633600000
+          },
+          "content-version": "vor",
+          "delay-in-days": 0,
+          "URL": "https://ieeexplore.ieee.org/Xplorehelp/downloads/license-information/IEEE.html"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2022,
+                7,
+                1
+              ]
+            ],
+            "date-time": "2022-07-01T00:00:00Z",
+            "timestamp": 1656633600000
+          },
+          "content-version": "stm-asf",
+          "delay-in-days": 0,
+          "URL": "https://doi.org/10.15223/policy-029"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2022,
+                7,
+                1
+              ]
+            ],
+            "date-time": "2022-07-01T00:00:00Z",
+            "timestamp": 1656633600000
+          },
+          "content-version": "stm-asf",
+          "delay-in-days": 0,
+          "URL": "https://doi.org/10.15223/policy-037"
+        }
+      ],
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "IEEE Trans. Intell. Transport. Syst."
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2022,
+            7
+          ]
+        ]
+      },
+      "DOI": "10.1109/tits.2021.3076813",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2021,
+            5,
+            12
+          ]
+        ],
+        "date-time": "2021-05-12T19:40:10Z",
+        "timestamp": 1620848410000
+      },
+      "page": "8194-8208",
+      "source": "Crossref",
+      "is-referenced-by-count": 39,
+      "title": [
+        "Jerk-Limited Time-Optimal Speed Planning for Arbitrary Paths"
+      ],
+      "prefix": "10.1109",
+      "volume": "23",
+      "author": [
+        {
+          "ORCID": "https://orcid.org/0000-0003-2161-9876",
+          "authenticated-orcid": false,
+          "given": "Antonio",
+          "family": "Artunedo",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Centre for Automation and Robotics (CSIC-UPM), Madrid, Spain"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "ORCID": "https://orcid.org/0000-0002-3963-7952",
+          "authenticated-orcid": false,
+          "given": "Jorge",
+          "family": "Villagra",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Centre for Automation and Robotics (CSIC-UPM), Madrid, Spain"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "ORCID": "https://orcid.org/0000-0002-3132-5348",
+          "authenticated-orcid": false,
+          "given": "Jorge",
+          "family": "Godoy",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Centre for Automation and Robotics (CSIC-UPM), Madrid, Spain"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IVS.2019.8814070"
+        },
+        {
+          "key": "ref2",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ACCESS.2018.2839884"
+        },
+        {
+          "key": "ref3",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ACCESS.2019.2959432"
+        },
+        {
+          "key": "ref4",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.23919/ECC.2018.8550510"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.3390/electronics8090943"
+        },
+        {
+          "key": "ref6",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TBME.2011.2179545"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.23919/ECC.2019.8796099"
+        },
+        {
+          "key": "ref8",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.trf.2018.02.036"
+        },
+        {
+          "key": "ref9",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/MITS.2017.2709782"
+        },
+        {
+          "key": "ref10",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TITS.2019.2913998"
+        },
+        {
+          "key": "ref11",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.3846/16484142.2014.1003406"
+        },
+        {
+          "key": "ref12",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1007/978-3-319-08338-4_19"
+        },
+        {
+          "key": "ref13",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.4271/2004-01-2065"
+        },
+        {
+          "key": "ref14",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TVT.2016.2555853"
+        },
+        {
+          "key": "ref15",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TRO.2018.2880120"
+        },
+        {
+          "key": "ref16",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICSMC.2009.5346115"
+        },
+        {
+          "key": "ref17",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IVS.2015.7225830"
+        },
+        {
+          "key": "ref18",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1631/FITEE.1800719"
+        },
+        {
+          "key": "ref19",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ISCAS.2018.8351307"
+        },
+        {
+          "key": "ref20",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2015.2493980"
+        },
+        {
+          "key": "ref21",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1080/00207179.2013.875224"
+        },
+        {
+          "key": "ref22",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/AMC.2002.1026947"
+        },
+        {
+          "key": "ref23",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IVS.2017.7995814"
+        },
+        {
+          "key": "ref24",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TIV.2016.2578706"
+        },
+        {
+          "key": "ref25",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/CoASE.2015.7294147"
+        },
+        {
+          "key": "ref26",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICRA.2017.7989084"
+        },
+        {
+          "key": "ref27",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/COASE.2019.8843215"
+        },
+        {
+          "key": "ref28",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ACC.2013.6579865"
+        },
+        {
+          "key": "ref29",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/70.105387"
+        },
+        {
+          "key": "ref30",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/70.75906"
+        },
+        {
+          "key": "ref31",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TITS.2019.2925193"
+        },
+        {
+          "key": "ref32",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TVT.2018.2804891"
+        },
+        {
+          "key": "ref33",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.robot.2018.11.022"
+        },
+        {
+          "key": "ref34",
+          "volume-title": "An Analytical Tuning of MPC Control Horizon Using the Hessian Condition Number",
+          "author": "Turki",
+          "year": "2017"
+        },
+        {
+          "key": "ref35",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.robot.2011.11.001"
+        },
+        {
+          "key": "ref36",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ACCESS.2018.2845448"
+        },
+        {
+          "key": "ref37",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.2009.5354448"
+        }
+      ],
+      "container-title": [
+        "IEEE Transactions on Intelligent Transportation Systems"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx7/6979/9826234/09430031.pdf?arnumber=9430031",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2024,
+            1,
+            9
+          ]
+        ],
+        "date-time": "2024-01-09T23:02:09Z",
+        "timestamp": 1704841329000
+      },
+      "score": 34.331097,
+      "resource": {
+        "primary": {
+          "URL": "https://ieeexplore.ieee.org/document/9430031/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2022,
+            7
+          ]
+        ]
+      },
+      "references-count": 37,
+      "journal-issue": {
+        "issue": "7"
+      },
+      "URL": "https://doi.org/10.1109/tits.2021.3076813",
+      "ISSN": [
+        "1524-9050",
+        "1558-0016"
+      ],
+      "issn-type": [
+        {
+          "value": "1524-9050",
+          "type": "print"
+        },
+        {
+          "value": "1558-0016",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2022,
+            7
+          ]
+        ]
+      }
+    }
+  ]
+}

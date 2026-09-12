@@ -1,0 +1,34 @@
+[
+  {
+    "code": "R31",
+    "url": "https://arxiv.org/pdf/2105.04830v2",
+    "final_url": "https://arxiv.org/pdf/2105.04830v2",
+    "http_status": 200,
+    "bytes": 241901,
+    "pdf": true
+  },
+  {
+    "code": "R32",
+    "url": "https://iris.unimore.it/bitstream/11380/1393228/1/Time-Optimal_Anti-Sloshing_Trajectory_Planning_for_Multiple_Liquid-Filled_Containers_Subject_to_SCARA_Motion.pdf",
+    "final_url": "https://iris.unimore.it/bitstream/11380/1393228/1/Time-Optimal_Anti-Sloshing_Trajectory_Planning_for_Multiple_Liquid-Filled_Containers_Subject_to_SCARA_Motion.pdf",
+    "http_status": 200,
+    "bytes": 6067131,
+    "pdf": true
+  },
+  {
+    "code": "R33",
+    "url": "https://arxiv.org/pdf/2510.25255v1",
+    "final_url": "https://arxiv.org/pdf/2510.25255v1",
+    "http_status": 200,
+    "bytes": 3738624,
+    "pdf": true
+  },
+  {
+    "code": "C06_pdfdirect",
+    "url": "https://ietresearch.onlinelibrary.wiley.com/doi/pdfdirect/10.1049/csy2.12121",
+    "final_url": "https://ietresearch.onlinelibrary.wiley.com/doi/pdfdirect/10.1049/csy2.12121",
+    "http_status": 403,
+    "bytes": 5671,
+    "pdf": false
+  }
+]

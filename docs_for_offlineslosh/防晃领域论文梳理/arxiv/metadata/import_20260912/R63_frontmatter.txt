@@ -1,0 +1,149 @@
+                                                                                                                                                                                           1
+
+
+
+
+                                          Safe Trajectory Tracking in Uncertain Environments
+                                                                       Ivo Batkovic1,2 , Paolo Falcone2,3 , Mohammad Ali1 , and Mario Zanon4
+
+
+
+                                             Abstract—In Model Predictive Control (MPC) formulations                       presented a unified framework, where the motion planning
+                                          of trajectory tracking problems, infeasible reference trajectories               and control problems are solved in order to control and guide
+                                          and a-priori unknown constraints can lead to cumbersome                          a quadcopter in various configurations with multiple moving
+                                          designs, aggressive tracking, and loss of recursive feasibility. This
+                                          is the case, for example, in trajectory tracking applications for                obstacles. The authors show the benefit of being able to plan
+                                          mobile systems in the presence of constraints which are not fully                new trajectories in such environments, however, no formal
+arXiv:2001.11602v2 [eess.SY] 2 Apr 2021
+
+
+
+
+                                          known a-priori. In this paper, we propose a new framework called                 safety (recursive feasibility) guarantees are provided.
+                                          Model Predictive Flexible trajectory Tracking Control (MPFTC),                      In this paper, we take a different point of view and deal
+                                          which relaxes the trajectory tracking requirement. Additionally,                 with the presence of a-priori unknown constraints by con-
+                                          we accommodate recursive feasibility in the presence of a-
+                                          priori unknown constraints, which might render the reference                     structing a new MPC framework which ensures safety, i.e.,
+                                          trajectory infeasible. In the proposed framework, constraint                     recursive feasibility of the system, while only requiring mild
+                                          satisfaction is guaranteed at all times while the reference tra-                 assumptions on the reference trajectory, which needs not be
+                                          jectory is tracked as good as constraint satisfaction allows, thus               feasible with respect to all constraints. Consequently, we do
+                                          simplifying the controller design and reducing possibly aggressive               provide safety guarantees without the need of the additional
+                                          tracking behavior. The proposed framework is illustrated with
+                                          three numerical examples.                                                        layer of motion planning. Nevertheless, our approach can still
+                                                                                                                           be combined with motion planning if this is deemed beneficial,
+                                             Index Terms—flexible trajectory tracking, nonlinear MPC,                      e.g., to improve performance.
+                                          safety, uncertain constraints, stability, recursive feasibility
+                                                                                                                              In standard MPC, the presence of constraints, can cause the
+                                                                                                                           system to slow or stop, while the reference trajectory does not:
+                                                                    I. I NTRODUCTION                                       in this case, as the system gets far from the reference, an un-
+                                             Model Predictive Control (MPC) is an advanced control                         desirably aggressive behavior is obtained. On the other hand,
+                                          technique for linear, or nonlinear systems, that has been made                   while safety and stability are the most important requirements,
+                                          successful by the possibility of introducing time-varying ref-                   a smooth, or at least not excessively aggressive, behavior is
+                                          erences with preview information as well as constraints. Stan-                   also desirable. To alleviate aggressive behaviors introduced
+                                          dard MPC formulations penalize deviations from a setpoint                        by infeasible reference trajectories, Model Predictive Path
+                                          or a (feasible) reference trajectory and stability and recursive                 Following Control (MPFC) has been proposed in [13], [14],
+                                          feasibility guarantees have been derived for such settings [1],                  [15], [16], [17], [18] by penalizing deviations from a reference
+                                          [2], [3]. However, in practice (a) not all constraints, that                     path instead of a trajectory, where additional variables are
+                                          the real system could be subject to, are available at the                        introduced in order to control the position along the reference
+                                          design stage, and (b) a reference trajectory which satisfies all                 path. The main difficulty in MPFC is the need to select an
+                                          constraints might therefore not be available. This is the case,                  appropriate output function to define the path typically in a
+                                          for example, in trajectory tracking applications for autonomous                  dimension lower than the system state space. Although the
+                                          vehicles, see, e.g., [4], [5], [6], [7]. For such problems, it                   results in this paper can be combined with MPFC, we also
+                                          would be convenient to use a reference trajectory that is                        propose an alternative strategy which we call Model Predictive
+                                          easy to generate, and that is not necessarily feasible for all                   Flexible trajectory Tracking Control (MPFTC). Based on ideas
+                                          constraints, while detecting and enforcing a-priori unknown                      similar to MPFC, we introduce new variables to artificially
+                                          constraints online at all times. Existing literature on motion                   modify the time derivative of the reference trajectory in a
+                                          planning in dynamic environments [8], [9] proposes ways of                       time warping fashion. Moreover, we also discuss safety in
+                                          tackling (b), where graph-based approaches have been rather                      a general sense, and give safety guarantees which build on
+                                          successful [10], [11], [12]. In particular, in [6] the authors                   the assumption that a safe set exists, where all (including
+                                                                                                                           the unknown) constraints are satisfied at all time: this is an
+                                            This work was partially supported by the Wallenberg Artificial Intelligence,   assumption often made in practice for stable systems at rest,
+                                          Autonomous Systems and Software Program (WASP) funded by Knut and
+                                          Alice Wallenberg Foundation, and by the COPPLAR project (VINNOVA.
+                                                                                                                           as long as a safe configuration can be found [19], [20], [21].
+                                          V.P. Grant No. 2015-04849).                                                         In order to illustrate in detail the theoretical developments,
+                                            1 Ivo Batkovic and Paolo Falcone are with the Mechatronics group at the
+                                                                                                                           we consider two toy examples and compare our formulation
+                                          Department of Electrical Engineering, Chalmers University of Technology,
+                                          Gothenburg, Sweden {ivo.batkovic,falcone}@chalmers.se
+                                                                                                                           with existing ones. We then design an MPFTC controller for
+                                            2 Ivo Batkovic, and Mohammad Ali are with the research department at           a robotic arm, which has to follow a trajectory while avoiding
+                                          Zenseact AB {ivo.batkovic,mohammad.ali}@zenuity.com                              an a-priori unknown obstacle. The main contributions of this
+                                            3 Paolo Falcone is with the Dipartimento di Ingegneria “Enzo Ferrari”
+                                                                                                                           paper can be summarized as follows: (a) the introduction
+                                          Università di Modena e Reggio Emilia, Italy falcone@unimore.it
+                                            4 Mario Zanon is with the IMT School for Advanced Studies Lucca                of the MPFTC framework for flexible trajectory tracking
+                                          mario.zanon@imtlucca.it                                                          with stability guarantees; and (b) the development of a safe
+                                                                                                                                           2
+
+
+
+framework for satisfaction of a-priori unknown constraints.            where ts is the sampling time for sampled-data systems and
+   This paper is structured as follows. In Section II we outline       ts = 1 in the discrete-time framework. Given the presence
+the flexible trajectory tracking problem and in Section III we         of nonlinear dynamics and constraints, we frame the problem
+prove stability for MPFTC. In Section IV we introduce a                in the context of MPC. Note that if τ is forced to follow its
+framework with recursive feasibility guarantees for a-priori un-       natural dynamics (2), then the reference tracking problem in
+known constraints. We illustrate the theoretical developments          the absence of a-priori unknown constraints g is a standard
+in Section V with three numerical examples. Finally, we draw           MPC problem and, therefore, inherits all stability guarantees,
+conclusions in Section VI.                                             but also a possibly aggressive behavior when the initial state
+                                                                       is far from the reference.
+                                                                          Approaches developed for mechanical systems in presence
+A. Notation
+                                                                       of large tracking errors, especially caused by reference setpoint
+  We denote a discrete-time nonlinear system by                        changes, have been proposed in, e.g., [22]. In the setting we
+                                                                       consider, however, perfect tracking will not be impeded by
+                       xk+1 = f (xk , uk ),                     (1)
+                                                                       sudden setpoint changes, but rather by the presence of con-
+where xk ∈ Rnx and uk ∈ Rnu are the state and input                    straints, e.g., a mobile system might have to temporarily stop
+vectors at time k, respectively. The state and inputs are subject      in order to avoid collisions with other systems or obstacles.
+to two categories of constraints: a-priori known constraints           Therefore, we investigate complementary approaches to those
+h(x, u) : Rnx ×Rnu → Rnh ; and a-priori unknown constraints            proposed in [22].
+g(x, u) : Rnx × Rnu → Rng , i.e., the state and inputs must               One family of approaches for smooth reference tracking
+satisfy h(x, u) ≤ 0 and g(x, u) ≤ 0, where the inequalities            is the so-called MPFC [14], [17]. While MPFC is a valid
+are defined element-wise.                                              technique for tackling our problem we propose a new, al-
+    We use the notation gn|k (x, u) to denote g at time n,             ternative, approach: MPFTC, which solves the problem of
+given the information available at time k. Moreover, we will           tracking an infeasible reference trajectory when the presence
+denote by gn (x, u) := gn|∞ (x, u) the real constraint, since in       of constraints g(x, u) ≤ 0 might force the system to tem-
+general gn|k (x, u) 6= gn (x, u). Note that for a-priori known         porarily deviate from the reference. While the main difficulty
+constraints hn|k (x, u) := hn (x, u) holds by definition. We           in MPFC is to establish a suitable output y = φ(x, u) and the
+apply the same notation to state and inputs, e.g., xn|k and            corresponding path, the main difficulty in MPFTC will be to
+un|k denote the predicted state and input at time n given the          pre-compute a parametrized feasible reference.
+current time k. In addition, to denote a set of integers, we use
+Iba := {a, a + 1, ..., b}.
+                                                                       III. M ODEL P REDICTIVE F LEXIBLE T RACKING C ONTROL
+                  II. P ROBLEM D ESCRIPTION                               The main idea in MPFTC is to avoid aggressive behaviors
+   Our aim is to control system (1) such that both known               by adapting the dynamics of the reference trajectory by means
+constraints h(x, u) ≤ 0 and a-priori unknown constraints               of a parameter τ , which acts as a fictitious time, through
+g(x, u) ≤ 0 are satisfied at all times. A situation in which           relaxed dynamics given by
+some constraints cannot be known a priori occurs in the
+context of trajectory tracking for mobile robots, where h                                     τk+1 = τk + ts + vk ,                      (3)
+includes, e.g., actuator saturations and/or imposes the avoid-
+ance of collision with fixed and known obstacles, while g              where v is an additional auxiliary control input and τ be-
+includes, e.g., moving obstacles present in the environment,           comes an auxiliary state. Note that the system dynamics are
+whose motion trajectories are not known a-priori, but can be           unchanged and the fictitious time τ makes only the reference
+(over)estimated online based on measurements.                          dynamics deviate from the natural ones.
+   Our first and essential objective is to guarantee safety of (1),      We formulate the MPFTC problem as the following MPC
+which we define formally as                                            problem
+
+Definition 1 (Safety). A controller is said to be safe in a                                    X−1
+                                                                                              k+N
+                                                                                                                                  2
+given set S ⊆ Rnx if ∀ x ∈ S it generates control inputs                V (xk , τk ) := min
+                                                                                        xu
+                                                                                                     qr (xn|k , un|k , τn|k ) + wvn|k
+U = {u0 , ..., u∞ } and corresponding state trajectories X =                           τ ,v   n=k
+                                                                                                                                        (4a)
+{x0 , x1 , ..., x∞ } such that hk (xk , uk ) ≤ 0 and gk (xk , uk ) ≤                                + pr (xk+N |k , τk+N |k )
+0, ∀ k ≥ 0.                                                                       s.t. xk|k = xk , τk|k = τk ,                          (4b)
+                                                                                                                                −1
+   Our second objective is to control the system such that                            xn+1|k = f (xn|k , un|k ),       n ∈ Ik+N
+                                                                                                                            k      ,    (4c)
+the state and input xk , uk track a parametrized reference                            τn+1|k = τn|k + ts + vn|k ,           k+N −1
+                                                                                                                       n ∈ Ik      ,    (4d)
+trajectory r(τ ) := (rx (τ ), ru (τ )) as closely as safety allows.                                                         k+N −1
+If the reference parameter τ is selected to be time, its natural                      hn (xn|k , un|k ) ≤ 0,           n ∈ Ik      ,    (4e)
+                                                                                                                            k+N −1
+dynamics are given by                                                                 gn|k (xn|k , un|k ) ≤ 0,         n ∈ Ik      ,    (4f)
+
+                         τk+1 = τk + ts ,                       (2)                   xk+N |k ∈ Xrf (τk+N |k ),                         (4g)
+

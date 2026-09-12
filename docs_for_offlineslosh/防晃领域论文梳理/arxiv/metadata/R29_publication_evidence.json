@@ -1,0 +1,149 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/LRA.2025.3634881",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/lra.2025.3634881",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/lra.2025.3634881",
+    "title": [
+      "SIT-LMPC: Safe Information-Theoretic Learning Model Predictive Control for Iterative Tasks"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-0990-6680",
+        "authenticated-orcid": false,
+        "given": "Zirui",
+        "family": "Zang",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "University of Pennsylvania, Philadelphia, PA, USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0009-0008-6080-8411",
+        "authenticated-orcid": false,
+        "given": "Ahmad",
+        "family": "Amine",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Pennsylvania, Philadelphia, PA, USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Nick-Marios T.",
+        "family": "Kokolakis",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Pennsylvania, Philadelphia, PA, USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-4841-3800",
+        "authenticated-orcid": false,
+        "given": "Truong X.",
+        "family": "Nghiem",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Electrical and Computer Engineering, University of Central Florida, Orlando, USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-1682-0551",
+        "authenticated-orcid": false,
+        "given": "Ugo",
+        "family": "Rosolia",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Lyric, Science &amp; Tech Department, Catania, Italy"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-3388-8283",
+        "authenticated-orcid": false,
+        "given": "Rahul",
+        "family": "Mangharam",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Pennsylvania, Philadelphia, PA, USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Robotics and Automation Letters"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2026,
+          1
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2026,
+          1
+        ]
+      ]
+    },
+    "volume": "11",
+    "issue": "1",
+    "page": "986-993",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/lra.2025.3634881",
+    "ISSN": [
+      "2377-3766",
+      "2377-3774"
+    ]
+  }
+}

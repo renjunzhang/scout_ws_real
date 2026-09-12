@@ -1,0 +1,401 @@
+{
+  "request_url": "https://api.crossref.org/works/10.1007/978-3-031-59257-7_41",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            1,
+            27
+          ]
+        ],
+        "date-time": "2026-01-27T22:49:53Z",
+        "timestamp": 1769554193904,
+        "version": "3.49.0"
+      },
+      "publisher-location": "Cham",
+      "reference-count": 9,
+      "publisher": "Springer Nature Switzerland",
+      "isbn-type": [
+        {
+          "value": "9783031592560",
+          "type": "print"
+        },
+        {
+          "value": "9783031592577",
+          "type": "electronic"
+        }
+      ],
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2024,
+                1,
+                1
+              ]
+            ],
+            "date-time": "2024-01-01T00:00:00Z",
+            "timestamp": 1704067200000
+          },
+          "content-version": "tdm",
+          "delay-in-days": 0,
+          "URL": "https://www.springernature.com/gp/researchers/text-and-data-mining"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2024,
+                1,
+                1
+              ]
+            ],
+            "date-time": "2024-01-01T00:00:00Z",
+            "timestamp": 1704067200000
+          },
+          "content-version": "vor",
+          "delay-in-days": 0,
+          "URL": "https://www.springernature.com/gp/researchers/text-and-data-mining"
+        }
+      ],
+      "content-domain": {
+        "domain": [
+          "link.springer.com"
+        ],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [],
+      "published-print": {
+        "date-parts": [
+          [
+            2024
+          ]
+        ]
+      },
+      "DOI": "10.1007/978-3-031-59257-7_41",
+      "type": "book-chapter",
+      "created": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            10
+          ]
+        ],
+        "date-time": "2024-05-10T13:02:04Z",
+        "timestamp": 1715346124000
+      },
+      "page": "411-419",
+      "update-policy": "https://doi.org/10.1007/springer_crossmark_policy",
+      "source": "Crossref",
+      "is-referenced-by-count": 2,
+      "title": [
+        "Time-Optimal Transport of Loosely Placed Liquid Filled Cups Along Prescribed Paths"
+      ],
+      "prefix": "10.1007",
+      "author": [
+        {
+          "ORCID": "https://orcid.org/0009-0006-3572-1213",
+          "authenticated-orcid": false,
+          "given": "Klaus",
+          "family": "Zauner",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "ORCID": "https://orcid.org/0000-0002-8846-9051",
+          "authenticated-orcid": false,
+          "given": "Hubert",
+          "family": "Gattringer",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "ORCID": "https://orcid.org/0000-0001-5033-340X",
+          "authenticated-orcid": false,
+          "given": "Andreas",
+          "family": "Müller",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "297",
+      "published-online": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            11
+          ]
+        ]
+      },
+      "reference": [
+        {
+          "key": "41_CR1",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Andersson, J.A.E., Gillis, J., Horn, G., Rawlings, J.B., Diehl, M.: CasADi—A software framework for nonlinear optimization and optimal control. Mathem. Program. Comput. (2018)",
+          "DOI": "10.1007/s12532-018-0139-4"
+        },
+        {
+          "key": "41_CR2",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Di Leva, R., Carricato, M., Gattringer, H., Müller, A.: Sloshing dynamics estimation for liquid-filled containers under 2-dimensional excitation. In: ECCOMAS Thematic Conference on Multibody Dynamics. pp. 80–89. (2021)",
+          "DOI": "10.3311/ECCOMASMBD2021-274"
+        },
+        {
+          "issue": "2",
+          "key": "41_CR3",
+          "doi-asserted-by": "publisher",
+          "first-page": "153",
+          "DOI": "10.1007/s11044-022-09841-0",
+          "volume": "56",
+          "author": "R Di Leva",
+          "year": "2022",
+          "unstructured": "Di Leva, R., Carricato, M., Gattringer, H., Müller, A.: Sloshing dynamics estimation for liquid-filled containers performing 3-dimensional motions: modeling and experimental validation. Multibody Syst. Dyn. 56(2), 153–171 (2022)",
+          "journal-title": "Multibody Syst. Dyn."
+        },
+        {
+          "key": "41_CR4",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.mechatronics.2022.102753",
+          "volume": "84",
+          "author": "H Gattringer",
+          "year": "2022",
+          "unstructured": "Gattringer, H., Müller, A., Oberherber, M., Kaserer, D.: Time-optimal robotic manipulation on a predefined path of loosely placed objects: modeling and experiment. Mechatronics 84, 102753 (2022)",
+          "journal-title": "Mechatronics"
+        },
+        {
+          "key": "41_CR5",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Geu Flores, F., Kecskeméthy, A.: Time-optimal path planning for the general waiter motion problem. In: Advances in Mechanisms, Robotics and Design Education and Research, pp. 189–203. Springer (2013)",
+          "DOI": "10.1007/978-3-319-00398-6_14"
+        },
+        {
+          "key": "41_CR6",
+          "unstructured": "Geu Flores, F., Kecskeméthy, A., Pöttker, A.: Time-optimal motion planning along specified paths for multibody systems including dry friction and power constraints. In: 13th World Congress in Mechanism and Machine Science (2011)"
+        },
+        {
+          "key": "41_CR7",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Reinhold, J., Amersdorfer, M., Meurer, T.: A dynamic optimization approach for sloshing free transport of liquid filled containers using an industrial robot. In: 2019 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS), pp. 2336 – 2341. (2019)",
+          "DOI": "10.1109/IROS40897.2019.8968144"
+        },
+        {
+          "key": "41_CR8",
+          "doi-asserted-by": "publisher",
+          "first-page": "25",
+          "DOI": "10.1007/s10107-004-0559-y",
+          "volume": "106",
+          "author": "A Wächter",
+          "year": "2006",
+          "unstructured": "Wächter, A., Biegler, L.: On the implementation of a primal-dual interior point filter line search algorithm for large-scale nonlinear programming. Mathemat. Program. 106, 25–57 (2006)",
+          "journal-title": "Mathemat. Program."
+        },
+        {
+          "key": "41_CR9",
+          "doi-asserted-by": "publisher",
+          "first-page": "483",
+          "DOI": "10.1109/87.918901",
+          "volume": "9",
+          "author": "K Yano",
+          "year": "2001",
+          "unstructured": "Yano, K., Terashima, K.: Robust liquid container transfer control for complete sloshing suppression. IEEE Trans. Control. Syst. Technol. 9, 483–493 (2001)",
+          "journal-title": "IEEE Trans. Control. Syst. Technol."
+        }
+      ],
+      "container-title": [
+        "Mechanisms and Machine Science",
+        "Advances in Service and Industrial Robotics"
+      ],
+      "original-title": [],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://link.springer.com/content/pdf/10.1007/978-3-031-59257-7_41",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            10
+          ]
+        ],
+        "date-time": "2024-05-10T13:07:00Z",
+        "timestamp": 1715346420000
+      },
+      "score": 1,
+      "resource": {
+        "primary": {
+          "URL": "https://link.springer.com/10.1007/978-3-031-59257-7_41"
+        }
+      },
+      "subtitle": [],
+      "short-title": [],
+      "issued": {
+        "date-parts": [
+          [
+            2024
+          ]
+        ]
+      },
+      "ISBN": [
+        "9783031592560",
+        "9783031592577"
+      ],
+      "references-count": 9,
+      "URL": "https://doi.org/10.1007/978-3-031-59257-7_41",
+      "relation": {},
+      "ISSN": [
+        "2211-0984",
+        "2211-0992"
+      ],
+      "issn-type": [
+        {
+          "value": "2211-0984",
+          "type": "print"
+        },
+        {
+          "value": "2211-0992",
+          "type": "electronic"
+        }
+      ],
+      "subject": [],
+      "published": {
+        "date-parts": [
+          [
+            2024
+          ]
+        ]
+      },
+      "assertion": [
+        {
+          "value": "11 May 2024",
+          "order": 1,
+          "name": "first_online",
+          "label": "First Online",
+          "group": {
+            "name": "ChapterHistory",
+            "label": "Chapter History"
+          }
+        },
+        {
+          "value": "RAAD",
+          "order": 1,
+          "name": "conference_acronym",
+          "label": "Conference Acronym",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "International Conference on Robotics in Alpe-Adria Danube Region",
+          "order": 2,
+          "name": "conference_name",
+          "label": "Conference Name",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "Cluj-Napoca",
+          "order": 3,
+          "name": "conference_city",
+          "label": "Conference City",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "Romania",
+          "order": 4,
+          "name": "conference_country",
+          "label": "Conference Country",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "2024",
+          "order": 5,
+          "name": "conference_year",
+          "label": "Conference Year",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "12 June 2024",
+          "order": 7,
+          "name": "conference_start_date",
+          "label": "Conference Start Date",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "14 June 2024",
+          "order": 8,
+          "name": "conference_end_date",
+          "label": "Conference End Date",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "33",
+          "order": 9,
+          "name": "conference_number",
+          "label": "Conference Number",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        },
+        {
+          "value": "raad2024",
+          "order": 10,
+          "name": "conference_id",
+          "label": "Conference ID",
+          "group": {
+            "name": "ConferenceInfo",
+            "label": "Conference Information"
+          }
+        }
+      ]
+    }
+  ]
+}

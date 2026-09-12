@@ -1,0 +1,471 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/yoypVP6I7jQssEqMEyNS+8xYoPI</id>
+  <title>arXiv Query: search_query=(ti:"robust model predictive control" AND all:nonlinear) AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=20</title>
+  <updated>2026-09-11T14:09:01Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(ti:%22robust+model+predictive+control%22+AND+all:nonlinear)+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=20&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>20</opensearch:itemsPerPage>
+  <opensearch:totalResults>27</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2402.13183v1</id>
+    <title>Robust Model Predictive Control for nonlinear discrete-time systems using iterative time-varying constraint tightening</title>
+    <updated>2024-02-20T17:49:43Z</updated>
+    <link href="https://arxiv.org/abs/2402.13183v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2402.13183v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Robust Model Predictive Control (MPC) for nonlinear systems is a problem that poses significant challenges as highlighted by the diversity of approaches proposed in the last decades. Often compromises with respect to computational load, conservatism, generality, or implementation complexity have to be made, and finding an approach that provides the right balance is still a challenge to the research community. This work provides a contribution by proposing a novel shrinking-horizon robust MPC formulation for nonlinear discrete-time systems. By explicitly accounting for how disturbances and linearization errors are propagated through the nonlinear dynamics, a constraint tightening-based formulation is obtained, with guarantees of robust constraint satisfaction. The proposed controller relies on iteratively solving a Nonlinear Program (NLP) to simultaneously optimize system operation and the required constraint tightening. Numerical experiments show the effectiveness of the proposed controller with three different choices of NLP solvers as well as significantly improved computational speed, better scalability, and generally reduced conservatism when compared to an existing technique from the literature.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-02-20T17:49:43Z</published>
+    <arxiv:comment>22 pages, 12 figures. Submitted to the International Journal of Robust and Nonlinear Control</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Daniel D. Leister</name>
+      <arxiv:affiliation>The University of Texas at Dallas</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Justin P. Koeln</name>
+      <arxiv:affiliation>The University of Texas at Dallas</arxiv:affiliation>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1910.12081v2</id>
+    <title>A computationally efficient robust model predictive control framework for uncertain nonlinear systems -- extended version</title>
+    <updated>2020-06-04T14:45:52Z</updated>
+    <link href="https://arxiv.org/abs/1910.12081v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1910.12081v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper, we present a nonlinear robust model predictive control (MPC) framework for general (state and input dependent) disturbances. This approach uses an online constructed tube in order to tighten the nominal (state and input) constraints. To facilitate an efficient online implementation, the shape of the tube is based on an offline computed incremental Lyapunov function with a corresponding (nonlinear) incrementally stabilizing feedback. Crucially, the online optimization only implicitly includes these nonlinear functions in terms of scalar bounds, which enables an efficient implementation. Furthermore, to account for an efficient evaluation of the worst case disturbance, a simple function is constructed offline that upper bounds the possible disturbance realizations in a neighbourhood of a given point of the open-loop trajectory. The resulting MPC scheme ensures robust constraint satisfaction and practical asymptotic stability with a moderate increase in the online computational demand compared to a nominal MPC. We demonstrate the applicability of the proposed framework in comparison to state of the art robust MPC approaches with a nonlinear benchmark example. This paper is an extended version of [1], and contains further details and additional considers: continuous-time systems (App. A), more general nonlinear constraints (App. B) and special cases (Sec. IV).</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-10-26T15:05:40Z</published>
+    <arxiv:comment>Extended version of accepted paper in Transaction on Automatic Control, 2020. Contains additional details regarding continuous-time formulations; more general nonlinear constraints; and discusses the special case of constantly bounded additive disturbances and LPV systems</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <arxiv:journal_ref>Transaction on Automatic Control, 2020</arxiv:journal_ref>
+    <author>
+      <name>Johannes Köhler</name>
+    </author>
+    <author>
+      <name>Raffaele Soloperto</name>
+    </author>
+    <author>
+      <name>Matthias A. Müller</name>
+    </author>
+    <author>
+      <name>Frank Allgöwer</name>
+    </author>
+    <arxiv:doi>10.1109/TAC.2020.2982585</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TAC.2020.2982585" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.25658v1</id>
+    <title>Bilinear Koopman-Based Robust Model Predictive Control for Unknown Nonlinear Systems via Contraction Metrics</title>
+    <updated>2026-07-28T12:43:58Z</updated>
+    <link href="https://arxiv.org/abs/2607.25658v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2607.25658v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Data-driven model predictive control (MPC) using Koopman operator theory is a promising approach for constrained control of unknown nonlinear systems. While linear Koopman realizations are commonly used due to their simplicity, bilinear Koopman realizations can provide significantly higher approximation accuracy for nonlinear control systems. However, robust MPC (RMPC) formulations that account for modeling errors in bilinear Koopman realizations remain limited. This paper proposes a RMPC framework for unknown nonlinear systems with general nonlinear constraints based on data-driven bilinear Koopman realizations. A central difficulty is that finite-dimensional Koopman predictors need not preserve the manifold of valid lifted states, so multi-step prediction in lifted coordinates may leave the region where one-step error certificates apply. We address this issue by reprojecting each predicted lifted state back onto the manifold, thereby obtaining an error-aware discrete-time control-affine predictor in the original state space without impractical assumptions. For this predictor, we develop a discrete-time robust control contraction metric based homothetic tube construction, and then formulate a tube-based RMPC problem with terminal ingredients. Under the proposed formulation, we prove robust satisfaction of the original nonlinear constraints by the true closed-loop trajectory, recursive feasibility, and convergence to a neighborhood of the target state. Numerical experiments demonstrate robust stabilization of nonlinear systems and the advantages of the proposed method over existing Koopman-based RMPC approaches in terms of performance.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-07-28T12:43:58Z</published>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Yuki Higuchi</name>
+    </author>
+    <author>
+      <name>Kazuhiro Sato</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2211.14595v1</id>
+    <title>Tube-based Distributionally Robust Model Predictive Control for Nonlinear Process Systems via Linearization</title>
+    <updated>2022-11-26T15:43:21Z</updated>
+    <link href="https://arxiv.org/abs/2211.14595v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2211.14595v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Model predictive control (MPC) is an effective approach to control multivariable dynamic systems with constraints. Most real dynamic models are however affected by plant-model mismatch and process uncertainties, which can lead to closed-loop performance deterioration and constraint violations. Methods such as stochastic MPC (SMPC) have been proposed to alleviate these problems; however, the resulting closed-loop state trajectory might still significantly violate the prescribed constraints if the real system deviates from the assumed disturbance distributions made during the controller design. In this work we propose a novel data-driven distributionally robust MPC scheme for nonlinear systems. Unlike SMPC, which requires the exact knowledge of the disturbance distribution, our scheme decides the control action with respect to the worst distribution from a distribution ambiguity set. This ambiguity set is defined as a Wasserstein ball centered at the empirical distribution. Due to the potential model errors that cause off-sets, the scheme is also extended by leveraging an offset-free method. The favorable results of this control scheme are demonstrated and empirically verified with a nonlinear mass spring system and a nonlinear CSTR case study.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-11-26T15:43:21Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Zhengang Zhong</name>
+    </author>
+    <author>
+      <name>Ehecatl Antonio del Rio-Chanona</name>
+    </author>
+    <author>
+      <name>Panagiotis Petsagkourakis</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2306.03027v3</id>
+    <title>Explicit feedback synthesis for nonlinear robust model predictive control driven by quasi-interpolation</title>
+    <updated>2024-04-19T15:57:31Z</updated>
+    <link href="https://arxiv.org/abs/2306.03027v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2306.03027v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present QuIFS (Quasi-Interpolation driven Feedback Synthesis): an offline feedback synthesis algorithm for explicit nonlinear robust minmax model predictive control (MPC) problems with guaranteed quality of approximation. The underlying technique is driven by a particular type of grid-based quasi-interpolation scheme. The QuIFS algorithm departs drastically from conventional approximation algorithms that are employed in the MPC industry (in particular, it is neither based on multi-parametric programming tools and nor does it involve kernel methods), and the essence of its point of departure is encoded in the following challenge-answer approach: Given an error margin $\varepsilon&gt;0$, compute in a single stroke a feasible feedback policy that is uniformly $\varepsilon$-close to the optimal MPC feedback policy for a given nonlinear system subjected to constraints and bounded uncertainties. Closed-loop stability and recursive feasibility under the approximate feedback policy are also established. We provide a library of numerical examples to illustrate our results.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-06-05T16:46:13Z</published>
+    <arxiv:comment>29 Pages; submitted</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Siddhartha Ganguly</name>
+    </author>
+    <author>
+      <name>Debasish Chatterjee</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2003.00345v2</id>
+    <title>Robust Model Predictive Control for Nonlinear Systems Using Convex Restriction</title>
+    <updated>2021-04-22T04:20:13Z</updated>
+    <link href="https://arxiv.org/abs/2003.00345v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2003.00345v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present an algorithm for robust model predictive control with consideration of uncertainty and safety constraints. Our framework considers a nonlinear dynamical system subject to disturbances from an unknown but bounded uncertainty set. By viewing the system as a fixed point of an operator acting over trajectories, we propose a convex condition on control actions that guarantee safety against the uncertainty set. The proposed condition guarantees that all realizations of the state trajectories satisfy safety constraints. Our algorithm solves a sequence of convex quadratic constrained optimization problems of size n*N, where n is the number of states, and N is the prediction horizon in the model predictive control problem. Compared to existing methods, our approach solves convex problems while guaranteeing that all realizations of uncertainty set do not violate safety constraints. Moreover, we consider the implicit time-discretization of system dynamics to increase the prediction horizon and enhance computational accuracy. Numerical simulations for vehicle navigation demonstrate the effectiveness of our approach.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-02-29T20:52:35Z</published>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Dongchan Lee</name>
+    </author>
+    <author>
+      <name>Konstantin Turitsyn</name>
+    </author>
+    <author>
+      <name>Jean-Jacques Slotine</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2609.02079v1</id>
+    <title>Koopman-Based Robust Model Predictive Control for Nonlinear Systems with Stochastic Intermittent Measurements</title>
+    <updated>2026-09-02T04:08:49Z</updated>
+    <link href="https://arxiv.org/abs/2609.02079v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2609.02079v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Intermittent state measurements pose fundamental challenges to model predictive control of constrained nonlinear systems because prediction uncertainty grows during feedback outages and measurement-triggered resets disrupt nominal state propagation, potentially compromising closed-loop stability and recursive feasibility. This paper develops a Koopman-based stochastic MPC framework with probabilistically truncated soft constraints. Specifically, a Lipschitz-constrained deep Koopman model provides a linear latent predictor, enabling computationally efficient online optimization. The intermittent measurement process is modeled as a two-mode discrete-time Markov chain, yielding a unified Markov jump error model for open-loop propagation and measurement-triggered resets. Under numerically verifiable sufficient conditions, the prediction error is shown to be mean-square ultimately bounded, and an explicit uniform second-moment bound is obtained. A distribution-free probabilistic error radius is then constructed for a prescribed confidence level and used to truncate dropout-dependent constraint tightening. An exact-penalty soft-constraint mechanism accommodates reset-induced jumps and prolonged dropouts. Under the stated terminal compatibility and bounded-disturbance conditions, recursive feasibility and mean-square ultimate boundedness of the closed-loop regulation error are established. Numerical simulations on a visual-servoing tracking task corroborate these theoretical results and demonstrate effective tracking under stochastic measurement unavailability.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-09-02T04:08:49Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Guanhua Liu</name>
+    </author>
+    <author>
+      <name>Tong Wu</name>
+    </author>
+    <author>
+      <name>Lixian Zhang</name>
+    </author>
+    <author>
+      <name>Weifeng Du</name>
+    </author>
+    <author>
+      <name>Minghao Han</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2311.06880v1</id>
+    <title>Deadbeat Robust Model Predictive Control: Robustness without Computing Robust Invariant Sets</title>
+    <updated>2023-11-12T15:55:32Z</updated>
+    <link href="https://arxiv.org/abs/2311.06880v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2311.06880v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Deadbeat Robust Model Predictive Control (DRMPC) is introduced as a new approach of Robust Model Predictive Control (RMPC) for linear systems with additive disturbances. Its main idea is to completely extinguish the effect of the disturbances in the predictions within a small number of time steps, called the deadbeat horizon. To this end, explicit deadbeat input sequences are calculated for the vertices of the disturbance set. They generalize to a nonlinear disturbance feedback policy for all disturbances by means of a barycentric function. Similar to previous approaches, this disturbance feedback policy can be either part of the online optimization (Online DRMPC) or pre-calculated during the design phase of the controller (Offline DRMPC). The main advantage over all other RMPC approaches is that no Robust Positive Invariant (RPI) set has to be calculated, which is often intractable for systems with higher dimensions. Nonetheless, for Online DRMPC and Offline DRMPC recursive feasibility and input-to-state stability can be guaranteed. A small numerical example compares the two versions of DRMPC and demonstrates that the performance of DRMPC is competitive with other state-of-the-art RMPC approaches. Its main advantage is its easy extension to linear time-varying (LTV) and linear parameter-varying (LPV) systems.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-11-12T15:55:32Z</published>
+    <arxiv:primary_category term="math.OC"/>
+    <arxiv:journal_ref>International Journal of Robust and Nonlinear Control, 2025</arxiv:journal_ref>
+    <author>
+      <name>G. Schildbach</name>
+    </author>
+    <arxiv:doi>10.1002/rnc.70126</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1002/rnc.70126" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2104.08261v3</id>
+    <title>Adaptive Robust Model Predictive Control with Matched and Unmatched Uncertainty</title>
+    <updated>2021-10-13T21:01:23Z</updated>
+    <link href="https://arxiv.org/abs/2104.08261v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2104.08261v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose a learning-based robust predictive control algorithm that compensates for significant uncertainty in the dynamics for a class of discrete-time systems that are nominally linear with an additive nonlinear component. Such systems commonly model the nonlinear effects of an unknown environment on a nominal system. We optimize over a class of nonlinear feedback policies inspired by certainty equivalent "estimate-and-cancel" control laws pioneered in classical adaptive control to achieve significant performance improvements in the presence of uncertainties of large magnitude, a setting in which existing learning-based predictive control algorithms often struggle to guarantee safety. In contrast to previous work in robust adaptive MPC, our approach allows us to take advantage of structure (i.e., the numerical predictions) in the a priori unknown dynamics learned online through function approximation. Our approach also extends typical nonlinear adaptive control methods to systems with state and input constraints even when we cannot directly cancel the additive uncertain function from the dynamics. Moreover, we apply contemporary statistical estimation techniques to certify the system's safety through persistent constraint satisfaction with high probability. Finally, we show in simulation that our method can accommodate more significant unknown dynamics terms than existing methods.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-04-16T17:47:02Z</published>
+    <arxiv:comment>Major revision</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Rohan Sinha</name>
+    </author>
+    <author>
+      <name>James Harrison</name>
+    </author>
+    <author>
+      <name>Spencer M. Richards</name>
+    </author>
+    <author>
+      <name>Marco Pavone</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2212.01371v1</id>
+    <title>Adaptive Robust Model Predictive Control via Uncertainty Cancellation</title>
+    <updated>2022-12-02T18:54:23Z</updated>
+    <link href="https://arxiv.org/abs/2212.01371v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2212.01371v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose a learning-based robust predictive control algorithm that compensates for significant uncertainty in the dynamics for a class of discrete-time systems that are nominally linear with an additive nonlinear component. Such systems commonly model the nonlinear effects of an unknown environment on a nominal system. We optimize over a class of nonlinear feedback policies inspired by certainty equivalent "estimate-and-cancel" control laws pioneered in classical adaptive control to achieve significant performance improvements in the presence of uncertainties of large magnitude, a setting in which existing learning-based predictive control algorithms often struggle to guarantee safety. In contrast to previous work in robust adaptive MPC, our approach allows us to take advantage of structure (i.e., the numerical predictions) in the a priori unknown dynamics learned online through function approximation. Our approach also extends typical nonlinear adaptive control methods to systems with state and input constraints even when we cannot directly cancel the additive uncertain function from the dynamics. We apply contemporary statistical estimation techniques to certify the system's safety through persistent constraint satisfaction with high probability. Moreover, we propose using Bayesian meta-learning algorithms that learn calibrated model priors to help satisfy the assumptions of the control design in challenging settings. Finally, we show in simulation that our method can accommodate more significant unknown dynamics terms than existing methods and that the use of Bayesian meta-learning allows us to adapt to the test environments more rapidly.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-12-02T18:54:23Z</published>
+    <arxiv:comment>Under review for the IEEE Transaction on Automatic Control, special issue on learning and control. arXiv admin note: text overlap with arXiv:2104.08261</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Rohan Sinha</name>
+    </author>
+    <author>
+      <name>James Harrison</name>
+    </author>
+    <author>
+      <name>Spencer M. Richards</name>
+    </author>
+    <author>
+      <name>Marco Pavone</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.12398v1</id>
+    <title>Robust model predictive control for large-scale distributed parameter systems under uncertainty</title>
+    <updated>2024-10-16T09:26:22Z</updated>
+    <link href="https://arxiv.org/abs/2410.12398v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.12398v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Control of nonlinear distributed parameter systems (DPS) under uncertainty is a meaningful task for many industrial processes. However, both intrinsic uncertainty and high dimensionality of DPS require intensive computations, while non-convexity of nonlinear systems can inhibit the computation of global optima during the control procedure. In this work, polynomial chaos expansion (PCE) was used to account for the uncertainties in quantities of interest through a systematic data collection from the high-fidelity simulator. Then the proper orthogonal decomposition (POD) method was adopted to project the high-dimensional nonlinear dynamics of the computed statistical moments/bounds onto a low-dimensional subspace, where recurrent neural networks (RNNs) were subsequently built to capture the reduced dynamics. Finally, the reduced RNNs based model predictive control (MPC) would generate a set of sequential optimisation problems, of which near global optima could be computed through the mixed integer linear programming (MILP) reformulation techniques and advanced MILP solver. The effectiveness of the proposed framework is demonstrated through two case studies: a chemical tubular reactor and a cell-immobilisation packed-bed bioreactor for the bioproduction of succinic acid.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-16T09:26:22Z</published>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Min Tao</name>
+    </author>
+    <author>
+      <name>Ioannis Zacharopoulos</name>
+    </author>
+    <author>
+      <name>Constantinos Theodoropoulos</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2003.05962v4</id>
+    <title>Tube-based Robust Model Predictive Control for a Distributed Parameter System Modeled as a Polytopic LPV (extended version)</title>
+    <updated>2025-01-26T02:22:38Z</updated>
+    <link href="https://arxiv.org/abs/2003.05962v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2003.05962v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Distributed parameter systems (DPS) are formulated as partial differential equations (PDE). Especially, under time-varying boundary conditions, PDE introduce force coupling. In the case of the flexible stacker crane (STC), nonlinear coupling is introduced. Accordingly, online trajectory planning and tracking can be addressed using a nonlinear model predictive control (NMPC). However, due to the high computational demands of a NMPC, this paper discusses a possibility of embedding nonlinearities inside a linear parameter varying (LPV) system and thus make a use of a numerically low-demanding linear MPC. The resulting mismatches are treated as parametric and additive uncertainties in the context of robust tube-based MPC (TMPC). For the proposed approach, most of the computations are carried out offline. Only a simple convex quadratic program (QP) is conducted online. Additionally a soft-constrained extension was briefly proposed. Simulation results are used to illustrate the good performance, closed-loop stability and recursive feasibility of the proposed approach despite uncertainties.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-03-12T18:16:09Z</published>
+    <arxiv:comment>8 Pages, American Control Conference, 2020</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <arxiv:journal_ref>American Control Conference, 2020</arxiv:journal_ref>
+    <author>
+      <name>Joe Ismail</name>
+    </author>
+    <author>
+      <name>Steven Liu</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2209.04995v1</id>
+    <title>A novel learning-based robust model predictive control energy management strategy for fuel cell electric vehicles</title>
+    <updated>2022-09-12T02:57:48Z</updated>
+    <link href="https://arxiv.org/abs/2209.04995v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2209.04995v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The multi-source electromechanical coupling makes the energy management of fuel cell electric vehicles (FCEVs) relatively nonlinear and complex especially in the types of 4-wheel-drive (4WD) FCEVs. Accurate state observing for complicated nonlinear system is the basis for fantastic energy managing in FCEVs. Aiming at releasing the energy-saving potential of FCEVs, a novel learning-based robust model predictive control (LRMPC) strategy is proposed for a 4WD FCEV, contributing to suitable power distribution among multiple energy sources. The well-designed strategy based on machine learning (ML) translates the knowledge of the nonlinear system to the explicit controlling scheme with superior robust performance. To start with, ML methods with high regression accuracy and superior generalization ability are trained offline to establish the precise state observer for SOC. Then, explicit data tables for SOC generated by state observer are used for grabbing accurate state changing, whose input features include the vehicle status and the states of vehicle components. To be specific, the vehicle velocity estimation for providing future speed reference is constructed by deep forest. Next, the components including explicit data tables and vehicle velocity estimation are combined with model predictive control (MPC) to release the state-of-the-art energy-saving ability for the multi-freedom system in FCEVs, whose name is LRMPC. At last, the detailed assessment is performed in simulation test to validate the advancing performance of LRMPC. The corresponding results highlight the optimal control effect in energy-saving potential and strong real-time application ability of LRMPC.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-09-12T02:57:48Z</published>
+    <arxiv:comment>16 pages, 16 figures</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Shibo Li</name>
+    </author>
+    <author>
+      <name>Zhuoran Hou</name>
+    </author>
+    <author>
+      <name>Liang Chu</name>
+    </author>
+    <author>
+      <name>Jingjing Jiang</name>
+    </author>
+    <author>
+      <name>Yuanjian Zhang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2308.08426v3</id>
+    <title>Differentiable Robust Model Predictive Control</title>
+    <updated>2024-07-26T12:41:29Z</updated>
+    <link href="https://arxiv.org/abs/2308.08426v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2308.08426v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Deterministic model predictive control (MPC), while powerful, is often insufficient for effectively controlling autonomous systems in the real-world. Factors such as environmental noise and model error can cause deviations from the expected nominal performance. Robust MPC algorithms aim to bridge this gap between deterministic and uncertain control. However, these methods are often excessively difficult to tune for robustness due to the nonlinear and non-intuitive effects that controller parameters have on performance. To address this challenge, we first present a unifying perspective on differentiable optimization for control using the implicit function theorem (IFT), from which existing state-of-the art methods can be derived. Drawing parallels with differential dynamic programming, the IFT enables the derivation of an efficient differentiable optimal control framework. The derived scheme is subsequently paired with a tube-based MPC architecture to facilitate the automatic and real-time tuning of robust controllers in the presence of large uncertainties and disturbances. The proposed algorithm is benchmarked on multiple nonlinear robotic systems, including two systems in the MuJoCo simulator environment and one hardware experiment on the Robotarium testbed, to demonstrate its efficacy.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-08-16T15:17:52Z</published>
+    <arxiv:comment>Accepted to Robotics: Science and Systems 2024</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Alex Oshin</name>
+    </author>
+    <author>
+      <name>Hassan Almubarak</name>
+    </author>
+    <author>
+      <name>Evangelos A. Theodorou</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2401.13762v2</id>
+    <title>Fast System Level Synthesis: Robust Model Predictive Control using Riccati Recursions</title>
+    <updated>2024-09-04T07:15:32Z</updated>
+    <link href="https://arxiv.org/abs/2401.13762v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2401.13762v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>System level synthesis enables improved robust MPC formulations by allowing for joint optimization of the nominal trajectory and controller. This paper introduces a tailored algorithm for solving the corresponding disturbance feedback optimization problem for linear time-varying systems. The proposed algorithm iterates between optimizing the controller and the nominal trajectory while converging q-linearly to an optimal solution. We show that the controller optimization can be solved through Riccati recursions leading to a horizon-length, state, and input scalability of $\mathcal{O}(N^2 ( n_x^3 +n_u^3))$ for each iterate. On a numerical example, the proposed algorithm exhibits computational speedups by a factor of up to $10^3$ compared to general-purpose commercial solvers.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-01-24T19:21:26Z</published>
+    <arxiv:comment>Young Author Award (finalist): IFAC Conference on Nonlinear Model Predictive Control (NMPC) 2024</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Antoine P. Leeman</name>
+    </author>
+    <author>
+      <name>Johannes Köhler</name>
+    </author>
+    <author>
+      <name>Florian Messerer</name>
+    </author>
+    <author>
+      <name>Amon Lahr</name>
+    </author>
+    <author>
+      <name>Moritz Diehl</name>
+    </author>
+    <author>
+      <name>Melanie N. Zeilinger</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2504.19540v1</id>
+    <title>Event-triggered Robust Model Predictive Control under Hard Computation Resource Constraints</title>
+    <updated>2025-04-28T07:44:35Z</updated>
+    <link href="https://arxiv.org/abs/2504.19540v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2504.19540v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Model predictive control (MPC) is capable of controlling nonlinear systems with guaranteed constraint satisfaction and stability. However, MPC requires solving optimization problems online periodically, which often exceeds the local system's computational capabilities. A potential solution is to leverage external processing, such as a central industrial server. Yet, this central computer typically serves multiple systems simultaneously, leading to significant hardware demands due to the need to solve numerous optimization problems concurrently. In this work, we tackle this challenge by developing an event-triggered model predictive control (ET-MPC) that provably stabilizes multiple nonlinear systems under disturbances while solving only optimization problems for a fixed-size subset at any given time. Unlike existing ET-MPC methods, which primarily reduce average computational load yet still require hardware capable of handling all systems simultaneously, our approach reduces the worst-case computational load. This significantly lowers central server hardware requirements by diminishing peak computational demands. We achieve our improvements by leveraging recent advancements in distributed event-triggered linear control and integrating them with a robust MPC that employs constraint tightening.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-04-28T07:44:35Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Alexander Gräfe</name>
+    </author>
+    <author>
+      <name>Sebastian Trimpe</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1805.08551v1</id>
+    <title>Robust Model Predictive Control for Autonomous Vehicles/Self Driving Cars</title>
+    <updated>2018-05-22T12:47:05Z</updated>
+    <link href="https://arxiv.org/abs/1805.08551v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1805.08551v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A robust Model Predictive Control (MPC) approach for controlling front steering of an autonomous vehicle is presented in this paper. We present various approaches to increase the robustness of model predictive control by using weight tuning, a successive on-line linearization of a nonlinear vehicle model to track position error and successive on-line linearization to track velocity error. Results of the effectiveness of each method in terms of accuracy and computational load are discussed.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2018-05-22T12:47:05Z</published>
+    <arxiv:comment>12 pages,9 figures</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Che Kun Law</name>
+    </author>
+    <author>
+      <name>Darshit Dalal</name>
+    </author>
+    <author>
+      <name>Stephen Shearrow</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2401.06650v2</id>
+    <title>LMI-based robust model predictive control for a quarter car with series active variable geometry suspension</title>
+    <updated>2024-01-29T13:42:25Z</updated>
+    <link href="https://arxiv.org/abs/2401.06650v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2401.06650v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper proposes a robust model predictive control-based solution for the recently introduced series active variable geometry suspension (SAVGS) to improve the ride comfort and road holding of a quarter car. In order to close the gap between the nonlinear multi-body SAVGS model and its linear equivalent, a new uncertain system characterization is proposed that captures unmodeled dynamics, parameter variation, and external disturbances. Based on the newly proposed linear uncertain model for the quarter car SAVGS system, a constrained optimal control problem (OCP) is presented in the form of a linear matrix inequality (LMI) optimization. More specifically, utilizing semidefinite relaxation techniques a state-feedback robust model predictive control (RMPC) scheme is presented and integrated with the nonlinear multi-body SAVGS model, where state-feedback gain and control perturbation are computed online to optimise performance, while physical and design constraints are preserved. Numerical simulation results with different ISO-defined road events demonstrate the robustness and significant performance improvement in terms of ride comfort and road holding of the proposed approach, as compared to the conventional passive suspension, as well as, to actively controlled SAVGS by a previously developed conventional H-infinity control scheme.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-01-12T15:56:45Z</published>
+    <arxiv:comment>13 pages, 11 figures, 2 tables, IEEE Transactions on Control Systems Technology</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Zilin Feng</name>
+    </author>
+    <author>
+      <name>Anastasis Georgiou</name>
+    </author>
+    <author>
+      <name>Simos A. Evangelou</name>
+    </author>
+    <author>
+      <name>Min Yu</name>
+    </author>
+    <author>
+      <name>Imad M Jaimoukha</name>
+    </author>
+    <author>
+      <name>Daniele Dini</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2604.04455v2</id>
+    <title>Region of Attraction Estimation for Linear Quadratic Regulator, Linear and Robust Model Predictive Control on a Two-Wheeled Inverted Pendulum</title>
+    <updated>2026-05-19T19:45:40Z</updated>
+    <link href="https://arxiv.org/abs/2604.04455v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2604.04455v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Nonlinear underactuated systems such as two-wheeled inverted pendulums (TWIPs) exhibit a limited region of attraction (RoA), which defines the set of initial conditions from which the closed-loop system converges to the equilibrium. The RoA of nonlinear and constrained systems is generally nonconvex and analytically intractable, requiring numerical or approximate estimation methods. This work investigates the estimation of the RoA for a TWIP stabilized under three model-based control strategies: saturated linear quadratic regulator (LQR), linear model predictive control (MPC), and constraint tightening MPC (CTMPC). We first derive a Lyapunov-based invariant set that provides a certified inner approximation of the RoA. Since this analytical bound is highly conservative, a Monte Carlo-based estimation procedure is then employed to obtain a more representative approximation of the RoA, capturing how the controllers behave beyond the analytically guaranteed region. The proposed methodology combines analytical guarantees with data-driven estimation, providing both a formally certified inner bound and an empirical characterization of the RoA, offering a practical way to evaluate controller performance without relying solely on conservative analytical bounds or purely empirical simulation.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-04-06T06:03:18Z</published>
+    <arxiv:comment>6 pages, 2 figures, accepted for presentation at ICCAD 2026</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Lorenzo Fici</name>
+    </author>
+    <author>
+      <name>Dalim Wahby</name>
+    </author>
+    <author>
+      <name>Alvaro Detailleur</name>
+    </author>
+    <author>
+      <name>Matthieu Barreau</name>
+    </author>
+    <author>
+      <name>Guillaume Ducard</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2408.17348v3</id>
+    <title>Robust Model Predictive Control Exploiting Monotonicity Properties</title>
+    <updated>2025-04-24T07:22:31Z</updated>
+    <link href="https://arxiv.org/abs/2408.17348v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2408.17348v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Robust model predictive control algorithms are essential for addressing unavoidable errors due to the uncertainty in predicting real-world systems. However, the formulation of such algorithms typically results in a trade-off between conservatism and computational complexity. Monotone systems facilitate the efficient computation of reachable sets and thus the straightforward formulation of a robust model predictive control approach optimizing over open-loop predictions. We present an approach based on the division of reachable sets to incorporate feedback in the predictions, resulting in less conservative strategies. The concept of mixed-monotonicity enables an extension of our methodology to non-monotone systems. The potential of the proposed approaches is demonstrated through a nonlinear high-dimensional chemical tank reactor cascade case study.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-08-30T15:23:15Z</published>
+    <arxiv:comment>Accepted as a technical note in "IEEE Transactions on Automatic Control", Early access DOI: 10.1109/TAC.2025.3558137, Code: https://github.com/MoritzHein/RobMPCExploitMon</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Moritz Heinlein</name>
+    </author>
+    <author>
+      <name>Sankaranarayanan Subramanian</name>
+    </author>
+    <author>
+      <name>Sergio Lucia</name>
+    </author>
+    <arxiv:doi>10.1109/TAC.2025.3558137</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/TAC.2025.3558137" title="doi"/>
+  </entry>
+</feed>

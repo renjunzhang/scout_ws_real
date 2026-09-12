@@ -1,0 +1,284 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/9L/3jDRWa6ME9awrQOPZssyoXM8</id>
+  <title>arXiv Query: search_query=ti:"input shaping" OR ti:"command shaping"&amp;id_list=&amp;start=0&amp;max_results=30</title>
+  <updated>2026-09-11T14:52:47Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=ti:%22input+shaping%22+OR+ti:%22command+shaping%22&amp;start=0&amp;max_results=30&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>30</opensearch:itemsPerPage>
+  <opensearch:totalResults>11</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/1808.03667v1</id>
+    <title>User oriented assessment of vibration suppression by command shaping in a supernumerary wearable robotic arm</title>
+    <updated>2018-08-10T18:35:27Z</updated>
+    <link href="https://arxiv.org/abs/1808.03667v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1808.03667v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Supernumerary Robotic Limbs (SRLs) exhibit inherently compliant behavior due to the elasticity present at the intersection of human tissue and the robot. This compliance, can prominently influence the operation of some SRLs, depending on the application. In order to control the residual vibrations of SRLs, we have used an input-shaping method which is a computationally inexpensive approach. The effectiveness of this method in controlling the residual vibrations of a SRL has been proven using robustness analysis. User studies show that reducing the vibrations using input shaping directly increases the user satisfaction and comfort by at least 9%. It is also observed that 36% of the users preferred unshaped commands. We hypothesize that the shaped commands put a higher cognitive load on the user compared to unshaped commands. This shows that when dealing with human-robot interaction, user satisfaction becomes an equally important parameter as traditional performance criteria and should be taken into account while evaluating the success of any vibration-control method.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2018-08-10T18:35:27Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Roozbeh Khodambashi</name>
+    </author>
+    <author>
+      <name>Gil Weinberg</name>
+    </author>
+    <author>
+      <name>William Singhose</name>
+    </author>
+    <author>
+      <name>Shima Rishmawi</name>
+    </author>
+    <author>
+      <name>Varun Murali</name>
+    </author>
+    <author>
+      <name>Euisun Kim</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2010.11676v1</id>
+    <title>Input-Shaping for Feed-Forward Control of Cable-Driven Parallel Robots</title>
+    <updated>2020-09-09T07:17:39Z</updated>
+    <link href="https://arxiv.org/abs/2010.11676v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2010.11676v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper deals with the use of input-shaping filters in conjunction with a feed-forward control of Cable-Driven Parallel Robots (CDPRs), while integrating cable tension calculation to satisfy positive cable tensions along the prescribed trajectory of the moving-platform. This method aims to attenuate the oscillatory motions of the moving-platform. Thus, the input signal is modified to make it self-cancel residual vibrations. 5 The effectiveness, in terms of moving-platform oscillation attenuation, of the proposed closed-loop control method combined with shaping inputs is experimentally studied on a suspended and non-redundant CDPR prototype. This confirms residual vibration reduction improvement with respect to the unshaped control in terms of Peak-to-Peak amplitude of velocity error, which can achieve 72 % while using input-shaping filters.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="physics.class-ph" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-09-09T07:17:39Z</published>
+    <arxiv:comment>Journal of Dynamic Systems, Measurement, and Control, American Society of Mechanical Engineers, 2020</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Sana Baklouti</name>
+      <arxiv:affiliation>RoMas, LS2N</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Eric Courteille</name>
+      <arxiv:affiliation>LGCGM</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Philippe Lemoine</name>
+      <arxiv:affiliation>LS2N, ECN</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Centrale Nantes</name>
+      <arxiv:affiliation>LS2N, CNRS, RoMas</arxiv:affiliation>
+    </author>
+    <author>
+      <name>Stéphane Caro</name>
+      <arxiv:affiliation>LS2N, CNRS, RoMas</arxiv:affiliation>
+    </author>
+    <arxiv:doi>10.1115/1.4048354</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1115/1.4048354" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2512.11228v2</id>
+    <title>Mitigating Dynamic Tip-Over during Mobile Crane Slewing using Input Shaping</title>
+    <updated>2026-02-10T19:04:14Z</updated>
+    <link href="https://arxiv.org/abs/2512.11228v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2512.11228v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Payload swing during rapid slewing of mobile cranes poses a safety risk, as it generates overturning moments that can lead to tip-over accidents of mobile cranes. Currently, to limit the risk of tip-over, mobile crane operators are forced to either reduce the slewing speed (which lowers productivity) or reduce the load being carried to reduce the induced moments. Both of these approaches reduce productivity. This paper seeks to enable rapid slewing without compromising safety by applying input shaping to the crane-slewing commands generated by the operator. A key advantage of this approach is that the input shaper requires only the information about the rope length, and does not require detailed mobile crane dynamics. Simulations and experiments show that the proposed method reduces residual payload swing and enables significantly higher slewing speeds without tip over, reducing slewing completion time by at least 38% compared to unshaped control. Human control with input shaping improves task completion time by 13%, reduces the peak swing by 18%, and reduces the potential of collisions by 82% when compared to unshaped control. Moreover, shaped control with a human had no tip-over, whereas large swing led to tip-over without input shaping. Thereby, the proposed method substantially recovers the operational-safety envelope of mobile cranes (designed to avoid tip-over using static analysis) that would otherwise be lost in dynamic conditions. Videos and demonstrations are available at https://youtu.be/dVy3bbIhrBU.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-12-12T02:28:34Z</published>
+    <arxiv:comment>Submitted to conference</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Navneet Kaur</name>
+    </author>
+    <author>
+      <name>Christopher J. Adams</name>
+    </author>
+    <author>
+      <name>William E. Singhose</name>
+    </author>
+    <author>
+      <name>Santosh Devasia</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.26717v2</id>
+    <title>Global Sensitive-Based Input Shaping for UAV-Payload Precision Motion Control</title>
+    <updated>2026-08-11T18:53:22Z</updated>
+    <link href="https://arxiv.org/abs/2607.26717v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2607.26717v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This work presents a comprehensive analysis and design of global sensitivity-based input shapers for a 3D Unmanned Aerial Vehicle-payload system, emphasizing robustness against uncertainties in payload mass and rope length. The proposed approach also leverages the Shapley value concept in controller design to systematically account for uncertainties, thereby reducing the controller's sensitivity to unknown parameters. To validate the effectiveness of the methodology, numerical simulations are conducted, comparing the proposed controller against non-robust, robust, and minimax designs. The results demonstrate that the standard global sensitivity or Shapley-based input shapers improve performance and offer a promising framework for uncertainty-aware control in aerial payload transport.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-07-29T10:07:13Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Karan Baker</name>
+    </author>
+    <author>
+      <name>Sanjay Maharjan</name>
+    </author>
+    <author>
+      <name>Tariq Hlayel</name>
+    </author>
+    <author>
+      <name>Oladapo Ogunbodede</name>
+    </author>
+    <author>
+      <name>Dutch Dunphy</name>
+    </author>
+    <author>
+      <name>Adrian Stein</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2507.01460v1</id>
+    <title>Robust Input Shaping Control for Flexible Structures Based on Unscented Kalman Filter</title>
+    <updated>2025-07-02T08:19:11Z</updated>
+    <link href="https://arxiv.org/abs/2507.01460v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2507.01460v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>With the rapid development of industrial automation and smart manufacturing, the control of flexible structures and underactuated systems has become a critical research focus. Residual vibrations in these systems not only degrade operational efficiency but also pose risks to structural integrity and longevity. Traditional input shaping techniques, while effective, often suffer from performance degradation due to parameter inaccuracies and environmental disturbances. To address these challenges, this paper introduces an innovative unscented Kalman filter-based zero vibration derivative input shaping (UZS) method. The proposed approach combines two key innovations: 1) a data-driven Unscented Kalman Filterfor real-time system parameter identification, and 2) a zero-vibration derivative (ZVD) input shaper for robust vibration suppression. To validate the effectiveness of UZS, we conducted extensive experiments on a vertical flexible beam platform, and the results demonstrate significant improvements over state-of-the-art methods. Additionally, we have made the experimental datasets publicly available to facilitate further research. The findings highlight UZS's potential for practical applications in industrial automation, robotics, and precision engineering.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-07-02T08:19:11Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Weiyi Yang</name>
+    </author>
+    <author>
+      <name>Yu Yuan</name>
+    </author>
+    <author>
+      <name>Mingsheng Shang</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2607.25071v1</id>
+    <title>Input Shaping for Point-to-Point Motion with a Continuum Robot Arm</title>
+    <updated>2026-07-27T21:05:32Z</updated>
+    <link href="https://arxiv.org/abs/2607.25071v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2607.25071v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A cable-driven continuum robot arm is an underactuated mechanism and may suffer residual vibration at the end of a rest-to-rest maneuver. In this work, a time-delay filter is applied as an input shaper to the system to eliminate the excitation of vibratory modes. A non-robust and a robust time-delay filter are designed based on a linear system model and demonstrate improved response compared to a velocity-driven pulse input. Experimental results using the continuum robot validate the application of the input shaper, with reduced overshoot and settling time exemplifying the reduction in oscillation at the end of the maneuver. It is also shown that utilizing the robust shaper further improves the response of the arm in comparison to applying the non-robust shaper. These results are significant towards the precise and robust implementation of continuum robots in applications involving arbitrary end-effector trajectories.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-07-27T21:05:32Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Rodolfo Hdz. Ibarra</name>
+    </author>
+    <author>
+      <name>Karan Baker</name>
+    </author>
+    <author>
+      <name>Parsa Molaei</name>
+    </author>
+    <author>
+      <name>Adrian Stein</name>
+    </author>
+    <author>
+      <name>Hunter B. Gilbert</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2408.12126v1</id>
+    <title>Robust Input Shaping Vibration Control via Extended Kalman Filter-Incorporated Residual Neural Network</title>
+    <updated>2024-08-22T04:39:10Z</updated>
+    <link href="https://arxiv.org/abs/2408.12126v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2408.12126v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>With the rapid development of industry, the vibration control of flexible structures and underactuated systems has been increasingly gaining attention. Input shaping technology enables stable performance for high-speed motion in industrial motion systems. However, existing input shapers generally suffer from the ineffective control performance due to the neglect of observation errors. To address this critical issue, this paper proposes an Extended Kalman Filter-incorporated Residual Neural Network-based input Shaping (ERS) model for vibration control. Its main ideas are two-fold: a) adopting an extended Kalman filter to address a vertical flexible beam's model errors; and b) adopting a residual neural network to cascade with the extended Kalman filter for eliminating the remaining observation errors. Detailed experiments on a real dataset collected from a vertical flexible beam demonstrate that the proposed ERS model has achieved significant vibration control performance over several state-of-the-art models.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-08-22T04:39:10Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Weiyi Yang</name>
+    </author>
+    <author>
+      <name>Shuai Li</name>
+    </author>
+    <author>
+      <name>Xin Luo</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2506.14405v1</id>
+    <title>Data Driven Approach to Input Shaping for Vibration Suppression in a Flexible Robot Arm</title>
+    <updated>2025-06-17T11:07:28Z</updated>
+    <link href="https://arxiv.org/abs/2506.14405v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2506.14405v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a simple and effective method for setting parameters for an input shaper to suppress the residual vibrations in flexible robot arms using a data-driven approach. The parameters are adaptively tuned in the workspace of the robot by interpolating previously measured data of the robot's residual vibrations. Input shaping is a simple and robust technique to generate vibration-reduced shaped commands by a convolution of an impulse sequence with the desired input command. The generated impulses create waves in the material countering the natural vibrations of the system. The method is demonstrated with a flexible 3D-printed robot arm with multiple different materials, achieving a significant reduction in the residual vibrations.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-06-17T11:07:28Z</published>
+    <arxiv:comment>6 pages, 11 figures, robosoft2025 conference</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <arxiv:journal_ref>2025 IEEE 8th International Conference on Soft Robotics (RoboSoft), Lausanne, Switzerland, 2025, pp. 1-6</arxiv:journal_ref>
+    <author>
+      <name>Jarkko Kotaniemi</name>
+    </author>
+    <author>
+      <name>Janne Saukkoriipi</name>
+    </author>
+    <author>
+      <name>Shuai Li</name>
+    </author>
+    <author>
+      <name>Markku Suomalainen</name>
+    </author>
+    <arxiv:doi>10.1109/RoboSoft63089.2025.11020930</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/RoboSoft63089.2025.11020930" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1807.01479v1</id>
+    <title>Homeostatic plasticity and external input shape neural network dynamics</title>
+    <updated>2018-07-04T08:30:38Z</updated>
+    <link href="https://arxiv.org/abs/1807.01479v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1807.01479v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In vitro and in vivo spiking activity clearly differ. Whereas networks in vitro develop strong bursts separated by periods of very little spiking activity, in vivo cortical networks show continuous activity. This is puzzling considering that both networks presumably share similar single-neuron dynamics and plasticity rules. We propose that the defining difference between in vitro and in vivo dynamics is the strength of external input. In vitro, networks are virtually isolated, whereas in vivo every brain area receives continuous input. We analyze a model of spiking neurons in which the input strength, mediated by spike rate homeostasis, determines the characteristics of the dynamical state. In more detail, our analytical and numerical results on various network topologies show consistently that under increasing input, homeostatic plasticity generates distinct dynamic states, from bursting, to close-to-critical, reverberating and irregular states. This implies that the dynamic state of a neural network is not fixed but can readily adapt to the input strengths. Indeed, our results match experimental spike recordings in vitro and in vivo: the in vitro bursting behavior is consistent with a state generated by very low network input (&lt; 0.1%), whereas in vivo activity suggests that on the order of 1% recorded spikes are input-driven, resulting in reverberating dynamics. Importantly, this predicts that one can abolish the ubiquitous bursts of in vitro preparations, and instead impose dynamics comparable to in vivo activity by exposing the system to weak long-term stimulation, thereby opening new paths to establish an in vivo-like assay in vitro for basic as well as neurological studies.</summary>
+    <category term="q-bio.NC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cond-mat.dis-nn" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="nlin.AO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2018-07-04T08:30:38Z</published>
+    <arxiv:comment>14 pages, 8 figures, accepted at Phys. Rev. X</arxiv:comment>
+    <arxiv:primary_category term="q-bio.NC"/>
+    <arxiv:journal_ref>Phys. Rev. X 8, 031018 (2018)</arxiv:journal_ref>
+    <author>
+      <name>Johannes Zierenberg</name>
+    </author>
+    <author>
+      <name>Jens Wilting</name>
+    </author>
+    <author>
+      <name>Viola Priesemann</name>
+    </author>
+    <arxiv:doi>10.1103/PhysRevX.8.031018</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1103/PhysRevX.8.031018" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.06768v1</id>
+    <title>Patterns of Creativity: How User Input Shapes AI-Generated Visual Diversity</title>
+    <updated>2024-10-09T10:57:05Z</updated>
+    <link href="https://arxiv.org/abs/2410.06768v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.06768v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Recent critiques of Artificial-intelligence (AI)-generated visual content highlight concerns about the erosion of artistic originality, as these systems often replicate patterns from their training datasets, leading to significant uniformity and reduced diversity. Our research adopts a novel approach by focusing on user behavior during interactions with Text-to-Image models. Instead of solely analyzing training data patterns, we examine how users' tendencies to create original prompts or rely on common templates influence content homogenization. We developed three originality metrics -- lexical, thematic, and word-sequence originality -- and applied them to user-generated prompts from two datasets, DiffusionDB and Civiverse. Additionally, we explored how characteristics such as topic choice, language originality, and the presence of NSFW content affect image popularity, using a linear regression model to predict user engagement. Our research enhances the discourse on AI's impact on creativity by emphasizing the critical role of user behavior in shaping the diversity of AI-generated visual content.</summary>
+    <category term="cs.HC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-09T10:57:05Z</published>
+    <arxiv:primary_category term="cs.HC"/>
+    <author>
+      <name>Maria-Teresa De Rosa Palmini</name>
+    </author>
+    <author>
+      <name>Eva Cetinic</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2410.16123v2</id>
+    <title>Spike-timing-dependent plasticity and random inputs shape interspike interval regularity of model STN neurons</title>
+    <updated>2025-02-21T03:10:15Z</updated>
+    <link href="https://arxiv.org/abs/2410.16123v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2410.16123v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Neuronal oscillations are closely related to the symptoms of Parkinson's disease (PD). In this study, we explore how random fluctuations (or "stochastic inputs") affect these oscillations in brain states, which reflect the collective activity of interconnected neurons. These random inputs are modeled in the context of the subthalamic nucleus (STN), a brain region implicated in PD, and their interaction with synaptic dynamics and spike-timing-dependent plasticity (STDP) in both healthy and PD-affected neurons. Specifically, we investigate the effects of random synaptic inputs and their correlations on the membrane potential of STN neurons. Our results show that these random inputs significantly influence the firing patterns of STN neurons, both in healthy cells and in those affected by PD under deep brain stimulation (DBS) treatment. We also find that STDP increases the regularity of the interspike intervals (ISI) in spike trains of output neurons. However, the introduction of random refractory periods and fluctuating input currents can induce greater irregularity in the spike trains. Furthermore, when random inputs and STDP are combined, the correlation between the activity of different neurons increases. These findings suggest that the stochastic dynamics of STN neurons, in conjunction with STDP, could offer insights into the mechanisms underlying PD symptoms and their potential management.</summary>
+    <category term="q-bio.NC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-10-21T15:50:39Z</published>
+    <arxiv:comment>25 pages, 8 figures</arxiv:comment>
+    <arxiv:primary_category term="q-bio.NC"/>
+    <author>
+      <name>Thoa Thieu</name>
+    </author>
+    <author>
+      <name>Roderick Melnik</name>
+    </author>
+  </entry>
+</feed>

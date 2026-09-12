@@ -1,0 +1,3 @@
+# Paper PDFs are local reference material; keep indexes and metadata versioned.
+# A basename pattern applies to this directory and every subdirectory.
+*.[pP][dD][fF]

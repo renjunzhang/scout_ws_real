@@ -1,0 +1,124 @@
+                                                 Damping of liquid sloshing by foams
+
+
+                                                 Damping of liquid sloshing by foams
+                                                          A. Sauret,1, 2, a) F. Boulogne,1, b) J. Cappello,1, 3 E. Dressaire,1, 4 and H. A. Stone1, c)
+                                                          1)
+                                                             Department of Mechanical and Aerospace Engineering, Princeton University, Princeton, NJ 08544,
+                                                          USA
+                                                          2)
+                                                             Surface du Verre et Interfaces, UMR 125 CNRS/Saint-Gobain, 93303 Aubervilliers,
+                                                          France.
+                                                          3)
+                                                             Ecole Normale Supérieure de Cachan, 94235 Cachan, France
+                                                          4)
+                                                             Department of Mechanical and Aerospace Engineering, New York University Polytechnic School of
+                                                          Engineering, Brooklyn, NY 11201, USA
+                                                          (Dated: 3 February 2015)
+arXiv:1411.6542v2 [physics.flu-dyn] 1 Feb 2015
+
+
+
+
+                                                          When a container is set in motion, the free surface of the liquid starts to oscillate or slosh. Such
+                                                          effects can be observed when a glass of water is handled carelessly and the fluid sloshes or even spills
+                                                          over the rims of the container. However, beer does not slosh as readily as water, which suggests that
+                                                          foam could be used to damp sloshing. In this work, we study experimentally the effect on sloshing
+                                                          of a liquid foam placed on top of a liquid bath. We generate a monodisperse two-dimensional liquid
+                                                          foam in a rectangular container and track the motion of the foam. The influence of the foam on
+                                                          the sloshing dynamics is experimentally characterized: only a few layers of bubbles are sufficient
+                                                          to significantly damp the oscillations. We rationalize our experimental findings with a model that
+                                                          describes the foam contribution to the damping coefficient through viscous dissipation on the walls
+                                                          of the container. Then we extend our study to confined three-dimensional liquid foam and observe
+                                                          that the behavior of 2D and confined 3D systems are very similar. Thus we conclude that only the
+                                                          bubbles close to the walls have a significant impact on the dissipation of energy. The possibility
+                                                          to damp liquid sloshing using foam is promising in numerous industrial applications such as the
+                                                          transport of liquefied gas in tankers or for propellants in rocket engines.
+
+
+
+
+                                                 I.   INTRODUCTION
+
+                                                   Sloshing is the motion of the free surface of a liquid induced by variations of the velocity of the con-
+                                                 tainer. The amplitude of the generated waves depends on the frequency and the amplitude of motion of the
+                                                 container.1–9 When the frequency of the motion corresponds to the resonance frequency of the surface wave,
+                                                 the amplitude increases significantly. If the amplitude of sloshing becomes large enough, spilling, splashing,
+                                                 and/or drop formation are possible.10 Such phenomenon can lead to challenging technical constraints in
+                                                 various applications including the transportation of oil and liquefied gas in tankers. Indeed, the sloshing dy-
+                                                 namics leads to considerable pressure forces on the walls of a container and can be a source of destabilization
+                                                 or failure of a container. Therefore, the characterization of the amplitude of the waves and the exploration of
+                                                 mechanisms capable of damping sloshing is of critical importance. To damp sloshing, various methods have
+                                                 been considered including the use of elastic membranes attached to the top of a container,11–13 or baffles
+                                                 placed in a container.14,15 The use of containers with elastic walls was also considered.16 However, these
+                                                 methods can be difficult to implement in large containers or require the design of new containers.
+                                                   In the present paper, we study the damping effects of a liquid foam placed on top of the liquid. The present
+                                                 method is versatile as it can be used in any container. Foam is easy to produce and cheap as it requires a
+                                                 small quantity of foaming solution to generate a large volume of foam. In addition, foams are already used in
+                                                 various industrial applications and processes such as oil recovery, soil remediation, fire containment or blast
+                                                 wave mitigation.17,18
+                                                   A foam, as used in the present study, is an assembly of densely packed bubbles produced upon aeration
+                                                 of a surfactant solution. The flow of foam in two-dimensional channels has been studied extensively both
+
+
+                                                 a) Electronic mail: alban.sauret@saint-gobain.com
+                                                 b) A. Sauret and F. Boulogne contributed equally to this work.
+                                                 c) Electronic mail: hastone@princeton.edu
+Damping of liquid sloshing by foams                                                                           2
+
+
+experimentally19–22 and numerically.23–25 Common foams exhibit viscous, elastic and/or plastic responses
+depending on the external forcing.26–28 For small deformations, foams behave as visco-elastic solids.29 In
+this regime, the effective viscosity of a foam is much larger than the viscosity of the foaming solution.30,31
+Therefore, foam is a good candidate to damp sloshing and thus to decrease the pressure forces exerted on
+the walls of a container.
+   Since the seminal work of Bretherton on the motion of a bubble in a capillary,32 the viscous dissipation of a
+flowing foam has been considered.33–38 It has been shown that the friction coefficient depends on the capillary
+number (ratio of viscous forces to surface tension forces) but varies with the nature of the foam. For three-
+dimensional foams, two sources of dissipation need to be taken into account. The first contribution is the
+viscous friction induced by the displacement of the Plateau borders associated with the displacement of the
+bubbles in contact with the walls of a container and relative to one another. The second contribution depends
+on the interfacial rheology of the foam and is induced by the presence of surfactant molecules at air/liquid
+interfaces.33,37 To characterize the relative magnitude of the different contributions, a distinction should be
+made between low and high surface moduli. At high surface modulus, interfaces behave as incompressible
+surfaces.39 In the present study, we rely on a foam with low surface modulus where the interfaces are elastic.
+   In this paper, we study the damping effect of a foam placed on top of a liquid bath in an oscillating
+rectangular container. In section II we begin by presenting the experimental setup, the physical properties of
+the system and the two methods of excitation considered. Then, in section III we characterize the sloshing of a
+single Newtonian fluid. We recall analytical results previously derived and validate the experimental approach.
+We also introduce the damping coefficient 1/τ and provide a scaling law to rationalize the experimental
+results. Section IV is devoted to the sloshing in presence of a layer of foam of varying thickness. We extend
+our observations to three-dimensional foams and present a phenomenological model that predicts the damping
+of the wave as a function of the foam thickness. We summarize our conclusions and discuss avenues for future
+research in section V.
+
+
+II.   EXPERIMENTAL METHODS
+
+A.    Experimental setup
+
+   To perform visualization of the different interfaces (liquid/air, liquid/foam, foam/air) and track the motion
+of the foam, we use a rectangular cell in which the displacement of the fluid remains mainly two-dimensional.
+The vertical walls of the container are made of borosilicate glass (purchased from Ted Pella and McMaster-
+Carr) and a rigid rubber sheet (McMaster-Carr) is used to close the bottom of the cell. This configuration
+allows the introduction of a needle at the center of the container to generate the monodisperse foam. The
+cell has a length of L = 70 mm, a height of 92 mm and a varying width w ∈ [3; 19] mm. The experimental
+apparatus, represented in figure 1(a), consists of a container, a LED panel and a high-speed camera mounted
+on a moving stage. The moving stage is on rails and set in motion by a mechanical vibrator (LDS 319024-3)
+controlled by a power supply (Stanford research system Model DS345) and an amplifier (LDS PA100E). The
+lighting is provided by the LED panel (Phlox, 10 cm × 10 cm) placed behind the cell. The oscillations of the
+liquid surface are recorded using a high-speed camera (Phantom V9.1) operating at typically 100 frames per
+second. Examples of the visualizations are shown without and with foam, respectively, in figures 1(b) and
+1(c).
+   We first study the sloshing dynamics of a single Newtonian fluid. We use different fluids to vary the
+viscosity, the density and the surface tension of the liquid. We compare the behavior of water, mixtures of
+water and glycerol (50% v/v, 60% v/v and 80% v/v of glycerol), dodecane, decanol and a foaming solution
+(described in detail in the next paragraph). We are therefore able to study how the physical parameters
+of the system influence the sloshing dynamics of a single Newtonian fluid. The viscosity and the surface
+tension of the Newtonian fluids are measured, respectively, with an Anton Paar rheometer (MCR 301, CC50
+geometry) and the pendant drop method at 20o C and compared with tabulated values.40–42 The physical
+properties of the different fluids used in this study are summarized in Table I.
+   To perform sloshing experiments in the presence of foam, we partially fill the cell with a foaming solution
+well above the critical micelle concentration (CMC). This solution is made of 90% v/v water, 5% v/v glyc-
+erol and 5% v/v of commercial surfactant (Dawn dish-washing liquid, Procter & Gamble). The surfactant
+

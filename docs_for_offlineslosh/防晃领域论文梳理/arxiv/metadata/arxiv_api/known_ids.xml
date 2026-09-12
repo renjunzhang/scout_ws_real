@@ -1,0 +1,51 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/wiVoA8oVMFMBbr4pmmK3hcLkwSc</id>
+  <title>arXiv Query: search_query=&amp;id_list=2108.11052,2011.02726&amp;start=0&amp;max_results=2</title>
+  <updated>2026-09-11T14:13:05Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=&amp;start=0&amp;max_results=2&amp;id_list=2108.11052,2011.02726" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>2</opensearch:itemsPerPage>
+  <opensearch:totalResults>2</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2108.11052v1</id>
+    <title>Spill-Free Transfer and Stabilization of Viscous Liquid</title>
+    <updated>2021-08-25T05:41:11Z</updated>
+    <link href="https://arxiv.org/abs/2108.11052v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2108.11052v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper studies the feedback stabilization problem of the motion of a tank that contains an incompressible, Newtonian, viscous liquid. The control input is the force applied on the tank and the overall system consists of two nonlinear Partial Differential Equations and two Ordinary Differential Equations. Moreover, a spill-free condition is required to hold. By applying the Control Lyapunov Functional methodology, a set of initial conditions (state space) is determined for which spill-free motion of the liquid is possible by applying an appropriate control input. Semi-global stabilization of the liquid and the tank by means of a simple feedback law is achieved, in the sense that for every closed subset of the state space, it is possible to find appropriate controller gains, so that every solution of the closed-loop system initiated from the given closed subset satisfies specific stability estimates. The closed-loop system exhibits an exponential convergence rate to the desired equilibrium point. The proposed stabilizing feedback law does not require measurement of the liquid level and velocity profiles inside the tank and simply requires measurements of: (i) the tank position error and tank velocity, (ii) the total momentum of the liquid, and (iii) the liquid levels at the tank walls. The obtained results allow an algorithmic solution of the problem of the spill-free movement and slosh-free settlement of a liquid in a vessel of limited height (such as water in a glass) by a robot to a pre-specified position, no matter how full the vessel is.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.AP" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="physics.flu-dyn" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-08-25T05:41:11Z</published>
+    <arxiv:comment>24 pages,1 figure, submitted to IEEE TAC for possible publication</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Iasson Karafyllis</name>
+    </author>
+    <author>
+      <name>Miroslav Krstic</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2011.02726v3</id>
+    <title>Phase-lag predicts nonlinear response maxima in liquid-sloshing experiments</title>
+    <updated>2021-08-04T10:01:38Z</updated>
+    <link href="https://arxiv.org/abs/2011.02726v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2011.02726v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Mass-spring models are essential for the description of sloshing resonances in engineering. By experimentally measuring the liquid's centre of mass in a horizontally oscillated rectangular tank, we show that low-amplitude sloshing obeys the Duffing equation. A bending of the response curve in analogy to a softening spring is observed, with growing hysteresis as the driving amplitude increases. At large amplitudes, complex wave patterns emerge (including wave-breaking and run up at the tank walls), competition between flow states is observed and the dynamics departs progressively from Duffing. We also provide a quantitative comparison of wave shapes and response curves to the predictions of a multimodal model based on potential flow theory (Faltinsen &amp; Timokha 2009) and show that it systematically overestimates the sloshing amplitudes and the hysteresis. We find that the phase-lag between the liquid's centre of mass and the forcing is the key predictor of the nonlinear response maxima. The phase-lag reflects precisely the onset of deviations from Duffing dynamics and - most importantly - at resonance the sloshing motion always lags the driving by 90° (independently of the wave pattern). This confirms the theoretical 90°-phase-lag criterion (Cenedese &amp; Haller 2020).</summary>
+    <category term="physics.flu-dyn" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-11-05T09:44:58Z</published>
+    <arxiv:comment>29 pages, 15 figures; [v3]: accepted version in Journal of Fluid Mechanics; minor revision in §8 [v2]: some structure changes; added comparison to multimodal modal from Faltinsen &amp; Timokha 2009 in §5, §7.2 &amp; appendix; new chapter §8</arxiv:comment>
+    <arxiv:primary_category term="physics.flu-dyn"/>
+    <author>
+      <name>Bastian Bäuerlein</name>
+    </author>
+    <author>
+      <name>Kerstin Avila</name>
+    </author>
+    <arxiv:doi>10.1017/jfm.2021.576</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1017/jfm.2021.576" title="doi"/>
+  </entry>
+</feed>

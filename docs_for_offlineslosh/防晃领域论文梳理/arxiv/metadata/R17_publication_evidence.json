@@ -1,0 +1,156 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/TAC.2021.3059838",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tac.2021.3059838",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tac.2021.3059838",
+    "title": [
+      "FaSTrack:A Modular Framework for Real-Time Motion Planning and Guaranteed Safe Tracking"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0001-8506-3665",
+        "authenticated-orcid": false,
+        "given": "Mo",
+        "family": "Chen",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-3863-8945",
+        "authenticated-orcid": false,
+        "given": "Sylvia L.",
+        "family": "Herbert",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-4217-4776",
+        "authenticated-orcid": false,
+        "given": "Haimin",
+        "family": "Hu",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-5924-0859",
+        "authenticated-orcid": false,
+        "given": "Ye",
+        "family": "Pu",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-2676-5090",
+        "authenticated-orcid": false,
+        "given": "Jaime Fernandez",
+        "family": "Fisac",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-5826-7686",
+        "authenticated-orcid": false,
+        "given": "Somil",
+        "family": "Bansal",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-1195-6465",
+        "authenticated-orcid": false,
+        "given": "SooJean",
+        "family": "Han",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-3192-3185",
+        "authenticated-orcid": false,
+        "given": "Claire J.",
+        "family": "Tomlin",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Automatic Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021,
+          12
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021,
+          12
+        ]
+      ]
+    },
+    "volume": "66",
+    "issue": "12",
+    "page": "5861-5876",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tac.2021.3059838",
+    "ISSN": [
+      "0018-9286",
+      "1558-2523",
+      "2334-3303"
+    ]
+  }
+}

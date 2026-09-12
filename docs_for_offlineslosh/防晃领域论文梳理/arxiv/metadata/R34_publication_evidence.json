@@ -1,0 +1,80 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/TCST.2015.2460693",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.1109/tcst.2015.2460693",
+    "title": [
+      "Optimal Trajectories for Vibration Reduction Based on Exponential Filters"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-2343-6929",
+        "authenticated-orcid": false,
+        "given": "Luigi",
+        "family": "Biagiotti",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Claudio",
+        "family": "Melchiorri",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Lorenzo",
+        "family": "Moriello",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Control Systems Technology"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2015
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2015
+        ]
+      ]
+    },
+    "page": "1-1",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tcst.2015.2460693",
+    "link": [
+      {
+        "URL": "http://xplorestaging.ieee.org/ielx7/87/7410136/7219404.pdf?arnumber=7219404",
+        "content-type": "unspecified",
+        "content-version": "vor",
+        "intended-application": "similarity-checking"
+      }
+    ]
+  }
+}

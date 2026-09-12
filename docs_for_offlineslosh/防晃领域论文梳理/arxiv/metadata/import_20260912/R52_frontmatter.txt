@@ -1,0 +1,77 @@
+Internal resonances and dynamic responses in equivalent mechanical
+                     model of partially liquid-filled vessel
+
+                            M. Farid and O. V. Gendelman*
+
+    Faculty of Mechanical Engineering, Technion – Israel Institute of Technology
+
+       *contacting author, ovgend@tx.technion.ac.il
+
+
+Abstract
+The paper treats oscillations of a liquid in partially filled vessel under horizontal
+harmonic ground excitation. Such excitation may lead to hydraulic impacts. The
+liquid sloshing mass is modeled by equivalent pendulum, which can impact the vessel
+walls. We use parameters of the equivalent pendulum for well-explored case of
+cylindrical vessels. The hydraulic impacts are modeled by high-power potential
+function. Conditions for internal resonances are presented. A non-resonant behavior
+and dynamic response related to 3:1 internal resonance are explored. When the
+excitation amplitude exceeds a critical value, the system exhibits multiple steady state
+solutions. Quasi-periodic solutions appear in relatively narrow range of parameters.
+Numerical continuation links between resonant regimes found asymptotically for
+small excitation amplitude, and high-amplitude responses with intensive impacts.
+
+
+   1. Introduction
+Vessels filled with liquid are used in many fields of engineering, including nuclear
+[1], vehicle [2,3] and aerospace industries [4], for storage of chemicals, gasoline,
+water, and various hazardous liquids [5]. External excitations may cause well-known
+dynamical effect of liquid sloshing. This effect can take place in liquid cargo on
+highways, cruises or in stationary vessels exposed to earthquakes. Dynamic loads
+related to the liquid sloshing may have direct and rather strong hazardous effect on the
+vessel stability and robustness.
+
+   So far, detailed analytical explorations are limited to small-amplitude sloshing in
+rectangular and cylindrical vessels. While being most interesting and potentially
+hazardous, high-amplitude liquid sloshing in cylindrical tanks still lacks complete
+analytic description. The reason is that the liquid in the tank is continuous system with
+
+                                           1
+infinite number of degrees of freedom, and its boundary conditions on the free surface
+are nonlinear and time-dependent. Nevertheless, loads created by high-amplitude
+liquid sloshing are so crucial for designing the containing vessel, its supports and
+payload limitations [6], that a number of approximate phenomenological models were
+suggested in order to get at least qualitative insight into this phenomenon.
+
+    In one of the most well-known phenomenological models, the sloshing dynamics
+in a partially-filled liquid tank with total mass M is modeled by a pendulum with mass
+m, length of l, and a rotational coordinate  with respect to the vessel center-line. In
+this simplified model, three dynamic regimes can take place, as shown in Pilipchuk
+and Ibrahim[7] and presented in Fig. 1:
+
+
+
+
+              a)                                  b)
+
+
+
+
+                                 c)
+
+Fig. 1. Regimes of liquid free-surface motion and their equivalent mechanical models.
+
+
+
+
+    (a) The liquid free surface performs small oscillations around its trivial stable
+        equilibrium and remains planar. This regime can be successfully described by
+        a pendulum performing small oscillations.
+    (b) Relatively large oscillations in which the liquid free surface does not remain
+        planar. This motion is described by a differential equation with weak
+        nonlinearity, and can be treated by perturbation methods [7–9]. In this regime
+        the “equivalent” spherical pendulum is considered to perform moderate
+
+
+                                                  2
+

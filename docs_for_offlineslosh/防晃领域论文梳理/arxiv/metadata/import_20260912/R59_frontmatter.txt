@@ -1,0 +1,116 @@
+                                                                   Real-time identification of parametric
+                                                               sloshing-induced heat and mass transfer in a
+                                                                   horizontally oriented cylindrical tank
+                                                                Samuel Akatchi Ahizi1,2∗    Francisco Monteiro1,2                     Ramòn Abarca3
+                                                                                      Miguel Alfonso Mendez1,2,4
+arXiv:2510.19540v3 [physics.flu-dyn] 10 Feb 2026
+
+
+
+
+                                                       1
+                                                       Environmental and Applied Fluid Dynamics, von Karman Institute for Fluid Dynamics, Belgium
+                                                        2
+                                                          Experimental Aerodynamics and Propulsion Lab, Universidad Carlos III de Madrid, Spain
+                                                                                    3
+                                                                                      Airbus Operations S.L., Spain
+                                                   4
+                                                     Aero-Thermo-Mechanics Laboratory, École Polytechnique de Bruxelles, Université Libre de Bruxelles,
+                                                                                                Belgium
+
+
+
+
+                                                                                                          Abstract
+                                                                 Vertical forcing of partially filled tanks can induce parametric sloshing. Under non-
+                                                             isothermal conditions, the resulting mixing can disrupt the thermal stratification between
+                                                             liquid and vapor, leading to enhanced heat and mass transfer and large pressure fluctuations.
+                                                             This work presents an experimental investigation of sloshing-induced heat and mass transfer
+                                                             in a horizontally oriented cylindrical tank under vertical harmonic excitation. This configu-
+                                                             ration is particularly relevant for cryogenic fuel storage in aircraft and ground transportation,
+                                                             yet its thermodynamic response under parametric sloshing remains largely uncharacterized.
+                                                             The present study provides the first experimental characterization of the sloshing-induced
+                                                             pressure drop and associated heat and mass transfer in this geometry. Decoupled isothermal
+                                                             and non-isothermal experimental campaigns are carried out across multiple fill levels and
+                                                             forcing amplitudes, near resonance of the first longitudinal symmetric mode (2, 0), using
+                                                             a hydrofluoroether fluid (3M™ Novec™ HFE-7000). To quantify heat and mass transfer,
+                                                             a lumped thermodynamic model is combined with an Augmented-state Extended Kalman
+                                                             Filter (AEKF), enabling real-time, time-resolved inference of Nusselt numbers. A critical
+                                                             forcing threshold is identified: below it, the fluid remains quiescent and thermally stratified;
+                                                             above it, parametric resonance drives strong sloshing, complete thermal destratification, and
+                                                             a rapid pressure drop. At 50% fill, the dominant (2, 0) response intermittently alternates
+                                                             with a planar (1, 0) mode, indicating subharmonic mode interaction. The inferred Nusselt
+                                                             numbers increase by several orders of magnitude after destratification, and pressure-rate
+                                                             analysis confirms that condensation governs the pressure evolution.
+
+
+                                                             Keywords: Cryogenic, sloshing, modeling, experiments, scaling, Kalman filter
+
+
+                                                   1        Introduction
+                                                   Cryogenic fuels such as liquid hydrogen (LH2 ), liquid methane (LCH4 ), and liquefied natural gas
+                                                   (LNG) are increasingly considered for next-generation aviation, maritime, trucking, and space
+                                                   applications (Ahluwalia et al., 2023; Brewer, 1991; Simonini et al., 2024; Tiwari et al., 2024).
+                                                   In these contexts, partially filled propellant tanks are subjected to vehicle motions and external
+                                                   accelerations that trigger sloshing. Besides potentially compromising vehicle stability (Bauer,
+                                                   1963; Kolaei et al., 2014; Toumi et al., 2009), sloshing also has important thermodynamic
+                                                       ∗
+                                                           Corresponding author: samuel.ahizi@vki.ac.be
+
+
+                                                                                                             1
+consequences: it disrupts the natural thermal stratification, thus intensifying heat and mass
+exchange between liquid, vapor, and walls, and leading to rapid pressure fluctuations (Das and
+Hopfinger, 2009; Ludwig et al., 2013; Moran et al., 1994).
+    Most sloshing studies have focused on upright cylindrical and spherical tanks under lateral
+excitation, primarily motivated by space-propulsion challenges during the early space race.
+In these geometries, isothermal sloshing has been extensively investigated, resulting in detailed
+regime maps that relate the free-surface response to geometry and excitation parameters (Miles,
+1984a,b). Beyond hydrodynamic regime mapping, interest in the thermodynamic consequences
+of sloshing was sparked by the pioneering work of Moran et al. (1994), who showed that resonant
+wave motion in a large spherical LH2 tank can trigger a rapid collapse of ullage pressure. A
+similar behavior was later documented by Lacapere et al. (2009) in tanks partially filled with
+LN2 and LOx, where sloshing destroyed the thermal stratification and enhanced interfacial heat
+and mass transfer. The link between de-stratification and pressure drop was further analyzed
+by Arndt et al. (2009) for upright cylindrical tanks with LN2 , who identified enhanced vapor
+condensation-triggered by the destruction of thermal stratification-as the driving mechanism
+of the pressure decay, and showed that the effect is mitigated by the presence of an inert gas
+in the ullage volume. A critical wave-amplitude threshold for the de-stratification (and hence
+the sloshing induced pressure drop) was identified by Ludwig et al. (2013), while more recent
+works have provided detailed flow visualizations in both harmonic (Himeno et al., 2011) and
+impulsive excitations (Himeno et al., 2018), extensive experimental campaigns and simplified
+thermodynamic models (van Foreest, 2014), high fidelity numerical simulations (Konopka et al.,
+2016) and inverse methods to identify the heat and mass transfer coefficients from experimental
+data (Marques et al., 2023) to name but a few.
+    By comparison, the literature on horizontal cylindrical tanks is strikingly sparse, especially
+in the case of vertical acceleration, despite this configuration is particularly relevant for aero-
+nautical (Catherines et al., 1975) and ground transportation applications (Rissi et al., 2008).
+Horizontally oriented cylindrical vessels are particularly attractive for fuselage-integrated LH2
+storage in future aircraft (Colozza, 2002), offering structural integration benefits and efficient
+usage of internal volume while minimizing aerodynamic penalties. Vertical sloshing dynamics
+in these geometries presents a much stronger dependence of the natural frequency to the fill
+ratio and aspect ratio. Although a few works investigating isothermal sloshing response in such
+a geometry under longitudinal (Luo et al., 2023) and angular (Grotle and Æsøy, 2018) accel-
+eration, on under realistic forcing during road transportation (Takeda et al., 2012), the case
+of vertical acceleration has so far only focused on 2D tank (Colville et al., 2025; Saltari et al.,
+2024).
+    In vertical sloshing, also known as parametric sloshing, the excitation works indirectly by
+altering the effective gravity, which normally acts as the restoring force in other sloshing con-
+ditions. Instead of pushing the liquid directly, vertical vibrations periodically weaken and
+strengthen this restoring mechanism, so the system’s ability to resist motion itself becomes
+time-dependent. This makes vertical sloshing qualitatively different from lateral sloshing: res-
+onance does not occur when the forcing frequency simply matches a natural mode, but rather
+when the modulation of gravity interacts with the free-surface dynamics in a way that destabi-
+lizes them. This type of forcing is closely linked to the classical Faraday instability (Douady,
+1990; Faraday, 1831), where a vertically oscillated liquid develops standing surface waves at
+half the excitation frequency. In confined tanks, exponential growth of sloshing modes occurs
+when the forcing amplitude exceeds a critical threshold, and the excitation frequency is close
+to twice the natural frequency of the leading mode (Benjamin et al., 1954; Frandsen, 2004).
+This parametric resonance can trigger complex behaviors such as mode competition if multi-
+ple eigen-frequencies are excited simultaneously (Ciliberto and Gollub, 1984; Ibrahim, 2005) or
+period-tripling states arising from non-linear interactions (Jiang et al., 1998). These phenom-
+ena have only recently been been observed in a two-dimensional horizontal geometry by Colville
+
+
+                                                2
+

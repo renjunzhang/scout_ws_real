@@ -1,0 +1,125 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=A+Solution+to+Slosh-free+Robot+Trajectory+Optimization&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/iros47612.2022.9981173",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/iros47612.2022.9981173",
+    "title": [
+      "A Solution to Slosh-free Robot Trajectory Optimization"
+    ],
+    "author": [
+      {
+        "given": "Rafael I. Cabral",
+        "family": "Muchacho",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Munich Institute of Robotics &#x0026; Machine Intelligence, Technische Universit&#x00E4;t M&#x00FC;nchen (TUM),Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Riddhiman",
+        "family": "Laha",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Munich Institute of Robotics &#x0026; Machine Intelligence, Technische Universit&#x00E4;t M&#x00FC;nchen (TUM),Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Luis F.C.",
+        "family": "Figueredo",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Munich Institute of Robotics &#x0026; Machine Intelligence, Technische Universit&#x00E4;t M&#x00FC;nchen (TUM),Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Sami",
+        "family": "Haddadin",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Munich Institute of Robotics &#x0026; Machine Intelligence, Technische Universit&#x00E4;t M&#x00FC;nchen (TUM),Germany"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          10,
+          23
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2022,
+          10,
+          23
+        ]
+      ]
+    },
+    "page": "223-230",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/iros47612.2022.9981173",
+    "event": {
+      "name": "2022 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+      "location": "Kyoto, Japan",
+      "start": {
+        "date-parts": [
+          [
+            2022,
+            10,
+            23
+          ]
+        ]
+      },
+      "end": {
+        "date-parts": [
+          [
+            2022,
+            10,
+            27
+          ]
+        ]
+      }
+    }
+  }
+}

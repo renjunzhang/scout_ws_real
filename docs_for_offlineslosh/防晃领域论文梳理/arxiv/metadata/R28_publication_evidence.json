@@ -1,0 +1,72 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Learning+Model+Predictive+Control+for+iterative+tasks.+A+Data-Driven+Control+Framework&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tac.2017.2753460",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tac.2017.2753460",
+    "title": [
+      "Learning Model Predictive Control for Iterative Tasks. A Data-Driven Control Framework"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-1682-0551",
+        "authenticated-orcid": false,
+        "given": "Ugo",
+        "family": "Rosolia",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-8919-6430",
+        "authenticated-orcid": false,
+        "given": "Francesco",
+        "family": "Borrelli",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Automatic Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2018,
+          7
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2018,
+          7
+        ]
+      ]
+    },
+    "volume": "63",
+    "issue": "7",
+    "page": "1883-1896",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tac.2017.2753460",
+    "ISSN": [
+      "0018-9286",
+      "1558-2523",
+      "2334-3303"
+    ]
+  }
+}

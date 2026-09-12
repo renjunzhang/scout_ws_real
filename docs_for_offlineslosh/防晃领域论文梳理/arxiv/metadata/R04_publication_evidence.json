@@ -1,0 +1,80 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Spill-Free+Transfer+and+Stabilization+of+Viscous+Liquid&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tac.2022.3162551",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tac.2022.3162551",
+    "title": [
+      "Spill-Free Transfer and Stabilization of Viscous Liquid"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-7259-9409",
+        "authenticated-orcid": false,
+        "given": "Iasson",
+        "family": "Karafyllis",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Department of Mathematics, National Technical University of Athens, Athens, Greece"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-5523-941X",
+        "authenticated-orcid": false,
+        "given": "Miroslav",
+        "family": "Krstic",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Mechanical and Aerospace Engineering, University of California, San Diego, CA, USA"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Automatic Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          9
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2022,
+          9
+        ]
+      ]
+    },
+    "volume": "67",
+    "issue": "9",
+    "page": "4585-4597",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tac.2022.3162551",
+    "ISSN": [
+      "0018-9286",
+      "1558-2523",
+      "2334-3303"
+    ]
+  }
+}

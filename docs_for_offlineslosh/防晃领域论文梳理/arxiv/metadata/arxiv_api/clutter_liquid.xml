@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/2axCsYV0e9PMGzEmCsrAkQdujvc</id>
+  <title>arXiv Query: search_query=(all:"Clutter-Aware" AND all:liquid) AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=30</title>
+  <updated>2026-09-11T14:14:25Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(all:%22Clutter-Aware%22+AND+all:liquid)+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=30&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>30</opensearch:itemsPerPage>
+  <opensearch:totalResults>1</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2408.00215v1</id>
+    <title>Clutter-Aware Spill-Free Liquid Transport via Learned Dynamics</title>
+    <updated>2024-08-01T00:53:36Z</updated>
+    <link href="https://arxiv.org/abs/2408.00215v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2408.00215v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this work, we present a novel algorithm to perform spill-free handling of open-top liquid-filled containers that operates in cluttered environments. By allowing liquid-filled containers to be tilted at higher angles and enabling motion along all axes of end-effector orientation, our work extends the reachable space and enhances maneuverability around obstacles, broadening the range of feasible scenarios. Our key contributions include: i) generating spill-free paths through the use of RRT* with an informed sampler that leverages container properties to avoid spill-inducing states (such as an upside-down container), ii) parameterizing the resulting path to generate spill-free trajectories through the implementation of a time parameterization algorithm, coupled with a transformer-based machine-learning model capable of classifying trajectories as spill-free or not. We validate our approach in real-world, obstacle-rich task settings using containers of various shapes and fill levels and demonstrate an extended solution space that is at least 3x larger than an existing approach.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-08-01T00:53:36Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Ava Abderezaei</name>
+    </author>
+    <author>
+      <name>Anuj Pasricha</name>
+    </author>
+    <author>
+      <name>Alex Klausenstock</name>
+    </author>
+    <author>
+      <name>Alessandro Roncone</name>
+    </author>
+  </entry>
+</feed>

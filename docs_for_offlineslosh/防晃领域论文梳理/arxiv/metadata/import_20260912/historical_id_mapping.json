@@ -1,0 +1,176 @@
+[
+  {
+    "historical_id": "AR01",
+    "arxiv_id": "2507.20861",
+    "code": "R38",
+    "file": "pdf/R38_2507.20861v1_Uncertainty_Aware_Planning_Robotized_Liquid_Handling.pdf"
+  },
+  {
+    "historical_id": "AR02",
+    "arxiv_id": "2509.21045",
+    "code": "R39",
+    "file": "pdf/R39_2509.21045_MPC_DRL_Space_Robot_Fuel_Sloshing.pdf"
+  },
+  {
+    "historical_id": "AR03",
+    "arxiv_id": "2309.07714",
+    "code": "R27",
+    "file": "pdf/R27_2309.07714v1_Shared_Telemanipulation_with_VR_controllers_in_an_anti_slosh_scenario.pdf"
+  },
+  {
+    "historical_id": "AR04",
+    "arxiv_id": "2506.23624",
+    "code": "R40",
+    "file": "pdf/R40_2506.23624v2_Universal_Shared_Control_Teleoperation_Slosh.pdf"
+  },
+  {
+    "historical_id": "AR05",
+    "arxiv_id": "2108.11052",
+    "code": "R04",
+    "file": "pdf/R04_2108.11052v1_Spill_Free_Transfer_and_Stabilization_of_Viscous_Liquid.pdf"
+  },
+  {
+    "historical_id": "AR06",
+    "arxiv_id": "2201.13272",
+    "code": "R05",
+    "file": "pdf/R05_2201.13272v2_Output_Feedback_Control_of_Viscous_Liquid_Tank_System_and_its_Numerical_Approximation.pdf"
+  },
+  {
+    "historical_id": "AR07",
+    "arxiv_id": "2101.09298",
+    "code": "R07",
+    "file": "pdf/R07_2101.09298v2_Safe_Learning_Reference_Governor_Theory_and_Application_to_Fuel_Truck_Rollover_Avoidance.pdf"
+  },
+  {
+    "historical_id": "AR08",
+    "arxiv_id": "1801.10017",
+    "code": "R41",
+    "file": "pdf/R41_1801.10017v1_Model_Based_Active_Slosh_Damping_Experiment.pdf"
+  },
+  {
+    "historical_id": "AR09",
+    "arxiv_id": "2510.08121",
+    "code": "R42",
+    "file": "pdf/R42_2510.08121v1_Closed_Loop_Control_Spinning_Spacecraft.pdf"
+  },
+  {
+    "historical_id": "AR10",
+    "arxiv_id": "2604.12505",
+    "code": "R43",
+    "file": "pdf/R43_2604.12505v1_LPV_Surrogate_Models_Fuel_Sloshing.pdf"
+  },
+  {
+    "historical_id": "AR11",
+    "arxiv_id": "2107.09501",
+    "code": "R44",
+    "file": "pdf/R44_2107.09501v1_Radial_Baffles_Vertical_Cylinders.pdf"
+  },
+  {
+    "historical_id": "AR12",
+    "arxiv_id": "1807.01547",
+    "code": "R45",
+    "file": "pdf/R45_1807.01547v1_Baffles_Cryogenic_Tank_Microgravity.pdf"
+  },
+  {
+    "historical_id": "AR13",
+    "arxiv_id": "1411.6542",
+    "code": "R46",
+    "file": "pdf/R46_1411.6542v2_Damping_Liquid_Sloshing_by_Foams.pdf"
+  },
+  {
+    "historical_id": "AR14",
+    "arxiv_id": "1608.06358",
+    "code": "R47",
+    "file": "pdf/R47_1608.06358_Passive_Energy_Absorbers_Liquid_Filled_Vessel.pdf"
+  },
+  {
+    "historical_id": "AR15",
+    "arxiv_id": "2505.02354",
+    "code": "R48",
+    "file": "pdf/R48_2505.02354v1_Controlled_Elastic_Baffle_DRL_SPH.pdf"
+  },
+  {
+    "historical_id": "AR16",
+    "arxiv_id": "2302.14579",
+    "code": "R49",
+    "file": "pdf/R49_2302.14579v2_Counter_Directed_Sloshing_Waves.pdf"
+  },
+  {
+    "historical_id": "AR17",
+    "arxiv_id": "1703.02017",
+    "code": "R50",
+    "file": "pdf/R50_1703.02017_Moderately_Nonlinear_Equivalent_Mechanical_Model.pdf"
+  },
+  {
+    "historical_id": "AR18",
+    "arxiv_id": "1605.09648",
+    "code": "R51",
+    "file": "pdf/R51_1605.09648_Strongly_Nonlinear_Equivalent_Mechanical_Model.pdf"
+  },
+  {
+    "historical_id": "AR19",
+    "arxiv_id": "1603.06931",
+    "code": "R52",
+    "file": "pdf/R52_1603.06931_Internal_Resonances_Liquid_Filled_Vessel.pdf"
+  },
+  {
+    "historical_id": "AR20",
+    "arxiv_id": "1307.6064",
+    "code": "R53",
+    "file": "pdf/R53_1307.6064v2_Energy_Dissipation_Sloshing_Part_I_Numerical.pdf"
+  },
+  {
+    "historical_id": "AR21",
+    "arxiv_id": "1307.6063",
+    "code": "R54",
+    "file": "pdf/R54_1307.6063v2_Energy_Dissipation_Sloshing_Part_II_Experiment.pdf"
+  },
+  {
+    "historical_id": "AR22",
+    "arxiv_id": "1412.0919",
+    "code": "R55",
+    "file": "pdf/R55_1412.0919v1_Surface_Wave_Dynamics_Orbital_Shaking.pdf"
+  },
+  {
+    "historical_id": "AR23",
+    "arxiv_id": "2310.11399",
+    "code": "R56",
+    "file": "pdf/R56_2310.11399v2_Real_Time_Data_Assimilation_Cryogenic_Tanks.pdf"
+  },
+  {
+    "historical_id": "AR24",
+    "arxiv_id": "2212.12246",
+    "code": "R57",
+    "file": "pdf/R57_2212.12246v1_Non_Isothermal_Sloshing_Inverse_Method.pdf"
+  },
+  {
+    "historical_id": "AR25",
+    "arxiv_id": "2410.06590",
+    "code": "R58",
+    "file": "pdf/R58_2410.06590v2_Non_Isothermal_Sloshing_Microgravity_Experiment.pdf"
+  },
+  {
+    "historical_id": "AR26",
+    "arxiv_id": "2510.19540",
+    "code": "R59",
+    "file": "pdf/R59_2510.19540v3_Real_Time_Identification_Parametric_Sloshing.pdf"
+  },
+  {
+    "historical_id": "AR27",
+    "arxiv_id": "2505.10215",
+    "code": "R60",
+    "file": "pdf/R60_2505.10215v1_Multiphase_Compressible_Delta_SPH.pdf"
+  },
+  {
+    "historical_id": "AR28",
+    "arxiv_id": "2201.11663",
+    "code": "R61",
+    "file": "pdf/R61_2201.11663v1_ML_Characterization_Nonlinear_Sloshing.pdf"
+  },
+  {
+    "historical_id": "AR29",
+    "arxiv_id": "2203.05775",
+    "code": "R62",
+    "file": "pdf/R62_2203.05775v2_Thermodynamics_Informed_Active_Learning_Fluids.pdf"
+  }
+]

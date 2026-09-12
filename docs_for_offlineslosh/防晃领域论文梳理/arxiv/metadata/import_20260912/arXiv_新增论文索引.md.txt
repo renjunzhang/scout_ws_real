@@ -1,0 +1,107 @@
+# arXiv 新增论文索引
+
+> 资料快照：2026-08-19  
+> 本批数量：29 篇，均已下载 PDF 并通过 PDF 元数据读取验证。  
+> 用途：补足原主索引在被动结构、强非线性、PDE 控制、模型失配、学习降阶和航天液体管理方面的证据。
+
+## 1. 筛选与质量控制
+
+本批不是按 “sloshing” 关键词直接堆积结果。筛选时排除了：
+
+- 原 Zotero/主索引中已有论文的 arXiv 重复版本；
+- 天体物理中的星系团 “sloshing”、无关微流体和仅借用流体比喻的规划论文；
+- 与液体动态没有实质关系、只有标题或摘要擦边的条目。
+
+29 篇中：
+
+- 25 篇已有可核验 DOI；
+- AR08、AR09 是有明确会议来源的 ESA GNC / EUCASS 论文稿；
+- AR15、AR28 仍应按预印本处理，不能当作已同行评审结果；
+- 10 篇直接涉及机器人、车辆、航天器的控制、规划或快速模型；
+- 12 篇补足被动防晃、能量耗散和非线性模型边界；
+- 7 篇补足测量、在线辨识、高保真数值和热力学耦合。
+
+### 证据等级
+
+| 等级 | 含义 |
+|---|---|
+| E4 | 真实液体参与闭环控制，或真实任务中有独立物理效果证据 |
+| E3 | 真实液体/自由面实验，但控制结论有限，或实验只验证其中一部分 |
+| E2 | 高保真仿真、经实验基准验证的数值方法，或系统级仿真 |
+| E1 | 理论、低阶模型或纯数值概念验证 |
+
+### RA-L 引用优先级
+
+| 标签 | 用法 |
+|---|---|
+| 核心 | 与机器人防晃问题、控制闭环或关键论点直接相关，正文优先引用 |
+| 重要背景 | 用于模型边界、被动方法、强非线性或实验设计，适合 Related Work/Discussion |
+| 方法补充 | 只在采用相应技术时引用，例如不确定度规划、LPV、热力学辨识 |
+| 前沿预印本 | 可说明最新方向，但不能作为成熟度、优越性或首创判断的唯一依据 |
+
+## 2. 控制、规划与快速模型：AR01–AR10
+
+| ID | 论文与正式来源 | 方法、证据与可支持结论 | 不能外推的边界 | RA-L |
+|---|---|---|---|---|
+| AR01 | [Uncertainty-aware Planning with Inaccurate Models for Robotized Liquid Handling](arXiv_2507.20861_Uncertainty_Aware_Planning_Robotized_Liquid_Handling.pdf), Faroni et al., IROS 2025, DOI 10.1109/IROS60139.2025.11246381 | GP 不确定度引导 MCTS；UR5e、RGB 液位感知和真实染色水倒液。训练点减至 10/5 个时，不确定度感知方法仍显著优于普通 MCTS。E4 | 任务是分步倒液，不是移动平台运输防晃；输出是倒液动作，不传播运输中的自由面状态。 | 方法补充 |
+| AR02 | [MPC-based Deep Reinforcement Learning Method for Space Robotic Control with Fuel Sloshing Mitigation](arXiv_2509.21045_MPC_DRL_Space_Robot_Fuel_Sloshing.pdf), Ramezani et al., IROS 2025, DOI 10.1109/IROS60139.2025.11247300 | MPC 提供名义轨迹，SAC/PPO 处理扰动；6-DoF CFD 晃液 Monte Carlo 中 SAC–MPC 报告 96% 对接成功率。E2 | Zero-G Lab 硬件实验明确没有加入燃料晃动；含液体的结论来自 CFD 仿真，不能写成实液闭环验证。 | 方法补充 |
+| AR03 | [Shared Telemanipulation with VR Controllers in an Anti Slosh Scenario](arXiv_2309.07714_Shared_Telemanipulation_Anti_Slosh.pdf), Grobbel et al., IEEE SMC 2023, DOI 10.1109/SMC53992.2023.10393900 | UR5e + 水杯 + VR 输入的 NMPC，共同权衡跟踪与摆模型晃角，30 Hz、平均求解约 21 ms。E3 | 只回放一段 10 s 人类输入；液体效果主要由内部摆角和定性观察给出，没有受控用户研究或独立液面统计。 | 核心 |
+| AR04 | [Towards Universal Shared Control in Teleoperation Without Haptic Feedback](arXiv_2506.23624_Universal_Shared_Control_Teleoperation_Slosh.pdf), Grobbel et al., IEEE Telepresence 2025, DOI 10.1109/Telepresence66096.2025.11521507 | 在 UR5e 在线优化中统一输入跟随、碰撞约束与液体稳定目标。论文摘要称平均规划约 13 ms，而正文实验报告平均小于 9 ms、峰值约 11 ms；未提供完整时延分布。E3 | 属于初步测量；没有正式受控用户研究，液体稳定也没有形成跨任务统计。 | 核心 |
+| AR05 | [Spill-Free Transfer and Stabilization of Viscous Liquid](arXiv_2108.11052_Spill_Free_Transfer_Stabilization_Viscous_Liquid.pdf), Karafyllis & Krstic, IEEE TAC 67, DOI 10.1109/TAC.2022.3162551 | 黏性 Saint-Venant PDE–ODE、控制 Lyapunov 泛函和 spill-free 状态域；给出半全局指数稳定结论。E1 | 需要壁面液位、液体总动量等量；是理论/数值路线，没有机器人实液实验，也不处理障碍规划。 | 核心 |
+| AR06 | [Output-Feedback Control of Viscous Liquid-Tank System and its Numerical Approximation](arXiv_2201.13272_Output_Feedback_Control_Viscous_Liquid_Tank.pdf), Karafyllis, Vokos & Krstic, Automatica 149, 110827, DOI 10.1016/j.automatica.2022.110827 | 将 AR05 扩展为仅利用容器位置与两侧壁液位的 output feedback；功能观测器估计容器速度和液体动量，并分析显式有限差分离散。E1 | 仍是浅水 PDE 假设下的理论与数值验证；没有硬件、传感时延或强非线性近溢出实验。 | 核心 |
+| AR07 | [Safe Learning Reference Governor: Theory and Application to Fuel Truck Rollover Avoidance](arXiv_2101.09298_Safe_Learning_Reference_Governor_Fuel_Truck.pdf), Liu et al., Journal of Autonomous Vehicles and Systems, DOI 10.1115/1.4053244 | 学习式 reference governor 在学习期间也约束安全；燃油罐车模型中修改转向命令避免侧翻，并适配速度与充液率变化。E2 | 罐车应用完全是等效液体模型仿真；安全定理依赖论文假设，不能当作未知 WMR/真实液体的直接保证。 | 方法补充 |
+| AR08 | [Model Based Active Slosh Damping Experiment](arXiv_1801.10017_Model_Based_Active_Slosh_Damping_Experiment.pdf), Jetzschmann et al., 10th ESA GNC 2017 | 反作用力反馈、μ/H∞ 鲁棒控制和 Hexapod 主动加速度；600 L 与 1100 L 水箱实验中约两周期内衰减，是本批最强的大尺度主动防晃证据。E4 | 1 g、大型专用六自由度平台且允许主动移动水箱；不能直接迁移为标准 WMR 的速度规划器。 | 核心 |
+| AR09 | [Closed-loop Control of Sloshing Fuel in a Spinning Spacecraft](arXiv_2510.08121_Closed_Loop_Control_Spinning_Spacecraft.pdf), Zucchelli et al., 11th EUCASS 2025 | 将约束曲面等效机械模型与 DIVA CFD 放入同一闭环，对特定 spin-up 机动比较主导力/矩，说明经开环标定的 ROM 在该闭环内仍可用。E2 | 本文是 CFD/ROM 数值闭环；并非新做的真实液体闭环实验，且 ROM 对细尺度界面振荡衰减过快。 | 方法补充 |
+| AR10 | [Data-driven Learning of LPV Surrogate Models of Fuel Sloshing](arXiv_2604.12505_LPV_Surrogate_Models_Fuel_Sloshing.pdf), Olucha et al., CEAS EuroGNC 2026, DOI 10.82124/CEAS-GNC-2026-103 | 开源 JAX-SPH + LPV surrogate；666 粒子时 30 s 高保真仿真小于 10 s，LPV 在两个闭环机动上比 SPH 快 100 倍以上。E2 | 二维、零重力、纯仿真，训练/验证机动范围有限；“快”不等于已经满足真实机器人在线安全要求。 | 方法补充 |
+
+## 3. 被动结构、能量耗散与非线性边界：AR11–AR22
+
+| ID | 论文与正式来源 | 方法、证据与可支持结论 | 不能外推的边界 | RA-L |
+|---|---|---|---|---|
+| AR11 | [Sloshing in Vertical Cylinders with Circular Walls: The Effect of Radial Baffles](arXiv_2107.09501_Radial_Baffles_Vertical_Cylinders.pdf), Kuznetsov & Motygin, Physics of Fluids, DOI 10.1063/5.0064549 | 解析特征值问题表明：贯穿全深度的径向隔板破坏轴对称性、拆分模态重数，并显著降低最低特征值/固有频率。E1 | 研究的是无黏线性自由振荡和特定径向隔板；没有给出“阻尼一定增加”的普遍结论。 | 重要背景 |
+| AR12 | [Effect of Baffles on Pressurization and Thermal Stratification in a LN2 Tank under Micro-gravity](arXiv_1807.01547_Baffles_Cryogenic_Tank_Microgravity.pdf), Zuo et al., Cryogenics, DOI 10.1016/j.cryogenics.2018.10.017 | VOF 两相热流仿真比较液位、间距、方向和间隙；优化构型带来最高约 54% 的压力上升差异。E2 | 指标是低重力自增压/热分层，不是开口杯溢出或机器人运输液面；百分比不可直接借给 WMR 防晃。 | 重要背景 |
+| AR13 | [Damping of Liquid Sloshing by Foams](arXiv_1411.6542_Damping_Liquid_Sloshing_by_Foams.pdf), Sauret et al., Physics of Fluids, DOI 10.1063/1.4907048 | 真实液体实验显示约 5 层泡沫已使液面幅值约降低一个数量级，阻尼随厚度趋于饱和；机理与泡沫 Plateau border 在壁面摩擦有关。E3 | 特定泡沫、容器宽度与洁净条件；泡沫会改变介质和维护要求，不适合所有食品/工业液体。 | 重要背景 |
+| AR14 | [Vibration Mitigation in Partially Liquid-Filled Vessel Using Passive Energy Absorbers](arXiv_1608.06358_Passive_Energy_Absorbers_Liquid_Filled_Vessel.pdf), Farid, Levy & Gendelman, Journal of Sound and Vibration 406, DOI 10.1016/j.jsv.2017.06.013 | 对 TMD 与 NES 的冲击工况数值优化；两个评价量上最高约 40%/90% 缓解，TMD 对调频敏感，NES 对刚度选择更鲁棒。E1 | 结果来自特定低阶罐体模型和数值评价量，不是通用幅值降低比例，也没有物理实验。 | 重要背景 |
+| AR15 | [Sloshing Suppression with a Controlled Elastic Baffle via DRL and SPH Simulation](arXiv_2505.02354_Controlled_Elastic_Baffle_DRL_SPH.pdf), Ye et al., 投稿 Ocean Engineering 的预印本 | 2D SPH 中训练弹性隔板策略，标称工况平均自由面幅值降低 81.63%；提取余弦策略在 3D 数值中降低 76.86%。E2 | 尚未正式发表；控制器和效果均为数值结果，论文也明确要求实验验证。 | 前沿预印本 |
+| AR16 | [Swirling against the Forcing](arXiv_2302.14579_Counter_Directed_Sloshing_Waves.pdf), Marcotte, Gallaire & Bongarzone, Physical Review Fluids 8, DOI 10.1103/PhysRevFluids.8.084802 | 圆柱容器实验确认相同椭圆轨道激励附近可存在同向或反向稳定旋转波，模型能解释稳定分支。E3 | 是受控谐波稳态物理研究，不是瞬态运输控制器；作用在于证明多稳态而非提供直接防晃方案。 | 重要背景 |
+| AR17 | [Response Regimes in Equivalent Mechanical Model of Moderately Nonlinear Liquid Sloshing](arXiv_1703.02017_Moderately_Nonlinear_Equivalent_Mechanical_Model.pdf), Farid & Gendelman, Nonlinear Dynamics 92, DOI 10.1007/s11071-018-4144-y | 非线性 ROM 预测多种非平稳响应，并用 NES 类比解释能量交换。E1 | 与已有实验/高保真现象主要是定性符合；没有本论文的新实液验证。 | 重要背景 |
+| AR18 | [Response Regimes in Equivalent Mechanical Model of Strongly Nonlinear Liquid Sloshing](arXiv_1605.09648_Strongly_Nonlinear_Equivalent_Mechanical_Model.pdf), Farid & Gendelman, International Journal of Non-Linear Mechanics 94, DOI 10.1016/j.ijnonlinmec.2017.04.006 | 用带速度相关恢复系数的 vibro-impact ROM 表达撞壁，得到稳态、混沌强调制与噪声响应，并与高次光滑势模型数值比对。E1 | 是等效模型间的数值验证，不是自由面 CFD 或真实实验。 | 重要背景 |
+| AR19 | [Internal Resonances and Dynamic Responses in Equivalent Mechanical Model](arXiv_1603.06931_Internal_Resonances_Liquid_Filled_Vessel.pdf), Farid & Gendelman, Journal of Sound and Vibration, DOI 10.1016/j.jsv.2016.05.046 | 研究 3:1 内共振、多个稳态、准周期解和强撞壁响应，说明越过小幅阈值后响应分支会突变。E1 | 针对受谐波激励的圆柱罐等效摆；不能直接给出任意杯形和瞬态轨迹的溢出边界。 | 重要背景 |
+| AR20 | [Mechanical Energy Dissipation… Part I: Numerical](arXiv_1307.6064_Energy_Dissipation_Sloshing_Part_I_Numerical.pdf), Bouscasse et al., Physics of Fluids 26, DOI 10.1063/1.4869233 | 建立耦合 Pendulum–TLD 能量分析和 SPH 数值模型；小激励类似传统 TLD，大激励的破波/撞击改变耗散与频响。E2 | 是结构减振/TLD 场景，不直接输出机器人运动命令；应与 AR21 实验成对引用。 | 重要背景 |
+| AR21 | [Mechanical Energy Dissipation… Part II: Experimental](arXiv_1307.6063_Energy_Dissipation_Sloshing_Part_II_Experiment.pdf), Bouscasse et al., Physics of Fluids 26, DOI 10.1063/1.4869234 | 水、葵花油和甘油的耦合摆–水箱实验；能量测量表明水工况的大耗散主要来自破波，并提供可复核实验数据。E3 | 只在机械系统共振频率和特定浅水槽上系统测试；黏度结论不能直接变成机器人控制收益。 | 重要背景 |
+| AR22 | [Surface Wave Dynamics in Orbital Shaken Cylindrical Containers](arXiv_1412.0919_Surface_Wave_Dynamics_Orbital_Shaking.pdf), Reclari et al., Physics of Fluids 26, DOI 10.1063/1.4874612 | 自由面与速度场实验揭示单/多波峰、子谐波、破波、旋流与滞回，并标出势流模型在哪些幅值后失效。E3 | 目标原本是轨道摇动/混合，不是抑晃；它支撑的是模型边界和非线性诊断。 | 重要背景 |
+
+## 4. 估计、高保真建模与热力学耦合：AR23–AR29
+
+| ID | 论文与正式来源 | 方法、证据与可支持结论 | 不能外推的边界 | RA-L |
+|---|---|---|---|---|
+| AR23 | [Real-time Data Assimilation for the Thermodynamic Modeling of Cryogenic Storage Tanks](arXiv_2310.11399_Real_Time_Data_Assimilation_Cryogenic_Tanks.pdf), Marques, Ahizi & Mendez, Energy 302, DOI 10.1016/j.energy.2024.131739 | 多环境实时数据同化，用 ANN 学 0D 热力学模型闭合项；多罐训练改善收敛。E2 | 所有验证数据都是合成罐工况；“实时”是热力学参数同化，不是自由面运动控制。 | 方法补充 |
+| AR24 | [Experimental Analysis of Non-Isothermal Sloshing Using a Model-Based Inverse Method](arXiv_2212.12246_Non_Isothermal_Sloshing_Inverse_Method.pdf), Marques et al., Applied Thermal Engineering, DOI 10.1016/j.applthermaleng.2023.120871 | HFE-7200 摇台实验证明平面/旋转晃动导致不同热质传递，旋转工况记录约 90% 气相压力下降；0D 逆方法拟合闭合系数。E3 | 密闭低温替代流体的压力/温度问题，不是开口容器 spill；逆方法是离线全段优化。 | 方法补充 |
+| AR25 | [Experimental Characterization of Non-Isothermal Sloshing in Microgravity](arXiv_2410.06590_Non_Isothermal_Sloshing_Microgravity_Experiment.pdf), Monteiro et al., Experimental Thermal and Fluid Science, DOI 10.1016/j.expthermflusci.2025.111473 | 第 83 次 ESA 抛物线飞行中的双试验池 HFE-7000 实验，记录自由面、压力与温度；显示小加速度差异会造成很不一样的瞬态。E3 | 是微重力自然响应数据，不含主动防晃控制；重复性受每条抛物线和初始热状态影响。 | 方法补充 |
+| AR26 | [Real-time Identification of Parametric Sloshing-Induced Heat and Mass Transfer](arXiv_2510.19540_Real_Time_Identification_Parametric_Sloshing.pdf), Ahizi et al., International Journal of Heat and Mass Transfer, DOI 10.1016/j.ijheatmasstransfer.2026.128707 | 水平圆柱密闭罐真实实验 + 增广 EKF，在线辨识热传递系数；越过参数激励阈值后完全去分层，Nusselt 数跳升 2–4 个数量级。E3 | 估计对象是热质传递参数，不是运输自由面状态或 spill risk；没有闭环运动控制。 | 方法补充 |
+| AR27 | [Extension of the Consistent δ+-SPH Model for Multiphase Flows](arXiv_2505.10215_Multiphase_Compressible_Delta_SPH.pdf), Huang et al., Journal of Computational Physics 535, DOI 10.1016/j.jcp.2025.114031 | 多相可压缩 δ+-SPH；在夹气晃动等基准上与实验波形/压力比较，可表达强撞击下空气压缩和短时压力峰。E2 | 面向离线高保真波击模拟，计算量和状态维度不适合直接放入 WMR 在线 MPC。 | 重要背景 |
+| AR28 | [A Machine Learning-based Characterization Framework for Nonlinear Sloshing](arXiv_2201.11663_ML_Characterization_Nonlinear_Sloshing.pdf), Luo et al., arXiv 预印本 | 539 条真实摇台/水槽序列，时延嵌入、聚类与稀疏回归刻画 bursting/switching，并做多步预测。E3 | 尚无可核验正式发表记录；只测单点壁面波高，论文没有把模型接入控制器。 | 前沿预印本 |
+| AR29 | [A Thermodynamics-informed Active Learning Approach to Perception and Reasoning about Fluids](arXiv_2203.05775_Thermodynamics_Informed_Active_Learning_Fluids.pdf), Moya et al., Computational Mechanics 72, DOI 10.1007/s00466-023-02279-x | SPH 全场教师 + GENERIC 结构保持 ROM + RealSense 自由面；用约 10 s 水、蜂蜜、啤酒等视频离线适配，适配后快速重建。E3 | 容器几何和液位固定，训练仍是离线慢更新；真实实验评价以自由面重建为主，没有机器人闭环安全验证。 | 方法补充 |
+
+## 5. 面向 RA-L 的最小引用组合
+
+如果论文主题仍是“标准 WMR 上的离线全程防晃规划 + 保相位在线跟踪”，新增文献不应 29 篇全部塞进 Related Work。建议按论点选择：
+
+1. **机器人在线控制近邻**：AR03、AR04；配合原索引 A12/C05、B12、C11。
+2. **连续液体/PDE 控制上界**：AR05、AR06，用来说明严格 spill-free 理论已存在，但与可部署 WMR 的模型和测量条件不同。
+3. **真实主动闭环证据**：AR08，证明反作用力反馈可以在 600–1100 L 真实水上快速衰减，但需要专用平台。
+4. **模型失配与快速代理**：只有论文确实实现不确定度或学习模型时再引 AR01、AR09、AR10、AR29。
+5. **低阶模型适用边界**：AR16–AR22 中选 2–4 篇，支撑多稳态、子谐波、破波、撞壁和耗散机制，避免只说“摆模型不够”而无物理证据。
+6. **被动方法全景**：AR11–AR14；其中 AR13 是清晰实验，AR11 提醒隔板会改模态而不只是增加阻尼。
+7. **高保真校准**：若使用 SPH/CFD 生成数据或校验撞击压力，再引用 AR27；否则不必为了数量加入。
+8. **航天热力学 AR23–AR26**：只在讨论传感、在线辨识或多物理耦合时引用，不能拿来证明地面开口杯防洒效果。
+
+## 6. 总体判断
+
+这 29 篇的价值不在于把参考文献数量从 60 扩大到 89，而在于纠正原资料集的几个偏置：
+
+- 被动防晃已经有泡沫、隔板、TMD/NES 和主动弹性隔板的原始证据；
+- 隔板不是单一“加阻尼元件”，它还会改变模态对称性、最低频率、热分层和相界面运动；
+- Saint-Venant PDE 路线已经给出严格 spill-free 稳定与 output-feedback 结果，但实验成熟度远低于理论成熟度；
+- 强非线性区可能出现多稳态、反向旋流、子谐波、破波和撞壁，低阶模型的可信时域必须被实验校准；
+- 学习模型最合理的角色是处理模型失配、快速代理或部分观测校正，而不是在没有不确定度边界时替代物理安全层。

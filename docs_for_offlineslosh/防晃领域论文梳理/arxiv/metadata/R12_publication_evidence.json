@@ -1,0 +1,109 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Reactive+Model+Predictive+Contouring+Control+for+Robot+Manipulators&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/iros60139.2025.11247346",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/iros60139.2025.11247346",
+    "title": [
+      "Reactive Model Predictive Contouring Control for Robot Manipulators"
+    ],
+    "author": [
+      {
+        "given": "Junheon",
+        "family": "Yoon",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Seoul National University,Graduate School of Convergence Science and Technology,Department of Intelligence and Information,Seoul,Republic of Korea,08826"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Woo-Jeong",
+        "family": "Baek",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Seoul National University,Artificial Intelligence Institute(AIIS),Republic of Korea"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Jaeheung",
+        "family": "Park",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Seoul National University,Graduate School of Convergence Science and Technology,Department of Intelligence and Information,Seoul,Republic of Korea,08826"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2025,
+          10,
+          19
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2025,
+          10,
+          19
+        ]
+      ]
+    },
+    "page": "365-372",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/iros60139.2025.11247346",
+    "event": {
+      "name": "2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+      "start": {
+        "date-parts": [
+          [
+            2025,
+            10,
+            19
+          ]
+        ]
+      },
+      "location": "Hangzhou, China",
+      "end": {
+        "date-parts": [
+          [
+            2025,
+            10,
+            25
+          ]
+        ]
+      }
+    }
+  }
+}

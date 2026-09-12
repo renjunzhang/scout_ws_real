@@ -1,0 +1,1227 @@
+{
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Hamaguchi+Taniguchi+liquid+sloshing+curved+path&rows=5",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T15:58:00Z",
+        "timestamp": 1787759880216,
+        "version": "build-2784847793"
+      },
+      "reference-count": 5,
+      "publisher": "Elsevier BV",
+      "issue": "1",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2002,
+                1,
+                1
+              ]
+            ],
+            "date-time": "2002-01-01T00:00:00Z",
+            "timestamp": 1009843200000
+          },
+          "content-version": "tdm",
+          "delay-in-days": 0,
+          "URL": "https://www.elsevier.com/tdm/userlicense/1.0/"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2002,
+                1,
+                1
+              ]
+            ],
+            "date-time": "2002-01-01T00:00:00Z",
+            "timestamp": 1009843200000
+          },
+          "content-version": "tdm",
+          "delay-in-days": 0,
+          "URL": "https://www.elsevier.com/legal/tdmrep-license"
+        }
+      ],
+      "content-domain": {
+        "domain": [
+          "elsevier.com",
+          "sciencedirect.com"
+        ],
+        "crossmark-restriction": true
+      },
+      "short-container-title": [
+        "IFAC Proceedings Volumes"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2002
+          ]
+        ]
+      },
+      "DOI": "10.3182/20020721-6-es-1901.01481",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2010,
+            9,
+            7
+          ]
+        ],
+        "date-time": "2010-09-07T13:17:28Z",
+        "timestamp": 1283865448000
+      },
+      "page": "79-84",
+      "update-policy": "https://doi.org/10.1016/elsevier_cm_policy",
+      "source": "Crossref",
+      "is-referenced-by-count": 5,
+      "title": [
+        "TRANSFER CONTROL AND CURVED PATH DESIGN FOR CYLINDRICAL LIQUID CONTAINER"
+      ],
+      "prefix": "10.3182",
+      "volume": "35",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "HAMAGUCHI",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "TANIGUCHI",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "78",
+      "reference": [
+        {
+          "key": "10.3182/20020721-6-ES-1901.01481_bib5657",
+          "first-page": "233",
+          "article-title": "Modeling and Control of Sloshing with Swirling in a Cylindrical Container during a Curved Path Transfer",
+          "volume": "1",
+          "author": "Hamaguchi",
+          "year": "1997",
+          "journal-title": "Proc. of the ASCC"
+        },
+        {
+          "key": "10.3182/20020721-6-ES-1901.01481_bib5658",
+          "first-page": "379",
+          "article-title": "Modeling and Optimal Control of Liquid Vibration in Transferring a Rectangular Container",
+          "volume": "1",
+          "author": "Hamaguchi",
+          "year": "1994",
+          "journal-title": "Proc. of the FLUCOME"
+        },
+        {
+          "key": "10.3182/20020721-6-ES-1901.01481_bib5659",
+          "first-page": "193",
+          "article-title": "Liquid Container Transfer Considering the Suppression of Sloshing for the Change of Liquid Level",
+          "volume": "B",
+          "author": "Yano",
+          "year": "1996",
+          "journal-title": "Proc. of the IFAC'96"
+        },
+        {
+          "issue": "483",
+          "key": "10.3182/20020721-6-ES-1901.01481_bib5660",
+          "doi-asserted-by": "crossref",
+          "first-page": "3655",
+          "DOI": "10.1299/kikaib.52.3655",
+          "article-title": "Dynamic Behavior of a Liquid in a Cylindrical Container Subject to Horizontal Vibration",
+          "volume": "52",
+          "author": "Sudo",
+          "year": "1986",
+          "journal-title": "Trans. of the Japan Society of Mechanical Engineers (B)"
+        },
+        {
+          "key": "10.3182/20020721-6-ES-1901.01481_bib5661",
+          "doi-asserted-by": "crossref",
+          "first-page": "76",
+          "DOI": "10.1115/1.2894142",
+          "article-title": "Preshaping Command Inputs to Reduce System Vibration",
+          "volume": "112",
+          "author": "Singer",
+          "year": "1990",
+          "journal-title": "ASME J. of Dynamic Systems, Measurement, and Control"
+        }
+      ],
+      "container-title": [
+        "IFAC Proceedings Volumes"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://api.elsevier.com/content/article/PII:S147466701539902X?httpAccept=text/xml",
+          "content-type": "text/xml",
+          "content-version": "vor",
+          "intended-application": "text-mining"
+        },
+        {
+          "URL": "https://api.elsevier.com/content/article/PII:S147466701539902X?httpAccept=text/plain",
+          "content-type": "text/plain",
+          "content-version": "vor",
+          "intended-application": "text-mining"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2025,
+            10,
+            26
+          ]
+        ],
+        "date-time": "2025-10-26T11:23:59Z",
+        "timestamp": 1761477839000
+      },
+      "score": 41.025078,
+      "resource": {
+        "primary": {
+          "URL": "https://linkinghub.elsevier.com/retrieve/pii/S147466701539902X"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2002
+          ]
+        ]
+      },
+      "references-count": 5,
+      "journal-issue": {
+        "issue": "1",
+        "published-print": {
+          "date-parts": [
+            [
+              2002
+            ]
+          ]
+        }
+      },
+      "alternative-id": [
+        "S147466701539902X"
+      ],
+      "URL": "https://doi.org/10.3182/20020721-6-es-1901.01481",
+      "ISSN": [
+        "1474-6670"
+      ],
+      "issn-type": [
+        {
+          "value": "1474-6670",
+          "type": "print"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2002
+          ]
+        ]
+      },
+      "assertion": [
+        {
+          "value": "Elsevier",
+          "name": "publisher",
+          "label": "This article is maintained by"
+        },
+        {
+          "value": "TRANSFER CONTROL AND CURVED PATH DESIGN FOR CYLINDRICAL LIQUID CONTAINER",
+          "name": "articletitle",
+          "label": "Article Title"
+        },
+        {
+          "value": "IFAC Proceedings Volumes",
+          "name": "journaltitle",
+          "label": "Journal Title"
+        },
+        {
+          "value": "https://doi.org/10.3182/20020721-6-ES-1901.01481",
+          "name": "articlelink",
+          "label": "CrossRef DOI link to publisher maintained version"
+        },
+        {
+          "value": "article",
+          "name": "content_type",
+          "label": "Content Type"
+        },
+        {
+          "value": "Copyright © 2002 IFAC. Published by Elsevier Ltd. All rights reserved.",
+          "name": "copyright",
+          "label": "Copyright"
+        }
+      ]
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T15:58:01Z",
+        "timestamp": 1787759881473,
+        "version": "build-2784847793"
+      },
+      "reference-count": 7,
+      "publisher": "IEEE",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.1109/icma.2005.1626862",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2006,
+            8,
+            15
+          ]
+        ],
+        "date-time": "2006-08-15T17:58:12Z",
+        "timestamp": 1155664692000
+      },
+      "page": "1959-1964",
+      "source": "Crossref",
+      "is-referenced-by-count": 7,
+      "title": [
+        "Path design and trace control of a wheeled mobile robot to damp liquid sloshing in a cylindrical container"
+      ],
+      "prefix": "10.1109",
+      "volume": "4",
+      "author": [
+        {
+          "given": "M.",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Yu.",
+          "family": "Yoshida",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Kihara",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref4",
+          "article-title": "Transfer Control and Curved Path Design for Cylindrical Liquid Container",
+          "author": "hamaguchi",
+          "year": "2002",
+          "journal-title": "Proceedings of the 15th World Congress of IFAC"
+        },
+        {
+          "key": "ref3",
+          "first-page": "233",
+          "article-title": "Modeling and Control of Sloshing with Swirling in a Cylindrical Container during a Curved Path Transfer",
+          "volume": "i",
+          "author": "hamaguchi",
+          "year": "1997",
+          "journal-title": "Proceedings of the 2nd Asian Control Conference"
+        },
+        {
+          "key": "ref6",
+          "article-title": "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container",
+          "author": "hamaguchi",
+          "year": "2004",
+          "journal-title": "Proceedings of the 4th international conference on advanced mechatronics"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.2004.1389775"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1115/1.2894142"
+        },
+        {
+          "key": "ref2",
+          "first-page": "193",
+          "article-title": "Liquid Container Transfer Considering the Suppression of Sloshing for the Change of Liquid Level",
+          "volume": "b",
+          "author": "yano",
+          "year": "1996",
+          "journal-title": "Proceedings of the 13th World Congress of IFAC"
+        },
+        {
+          "key": "ref1",
+          "first-page": "379",
+          "article-title": "Modeling and Optimal Control of Liquid Vibration in Transferring a Rectangular Container",
+          "volume": "1",
+          "author": "hamaguchi",
+          "year": "1994",
+          "journal-title": "Proc FLUCOME"
+        }
+      ],
+      "event": {
+        "name": "2005 IEEE International Conference on Mechatronics and Automation",
+        "location": "Niagara Falls, Ont., Canada",
+        "acronym": "ICMA-05"
+      },
+      "container-title": [
+        "IEEE International Conference Mechatronics and Automation, 2005"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx5/10831/34149/01626862.pdf?arnumber=1626862",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            3,
+            14
+          ]
+        ],
+        "date-time": "2017-03-14T17:52:18Z",
+        "timestamp": 1489513938000
+      },
+      "score": 39.81269,
+      "resource": {
+        "primary": {
+          "URL": "http://ieeexplore.ieee.org/document/1626862/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            null
+          ]
+        ]
+      },
+      "references-count": 7,
+      "URL": "https://doi.org/10.1109/icma.2005.1626862"
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2023,
+            8,
+            19
+          ]
+        ],
+        "date-time": "2023-08-19T04:52:18Z",
+        "timestamp": 1692420738177
+      },
+      "reference-count": 12,
+      "publisher": "Japan Society of Mechanical Engineers",
+      "issue": "6",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      },
+      "DOI": "10.1299/mej.2014dr0061",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2014,
+            12,
+            14
+          ]
+        ],
+        "date-time": "2014-12-14T23:19:09Z",
+        "timestamp": 1418599149000
+      },
+      "page": "DR0061-DR0061",
+      "source": "Crossref",
+      "is-referenced-by-count": 2,
+      "title": [
+        "Damping control of sloshing during liquid container transfer by active vibration reducer with 6-DOF parallel linkage (In the case of straight path on horizontal plane)"
+      ],
+      "prefix": "10.1299",
+      "volume": "1",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "HAMAGUCHI",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "TANIGUCHI",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "124",
+      "reference": [
+        {
+          "key": "1",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Aboel-Hassan, A., Arafa, M. and Nassef, A., Design and optimization of input shapers for liquid slosh suppression, Journal of Sound and Vibration, Vol. 320 (2009), pp. 1-15.",
+          "DOI": "10.1016/j.jsv.2008.07.015"
+        },
+        {
+          "key": "2",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Chen, S.-L. and You, I.-T., Kinematic and singularity analyses of a six DOF 6-3-3 parallel link machine tool, International Journal of Advanced Manufacturing Technology, Vol. 16, No. 11 (2000), pp. 835-842.",
+          "DOI": "10.1007/s001700070018"
+        },
+        {
+          "key": "3",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Choi, S.-B., Park, D.-W. and Cho, M.-S., Position control of a parallel link manipulator using electro-rheological valve actuators, Mechatronics, Vol. 11, No. 2 (2001), pp. 157-181.",
+          "DOI": "10.1016/S0957-4158(00)00011-8"
+        },
+        {
+          "key": "4",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hamaguchi, M., Motegi, H., Terashima, K. and Nomura, H., Optimal control of transferring a liquid container with boundary element analysis, Transactions of the Society of Instrument and Control Engineers, Vol. 31, No. 9 (1995), pp. 1442-1451 (in Japanese).",
+          "DOI": "10.9746/sicetr1965.31.1442"
+        },
+        {
+          "key": "5",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hamaguchi, M. and Taniguchi, T., Sloshing damping control in a cylindrical container on a wheeled mobile robot using dual-swing active-vibration reduction, Journal of Robotics and Mechatronics, Vol. 21, No. 5 (2009), pp. 642-646.",
+          "DOI": "10.20965/jrm.2009.p0642"
+        },
+        {
+          "key": "6",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hong, J. and Yamamoto, M., A calculation method of the reaction force and moment for a Delta-type parallel link robot fixed with a frame, Robotica, Vol. 27, No. 4 (2009), pp. 579-587.",
+          "DOI": "10.1017/S0263574708004967"
+        },
+        {
+          "key": "7",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Masuda, T., Fujiwara, M. and Arai, T., Kinematics analysis of the parallel mechanism having vertically fixed linear actuators, Transactions of the Japan Society of Mechanical Engineers Series C, Vol. 65, No. 638 (1999), pp. 4076-4083 (in Japanese).",
+          "DOI": "10.1299/kikaic.65.4076"
+        },
+        {
+          "key": "8",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Preumont, A., Horodinca, M., Romanescu, I., Marneffe, B., Avraam, M., Deraemaeker, A., Bossens, F. and Hanieh A. A., A six-axis single-stage active vibration isolator based on Stewart platform, Journal of Sound and Vibration, Vol. 300 (2007), pp. 644-661.",
+          "DOI": "10.1016/j.jsv.2006.07.050"
+        },
+        {
+          "key": "9",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Terashima, K., Hamaguchi, M. and Kaneshige, A., Optimal control of three dimensional liquid container transfer and robustness of sloshing suppression for the change of liquid level and viscosity, Transactions of the Institute of Systems, Control and Information Engineers, Vol. 9, No. 4 (1996), pp. 162-171 (in Japanese).",
+          "DOI": "10.5687/iscie.9.162"
+        },
+        {
+          "key": "10",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Terashima, K. and Yano, K., Sloshing analysis and suppression control of tilting-type automatic pouring machine, Control Engineering Practice, Vol. 9, No. 6 (2001), pp. 607-620.",
+          "DOI": "10.1016/S0967-0661(01)00023-5"
+        },
+        {
+          "key": "11",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Yano, K. and Terashima, K., Robust liquid container transfer control for complete sloshing suppression, IEEE Transactions on Control Systems Technology, Vol. 9, No. 3 (2001), pp. 483-493.",
+          "DOI": "10.1109/87.918901"
+        },
+        {
+          "key": "12",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Yano, K. and Terashima, K., Sloshing suppression control of liquid transfer systems considering a 3-D transfer path, IEEE/ASME Transactions on Mechatronics, Vol. 10, No. 1 (2005), pp. 8-16.",
+          "DOI": "10.1109/TMECH.2004.839033"
+        }
+      ],
+      "container-title": [
+        "Mechanical Engineering Journal"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2021,
+            4,
+            9
+          ]
+        ],
+        "date-time": "2021-04-09T20:33:57Z",
+        "timestamp": 1618000437000
+      },
+      "score": 37.684418,
+      "resource": {
+        "primary": {
+          "URL": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_article"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      },
+      "references-count": 12,
+      "journal-issue": {
+        "issue": "6",
+        "published-print": {
+          "date-parts": [
+            [
+              2014
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1299/mej.2014dr0061",
+      "ISSN": [
+        "2187-9745"
+      ],
+      "issn-type": [
+        {
+          "value": "2187-9745",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T15:58:34Z",
+        "timestamp": 1787759914216,
+        "version": "build-2784847793"
+      },
+      "reference-count": 35,
+      "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+      "issue": "1",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2019,
+                2,
+                1
+              ]
+            ],
+            "date-time": "2019-02-01T00:00:00Z",
+            "timestamp": 1548979200000
+          },
+          "content-version": "vor",
+          "delay-in-days": 0,
+          "URL": "https://ieeexplore.ieee.org/Xplorehelp/downloads/license-information/IEEE.html"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2019,
+                2,
+                1
+              ]
+            ],
+            "date-time": "2019-02-01T00:00:00Z",
+            "timestamp": 1548979200000
+          },
+          "content-version": "stm-asf",
+          "delay-in-days": 0,
+          "URL": "https://doi.org/10.15223/policy-029"
+        },
+        {
+          "start": {
+            "date-parts": [
+              [
+                2019,
+                2,
+                1
+              ]
+            ],
+            "date-time": "2019-02-01T00:00:00Z",
+            "timestamp": 1548979200000
+          },
+          "content-version": "stm-asf",
+          "delay-in-days": 0,
+          "URL": "https://doi.org/10.15223/policy-037"
+        }
+      ],
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "IEEE/ASME Trans. Mechatron."
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2019,
+            2
+          ]
+        ]
+      },
+      "DOI": "10.1109/tmech.2019.2892089",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2019,
+            1,
+            10
+          ]
+        ],
+        "date-time": "2019-01-10T19:36:34Z",
+        "timestamp": 1547148994000
+      },
+      "page": "361-372",
+      "source": "Crossref",
+      "is-referenced-by-count": 19,
+      "title": [
+        "Damping Control of Sloshing in Liquid Container in Cart With Active Vibration Reducer: The Case of a Curved Path on a Horizontal Plane"
+      ],
+      "prefix": "10.1109",
+      "volume": "24",
+      "author": [
+        {
+          "ORCID": "https://orcid.org/0000-0003-2308-246X",
+          "authenticated-orcid": false,
+          "given": "Masafumi",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref33",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/VSS.2012.6163542"
+        },
+        {
+          "key": "ref32",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2016.2636251"
+        },
+        {
+          "key": "ref31",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1299/jsmec.44.731"
+        },
+        {
+          "key": "ref30",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.2514/3.19722"
+        },
+        {
+          "key": "ref35",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1049/iet-cta.2016.1219"
+        },
+        {
+          "key": "ref34",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1504/IJAMECHS.2013.059794"
+        },
+        {
+          "key": "ref10",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TIE.2014.2361799"
+        },
+        {
+          "key": "ref11",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/37.569711"
+        },
+        {
+          "key": "ref12",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/S0967-0661(01)00023-5"
+        },
+        {
+          "key": "ref13",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.20965/jrm.2009.p0642"
+        },
+        {
+          "key": "ref14",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.1991.174577"
+        },
+        {
+          "key": "ref15",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1007/s001700070018"
+        },
+        {
+          "key": "ref16",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/S0957-4158(00)00011-8"
+        },
+        {
+          "key": "ref17",
+          "first-page": "1262",
+          "article-title": "A compact modified Delta parallel mechanism design based on a stiffness analysis",
+          "author": "yoon",
+          "year": "0",
+          "journal-title": "Proc IEEE/ASME Int Conf AIM"
+        },
+        {
+          "key": "ref18",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/AIM.2005.1511052"
+        },
+        {
+          "key": "ref19",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1017/S0263574708004967"
+        },
+        {
+          "key": "ref28",
+          "first-page": "247",
+          "article-title": "On the vibration of an elevated water-tank&#x2013;I",
+          "volume": "4",
+          "author": "senda",
+          "year": "1954",
+          "journal-title": "Tech Repts Osaka Univ"
+        },
+        {
+          "key": "ref4",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.20965/jrm.2005.p0546"
+        },
+        {
+          "key": "ref27",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2018.2866916"
+        },
+        {
+          "key": "ref3",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2004.839033"
+        },
+        {
+          "key": "ref6",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TIE.2009.2026380"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "crossref",
+          "first-page": "1",
+          "DOI": "10.1016/j.jsv.2008.07.015",
+          "article-title": "Design and optimization of input shapers for liquid slosh suppression",
+          "volume": "320",
+          "author": "a -hassan",
+          "year": "2009",
+          "journal-title": "J Sound Vib"
+        },
+        {
+          "key": "ref29",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1299/kikaic.65.1816"
+        },
+        {
+          "key": "ref8",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2011.2182056"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.2514/1.A32137"
+        },
+        {
+          "key": "ref2",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/87.918901"
+        },
+        {
+          "key": "ref9",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TMECH.2014.2311888"
+        },
+        {
+          "key": "ref1",
+          "first-page": "353",
+          "article-title": "Optimal control of liquid container transfer to several performance specifications",
+          "volume": "6",
+          "author": "hamaguchi",
+          "year": "1994",
+          "journal-title": "J Adv Automat Technol"
+        },
+        {
+          "key": "ref20",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.2011.6094423"
+        },
+        {
+          "key": "ref22",
+          "doi-asserted-by": "crossref",
+          "first-page": "644",
+          "DOI": "10.1016/j.jsv.2006.07.050",
+          "article-title": "A six-axis single-stage active vibration isolator based on Stewart platform",
+          "volume": "300",
+          "author": "preumont",
+          "year": "2007",
+          "journal-title": "J Sound Vib"
+        },
+        {
+          "key": "ref21",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.5220/0005116905920598"
+        },
+        {
+          "key": "ref24",
+          "article-title": "Damping control of sloshing in liquid container on cart with active vibration reducer having parallel linkage: Damping control without excitation of higher-mode sloshing",
+          "volume": "81",
+          "author": "hamaguchi",
+          "year": "2015",
+          "journal-title": "JSME Trans"
+        },
+        {
+          "key": "ref23",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1299/mej.2014dr0061"
+        },
+        {
+          "key": "ref26",
+          "first-page": "501",
+          "article-title": "Dynamic behavior of liquids in moving containers",
+          "volume": "16",
+          "author": "abramson",
+          "year": "1963",
+          "journal-title": "Appl Mechanics Rev"
+        },
+        {
+          "key": "ref25",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.5687/iscie.9.162"
+        }
+      ],
+      "container-title": [
+        "IEEE/ASME Transactions on Mechatronics"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx7/3516/8642453/08606973.pdf?arnumber=8606973",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2022,
+            7,
+            13
+          ]
+        ],
+        "date-time": "2022-07-13T21:03:34Z",
+        "timestamp": 1657746214000
+      },
+      "score": 37.101147,
+      "resource": {
+        "primary": {
+          "URL": "https://ieeexplore.ieee.org/document/8606973/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2019,
+            2
+          ]
+        ]
+      },
+      "references-count": 35,
+      "journal-issue": {
+        "issue": "1"
+      },
+      "URL": "https://doi.org/10.1109/tmech.2019.2892089",
+      "ISSN": [
+        "1083-4435",
+        "1941-014X"
+      ],
+      "issn-type": [
+        {
+          "value": "1083-4435",
+          "type": "print"
+        },
+        {
+          "value": "1941-014X",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2019,
+            2
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            3
+          ]
+        ],
+        "date-time": "2022-04-03T07:17:01Z",
+        "timestamp": 1648970221712
+      },
+      "reference-count": 0,
+      "publisher": "Japan Society of Mechanical Engineers",
+      "issue": "0",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "ICAM"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "DOI": "10.1299/jsmeicam.2004.4.52_3",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "page": "52",
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "prefix": "10.1299",
+      "volume": "2004.4",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Shimane Univ."
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "124",
+      "container-title": [
+        "The Abstracts of the international conference on advanced mechatronics : toward evolutionary fusion of IT and mechatronics : ICAM"
+      ],
+      "original-title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "score": 34.808765,
+      "resource": {
+        "primary": {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_article"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "references-count": 0,
+      "journal-issue": {
+        "issue": "0",
+        "published-print": {
+          "date-parts": [
+            [
+              2004
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1299/jsmeicam.2004.4.52_3",
+      "ISSN": [
+        "2424-3116"
+      ],
+      "issn-type": [
+        {
+          "value": "2424-3116",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      }
+    }
+  ]
+}

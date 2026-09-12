@@ -1,0 +1,30 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Emergency+Stopping+for+Liquid-manipulating+Robots&rows=3",
+  "match_review": "No matching formal publication identified in this targeted search; not evidence that no publication exists.",
+  "top_results": [
+    {
+      "title": [
+        "Stopping killer robots"
+      ],
+      "DOI": "10.1177/0096340213516745",
+      "container-title": [
+        "Bulletin of the Atomic Scientists"
+      ]
+    },
+    {
+      "title": [
+        "Manipulating industrial robots. Vocabulary"
+      ],
+      "DOI": "10.3403/00880740",
+      "container-title": null
+    },
+    {
+      "title": [
+        "Manipulating industrial robots. Vocabulary"
+      ],
+      "DOI": "10.3403/00880740u",
+      "container-title": null
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Minimum+Time+Learning+Model+Predictive+Control&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1002/rnc.5284",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1002/rnc.5284",
+    "title": [
+      "Minimum time learning model predictive control"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-1682-0551",
+        "authenticated-orcid": false,
+        "given": "Ugo",
+        "family": "Rosolia",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Department of Mechanical and Civil Engineering California Institute of Technology Pasadena California USA"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Francesco",
+        "family": "Borrelli",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Department of Mechanical Engineering University of California Berkeley Berkeley California USA"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "International Journal of Robust and Nonlinear Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2020,
+          10,
+          22
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2020,
+          10,
+          22
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021,
+          12
+        ]
+      ]
+    },
+    "volume": "31",
+    "issue": "18",
+    "page": "8830-8854",
+    "publisher": "Wiley",
+    "URL": "https://doi.org/10.1002/rnc.5284",
+    "ISSN": [
+      "1049-8923",
+      "1099-1239"
+    ]
+  }
+}

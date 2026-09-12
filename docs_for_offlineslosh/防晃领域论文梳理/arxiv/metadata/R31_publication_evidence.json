@@ -1,0 +1,61 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Jerk-limited+Real-time+Trajectory+Generation+with+Arbitrary+Target+States&rows=3",
+  "match_review": "Title, author list and DOI checked against PDF frontmatter. Version/date differences are recorded separately.",
+  "record": {
+    "DOI": "10.15607/rss.2021.xvii.015",
+    "title": [
+      "Jerk-limited Real-time Trajectory Generation with Arbitrary Target States"
+    ],
+    "author": [
+      {
+        "given": "Lars",
+        "family": "Berscheid",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Torsten",
+        "family": "Kroeger",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "Robotics: Science and Systems XVII"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021,
+          7,
+          12
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2021,
+          7,
+          12
+        ]
+      ]
+    },
+    "publisher": "Robotics: Science and Systems Foundation",
+    "URL": "https://doi.org/10.15607/rss.2021.xvii.015"
+  }
+}

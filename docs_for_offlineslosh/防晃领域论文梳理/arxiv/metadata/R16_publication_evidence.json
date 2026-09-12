@@ -1,0 +1,85 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Funnel+Libraries+for+Real-Time+Robust+Feedback+Motion+Planning&rows=5",
+  "doi_api_url": "https://api.crossref.org/works/10.1177/0278364917712421",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1177/0278364917712421",
+    "title": [
+      "Funnel libraries for real-time robust feedback motion planning"
+    ],
+    "author": [
+      {
+        "given": "Anirudha",
+        "family": "Majumdar",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Computer Science and Artificial Intelligence Lab, Massachusetts Institute of Technology, Cambridge, MA, USA"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "given": "Russ",
+        "family": "Tedrake",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Computer Science and Artificial Intelligence Lab, Massachusetts Institute of Technology, Cambridge, MA, USA"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "The International Journal of Robotics Research"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2017,
+          6,
+          25
+        ]
+      ]
+    },
+    "published-online": {
+      "date-parts": [
+        [
+          2017,
+          6,
+          25
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2017,
+          7
+        ]
+      ]
+    },
+    "volume": "36",
+    "issue": "8",
+    "page": "947-982",
+    "publisher": "SAGE Publications",
+    "URL": "https://doi.org/10.1177/0278364917712421",
+    "ISSN": [
+      "0278-3649",
+      "1741-3176"
+    ]
+  }
+}

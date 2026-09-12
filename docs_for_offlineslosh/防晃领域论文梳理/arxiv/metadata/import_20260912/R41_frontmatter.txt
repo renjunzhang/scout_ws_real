@@ -1,0 +1,87 @@
+                                                           MODEL BASED ACTIVE SLOSH DAMPING EXPERIMENT
+
+                                                                        C. Jetzschmann1 , H. Strauch1 , S. Bennani2
+                                                               1
+                                                                Airbus DS GmbH, Airbus Allee 1, 28199 Bremen, Germany
+                                             christina.jetzschmann@airbus.com +494215393597, hans.strauch@airbus.com +494215395316
+                                                            2
+                                                              ESA/ESTEC, Keplerlaan 1, 2200 AG Noordwijk, The Netherlands
+                                                                         samir.bennani@esa.int +31715658099
+arXiv:1801.10017v1 [cs.SY] 30 Jan 2018
+
+
+
+
+                                                                                          ABSTRACT
+
+                                                This paper presents a model based experimental investigation to demonstrate the usefulness of an
+                                                active damping strategy to manage fluid sloshing motion in spacecraft tanks. The active damping
+                                                strategy is designed to reduce the degrading impact on maneuvering and pointing performance via
+                                                a force feedback strategy. Many problems have been encountered until now, such as instability of
+                                                the closed loop system, excessive consumption in the attitude propellant or problems for engine
+                                                re-ignition in upper stages. Mostly, they have been addressed in a passive way via the design of
+                                                baffles and membranes, which on their own have mass and constructive impacts. Active manage-
+                                                ment of propellant motion in launchers and satellites has the potential to increase performance
+                                                on various levels. This paper demonstrates active slosh management using force feedback for
+                                                the compensation of the slosh resonances. Force sensors between tank and the carrying structure
+                                                provide information of the fluid motion via the reaction force. The control system is designed to
+                                                generate an appropriate acceleration profile that leads to desired attenuation profiles in amplitude,
+                                                frequency and time. Two robust control design methods, one based on µ design and the other on
+                                                parametric structured design based on non-smooth optimization of the worst-case H∞ norm, are
+                                                applied. The controller is first tested with a computational fluid dynamics simulation in the loop.
+                                                Finally a water tank mounted on a Hexapod with up to 1100 liter is used to evaluate the control
+                                                performance. The paper illustrates that is possible to actively influence sloshing via closed loop.
+
+                                         1    INTRODUCTION
+
+                                         The ratio between propellant mass and dry mass in satellites and particularly in launchers can easily
+                                         exceed one. Such a high value of fluid can cause instability of the closed loop system, excessive
+                                         consumption in the attitude propellant when the control system tries to counteract the sloshing, or
+                                         problems for engine re-ignition in upper stages because the propellant is not properly located at the
+                                         tank outlet. In most of the cases this has been only addressed in a passive fashion: On the constructive
+                                         side baffles or membranes are implemented. On the flight software side (GNC level) the destabilizing
+                                         impact of the sloshing resonant mode is often just filtered out via notch filters. This is considered as
+                                         a passive approach since there is no sensing, actuation and control action.
+                                         Active management of propellant motion offers the potential to increase performance on various
+                                         levels. Examples are large angle slewing maneuvers of upper stages performed in such a way that
+                                         the propellant stays close to the tank bottom or increasing the damping in powered flight phases of
+
+
+                                         ESA GNC 2017 – C Jetzschmann                                                                                   1
+launchers. Force sensors between tank and the carrying structure can provide information of the
+fluid motion via the reaction force. A control system will be designed generating an appropriate
+acceleration profile that leads to a desired closed loop behavior.
+
+
+
+
+Figure 1: Workflow Development and Test - Left side: Active damping on Hexapod under one g,
+Right side: Excitation free spin-up (open loop) experiment on ISS in zero g (in preparation)
+
+
+A model based design approach allows approaching the development of such a controller in a struc-
+tured way ([1]). At first, an analytic description of the slosh motion is derived. This serves as the
+basis for the control design. The next step is to set-up a simulation infrastructure based on physical
+modeling, in this case with Flow3D for a computational fluid dynamic (CFD) representation of the
+propellant dynamics ([2]) and Mathwork’s SimMechanics for the Hexapod representation which is
+used for exciting the slosh motion. It is of importance that the CFD must interact with the controller
+in closed loop ([3]). Replacing the analytic design model with the CFD provides a first test on the
+suitability of the designed controller. The last step must of course be the test with real fluids.
+In order to prove the concept of active damping and to show the mastering of the complete develop-
+ment cycle from theoretical design to CFD simulation to hardware-in-the-loop, a tank with fill levels
+from 600 to 1100 liter water is placed on a Hexapod. The fluid is deliberately excited into an oscilla-
+tory phase. The reaction force between tank and Hexapod attachment is measured and the controller
+commands the Hexapod with the purpose of damping the slosh motion after it has been excited into
+an oscillatory, very lightly damped motion.
+Two controller architectures are tested and compared. The first is a classical µ design with a model
+reduction applied to the resulting controller. The second one is a fixed structure controller based on
+the Mathworks’ Robust Control Toolbox ’robust systune’ feature, which implements the algorithm
+from [4]. This last technique is very attractive insofar as it allows to derive robust controller for
+prescribed controller topologies. However, the parametric structured design, which minimizes the
+worst-case H∞ norm, is based on non-smooth optimization. This can lead to large, abrupt changes in
+the controller parameters for even small changes in the weighting function, which defy the intuition.
+A full order µ controller is therefore a good guiding principal serving as a benchmark.
+In order to have a reliable process allowing to move from simulation to the hardware-in-the-loop,
+
+ESA GNC 2017 – C Jetzschmann                                                                         2
+

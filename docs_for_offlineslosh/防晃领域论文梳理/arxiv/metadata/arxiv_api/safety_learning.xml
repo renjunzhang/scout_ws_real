@@ -1,0 +1,554 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<feed xmlns:opensearch="http://a9.com/-/spec/opensearch/1.1/" xmlns:arxiv="http://arxiv.org/schemas/atom" xmlns="http://www.w3.org/2005/Atom">
+  <id>https://arxiv.org/api/DrWhyUqC0U1PovXiJIjSsodlPYc</id>
+  <title>arXiv Query: search_query=(ti:"predictive safety filter" OR ti:"learning model predictive control") AND submittedDate:"199001010000 TO 202609112359"&amp;id_list=&amp;start=0&amp;max_results=25</title>
+  <updated>2026-09-11T14:08:53Z</updated>
+  <link href="https://arxiv.org/api/query?search_query=(ti:%22predictive+safety+filter%22+OR+ti:%22learning+model+predictive+control%22)+AND+submittedDate:%22199001010000+TO+202609112359%22&amp;start=0&amp;max_results=25&amp;id_list=" type="application/atom+xml"/>
+  <opensearch:itemsPerPage>25</opensearch:itemsPerPage>
+  <opensearch:totalResults>54</opensearch:totalResults>
+  <opensearch:startIndex>0</opensearch:startIndex>
+  <entry>
+    <id>http://arxiv.org/abs/2311.08496v2</id>
+    <title>A Robust, Efficient Predictive Safety Filter</title>
+    <updated>2024-04-26T17:46:09Z</updated>
+    <link href="https://arxiv.org/abs/2311.08496v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2311.08496v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper, we propose a novel predictive safety filter that is robust to bounded perturbations and is implemented in an even-triggered fashion to reduce online computation. The proposed safety filter extends upon existing work to reject disturbances for discrete-time, time-varying nonlinear systems with time-varying constraints. The safety filter is based on novel concepts of robust, discrete-time barrier functions and can be used to filter any control law. Here, we use the safety filter in conjunction with Differentiable Predictive Control (DPC) as a promising offline learning-based policy optimization method. The approach is demonstrated on a two-tank system, building, and single-integrator example.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-11-14T19:42:00Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Wenceslao Shaw Cortez</name>
+    </author>
+    <author>
+      <name>Jan Drgona</name>
+    </author>
+    <author>
+      <name>Draguna Vrabie</name>
+    </author>
+    <author>
+      <name>Mahantesh Halappanavar</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2212.02111v2</id>
+    <title>Predictive safety filter using system level synthesis</title>
+    <updated>2023-06-09T12:58:03Z</updated>
+    <link href="https://arxiv.org/abs/2212.02111v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2212.02111v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Safety filters provide modular techniques to augment potentially unsafe control inputs (e.g. from learning-based controllers or humans) with safety guarantees in the form of constraint satisfaction. In this paper, we present an improved model predictive safety filter (MPSF) formulation, which incorporates system level synthesis techniques in the design. The resulting SL-MPSF scheme ensures safety for linear systems subject to bounded disturbances in an enlarged safe set. It requires less severe and frequent modifications of potentially unsafe control inputs compared to existing MPSF formulations to certify safety. In addition, we propose an explicit variant of the SL-MPSF formulation, which maintains scalability, and reduces the required online computational effort - the main drawback of the MPSF. The benefits of the proposed system level safety filter formulations compared to state-of-the-art MPSF formulations are demonstrated using a numerical example.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-12-05T09:10:26Z</published>
+    <arxiv:comment>https://gitlab.ethz.ch/ics/SLS_safety_filter/</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <arxiv:journal_ref>Proceedings of The 5th Annual Learning for Dynamics and Control Conference, PMLR 211:1180-1192 (2023)</arxiv:journal_ref>
+    <author>
+      <name>Antoine P. Leeman</name>
+    </author>
+    <author>
+      <name>Johannes Köhler</name>
+    </author>
+    <author>
+      <name>Samir Benanni</name>
+    </author>
+    <author>
+      <name>Melanie N. Zeilinger</name>
+    </author>
+    <arxiv:doi>10.3929/ethz-b-000615512</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.3929/ethz-b-000615512" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2004.05173v3</id>
+    <title>Output-Lifted Learning Model Predictive Control</title>
+    <updated>2021-01-15T20:00:50Z</updated>
+    <link href="https://arxiv.org/abs/2004.05173v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2004.05173v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose a computationally efficient Learning Model Predictive Control (LMPC) scheme for constrained optimal control of a class of nonlinear systems where the state and input can be reconstructed using lifted outputs. For the considered class of systems, we show how to use historical trajectory data collected during iterative tasks to construct a convex value function approximation along with a convex safe set in a lifted space of virtual outputs. These constructions are iteratively updated with historical data and used to synthesize predictive control policies. We show that the proposed strategy guarantees recursive constraint satisfaction, asymptotic stability and non-decreasing closed-loop performance at each policy update. Finally, simulation results demonstrate the effectiveness of the proposed strategy on a piecewise affine (PWA) system, kinematic unicycle and bilinear DC motor.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-04-10T18:00:01Z</published>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Siddharth H. Nair</name>
+    </author>
+    <author>
+      <name>Ugo Rosolia</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2202.07716v3</id>
+    <title>Learning Model Predictive Control for Quadrotors</title>
+    <updated>2022-06-02T00:20:29Z</updated>
+    <link href="https://arxiv.org/abs/2202.07716v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2202.07716v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Aerial robots can enhance their safe and agile navigation in complex and cluttered environments by efficiently exploiting the information collected during a given task. In this paper, we address the learning model predictive control problem for quadrotors. We design a learning receding--horizon nonlinear control strategy directly formulated on the system nonlinear manifold configuration space SO(3)xR^3. The proposed approach exploits past successful task iterations to improve the system performance over time while respecting system dynamics and actuator constraints. We further relax its computational complexity making it compatible with real-time quadrotor control requirements. We show the effectiveness of the proposed approach in learning a minimum time control task, respecting dynamics, actuators, and environment constraints. Several experiments in simulation and real-world set-up validate the proposed approach.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-02-15T20:31:52Z</published>
+    <arxiv:comment>Guanrui Li and Alex Tunchez contributed equally to this paper. This paper has been accepted to the 2022 IEEE International Conference on Robotics and Automation. Please cite this paper with the standard IEEE Conference format. Link to the Video: https://youtu.be/-5cIsIM5G7M</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <arxiv:journal_ref>International Conference on Robotics and Automation (ICRA), 2022</arxiv:journal_ref>
+    <author>
+      <name>Guanrui Li</name>
+    </author>
+    <author>
+      <name>Alex Tunchez</name>
+    </author>
+    <author>
+      <name>Giuseppe Loianno</name>
+    </author>
+    <arxiv:doi>10.1109/ICRA46639.2022.9812077</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/ICRA46639.2022.9812077" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2405.11698v2</id>
+    <title>Multi-Objective Learning Model Predictive Control</title>
+    <updated>2024-10-17T21:54:35Z</updated>
+    <link href="https://arxiv.org/abs/2405.11698v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2405.11698v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Multi-Objective Learning Model Predictive Control is a novel data-driven control scheme which improves a linear system's closed-loop performance with respect to several convex control objectives over iterations of a repeated task. At each task iteration, collected system data is used to construct terminal components of a Model Predictive Controller. The formulation presented in this paper ensures that closed-loop control performance improves between successive iterations with respect to each objective. We provide proofs of recursive feasibility and performance improvement, and show that the converged policy is Pareto optimal. Simulation results demonstrate the applicability of the proposed approach.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-05-19T23:08:15Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Siddharth H. Nair</name>
+    </author>
+    <author>
+      <name>Charlott Vallon</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2102.11907v1</id>
+    <title>A predictive safety filter for learning-based racing control</title>
+    <updated>2021-02-23T19:36:14Z</updated>
+    <link href="https://arxiv.org/abs/2102.11907v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2102.11907v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The growing need for high-performance controllers in safety-critical applications like autonomous driving has been motivating the development of formal safety verification techniques. In this paper, we design and implement a predictive safety filter that is able to maintain vehicle safety with respect to track boundaries when paired alongside any potentially unsafe control signal, such as those found in learning-based methods. A model predictive control (MPC) framework is used to create a minimally invasive algorithm that certifies whether a desired control input is safe and can be applied to the vehicle, or that provides an alternate input to keep the vehicle in bounds. To this end, we provide a principled procedure to compute a safe and invariant set for nonlinear dynamic bicycle models using efficient convex approximation techniques. To fully support an aggressive racing performance without conservative safety interventions, the safe set is extended in real-time through predictive control backup trajectories. Applications for assisted manual driving and deep imitation learning on a miniature remote-controlled vehicle demonstrate the safety filter's ability to ensure vehicle safety during aggressive maneuvers.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2021-02-23T19:36:14Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Ben Tearle</name>
+    </author>
+    <author>
+      <name>Kim P. Wabersich</name>
+    </author>
+    <author>
+      <name>Andrea Carron</name>
+    </author>
+    <author>
+      <name>Melanie N. Zeilinger</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1911.09239v4</id>
+    <title>Minimum Time Learning Model Predictive Control</title>
+    <updated>2020-10-04T06:24:22Z</updated>
+    <link href="https://arxiv.org/abs/1911.09239v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1911.09239v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper we present a Learning Model Predictive Control (LMPC) strategy for linear and nonlinear time optimal control problems. Our work builds on existing LMPC methodologies and it guarantees finite time convergence properties for the closed-loop system. We show how to construct a time varying safe set and terminal cost function using closed-loop data. The resulting LMPC policy is time varying and it guarantees recursive constraint satisfaction and non-decreasing performance. Computational efficiency is obtained by convexifing the safe set and terminal cost function. We demonstrate that, for a class of nonlinear system and convex constraints, the convex LMPC formulation guarantees recursive constraint satisfaction and non-decreasing performance. Finally, we illustrate the effectiveness of the proposed strategies on minimum time obstacle avoidance and racing examples.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-11-21T01:51:35Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Ugo Rosolia</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1907.04990v3</id>
+    <title>Eco-driving with Learning Model Predictive Control</title>
+    <updated>2019-09-11T05:33:58Z</updated>
+    <link href="https://arxiv.org/abs/1907.04990v3" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1907.04990v3" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present a predictive cruise controller which iteratively improves the fuel economy of a vehicle traveling along the same route every day. Our approach uses historical data from previous trip iterations to improve vehicle performance while guaranteeing a desired arrival time. The proposed predictive cruise controller is based on the recently developed Learning Model Predictive Control (LMPC) framework, which is extended in this paper to include time constraints. Moreover, we reformulate the modified LMPC with time constraint into a computationally tractable form. Our method is presented in detail, applied to the predictive cruise control problem, and validated through simulations.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-07-11T04:16:56Z</published>
+    <arxiv:comment>This work was presented at the 14th International Symposium in Advanced Vehicle Control (AVEC '18)</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Yeojun Kim</name>
+    </author>
+    <author>
+      <name>Samuel Tay</name>
+    </author>
+    <author>
+      <name>Jacopo Guanetti</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1610.06534v6</id>
+    <title>Autonomous Racing using Learning Model Predictive Control</title>
+    <updated>2017-11-09T02:32:50Z</updated>
+    <link href="https://arxiv.org/abs/1610.06534v6" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1610.06534v6" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A novel learning Model Predictive Control technique is applied to the autonomous racing problem. The goal of the controller is to minimize the time to complete a lap. The proposed control strategy uses the data from previous laps to improve its performance while satisfying safety requirements. Moreover, a system identification technique is proposed to estimate the vehicle dynamics. Simulation results with the high fidelity simulator software CarSim show the effectiveness of the proposed control scheme.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2016-10-20T18:47:05Z</published>
+    <arxiv:comment>Extended version of the paper accepted to ACC</arxiv:comment>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>Ugo Rosolia</name>
+    </author>
+    <author>
+      <name>Ashwin Carvalho</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2303.12127v1</id>
+    <title>Robust Output-Lifted Learning Model Predictive Control</title>
+    <updated>2023-03-21T18:36:21Z</updated>
+    <link href="https://arxiv.org/abs/2303.12127v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2303.12127v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose an iterative approach for designing Robust Learning Model Predictive Control (LMPC) policies for a class of nonlinear systems with additive, unmodelled dynamics. The nominal dynamics are assumed to be difference flat, i.e., the state and input can be reconstructed using flat output sequences. For the considered class of systems, we synthesize Robust MPC policies and show how to use historical trajectory data collected during iterative tasks to 1) obtain bounds on the unmodelled dynamics and 2) construct a convex value function approximation along with a convex safe set in the space of output sequences for designing terminal components in the Robust MPC design. We show that the proposed strategy guarantees robust constraint satisfaction, asymptotic convergence to a desired subset of the state space, and non-decreasing closed-loop performance at each policy update. Finally, simulation results demonstrate the effectiveness of the proposed strategy on a minimum time control problem using a constrained nonlinear and uncertain vehicle model.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-03-21T18:36:21Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Siddharth H. Nair</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2311.06769v1</id>
+    <title>Learning Predictive Safety Filter via Decomposition of Robust Invariant Set</title>
+    <updated>2023-11-12T08:11:28Z</updated>
+    <link href="https://arxiv.org/abs/2311.06769v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2311.06769v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Ensuring safety of nonlinear systems under model uncertainty and external disturbances is crucial, especially for real-world control tasks. Predictive methods such as robust model predictive control (RMPC) require solving nonconvex optimization problems online, which leads to high computational burden and poor scalability. Reinforcement learning (RL) works well with complex systems, but pays the price of losing rigorous safety guarantee. This paper presents a theoretical framework that bridges the advantages of both RMPC and RL to synthesize safety filters for nonlinear systems with state- and action-dependent uncertainty. We decompose the robust invariant set (RIS) into two parts: a target set that aligns with terminal region design of RMPC, and a reach-avoid set that accounts for the rest of RIS. We propose a policy iteration approach for robust reach-avoid problems and establish its monotone convergence. This method sets the stage for an adversarial actor-critic deep RL algorithm, which simultaneously synthesizes a reach-avoid policy network, a disturbance policy network, and a reach-avoid value network. The learned reach-avoid policy network is utilized to generate nominal trajectories for online verification, which filters potentially unsafe actions that may drive the system into unsafe regions when worst-case disturbances are applied. We formulate a second-order cone programming (SOCP) approach for online verification using system level synthesis, which optimizes for the worst-case reach-avoid value of any possible trajectories. The proposed safety filter requires much lower computational complexity than RMPC and still enjoys persistent robust safety guarantee. The effectiveness of our method is illustrated through a numerical example.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-11-12T08:11:28Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Zeyang Li</name>
+    </author>
+    <author>
+      <name>Chuxiong Hu</name>
+    </author>
+    <author>
+      <name>Weiye Zhao</name>
+    </author>
+    <author>
+      <name>Changliu Liu</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2306.02551v2</id>
+    <title>Conformal Predictive Safety Filter for RL Controllers in Dynamic Environments</title>
+    <updated>2023-08-22T18:39:50Z</updated>
+    <link href="https://arxiv.org/abs/2306.02551v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2306.02551v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The interest in using reinforcement learning (RL) controllers in safety-critical applications such as robot navigation around pedestrians motivates the development of additional safety mechanisms. Running RL-enabled systems among uncertain dynamic agents may result in high counts of collisions and failures to reach the goal. The system could be safer if the pre-trained RL policy was uncertainty-informed. For that reason, we propose conformal predictive safety filters that: 1) predict the other agents' trajectories, 2) use statistical techniques to provide uncertainty intervals around these predictions, and 3) learn an additional safety filter that closely follows the RL controller but avoids the uncertainty intervals. We use conformal prediction to learn uncertainty-informed predictive safety filters, which make no assumptions about the agents' distribution. The framework is modular and outperforms the existing controllers in simulation. We demonstrate our approach with multiple experiments in a collision avoidance gym environment and show that our approach minimizes the number of collisions without making overly-conservative predictions.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2023-06-05T02:55:17Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Kegan J. Strawn</name>
+    </author>
+    <author>
+      <name>Nora Ayanian</name>
+    </author>
+    <author>
+      <name>Lars Lindemann</name>
+    </author>
+    <arxiv:doi>10.1109/LRA.2023.3322644</arxiv:doi>
+    <link rel="related" href="https://doi.org/10.1109/LRA.2023.3322644" title="doi"/>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2404.05496v2</id>
+    <title>Stability Mechanisms for Predictive Safety Filters</title>
+    <updated>2024-09-18T11:44:31Z</updated>
+    <link href="https://arxiv.org/abs/2404.05496v2" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2404.05496v2" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Predictive safety filters enable the integration of potentially unsafe learning-based control approaches and humans into safety-critical systems. In addition to simple constraint satisfaction, many control problems involve additional stability requirements that may vary depending on the specific use case or environmental context. In this work, we address this problem by augmenting predictive safety filters with stability guarantees, ranging from bounded convergence to uniform asymptotic stability. The proposed framework extends well-known stability results from model predictive control (MPC) theory while supporting commonly used design techniques. As a result, straightforward extensions to dynamic trajectory tracking problems can be easily adapted, as outlined in this article. The practicality of the framework is demonstrated using an automotive advanced driver assistance scenario, involving a reference trajectory stabilization problem.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-04-08T13:20:48Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Elias Milios</name>
+    </author>
+    <author>
+      <name>Kim Peter Wabersich</name>
+    </author>
+    <author>
+      <name>Felix Berkel</name>
+    </author>
+    <author>
+      <name>Lukas Schwenkel</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2005.00826v1</id>
+    <title>Learning Model Predictive Control for Competitive Autonomous Racing</title>
+    <updated>2020-05-02T13:05:31Z</updated>
+    <link href="https://arxiv.org/abs/2005.00826v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2005.00826v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The goal of this thesis is to design a learning model predictive controller (LMPC) that allows multiple agents to race competitively on a predefined race track in real-time. This thesis addresses two major shortcomings in the already existing single-agent formulation. Previously, the agent determines a locally optimal trajectory but does not explore the state space, which may be necessary for overtaking maneuvers. Additionally, obstacle avoidance for LMPC has been achieved in the past by using a non-convex terminal set, which increases the complexity for determining a solution to the optimization problem. The proposed algorithm for multi-agent racing explores the state space by executing the LMPC for multiple different initializations, which yields a richer terminal safe set. Furthermore, a new method for selecting states in the terminal set is developed, which keeps the convexity for the terminal safe set and allows for taking suboptimal states.</summary>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="stat.ML" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-05-02T13:05:31Z</published>
+    <arxiv:primary_category term="cs.LG"/>
+    <author>
+      <name>Lukas Brunke</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2006.13406v1</id>
+    <title>Distributed Learning Model Predictive Control for Linear Systems</title>
+    <updated>2020-06-24T00:50:51Z</updated>
+    <link href="https://arxiv.org/abs/2006.13406v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2006.13406v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a distributed learning model predictive control (DLMPC) scheme for distributed linear time invariant systems with coupled dynamics and state constraints. The proposed solution method is based on an online distributed optimization scheme with nearest-neighbor communication. If the control task is iterative and data from previous feasible iterations are available, local data are exploited by the subsystems in order to construct the local terminal set and terminal cost, which guarantee recursive feasibility and asymptotic stability, as well as performance improvement over iterations. In case a first feasible trajectory is difficult to obtain, or the task is non-iterative, we further propose an algorithm that efficiently explores the state-space and generates the data required for the construction of the terminal cost and terminal constraint in the MPC problem in a safe and distributed way. In contrast to other distributed MPC schemes which use structured positive invariant sets, the proposed approach involves a control invariant set as the terminal set, on which we do not impose any distributed structure. The proposed iterative scheme converges to the global optimal solution of the underlying infinite horizon optimal control problem under mild conditions. Numerical experiments demonstrate the effectiveness of the proposed DLMPC scheme.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2020-06-24T00:50:51Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Yvonne R. Stürz</name>
+    </author>
+    <author>
+      <name>Edward L. Zhu</name>
+    </author>
+    <author>
+      <name>Ugo Rosolia</name>
+    </author>
+    <author>
+      <name>Karl H. Johansson</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1903.07003v4</id>
+    <title>Task Decomposition for Iterative Learning Model Predictive Control</title>
+    <updated>2020-03-11T23:16:50Z</updated>
+    <link href="https://arxiv.org/abs/1903.07003v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1903.07003v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A task decomposition method for iterative learning model predictive control is presented. We consider a constrained nonlinear dynamical system and assume the availability of state-input pair datasets which solve a task T1. Our objective is to find a feasible model predictive control policy for a second task, T2, using stored data from T1. Our approach applies to tasks T2 which are composed of subtasks contained in T1. In this paper we propose a formal definition of subtasks and the task decomposition problem, and provide proofs of feasibility and iteration cost improvement over simple initializations. We demonstrate the effectiveness of the proposed method on autonomous racing and robotic manipulation experiments.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-03-16T23:55:05Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Charlott Vallon</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1908.02879v1</id>
+    <title>Learning Model Predictive Control for Connected Autonomous Vehicles</title>
+    <updated>2019-08-07T23:54:35Z</updated>
+    <link href="https://arxiv.org/abs/1908.02879v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1908.02879v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>A Learning Model Predictive Controller (LMPC) is presented and tailored to platooning and Connected Autonomous Vehicles (CAVs) applications. The proposed controller builds on previous work on nonlinear LMPC, adapting its architecture and extending its capability to (a) handle dynamic environments and (b) account for data-driven decision variables that derive from an unknown or unknowable function. The paper presents the control design approach, and shows how to recursively construct an outer loop candidate trajectory and an inner iterative LMPC controller that converges to an optimal strategy over both model-driven and data-driven variables. Simulation results show the effectiveness of the proposed control logic.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-08-07T23:54:35Z</published>
+    <arxiv:comment>8 pages, 4 figures, 58th IEEE Conference on Decision and Control</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Hassan Jafarzadeh</name>
+    </author>
+    <author>
+      <name>Cody Fleming</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2211.16633v1</id>
+    <title>Collaborative learning model predictive control for repetitive tasks</title>
+    <updated>2022-11-29T23:55:45Z</updated>
+    <link href="https://arxiv.org/abs/2211.16633v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2211.16633v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>This paper presents a cloud-based learning model predictive controller that integrates three interacting components: a set of agents, which must learn to perform a finite set of tasks with the minimum possible local cost; a coordinator, which assigns the tasks to the agents; and the cloud, which stores data to facilitate the agents' learning. The tasks consist in traveling repeatedly between a set of target states while satisfying input and state constraints. In turn, the state constraints may change in time for each of the possible tasks. To deal with it, different modes of operation, which establish different restrictions, are defined. The agents' inputs are found by solving local model predictive control (MPC) problems where the terminal set and cost are defined from previous trajectories. The data collected by each agent is uploaded to the cloud and made accessible to all their peers. Likewise, similarity between tasks is exploited to accelerate the learning process. The applicability of the proposed approach is illustrated by simulation results.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2022-11-29T23:55:45Z</published>
+    <arxiv:comment>Conference on Decision and Control 2022</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Paula Chanfreut</name>
+    </author>
+    <author>
+      <name>José María Maestre</name>
+    </author>
+    <author>
+      <name>Eduardo F. Camacho</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1911.07535v4</id>
+    <title>Learning Model Predictive Control for Periodic Repetitive Tasks</title>
+    <updated>2020-04-17T13:56:07Z</updated>
+    <link href="https://arxiv.org/abs/1911.07535v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1911.07535v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We propose a reference-free learning model predictive controller for periodic repetitive tasks. We consider a problem in which dynamics, constraints and stage cost are periodically time-varying. The controller uses the closed-loop data to construct a time-varying terminal set and a time-varying terminal cost. We show that the proposed strategy in closed-loop with linear and nonlinear systems guarantees recursive constraints satisfaction, non-increasing open-loop cost, and that the open-loop and closed-loop cost are the same at convergence. Simulations are presented for different repetitive tasks, both for linear and nonlinear systems.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2019-11-18T10:53:57Z</published>
+    <arxiv:comment>2020 European Control Conference, Saint Petersburg, Russia. Extended version of the conference paper</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Nicola Scianca</name>
+    </author>
+    <author>
+      <name>Ugo Rosolia</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2407.06313v1</id>
+    <title>Data-Driven Multi-Modal Learning Model Predictive Control</title>
+    <updated>2024-07-08T18:25:50Z</updated>
+    <link href="https://arxiv.org/abs/2407.06313v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2407.06313v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>We present a Learning Model Predictive Controller (LMPC) for multi-modal systems performing iterative control tasks. Assuming availability of historical data, our goal is to design a data-driven control policy for the multi-modal system where the current mode is unknown. First, we propose a novel method to select local data for constructing affine time-varying (ATV) models of a multi-modal system in the context of LMPC. Then we present how to build a sampled safe set from multi-modal historical data. We demonstrate the effectiveness of our method through simulation results of automated driving on a friction-varying track.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-07-08T18:25:50Z</published>
+    <arxiv:comment>Submitted to 2024 IEEE Conference on Decision and Control</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Fionna B. Kopp</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2608.09653v1</id>
+    <title>Predictive safety filter enhanced curriculum learning control for efficient vehicle dynamics controller</title>
+    <updated>2026-08-10T14:28:44Z</updated>
+    <link href="https://arxiv.org/abs/2608.09653v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2608.09653v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Recent advances in learning-based control have enabled impressive achievements in solving complex control problems in various domains. However, since learning-based control may not be able to realize safety-guaranties, it is of great importance to enhance safety and robustness while maintaining good performances. Take vehicle motion \&amp; dynamics control as an example, in order to overcome the pain points of traditional methods such as heavy parameter calibration effort and learning-based control to bring better performance and efficiency in stability \&amp; agility over prior work for state-based vehicle control tasks, in this work, our method aims to develop a curriculum learning controller enhanced with physics-based predictive safety filter. The validation is conducted with the Python-CarSim platform, demonstrating better improvements and scalability under various maneuvers.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.AI" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2026-08-10T14:28:44Z</published>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>Baocong Zhang</name>
+    </author>
+    <author>
+      <name>Siliang Lu</name>
+    </author>
+    <author>
+      <name>Chenyang Li</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2409.13817v1</id>
+    <title>Differentiable Predictive Control for Robotics: A Data-Driven Predictive Safety Filter Approach</title>
+    <updated>2024-09-20T18:00:08Z</updated>
+    <link href="https://arxiv.org/abs/2409.13817v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2409.13817v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>Model Predictive Control (MPC) is effective at generating safe control strategies in constrained scenarios, at the cost of computational complexity. This is especially the case in robots that require high sampling rates and have limited computing resources. Differentiable Predictive Control (DPC) trains offline a neural network approximation of the parametric MPC problem leading to computationally efficient online control laws at the cost of losing safety guarantees. DPC requires a differentiable model, and performs poorly when poorly conditioned. In this paper we propose a system decomposition technique based on relative degree to overcome this. We also develop a novel safe set generation technique based on the DPC training dataset and a novel event-triggered predictive safety filter which promotes convergence towards the safe set. Our empirical results on a quadcopter demonstrate that the DPC control laws have comparable performance to the state-of-the-art MPC whilst having up to three orders of magnitude reduction in computation time and satisfy safety requirements in a scenario that DPC was not trained on.</summary>
+    <category term="cs.RO" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2024-09-20T18:00:08Z</published>
+    <arxiv:comment>8 Pages, 6 figures</arxiv:comment>
+    <arxiv:primary_category term="cs.RO"/>
+    <author>
+      <name>John Viljoen</name>
+    </author>
+    <author>
+      <name>Wenceslao Shaw Cortez</name>
+    </author>
+    <author>
+      <name>Jan Drgona</name>
+    </author>
+    <author>
+      <name>Sebastian East</name>
+    </author>
+    <author>
+      <name>Masayoshi Tomizuka</name>
+    </author>
+    <author>
+      <name>Draguna Vrabie</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/1812.05506v4</id>
+    <title>A predictive safety filter for learning-based control of constrained nonlinear dynamical systems</title>
+    <updated>2021-05-17T14:34:01Z</updated>
+    <link href="https://arxiv.org/abs/1812.05506v4" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/1812.05506v4" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The transfer of reinforcement learning (RL) techniques into real-world applications is challenged by safety requirements in the presence of physical limitations. Most RL methods, in particular the most popular algorithms, do not support explicit consideration of state and input constraints. In this paper, we address this problem for nonlinear systems with continuous state and input spaces by introducing a predictive safety filter, which is able to turn a constrained dynamical system into an unconstrained safe system and to which any RL algorithm can be applied `out-of-the-box'. The predictive safety filter receives the proposed control input and decides, based on the current system state, if it can be safely applied to the real system, or if it has to be modified otherwise. Safety is thereby established by a continuously updated safety policy, which is based on a model predictive control formulation using a data-driven system model and considering state and input dependent uncertainties.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <category term="cs.LG" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2018-12-13T16:31:39Z</published>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Kim P. Wabersich</name>
+    </author>
+    <author>
+      <name>Melanie N. Zeilinger</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2507.14025v1</id>
+    <title>Reference-Free Iterative Learning Model Predictive Control with Neural Certificates</title>
+    <updated>2025-07-18T15:53:44Z</updated>
+    <link href="https://arxiv.org/abs/2507.14025v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2507.14025v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>In this paper, we propose a novel reference-free iterative learning model predictive control (MPC). In the proposed method, a certificate function based on the concept of Control Lyapunov Barrier Function (CLBF) is learned using data collected from past control executions and used to define the terminal set and cost in the MPC optimization problem at the current iteration. This scheme enables the progressive refinement of the MPC's terminal components over successive iterations. Unlike existing methods that rely on mixed-integer programming and suffer from numerical difficulties, the proposed approach formulates the MPC optimization problem as a standard nonlinear program, enabling more efficient online computation. The proposed method satisfies key MPC properties, including recursive feasibility and asymptotic stability. Additionally, we demonstrate that the performance cost is non-increasing with respect to the number of iterations, under certain assumptions. Numerical experiments including the simulation with PyBullet confirm that our control scheme iteratively enhances control performance and significantly improves online computational efficiency compared to the existing methods.</summary>
+    <category term="eess.SY" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-07-18T15:53:44Z</published>
+    <arxiv:comment>This paper was submitted to IET Control Theory &amp; Applications on May 19, 2025 (under review)</arxiv:comment>
+    <arxiv:primary_category term="eess.SY"/>
+    <author>
+      <name>Wataru Hashimoto</name>
+    </author>
+    <author>
+      <name>Kazumune Hashimoto</name>
+    </author>
+    <author>
+      <name>Masako Kishida</name>
+    </author>
+    <author>
+      <name>Shigemasa Takai</name>
+    </author>
+  </entry>
+  <entry>
+    <id>http://arxiv.org/abs/2507.02383v1</id>
+    <title>A learning model predictive control for virtual coupling in railroads</title>
+    <updated>2025-07-03T07:26:33Z</updated>
+    <link href="https://arxiv.org/abs/2507.02383v1" rel="alternate" type="text/html"/>
+    <link href="https://arxiv.org/pdf/2507.02383v1" rel="related" type="application/pdf" title="pdf"/>
+    <summary>The objective of this paper is to present a novel intelligent train control system for virtual coupling in railroads based on a Learning Model Predictive Control (LMPC). Virtual coupling is an emerging railroad technology that reduces the distance between trains to increase the capacity of the line, whereas LMPC is an optimization-based controller that incorporates artificial intelligence methods to improve its control policies. By incorporating data from past experiences into the optimization problem, LMPC can learn unmodeled dynamics and enhance system performance while satisfying constraints. The LMPC developed in this paper is simulated and compared, in terms of energy consumption, with a general MPC, without learning capabilities. The simulations are divided into two main practical applications: a LMPC applied only to the rear trains (followers) and a LMPC applied to both the followers and the first front train of the convoy (leader). Within each application, the LMPC is independently tested for three railroad categories: metro, regional, and high-speed. The results show that the LMPC reduces energy consumption in all simulation cases while approximately maintaining speed and travel time. The effect is more pronounced in rail applications with frequent speed variations, such as metro systems, compared to high-speed rail. Future research will investigate the impact of using real-world data in place of simulated data.</summary>
+    <category term="math.OC" scheme="http://arxiv.org/schemas/atom"/>
+    <published>2025-07-03T07:26:33Z</published>
+    <arxiv:comment>16 pages</arxiv:comment>
+    <arxiv:primary_category term="math.OC"/>
+    <author>
+      <name>Miguel A. Vaquero-Serrano</name>
+    </author>
+    <author>
+      <name>Francesco Borrelli</name>
+    </author>
+    <author>
+      <name>Jesus Felez</name>
+    </author>
+  </entry>
+</feed>

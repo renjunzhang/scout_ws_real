@@ -1,0 +1,92 @@
+                                                   Sloshing in vertical cylinders with circular walls:
+                                                   the effect of radial baffles
+
+                                                   Nikolay Kuznetsov, Oleg Motygin
+arXiv:2107.09501v1 [physics.flu-dyn] 18 Jul 2021
+
+
+
+
+                                                   Abstract The behaviour of sloshing eigenvalues and eigenfunctions is studied for
+                                                   vertical cylindrical containers that have circular walls and constant (possibly infinite)
+                                                   depth. The effect of breaking the axial symmetry due to the presence of radial
+                                                   baffles is analysed. It occurs that the lowest eigenvalues are substantially smaller for
+                                                   containers with baffles going throughout the depth; moreover, all eigenvalues are
+                                                   simple in this case. On the other hand, the lowest eigenvalue has multiplicity two in
+                                                   the absence of baffle. It is shown how these properties affect the location of maxima
+                                                   and minima of the free surface elevation and the location of its nodes.
+
+
+
+                                                   1 Introduction
+
+                                                   The sloshing of a fluid in various partially filled containers is a topic of great interest
+                                                   to engineers, physicists and mathematicians. It has received extensive study; see, for
+                                                   example, the monographs [1] and [2] (the second one has more than 100 pages of
+                                                   references). A historical review going back to the 18th century can be found in [3],
+                                                   whereas the comprehensive book [4] presents an advanced mathematical approach
+                                                   to the problem based on spectral theory of operators in a Hilbert space. It is also
+                                                   worth mentioning that the 2012 Ig Nobel Prize for Fluid Dynamics was awarded
+                                                   to Krechetnikov and Mayer for their work [5] concerning the dynamics of sloshing
+                                                   when walking with a mug of coffee.
+
+
+                                                   N. Kuznetsov
+                                                   Laboratory for Mathematical Modelling of Wave Phenomena, Institute for Problems in Mechanical
+                                                   Engineering, Russian Academy of Sciences, V.O., Bol’shoy pr. 61, St. Petersburg 199178, Russian
+                                                   Federation e-mail: nikolay.g.kuznetsov@gmail.com
+                                                   O. Motygin
+                                                   Laboratory for Mathematical Modelling of Wave Phenomena, Institute for Problems in Mechanical
+                                                   Engineering, Russian Academy of Sciences, V.O., Bol’shoy pr. 61, St. Petersburg 199178, Russian
+                                                   Federation e-mail: mov@ipme.ru,o.v.motygin@gmail.com
+
+
+                                                                                                                                                1
+2                                                          Nikolay Kuznetsov, Oleg Motygin
+
+   The standard approach to sloshing is based on the linear water wave theory (see
+again the books [1] and [2]). In its framework, one seeks sloshing modes and frequen-
+cies using eigenfunctions and eigenvalues, respectively, of a mixed Steklov problem
+for the Laplace equation, and so a spectral parameter, say 𝜈, appears in a boundary
+condition, whereas the radian frequency of fluid’s oscillations is proportional to the
+square root of 𝜈.
+   The question of suppression of sloshing by means of baffles (it is of importance
+for practice) goes back to the 1960s. The corresponding experimental and theoretical
+results were the topic of numerous NASA Technical Reports cited in [2] (in particular,
+a lot of data is summarised in [6]). In many cases, it was found that the effect of
+a baffle is to lower sloshing frequencies, especially, the lowest one. Therefore, a
+lot of research has been carried out in this field since the 1960s. In particular,
+some quite sophisticated techniques were developed for numerical evaluation of this
+effect during the past 30 years; here we mention a few methods that look the most
+interesting. In [7], eigenfunction expansions were applied on either side of a vertical
+baffle in a rectangular tank. By matching these expansions one obtains an integral
+equation on the interval below or above the baffle. The approach developed in [8],
+uses fundamental solutions of the problem for reducing it to an integral equation in
+the case of a vertical circular container with a horizontal annular baffle. The method
+of successive conformal mappings leading to standard truncated matrix eigenvalue
+problems which are then solved numerically was used in [9], where several different
+baffles in a horizontal circular cylinder were considered.
+   Despite abundant numerical and analytical results (see e.g. [10] and references
+therein), the mechanism of the baffle effect is far from being completely understood.
+The aim of this note is to show the crucial role of breaking the axial symmetry in this
+phenomenon. For this purpose we compare properties of explicit solutions obtained
+by separation of variables for two pairs of vertical cylindrical containers.
+   First, we consider sloshing frequencies and the corresponding modes that describe
+free oscillations of a fluid in a circular container of constant depth which has or has
+not the following radial baffle. It is located between the cylinder’s axis and the vertical
+wall and goes throughout the container’s depth. (According to Fox and Kuttler [3], it
+was Lord Rayleigh [11] who completed the solution of the problem without baffle,
+studies of which were initiated by Ostrogradsky and Poisson in the 1820s.) The
+second pair of containers includes the vertical annular cylinder without and with
+the radial baffle that connects the cylinder’s walls orthogonally to them and goes
+throughout the container’s depth. To the author’s knowledge, no comparison of the
+described solutions was ever published. Thus, a gap concerning the mechanism of
+the hydrodynamic effect due to radial baffles is filled in at least partially.
+
+
+
+2 Statement of the problem
+
+The general formulation of the three-dimensional sloshing problem is as follows.
+A fluid domain, say 𝑊, is bounded from above by a free surface and from below
+

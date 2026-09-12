@@ -1,0 +1,124 @@
+         MPC-based Deep Reinforcement Learning Method for Space
+              Robotic Control with Fuel Sloshing Mitigation
+  Mahya Ramezani, M. Amin Alandihallaj, Barış Can Yalçın, Miguel Angel Olivares Mendez, and Holger Voos
+
+Abstract— This paper presents an integrated Reinforcement
+Learning (RL) and Model Predictive Control (MPC) framework
+for autonomous satellite docking with a partially filled fuel tank.
+Traditional docking control faces challenges due to fuel sloshing
+in microgravity, which induces unpredictable forces affecting
+stability. To address this, we integrate Proximal Policy
+Optimization (PPO) and Soft Actor-Critic (SAC) RL algorithms
+with MPC, leveraging MPC’s predictive capabilities to
+accelerate RL training and improve control robustness. The
+proposed approach is validated through Zero-G Lab of SnT
+experiments for planar stabilization and high-fidelity numerical
+simulations for 6-DOF docking with fuel sloshing dynamics.
+Simulation results demonstrate that SAC-MPC achieves
+superior docking accuracy, higher success rates, and lower
+control effort, outperforming standalone RL and PPO-MPC
+methods. This study advances fuel-efficient and disturbance-
+                                                                            Figure 1. Two floating platforms operating in Zero-G Lab [1].
+resilient satellite docking, enhancing the feasibility of on-orbit
+refueling and servicing missions.
+                                                                      planning in unknown environments [17], satellite collision
+                       I. INTRODUCTION                                avoidance [18], orbital maneuvering [19], satellite task
+   The limited fuel reserves of spacecraft and satellites             scheduling [20, 21], motion control [22], and even failure
+constrain their operational lifespan and deep-space                   predictions [23]. RL improves performance through iterative
+exploration. On-orbit refueling presents a transformative             learning in simulated environments, reducing real-time
+solution, extending mission duration, reducing costs, and             computational demands. However, RL alone requires
+improving adaptability. Additionally, refueling minimizes             extensive training. Integrating RL with MPC can accelerate
+satellite launches, mitigates space debris, and supports              learning, leveraging MPC's predictive capabilities while
+satellite servicing, debris removal, and space infrastructure         benefiting from RL’s adaptability to uncertainties [15].
+development, contributing to long-term space sustainability.             To address this, we propose a hybrid RL-MPC approach.
+   A major challenge in on-orbit refueling is ensuring precise        Specifically, we incorporate Proximal Policy Optimization
+and safe docking, as small velocity miscalculations can lead          (PPO) with MPC principles. PPO ensures stable policy
+to mission failure. Fuel sloshing in microgravity introduces          updates while maintaining adaptability, making it well-suited
+unpredictable forces, complicating spacecraft control.                for initial docking control under uncertainty. By integrating
+   Extensive research has explored sloshing dynamics                  MPC, PPO gains enhanced predictive capabilities, generating
+through mass-spring and pendulum models [2], as well as               structured control sequences while adapting to environmental
+Computational Fluid Dynamics (CFD) simulations. Studies               changes. This forms a baseline RL-MPC framework for
+have examined sloshing effects on spin-stabilized spacecraft          satellite docking, tested in Zero-G Lab at the University of
+[3], flexible satellites [4], and spacecraft trajectory control.      Luxembourg (shown in Fig.1). More information about the
+Various control methods have been proposed, including fuzzy           Zero-G Lab can be found in [24-28].
+control [5-7], PD control [8, 9], LQR [10], H∞ control [11],             However, docking maneuvers, especially with fuel
+sliding mode control [12, 13], and model predictive control           sloshing disturbances, require greater adaptability. Fuel
+(MPC) [14]. While these methods have advanced spacecraft              sloshing introduces unpredictable forces affecting trajectory
+attitude control, their application to fuel sloshing in docking       and attitude control. To tackle this, we enhance the PPO-MPC
+scenarios remains underexplored.                                      framework by incorporating Soft Actor-Critic (SAC), which
+   MPC is a promising approach, capable of predicting system          maximizes entropy for better exploration and optimizes both
+behavior and mitigating disturbances in real time. However,           policy and value functions efficiently. SAC improves sample
+computational complexity and dependence on high accuracy              efficiency and adaptability, crucial for real-time aerospace
+sloshing models limit its real-time application.                      applications.
+   In parallel, Artificial Intelligence (AI), particularly               Transitioning from PPO-MPC to SAC-MPC, we develop a
+Reinforcement Learning (RL), has shown promise in                     resilient docking control strategy that effectively mitigates
+aerospace applications, including trajectory [15] and path [16]       fuel sloshing disturbances. This integrated methodology
+leverages MPC’s predictive power and RL’s adaptability,
+enabling precise docking in uncertain, dynamic conditions.
+Our study bridges RL-based control with practical aerospace
+applications, offering a robust solution for autonomous
+satellite docking with fuel-efficient, disturbance-resilient
+guidance.
+    The paper is structured as follows: Section 2 presents the
+orbital refueling mission’s dynamic model. Section 3 and 4
+detail the RL methodology and proposed framework. Section
+5 validates the control strategy through numerical
+simulations, accounting for fuel sloshing dynamics. Section 6
+concludes with key contributions and implications for on-
+orbit refueling missions.
+                    II. SYSTEM DESCRIPTION                             Figure 2. The tanker model with sloshing dynamics in the spherical tank.
+     Fuel sloshing, driven by the oscillatory motion of liquid,          The attitude dynamics and kinematics of the tanker
+alters the center of mass and induces system-wide oscillations,       spacecraft can be modeled as follows [31]
+                                                                                               𝝉
+affecting spacecraft stability. Traditional mass-spring and
+                                                                        𝐈𝝎̇ = 𝝎 × 𝐈𝝎 + ⏞   𝝉𝒄 + 𝝉𝒔
+pendulum models approximate sloshing but become                                1 𝑞4 𝝎 − 𝝎 × 𝒒                                   (2)
+inaccurate in microgravity, where liquids exhibit non-cohesive          𝐪̇ = [           𝑇       ]
+behavior and can fragment into multiple blobs. To address this,                2     −𝝎 𝒒
+OpenFOAM [29] is used for high-fidelity CFD simulations,              in which 𝝎 is the angular velocity vector, 𝐈 represent the
+enabling precise modeling of fluid fragmentation and irregular        moment of inertia of the body, 𝐪 = [𝒒 𝑞4 ] is the quaternion
+motion, improving control strategy reliability.                       vector, 𝝉𝒄 is the controlling torque generated by thrusters, and
+     The mission scenario involves a tanker satellite performing      𝝉𝒔 represents the torque generated by the fuel motion.
+docking maneuvers with a target satellite in Low Earth Orbit          Consider the undisturbed tanker’s nonlinear equations of
+(LEO). While the system operates in six degrees of freedom            motion as
+(6-DOF), this study focuses on planar motion due to                     𝒔̇ (𝑡) = 𝒇(𝒔(𝑡), 𝒖(𝑡))                                  (3)
+                                                                                                     T
+constraints in the Zero-G Lab at the University of Luxembourg         where 𝒔 = [𝛿𝒓 𝛿𝒓̇ 𝐪 𝝎] denotes the system state vector,
+(Fig. 1), where only 3-DOF motion (planar and rotational) can         𝒖 = 𝑭𝒄 represents the control input, and 𝒇(∙,∙): (ℝ𝑛 , ℝ𝑚 ) ⟶
+be replicated.                                                        ℝ𝑛 denotes a nonlinear function of the system. 𝑛 and 𝑚 are
+     The system consists of a rigid tanker spacecraft with a          the number of system states and control inputs, respectively.
+spherical fuel tank (Fig. 3). Its dry mass (M) represents                   Using the first order approximation of the system (3), the
+structural components, while fuel mass (m) is positioned b            resulting Linear Time-Varying (LTV) system is as
+units from the spacecraft’s center of mass. For attitude control,      𝒔̂̇(𝑡) = 𝐀𝑡 𝒔̂(𝑡) + 𝐁𝑡 𝒖(𝑡) + 𝒅(𝑡)                       (4)
+the tanker is equipped with 12 on/off thrusters. In the Zero-G        where 𝐀𝑡 ∈ ℝ𝑛×𝑛 , 𝐁𝑡 ∈ ℝ𝑛×𝑚 and 𝒅(𝑡) ∈ ℝ𝑛×1 .
+Lab, the lab floor acts as an orbital plane analog, but due to 3-           The LTV system (4) can be utilized over a finite time
+DOF limitations, the floating platforms use 8 thrusters instead       horizon to approximate the nonlinear system (3) in case the
+of 12.                                                                effect of the fuel sloshing is neglected. This model is used to
+     When considering sloshing as a disturbance and assuming          generate an optimum trajectory in the next chapter using MPC
+the target satellite is in a circular orbit, the Clohessy-Wiltshire   method.
+(CW) equations can describe the simplified relative orbital                                 III. MPC FRAMEWORK
+motion model as follows                                                     As discussed, the control strategy must ensure satellite
+                          𝐹𝑥                                          safety by incorporating collision avoidance while managing
+  𝑥̈ = 3𝑛2 𝑥 + 2𝑛𝑦̇ + + 𝑑𝑠 𝑥
+                          𝑀                                           disturbances like sloshing, which can introduce undesirable
+                 𝐹𝑦                                                   velocities during docking. However, directly modeling
+  𝑦̈ = −2𝑛𝑥̇ + + 𝑑𝑠 𝑦                                       (1)
+                 𝑀                                                    sloshing within the control framework is challenging due to its
+                𝐹𝑧                                                    complexity and reliance on CFD simulations. To address this,
+  𝑧̈ = −𝑛2 𝑧 + + 𝑑𝑠 𝑧
+                𝑀                                                     the control scheme generates an optimal nominal trajectory
+                                                                      based on unperturbed dynamics, while the RL component
+where 𝑛 is the orbital rate of the target satellite, 𝛿𝒓 = [𝑥 𝑦 𝑧]T    manages sloshing disturbances separately.
+represents the tanker position with respect to the target satellite         In this study, MPC is formulated as a path-planning
+                                                               T
+expressed in the RSW coordinate frame, 𝑭𝒄 = [𝐹𝑥 𝐹𝑦 𝐹𝑧 ] =             problem, ensuring the docking trajectory is optimal and
+𝑪𝑅𝐵 [𝑓𝑥 𝑓𝑦 𝑓𝑧 ] is the thruster force vector in the RSW frame, 𝑪𝑅𝐵    collision-free. The optimization problem solved at each time
+                                                                      step is defined as follows
+is the body frame to RSW frame rotation matrix, and 𝒅𝒔 =
+                T       𝒇
+[𝑑𝑠 𝑥 𝑑𝑠 𝑦 𝑑𝑠 𝑧 ] = 𝑪𝑅𝐵 𝒔 represents the fuel acceleration
+                       𝑀
+vector acting on the tanker. The relative equations of motion
+are derived in the RSW reference frame of the target satellite
+[30].
+

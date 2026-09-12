@@ -1,0 +1,71 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=A+New+Approach+to+Time-Optimal+Path+Parameterization+based+on+Reachability+Analysis&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tro.2018.2819195",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tro.2018.2819195",
+    "title": [
+      "A New Approach to Time-Optimal Path Parameterization Based on Reachability Analysis"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0001-6116-1359",
+        "authenticated-orcid": false,
+        "given": "Hung",
+        "family": "Pham",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-9605-4940",
+        "authenticated-orcid": false,
+        "given": "Quang-Cuong",
+        "family": "Pham",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Robotics"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2018,
+          6
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2018,
+          6
+        ]
+      ]
+    },
+    "volume": "34",
+    "issue": "3",
+    "page": "645-659",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tro.2018.2819195",
+    "ISSN": [
+      "1552-3098",
+      "1941-0468"
+    ]
+  }
+}

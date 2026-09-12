@@ -1,0 +1,1059 @@
+{
+  "request_url": "https://api.crossref.org/works?query.bibliographic=sloshing+suppression+wheeled+mobile+robot&rows=6",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            3
+          ]
+        ],
+        "date-time": "2022-04-03T07:17:01Z",
+        "timestamp": 1648970221712
+      },
+      "reference-count": 0,
+      "publisher": "Japan Society of Mechanical Engineers",
+      "issue": "0",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "ICAM"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "DOI": "10.1299/jsmeicam.2004.4.52_3",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "page": "52",
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "prefix": "10.1299",
+      "volume": "2004.4",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Shimane Univ."
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "124",
+      "container-title": [
+        "The Abstracts of the international conference on advanced mechatronics : toward evolutionary fusion of IT and mechatronics : ICAM"
+      ],
+      "original-title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "score": 35.537796,
+      "resource": {
+        "primary": {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_article"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "references-count": 0,
+      "journal-issue": {
+        "issue": "0",
+        "published-print": {
+          "date-parts": [
+            [
+              2004
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1299/jsmeicam.2004.4.52_3",
+      "ISSN": [
+        "2424-3116"
+      ],
+      "issn-type": [
+        {
+          "value": "2424-3116",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T15:58:01Z",
+        "timestamp": 1787759881473,
+        "version": "build-2784847793"
+      },
+      "reference-count": 7,
+      "publisher": "IEEE",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.1109/icma.2005.1626862",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2006,
+            8,
+            15
+          ]
+        ],
+        "date-time": "2006-08-15T17:58:12Z",
+        "timestamp": 1155664692000
+      },
+      "page": "1959-1964",
+      "source": "Crossref",
+      "is-referenced-by-count": 7,
+      "title": [
+        "Path design and trace control of a wheeled mobile robot to damp liquid sloshing in a cylindrical container"
+      ],
+      "prefix": "10.1109",
+      "volume": "4",
+      "author": [
+        {
+          "given": "M.",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Yu.",
+          "family": "Yoshida",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Kihara",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref4",
+          "article-title": "Transfer Control and Curved Path Design for Cylindrical Liquid Container",
+          "author": "hamaguchi",
+          "year": "2002",
+          "journal-title": "Proceedings of the 15th World Congress of IFAC"
+        },
+        {
+          "key": "ref3",
+          "first-page": "233",
+          "article-title": "Modeling and Control of Sloshing with Swirling in a Cylindrical Container during a Curved Path Transfer",
+          "volume": "i",
+          "author": "hamaguchi",
+          "year": "1997",
+          "journal-title": "Proceedings of the 2nd Asian Control Conference"
+        },
+        {
+          "key": "ref6",
+          "article-title": "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container",
+          "author": "hamaguchi",
+          "year": "2004",
+          "journal-title": "Proceedings of the 4th international conference on advanced mechatronics"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.2004.1389775"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1115/1.2894142"
+        },
+        {
+          "key": "ref2",
+          "first-page": "193",
+          "article-title": "Liquid Container Transfer Considering the Suppression of Sloshing for the Change of Liquid Level",
+          "volume": "b",
+          "author": "yano",
+          "year": "1996",
+          "journal-title": "Proceedings of the 13th World Congress of IFAC"
+        },
+        {
+          "key": "ref1",
+          "first-page": "379",
+          "article-title": "Modeling and Optimal Control of Liquid Vibration in Transferring a Rectangular Container",
+          "volume": "1",
+          "author": "hamaguchi",
+          "year": "1994",
+          "journal-title": "Proc FLUCOME"
+        }
+      ],
+      "event": {
+        "name": "2005 IEEE International Conference on Mechatronics and Automation",
+        "location": "Niagara Falls, Ont., Canada",
+        "acronym": "ICMA-05"
+      },
+      "container-title": [
+        "IEEE International Conference Mechatronics and Automation, 2005"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx5/10831/34149/01626862.pdf?arnumber=1626862",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            3,
+            14
+          ]
+        ],
+        "date-time": "2017-03-14T17:52:18Z",
+        "timestamp": 1489513938000
+      },
+      "score": 32.0277,
+      "resource": {
+        "primary": {
+          "URL": "http://ieeexplore.ieee.org/document/1626862/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            null
+          ]
+        ]
+      },
+      "references-count": 7,
+      "URL": "https://doi.org/10.1109/icma.2005.1626862"
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2023,
+            11,
+            22
+          ]
+        ],
+        "date-time": "2023-11-22T08:30:50Z",
+        "timestamp": 1700641850972
+      },
+      "reference-count": 0,
+      "publisher": "International Journal of Science and Research",
+      "issue": "1",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "IJSR"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2016,
+            1,
+            5
+          ]
+        ]
+      },
+      "DOI": "10.21275/v5i1.nov152938",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2016,
+            4,
+            27
+          ]
+        ],
+        "date-time": "2016-04-27T11:04:37Z",
+        "timestamp": 1461755077000
+      },
+      "page": "1064-1068",
+      "source": "Crossref",
+      "is-referenced-by-count": 1,
+      "title": [
+        "Motion Planning and Trajectory for Wheeled Mobile Robot"
+      ],
+      "prefix": "10.21275",
+      "volume": "5",
+      "member": "8810",
+      "published-online": {
+        "date-parts": [
+          [
+            2016,
+            1,
+            5
+          ]
+        ]
+      },
+      "container-title": [
+        "International Journal of Science and Research (IJSR)"
+      ],
+      "original-title": [
+        "Motion Planning and Trajectory for Wheeled Mobile Robot"
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2016,
+            4,
+            27
+          ]
+        ],
+        "date-time": "2016-04-27T11:06:25Z",
+        "timestamp": 1461755185000
+      },
+      "score": 30.810394,
+      "resource": {
+        "primary": {
+          "URL": "https://www.ijsr.net/archive/v5i1/NOV152938.pdf"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2016,
+            1,
+            5
+          ]
+        ]
+      },
+      "references-count": 0,
+      "journal-issue": {
+        "issue": "1",
+        "published-online": {
+          "date-parts": [
+            [
+              2016,
+              1,
+              5
+            ]
+          ]
+        },
+        "published-print": {
+          "date-parts": [
+            [
+              2016,
+              1,
+              5
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.21275/v5i1.nov152938",
+      "ISSN": [
+        "2319-7064"
+      ],
+      "issn-type": [
+        {
+          "value": "2319-7064",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2016,
+            1,
+            5
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2025,
+            10,
+            22
+          ]
+        ],
+        "date-time": "2025-10-22T17:52:19Z",
+        "timestamp": 1761155539194,
+        "version": "3.28.0"
+      },
+      "reference-count": 15,
+      "publisher": "IEEE",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2011,
+            8
+          ]
+        ]
+      },
+      "DOI": "10.1109/icma.2011.5985715",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2011,
+            8,
+            16
+          ]
+        ],
+        "date-time": "2011-08-16T15:29:22Z",
+        "timestamp": 1313508562000
+      },
+      "page": "932-937",
+      "source": "Crossref",
+      "is-referenced-by-count": 1,
+      "title": [
+        "Adaptive hybrid suppression control of a wheeled mobile robot with active flexible members"
+      ],
+      "prefix": "10.1109",
+      "author": [
+        {
+          "given": "Payam",
+          "family": "Zarafshan",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "S. Ali. A.",
+          "family": "Moosavian",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref10",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1080/0020772031000135450"
+        },
+        {
+          "key": "ref11",
+          "first-page": "242",
+          "article-title": "Dynamics of Wheeled Mobile Robots with flexible suspension: Analytical Modelling and verification",
+          "volume": "23",
+          "author": "khalil",
+          "year": "2008",
+          "journal-title": "International Journal of Robotics and Automation"
+        },
+        {
+          "article-title": "Dynamics of Multi-body Systems",
+          "year": "2005",
+          "author": "shabana",
+          "key": "ref12"
+        },
+        {
+          "article-title": "Finite Element Modelling of Piezoelectric Active Structures",
+          "year": "2001",
+          "author": "piefort",
+          "key": "ref13"
+        },
+        {
+          "key": "ref14",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1121/1.419631"
+        },
+        {
+          "key": "ref15",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1088/0964-1726/8/1/016"
+        },
+        {
+          "key": "ref4",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ROBOT.1996.506156"
+        },
+        {
+          "key": "ref3",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.ast.2010.01.001"
+        },
+        {
+          "key": "ref6",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.apm.2007.07.010"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICMECH.2004.1364450"
+        },
+        {
+          "key": "ref8",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1115/1.1590354"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.compstruc.2007.01.028"
+        },
+        {
+          "key": "ref2",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.mechmachtheory.2006.01.014"
+        },
+        {
+          "key": "ref1",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/AIM.2010.5695818"
+        },
+        {
+          "key": "ref9",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TRO.2008.915438"
+        }
+      ],
+      "event": {
+        "name": "2011 IEEE International Conference on Mechatronics and Automation (ICMA)",
+        "start": {
+          "date-parts": [
+            [
+              2011,
+              8,
+              7
+            ]
+          ]
+        },
+        "location": "Beijing, China",
+        "end": {
+          "date-parts": [
+            [
+              2011,
+              8,
+              10
+            ]
+          ]
+        }
+      },
+      "container-title": [
+        "2011 IEEE International Conference on Mechatronics and Automation"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx5/5978849/5985607/05985715.pdf?arnumber=5985715",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            3,
+            21
+          ]
+        ],
+        "date-time": "2017-03-21T02:38:13Z",
+        "timestamp": 1490063893000
+      },
+      "score": 30.418392,
+      "resource": {
+        "primary": {
+          "URL": "http://ieeexplore.ieee.org/document/5985715/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2011,
+            8
+          ]
+        ]
+      },
+      "references-count": 15,
+      "URL": "https://doi.org/10.1109/icma.2011.5985715",
+      "published": {
+        "date-parts": [
+          [
+            2011,
+            8
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2025,
+            12,
+            19
+          ]
+        ],
+        "date-time": "2025-12-19T21:07:29Z",
+        "timestamp": 1766178449346
+      },
+      "reference-count": 8,
+      "publisher": "Fuji Technology Press Ltd.",
+      "issue": "5",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "J. Robot. Mechatron.",
+        "JRM"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2009,
+            10,
+            20
+          ]
+        ]
+      },
+      "abstract": "<jats:p>Damping control we propose for sloshing in cylindrical  containers carried by a wheeled mobile robot enables the container  to tilt independently in the direction of movement and orthogonally  through the use of a dual-swing active-vibration reducer. The robot  follows a curved sloping path. Sloshing generated by robot movement  is damped by the vibration reducer, which keeps the container level  on a slope. Vibration reduction is managed by an optimal servo  controller having a Kalman filter. Experimental results demonstrate  our damping control proposal's usefulness and feasibility.</jats:p>",
+      "DOI": "10.20965/jrm.2009.p0642",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2016,
+            4,
+            14
+          ]
+        ],
+        "date-time": "2016-04-14T02:18:46Z",
+        "timestamp": 1460600326000
+      },
+      "page": "642-646",
+      "source": "Crossref",
+      "is-referenced-by-count": 10,
+      "title": [
+        "Sloshing Damping Control in a Cylindrical Container on a Wheeled Mobile Robot Using Dual-Swing Active-Vibration Reduction"
+      ],
+      "prefix": "10.20965",
+      "volume": "21",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "name": "Department of Electronic and Control Systems Engineering,  Shimane University",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "8550",
+      "published-online": {
+        "date-parts": [
+          [
+            2009,
+            10,
+            20
+          ]
+        ]
+      },
+      "reference": [
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "W. Wu, H. Chen and P.-Y. Woo, “Time optimal path planning for a wheeled mobile robot,” J. of Robotic Systems, Vol.17, No.11, pp. 585-591, 2000.",
+          "key": "key-10.20965/jrm.2009.p0642-1",
+          "DOI": "10.1002/1097-4563(200011)17:11<585::AID-ROB1>3.0.CO;2-7"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "M. L. Corradini and G. Orlando, “Robust tracking control of mobile robots in the presence of uncertainties in the dynamical model,” J. of Robotic Systems, Vol.18, No.6, pp. 317-323, 2001.",
+          "key": "key-10.20965/jrm.2009.p0642-2",
+          "DOI": "10.1002/rob.1026"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "T. Acarman and U. Ozquner, “Rollover prevention for heavy trucks using frequency shaped sliding mode control,” Proc. of 2003 IEEE Conf. on Control Applications, Vol.1, pp. 7-12, 2003.",
+          "key": "key-10.20965/jrm.2009.p0642-3",
+          "DOI": "10.1109/CCA.2003.1223250"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "J.T. Feddema et al., “Control for slosh-free motion of an open container,” IEEE Control Systems Magazine, Vol.17, No.1, pp. 29-36, 1997.",
+          "key": "key-10.20965/jrm.2009.p0642-4",
+          "DOI": "10.1109/37.569711"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "K. Yano, T. Toda, and K. Terashima, “Sloshing suppression control of automatic pouring robot by hybrid shape approach,” Proc. of the 40th IEEE Conf. on Decision and Control, Vol.2, pp. 1328-1333, 2001.",
+          "key": "key-10.20965/jrm.2009.p0642-5",
+          "DOI": "10.1109/CDC.2001.981074"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "K. Yano and K. Terashima, “Sloshing suppression control of liquid transfer systems considering 3D transfer path,” IEEE/ASME Trans. on Mechatronics, Vol.10, No.1, pp. 8-16, 2005.",
+          "key": "key-10.20965/jrm.2009.p0642-6",
+          "DOI": "10.1109/TMECH.2004.839033"
+        },
+        {
+          "doi-asserted-by": "crossref",
+          "unstructured": "M. Hamaguchi and T. Taniguchi, “Damping and transfer control of liquid in a cylindrical container using a wheeled mobile robot,” J. of Robotics and Mechatronics, Vol.17, No.5, pp. 546-552, 2005.",
+          "key": "key-10.20965/jrm.2009.p0642-7",
+          "DOI": "10.20965/jrm.2005.p0546"
+        },
+        {
+          "unstructured": "K. Furuta, S. Kawaji, T. Mita, and S. Hara, “Mechanical system control,” Ohmu-sha, pp. 128-135, 1984 (in Japanese).",
+          "key": "key-10.20965/jrm.2009.p0642-8"
+        }
+      ],
+      "container-title": [
+        "Journal of Robotics and Mechatronics"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.fujipress.jp/main/wp-content/themes/Fujipress/phyosetsu.php?ppno=ROBOT002100050011",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            6,
+            25
+          ]
+        ],
+        "date-time": "2017-06-25T02:37:02Z",
+        "timestamp": 1498358222000
+      },
+      "score": 29.476067,
+      "resource": {
+        "primary": {
+          "URL": "https://www.fujipress.jp/jrm/rb/robot002100050642"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2009,
+            10,
+            20
+          ]
+        ]
+      },
+      "references-count": 8,
+      "journal-issue": {
+        "issue": "5",
+        "published-online": {
+          "date-parts": [
+            [
+              2009,
+              10,
+              20
+            ]
+          ]
+        },
+        "published-print": {
+          "date-parts": [
+            [
+              2009,
+              10,
+              20
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.20965/jrm.2009.p0642",
+      "ISSN": [
+        "1883-8049",
+        "0915-3942"
+      ],
+      "issn-type": [
+        {
+          "type": "electronic",
+          "value": "1883-8049"
+        },
+        {
+          "type": "print",
+          "value": "0915-3942"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2009,
+            10,
+            20
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T03:02:29Z",
+        "timestamp": 1787713349328,
+        "version": "build-2784847793"
+      },
+      "reference-count": 0,
+      "publisher": "Pro Literatur Verlag, Germany",
+      "isbn-type": [
+        {
+          "value": "3866110383",
+          "type": "print"
+        }
+      ],
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.5772/4641",
+      "type": "book-chapter",
+      "created": {
+        "date-parts": [
+          [
+            2012,
+            3,
+            20
+          ]
+        ],
+        "date-time": "2012-03-20T07:46:49Z",
+        "timestamp": 1332229609000
+      },
+      "source": "Crossref",
+      "is-referenced-by-count": 5,
+      "title": [
+        "Mechatronics Design of a Mecanum Wheeled Mobile Robot"
+      ],
+      "prefix": "10.5772",
+      "author": [
+        {
+          "given": "Peter",
+          "family": "Xu",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "3774",
+      "published-online": {
+        "date-parts": [
+          [
+            2005,
+            7,
+            1
+          ]
+        ]
+      },
+      "container-title": [
+        "Cutting Edge Robotics"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.intechopen.com/download/pdf/4",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            3,
+            31
+          ]
+        ],
+        "date-time": "2017-03-31T05:43:04Z",
+        "timestamp": 1490938984000
+      },
+      "score": 28.70566,
+      "resource": {
+        "primary": {
+          "URL": "http://www.intechopen.com/books/cutting_edge_robotics/mechatronics_design_of_a_mecanum_wheeled_mobile_robot"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2005,
+            7,
+            1
+          ]
+        ]
+      },
+      "ISBN": [
+        "3866110383"
+      ],
+      "references-count": 0,
+      "URL": "https://doi.org/10.5772/4641",
+      "published": {
+        "date-parts": [
+          [
+            2005,
+            7,
+            1
+          ]
+        ]
+      }
+    }
+  ]
+}

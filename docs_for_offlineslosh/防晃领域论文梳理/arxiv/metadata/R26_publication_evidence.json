@@ -1,0 +1,125 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Clutter-Aware+Spill-Free+Liquid+Transport+via+Learned+Dynamics&rows=5",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/iros58592.2024.10802215",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/iros58592.2024.10802215",
+    "title": [
+      "Clutter-Aware Spill-Free Liquid Transport via Learned Dynamics"
+    ],
+    "author": [
+      {
+        "given": "Ava",
+        "family": "Abderezaei",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "University of Colorado Boulder,Department of Computer Science,Boulder,CO,USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Anuj",
+        "family": "Pasricha",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Colorado Boulder,Department of Computer Science,Boulder,CO,USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Alex",
+        "family": "Klausenstock",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Colorado Boulder,Department of Computer Science,Boulder,CO,USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Alessandro",
+        "family": "Roncone",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "University of Colorado Boulder,Department of Computer Science,Boulder,CO,USA"
+          }
+        ],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "proceedings-article",
+    "container-title": [
+      "2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2024,
+          10,
+          14
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2024,
+          10,
+          14
+        ]
+      ]
+    },
+    "page": "9908-9915",
+    "publisher": "IEEE",
+    "URL": "https://doi.org/10.1109/iros58592.2024.10802215",
+    "event": {
+      "name": "2024 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)",
+      "location": "Abu Dhabi, United Arab Emirates",
+      "start": {
+        "date-parts": [
+          [
+            2024,
+            10,
+            14
+          ]
+        ]
+      },
+      "end": {
+        "date-parts": [
+          [
+            2024,
+            10,
+            18
+          ]
+        ]
+      }
+    }
+  }
+}

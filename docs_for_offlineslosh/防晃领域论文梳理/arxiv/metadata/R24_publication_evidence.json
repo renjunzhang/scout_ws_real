@@ -1,0 +1,100 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works/10.1109/TAC.2020.2982585",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tac.2020.2982585",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tac.2020.2982585",
+    "title": [
+      "A Computationally Efficient Robust Model Predictive Control Framework for Uncertain Nonlinear Systems"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-5556-604X",
+        "authenticated-orcid": false,
+        "given": "Johannes",
+        "family": "Kohler",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-3768-5552",
+        "authenticated-orcid": false,
+        "given": "Raffaele",
+        "family": "Soloperto",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-4911-9526",
+        "authenticated-orcid": false,
+        "given": "Matthias A.",
+        "family": "Muller",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-3702-3658",
+        "authenticated-orcid": false,
+        "given": "Frank",
+        "family": "Allgower",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Automatic Control"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021,
+          2
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021,
+          2
+        ]
+      ]
+    },
+    "volume": "66",
+    "issue": "2",
+    "page": "794-801",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tac.2020.2982585",
+    "ISSN": [
+      "0018-9286",
+      "1558-2523",
+      "2334-3303"
+    ]
+  }
+}

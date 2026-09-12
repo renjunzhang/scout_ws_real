@@ -1,0 +1,101 @@
+                                                        Extension of the consistent δ + -SPH model for
+                                                       multiphase flows considering the compressibility of
+                                                                        different phases
+arXiv:2505.10215v1 [physics.flu-dyn] 15 May 2025
+
+
+
+
+                                                    Xiao-Ting Huanga,, Peng-Nan Suna , Hong-Guan Lyua , Andrea Colagrossib ,
+                                                                                A-Man Zhangc
+                                                     a School of Ocean Engineering and Technology, Sun Yat-sen University, Zhuhai, China
+                                                    b Institute of Marine Engineering (INM), National Research Council (CNR), Rome, Italy
+                                                      c College of Shipbuilding Engineering, Harbin Engineering University, Harbin, China
+
+
+
+
+                                                   Abstract
+                                                   In hydrodynamic problems involving wave impact on structures, air compress-
+                                                   ibility is crucial for accurate pressure prediction when an air bubble is entrapped.
+                                                   In this work, the consistent δ + -SPH model, originally developed for single-phase
+                                                   scenarios, is extended to multiphase contexts. Although the consistent δ + -SPH
+                                                   model shows good performance for single phase and viscous flow simulations,
+                                                   extending it to multiphase scenarios presents challenges, such as proper im-
+                                                   plementation of particle shifting for multiphase interfaces. Therefore, within
+                                                   the framework of the consistent δ + -SPH, we introduce the following enhance-
+                                                   ments: firstly, new strategy for handling δu-terms given by the particle shift-
+                                                   ing technique at multiphase interfaces are proposed to maintain stability and
+                                                   conservation. Secondly, for modeling of incompressible phases, like water, an
+                                                   acoustic damper term is introduced to alleviate acoustic waves resulting from
+                                                   the weakly-compressible assumption, which is expected to achieve smooth pres-
+                                                   sure field comparable to truly-incompressible hypothesis, thereby reducing the
+                                                   nonphysical pressure wave during the violent impact state; for modeling com-
+                                                   pressible phases like air, a physical sound speed is adopted in the equation of
+                                                   state to accurately model real gas phase compressibility. To test and validate
+                                                   the present multiphase SPH model, simulations were conducted for six scenar-
+                                                   ios. In particular, except for sloshing with two-layer liquids, the other scenarios
+                                                   fully consider air pressure oscillations when air is entrapped, compressed, or
+                                                   expanded by surrounding flows. The results demonstrate significant advantages
+                                                   of the present SPH model in simulating multiphase problems involving strong
+                                                   liquid impact and different phase compressibility.
+                                                   Keywords: Multiphase, Particle shifting, δ + -SPH, Compressible flow
+
+
+
+                                                      Email address: sunpn@mail.sysu.edu.cn (Peng-Nan Sun)
+
+
+
+
+                                                   Submitted to Journal Computational Physics     04 November 2024, Accepted 22 April 2025
+1. Introduction
+
+    The study of multiphase flows is essential in both scientific and engineering
+domains, attracting significant attention from scholars in recent years [1, 2].
+Computational Fluid Dynamics (CFD) has emerged as a valuable approach for
+studying multiphase flow problems. However, due to the unavoidable discon-
+tinuous characteristics such as density, and physical interactions at the phase
+interfaces, Eulerian mesh-based methods face inherent challenges. In this re-
+gard, Lagrangian particle methods stand out for their ability to handle complex
+interfaces and multiphase flows with deformations without requiring additional
+numerical treatments for interface tracking [3, 4, 5, 6]. Among these methods,
+Smoothed Particle Hydrodynamics (SPH) is extensively applied in simulating
+multiphase flows [7, 8, 9, 10, 11, 12, 13].
+    Previous studies on multiphase flow models, such as water-gas phase models,
+often assume that both water and gas are incompressible, as seen in VOF-based
+methods (see e.g., [14]) and level-set methods (see e.g., [15]). However, in sce-
+narios involving violent free surface flows, such as wave impacts on structures or
+sloshing, air entrainment or water-air mixing can lead to compression and expan-
+sion of the air phase, resulting in pressure changing rapidly and with long-term
+oscillation [16, 17, 18, 19]. Hence, it is crucial to consider the compressibility of
+different phases when studying such multiphase flow problems.
+    Multiphase SPH schemes can be categorized according to how pressure is
+solved, leading to two main approaches: Weakly Compressible SPH (WCSPH)
+[20, 21] and Incompressible SPH (ISPH) [22, 23, 24]. In the WCSPH framework,
+the pressure is explicitly solved based on the Equation of State (EOS), making
+it well suited for compressible multiphase flow problems, while the ISPH model
+solves the pressure implicitly via the Poisson equation, which poses challenges
+for handling strongly compressible flows [25, 26, 27]. Additionally, the ISPH
+scheme also faces difficulties in parallelization [28], while the WCSPH scheme is
+well suited for multi-GPU simulations [29]. In this study, the WCSPH scheme is
+chosen because of its ability to handle the compressibility of fluid phases while
+naturally satisfying the free surface condition [30].
+    Within the context of WCSPH multiphase flows, two main challenges we
+discuss in the present work are: (i) numerical instability, such as pressure in-
+stability, particle penetration at phase interfaces; and (ii) modeling the com-
+pressibility of different fluid phases. Various approaches have been proposed to
+tackle the two challenges, which are discussed below.
+    Pressure instability at multiphase interfaces is often attributed to density
+discontinuity. To address this issue, particular attention is paid to the treatment
+of density. Hu et al. [31] used the summation of density to obtain smoothed
+pressure field for multiphase SPH scheme, but under the assumption of uniform
+particle distribution. Furthermore, it does not work for free-surface problems
+due to the truncation of the kernel support. Another approach for density
+evaluation is using the continuity equation, which has been widely used and well-
+supported by numerical techniques. For example, Colagrossi and Landrini [32]
+used moving-least-squares (MLS) interpolation to frequently reinitialize density
+
+
+                                         2
+

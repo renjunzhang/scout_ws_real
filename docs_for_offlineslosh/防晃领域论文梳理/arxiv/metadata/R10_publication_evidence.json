@@ -1,0 +1,99 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Model+Predictive+Contouring+Control+for+Collision+Avoidance+in+Unstructured+Dynamic+Environments&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/lra.2019.2929976",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/lra.2019.2929976",
+    "title": [
+      "Model Predictive Contouring Control for Collision Avoidance in Unstructured Dynamic Environments"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0003-3598-8015",
+        "authenticated-orcid": false,
+        "given": "Bruno",
+        "family": "Brito",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-3605-5738",
+        "authenticated-orcid": false,
+        "given": "Boaz",
+        "family": "Floor",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-3856-6221",
+        "authenticated-orcid": false,
+        "given": "Laura",
+        "family": "Ferranti",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0003-0058-570X",
+        "authenticated-orcid": false,
+        "given": "Javier",
+        "family": "Alonso-Mora",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Robotics and Automation Letters"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2019,
+          10
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2019,
+          10
+        ]
+      ]
+    },
+    "volume": "4",
+    "issue": "4",
+    "page": "4459-4466",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/lra.2019.2929976",
+    "ISSN": [
+      "2377-3766",
+      "2377-3774"
+    ]
+  }
+}

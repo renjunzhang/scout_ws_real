@@ -1,0 +1,115 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.title=Model+Predictive+Contouring+Control+for+Time-Optimal+Quadrotor+Flight&rows=3",
+  "doi_api_url": "https://api.crossref.org/works/10.1109/tro.2022.3173711",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1109/tro.2022.3173711",
+    "title": [
+      "Model Predictive Contouring Control for Time-Optimal Quadrotor Flight"
+    ],
+    "author": [
+      {
+        "ORCID": "https://orcid.org/0000-0002-7977-7802",
+        "authenticated-orcid": false,
+        "given": "Angel",
+        "family": "Romero",
+        "sequence": "first",
+        "affiliation": [
+          {
+            "name": "Robotics and Perception Group, University of Zurich, Zurich, Switzerland"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-8539-3979",
+        "authenticated-orcid": false,
+        "given": "Sihao",
+        "family": "Sun",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Robotics and Perception Group, University of Zurich, Zurich, Switzerland"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0001-9585-1278",
+        "authenticated-orcid": false,
+        "given": "Philipp",
+        "family": "Foehn",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Robotics and Perception Group, University of Zurich, Zurich, Switzerland"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      },
+      {
+        "ORCID": "https://orcid.org/0000-0002-3831-6778",
+        "authenticated-orcid": false,
+        "given": "Davide",
+        "family": "Scaramuzza",
+        "sequence": "additional",
+        "affiliation": [
+          {
+            "name": "Robotics and Perception Group, University of Zurich, Zurich, Switzerland"
+          }
+        ],
+        "role": [
+          {
+            "vocabulary": "crossref",
+            "role": "author"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IEEE Transactions on Robotics"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2022,
+          12
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2022,
+          12
+        ]
+      ]
+    },
+    "volume": "38",
+    "issue": "6",
+    "page": "3340-3356",
+    "publisher": "Institute of Electrical and Electronics Engineers (IEEE)",
+    "URL": "https://doi.org/10.1109/tro.2022.3173711",
+    "ISSN": [
+      "1552-3098",
+      "1941-0468"
+    ]
+  }
+}

@@ -1,0 +1,880 @@
+{
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Sloshing-Free+Manipulation+of+Liquids+Using+Robotic+Arms&rows=5",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "institution": [
+        {
+          "name": "San Jose State University",
+          "acronym": [
+            "SJSU",
+            "SJSU"
+          ],
+          "place": [
+            "San Jose, CA, USA"
+          ],
+          "department": [
+            "Computer Engineering"
+          ]
+        }
+      ],
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            7,
+            13
+          ]
+        ],
+        "date-time": "2024-07-13T00:20:18Z",
+        "timestamp": 1720830018284
+      },
+      "reference-count": 0,
+      "publisher": "San Jose State University Library",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.31979/etd.34cf-wyx3",
+      "type": "dissertation",
+      "created": {
+        "date-parts": [
+          [
+            2024,
+            4,
+            17
+          ]
+        ],
+        "date-time": "2024-04-17T01:46:23Z",
+        "timestamp": 1713318383000
+      },
+      "approved": {
+        "date-parts": [
+          [
+            2023,
+            1,
+            1
+          ]
+        ]
+      },
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Exploring the Design Space of Simulated Robotic Arms with Tactile Stimuli for Object Manipulation Using Reinforcement Learning Methods"
+      ],
+      "prefix": "10.31979",
+      "author": [
+        {
+          "given": "Alavi Ahmed",
+          "family": "Khan",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "San Jose State University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "16862",
+      "link": [
+        {
+          "URL": "https://scholarworks.sjsu.edu/cgi/viewcontent.cgi?article=8999&amp;context=etd_theses&amp;unstamped=1",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2024,
+            7,
+            12
+          ]
+        ],
+        "date-time": "2024-07-12T18:17:29Z",
+        "timestamp": 1720808249000
+      },
+      "score": 31.306551,
+      "degree": [
+        "Master of Science (MS)"
+      ],
+      "resource": {
+        "primary": {
+          "URL": "https://scholarworks.sjsu.edu/etd_theses/5452"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            null
+          ]
+        ]
+      },
+      "references-count": 0,
+      "URL": "https://doi.org/10.31979/etd.34cf-wyx3"
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            9,
+            4
+          ]
+        ],
+        "date-time": "2024-09-04T13:01:53Z",
+        "timestamp": 1725454913810
+      },
+      "reference-count": 0,
+      "publisher": "SCITEPRESS - Science and Technology Publications",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2021
+          ]
+        ]
+      },
+      "DOI": "10.5220/0010712100003061",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2021,
+            10,
+            29
+          ]
+        ],
+        "date-time": "2021-10-29T18:57:47Z",
+        "timestamp": 1635533867000
+      },
+      "page": "57-63",
+      "source": "Crossref",
+      "is-referenced-by-count": 1,
+      "title": [
+        "On-orbit Free-floating Manipulation using a Two-arm Robotic System"
+      ],
+      "prefix": "10.5220",
+      "author": [
+        {
+          "given": "Jose",
+          "family": "Ramon",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "University of Alicante, Department of Physics, Systems Engineering and Signal Theory, Alicante, Spain, --- Select a Country ---"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Jorge",
+          "family": "Pomares",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "University of Alicante, Department of Physics, Systems Engineering and Signal Theory, Alicante, Spain, --- Select a Country ---"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Leonard",
+          "family": "Felicetti",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Cranfield University, School of Aerospace, Transport and Manufacturing, Cranfield, U.K., --- Select a Country ---"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "3171",
+      "event": {
+        "name": "2nd International Conference on Robotics, Computer Vision and Intelligent Systems",
+        "start": {
+          "date-parts": [
+            [
+              2021,
+              10,
+              27
+            ]
+          ]
+        },
+        "location": "Online Streaming, --- Select a Country ---",
+        "end": {
+          "date-parts": [
+            [
+              2021,
+              10,
+              28
+            ]
+          ]
+        }
+      },
+      "container-title": [
+        "Proceedings of the 2nd International Conference on Robotics, Computer Vision and Intelligent Systems"
+      ],
+      "original-title": [
+        "On-orbit Free-floating Manipulation using a Two-arm Robotic System"
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2021,
+            10,
+            29
+          ]
+        ],
+        "date-time": "2021-10-29T18:57:49Z",
+        "timestamp": 1635533869000
+      },
+      "score": 29.591908,
+      "resource": {
+        "primary": {
+          "URL": "https://www.scitepress.org/DigitalLibrary/Link.aspx?doi=10.5220/0010712100003061"
+        }
+      },
+      "subtitle": [
+        ""
+      ],
+      "issued": {
+        "date-parts": [
+          [
+            2021
+          ]
+        ]
+      },
+      "references-count": 0,
+      "URL": "https://doi.org/10.5220/0010712100003061",
+      "published": {
+        "date-parts": [
+          [
+            2021
+          ]
+        ]
+      }
+    },
+    {
+      "institution": [
+        {
+          "name": "Research Square"
+        }
+      ],
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            4
+          ]
+        ],
+        "date-time": "2024-05-04T00:29:20Z",
+        "timestamp": 1714782560760
+      },
+      "posted": {
+        "date-parts": [
+          [
+            2024,
+            4,
+            2
+          ]
+        ]
+      },
+      "group-title": "In Review",
+      "reference-count": 0,
+      "publisher": "Research Square Platform LLC",
+      "license": [
+        {
+          "start": {
+            "date-parts": [
+              [
+                2024,
+                4,
+                2
+              ]
+            ],
+            "date-time": "2024-04-02T00:00:00Z",
+            "timestamp": 1712016000000
+          },
+          "content-version": "unspecified",
+          "delay-in-days": 0,
+          "URL": "https://creativecommons.org/licenses/by/4.0/"
+        }
+      ],
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "accepted": {
+        "date-parts": [
+          [
+            2024,
+            3,
+            26
+          ]
+        ]
+      },
+      "abstract": "<title>Abstract</title>\n        <p>We present a model-based feedforward control strategy suitable for designing swift rest-to-rest maneu-vers for liquids in arbitrarily shaped containers. We employ the commonly used equivalent pendulummodel to represent the sloshing dynamics and suggest a novel parameter identification scheme suitablefor arbitrary container shapes and any number of sloshing modes. By computing natural modes andfluid reaction forces and torques for imposed harmonic container motions via a finite element model,we obtain data for the identification scheme. A fitting procedure then yields highly accurate parameters for a physical pendulum model, where each pendulum represents one sloshing mode. We alsoprovide a thorough analysis of parameter identifiability and guidelines for obtaining robust parameterestimates. The proposed feed forward control method uses a virtual tray pendulum on which we placethe container (in the form of its equivalent pendulum model). Designing the virtual tray such thatthe fluid’s dominant sloshing mode becomes uncontrollable for displacements of the tray pendulumpivot effectively zeros out any sloshing motion in this mode. We then exploit the flatness property ofthe resulting system to design rest-to-rest maneuvers where any residual sloshing motion (in highermodes) can be exactly stopped at the end of the maneuver. The effectiveness of the proposed methodis demonstrated through extensive simulations and experimental results using a Martini cocktail glass,whose shape is challenging in terms of sloshing. The experimental results show the successful, accurate suppression of sloshing, validating the efficacy of the proposed concept.</p>",
+      "DOI": "10.21203/rs.3.rs-4171559/v1",
+      "type": "posted-content",
+      "created": {
+        "date-parts": [
+          [
+            2024,
+            4,
+            2
+          ]
+        ],
+        "date-time": "2024-04-02T05:58:18Z",
+        "timestamp": 1712037498000
+      },
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Rapid sloshing-free transport of liquids in arbitrarily shaped containers"
+      ],
+      "prefix": "10.21203",
+      "author": [
+        {
+          "given": "Florian",
+          "family": "Toth",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "TU Wien"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Andreas",
+          "family": "Scharner",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "TU Wien"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Alexander",
+          "family": "Schirrer",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "TU Wien"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Christoph",
+          "family": "Hametner",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "TU Wien"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Stefan",
+          "family": "Jakubek",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "TU Wien"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "8761",
+      "link": [
+        {
+          "URL": "https://www.researchsquare.com/article/rs-4171559/v1",
+          "content-type": "text/html",
+          "content-version": "vor",
+          "intended-application": "text-mining"
+        },
+        {
+          "URL": "https://www.researchsquare.com/article/rs-4171559/v1.html",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2024,
+            5,
+            3
+          ]
+        ],
+        "date-time": "2024-05-03T09:04:26Z",
+        "timestamp": 1714727066000
+      },
+      "score": 26.54316,
+      "resource": {
+        "primary": {
+          "URL": "https://www.researchsquare.com/article/rs-4171559/v1"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2024,
+            4,
+            2
+          ]
+        ]
+      },
+      "references-count": 0,
+      "URL": "https://doi.org/10.21203/rs.3.rs-4171559/v1",
+      "published": {
+        "date-parts": [
+          [
+            2024,
+            4,
+            2
+          ]
+        ]
+      },
+      "subtype": "preprint"
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            6,
+            15
+          ]
+        ],
+        "date-time": "2024-06-15T17:19:08Z",
+        "timestamp": 1718471948912
+      },
+      "reference-count": 13,
+      "publisher": "Elsevier",
+      "isbn-type": [
+        {
+          "value": "9780080451572",
+          "type": "print"
+        }
+      ],
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2006
+          ]
+        ]
+      },
+      "DOI": "10.1016/b978-008045157-2/50100-0",
+      "type": "book-chapter",
+      "created": {
+        "date-parts": [
+          [
+            2007,
+            10,
+            11
+          ]
+        ],
+        "date-time": "2007-10-11T11:18:52Z",
+        "timestamp": 1192101532000
+      },
+      "page": "572-577",
+      "source": "Crossref",
+      "is-referenced-by-count": 2,
+      "title": [
+        "From robotic arms to mobile manipulation"
+      ],
+      "prefix": "10.1016",
+      "author": [
+        {
+          "given": "V.",
+          "family": "Padois",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "J.-Y.",
+          "family": "Fourquet",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "P.",
+          "family": "Chiron",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "78",
+      "reference": [
+        {
+          "issue": "11",
+          "key": "10.1016/B978-008045157-2/50100-0_bib1",
+          "doi-asserted-by": "crossref",
+          "first-page": "709",
+          "DOI": "10.1002/(SICI)1097-4563(199611)13:11<709::AID-ROB3>3.0.CO;2-Z",
+          "article-title": "Door-opening behaviour of an autonomous mobile manipulator by sequence of action primitives",
+          "volume": "13",
+          "author": "Nagatani",
+          "year": "1996",
+          "journal-title": "Journal of Robotic Systems"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib2",
+          "series-title": "Proceedings of the 35th International Symposium on Robotics",
+          "article-title": "Coordination and partial decoupling in tracking control for wheeled mobile manipulators",
+          "author": "Padois",
+          "year": "2004"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib3",
+          "article-title": "A framework for the control of nonholonomic mobile manipulators",
+          "author": "Fruchard",
+          "year": "2005",
+          "journal-title": "Activity report INRIA 5556"
+        },
+        {
+          "issue": "9",
+          "key": "10.1016/B978-008045157-2/50100-0_bib4",
+          "doi-asserted-by": "crossref",
+          "first-page": "443",
+          "DOI": "10.1002/rob.10052",
+          "article-title": "Extended Jacobian Inverse Kinematics Algorithms for Mobile Manipulators",
+          "volume": "19",
+          "author": "Tchon",
+          "year": "2002",
+          "journal-title": "Journal of Robotic Systems"
+        },
+        {
+          "issue": "7–8",
+          "key": "10.1016/B978-008045157-2/50100-0_bib5",
+          "doi-asserted-by": "crossref",
+          "first-page": "565",
+          "DOI": "10.1177/02783649030227007",
+          "article-title": "Manipulability of wheeled mobile manipulation: application to motion generation",
+          "volume": "vol. 22",
+          "author": "Bayle",
+          "year": "2003",
+          "journal-title": "The International Journal of Robotics Research"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib6",
+          "series-title": "Modelling and control of robot manipulators",
+          "author": "Sciavicco",
+          "year": "1999"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib7",
+          "series-title": "Foundations of robotics—Analysis and Control",
+          "author": "Yoshikawa",
+          "year": "1990"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib8",
+          "doi-asserted-by": "crossref",
+          "first-page": "47",
+          "DOI": "10.1109/70.481750",
+          "article-title": "Structural Properties and Classification of Kinematic and Dynamic Models of Wheeled Mobile Robots",
+          "volume": "12",
+          "author": "Campion",
+          "year": "1996",
+          "journal-title": "IEEE Transactions on Automatic Control"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib9",
+          "series-title": "IEEE International Conference on Robotics and Automation",
+          "article-title": "Kinematic modelling of wheeled mobile manipulators",
+          "author": "Bayle",
+          "year": "2003"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib10",
+          "article-title": "Enchanements dynamiques de tches pour des manipulateurs mobiles à roues",
+          "author": "Padois",
+          "year": "2005"
+        },
+        {
+          "issue": "1",
+          "key": "10.1016/B978-008045157-2/50100-0_bib11",
+          "doi-asserted-by": "crossref",
+          "first-page": "1",
+          "DOI": "10.1177/027836499301200101",
+          "article-title": "A theory of generalized inverses applied to Robotics",
+          "volume": "12",
+          "author": "Doty",
+          "year": "1993",
+          "journal-title": "The International Journal of Robotics Research"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib12",
+          "doi-asserted-by": "crossref",
+          "DOI": "10.1115/1.3139652",
+          "article-title": "Hybrid position/force control of manipulators",
+          "author": "Raibert",
+          "year": "1981",
+          "journal-title": "ASME Journal of Dynamic Systems, Measurement and Control"
+        },
+        {
+          "key": "10.1016/B978-008045157-2/50100-0_bib13",
+          "series-title": "Proceedings of the 2001 IEEE International Conference on Robotics and Automation",
+          "first-page": "1277",
+          "article-title": "Utilization of inertial effect in damping-based posture control of mobile manipulator",
+          "author": "Kang",
+          "year": "2001"
+        }
+      ],
+      "container-title": [
+        "Intelligent Production Machines and Systems"
+      ],
+      "language": "en",
+      "deposited": {
+        "date-parts": [
+          [
+            2019,
+            1,
+            3
+          ]
+        ],
+        "date-time": "2019-01-03T13:20:05Z",
+        "timestamp": 1546521605000
+      },
+      "score": 26.440907,
+      "resource": {
+        "primary": {
+          "URL": "https://linkinghub.elsevier.com/retrieve/pii/B9780080451572501000"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2006
+          ]
+        ]
+      },
+      "ISBN": [
+        "9780080451572"
+      ],
+      "references-count": 13,
+      "URL": "https://doi.org/10.1016/b978-008045157-2/50100-0",
+      "published": {
+        "date-parts": [
+          [
+            2006
+          ]
+        ]
+      }
+    },
+    {
+      "institution": [
+        {
+          "id": [
+            {
+              "id": "https://ror.org/013cjyk83",
+              "id-type": "ROR",
+              "asserted-by": "publisher"
+            }
+          ],
+          "name": "Université Paris sciences et lettres"
+        }
+      ],
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            7,
+            30
+          ]
+        ],
+        "date-time": "2026-07-30T11:35:23Z",
+        "timestamp": 1785411323312,
+        "version": "3.56.0"
+      },
+      "reference-count": 0,
+      "publisher": "Agence Bibliographique de l'Enseignement Supérieur",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "abstract": "<jats:title>Études des systèmes actifs pour l'exploration robotique, la manipulation des ondes et le contrôle de la caléfaction</jats:title>\n                <jats:p xml:lang=\"fr\">Les systèmes physiques autopropulsés, également appelés actifs, possèdent une phénoménologie riche avec de multiples domaines d'application. Il s'agit de systèmes naturels ou artificiels constitués d'un ou plusieurs individus qui convertissent une source d'énergie interne ou externe pour se mouvoir. Dans ce travail, nous étudions quelques applications de trois systèmes actifs que nous pouvons contrôler à volonté. Premièrement, nous étudions la dynamique d'un robot qui explore de manière aléatoire une région de forme arbitraire. Grâce à l’utilisation d’un nouveau théorème, nous démontrons qu'il est capable de mesurer la surface et le périmètre d’une région quelconque. Ainsi, nous développons une stratégie pour reconnaître des formes préalablement sauvegardées dans un dictionnaire. Dans une seconde partie, nous étudions un autre système expérimental constitué d'aimants en lévitation sur un coussin d'air et se répulsant mutuellement. Ce réseau magnétique se comporte comme un milieu élastique dans lequel les ondes mécaniques peuvent se propager. Nous démontrons qu'une onde propagative peut être inversée temporellement par l'application d'un changement violent de l'amortissement du milieu. L’application successive des chocs d’amortissements nous permet d'absorber sélectivement des composantes monochromatiques d’une onde dont le spectre est large bande. Enfin, nous nous intéressons au contrôle des liquides en état de caléfaction. Nous introduisons un nouveau mécanisme de stabilisation basé sur une évacuation partielle de la couche de vapeur qui supporte le liquide pour empêcher l’instabilité de Rayleigh-Taylor. Finalement, nous montrons qu’un contrôle local de la direction de l'évacuation de la vapeur nous permet de propulser des liquides et, ainsi de fabriquer une nouvelle génération de moteurs hydrodynamiques.</jats:p>",
+      "DOI": "10.70675/7a9a331fz9434z4568za059z021d647c3d9c",
+      "type": "dissertation",
+      "created": {
+        "date-parts": [
+          [
+            2026,
+            4,
+            7
+          ]
+        ],
+        "date-time": "2026-04-07T10:29:41Z",
+        "timestamp": 1775557781000
+      },
+      "approved": {
+        "date-parts": [
+          [
+            2022,
+            12,
+            7
+          ]
+        ]
+      },
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Studies of active systems for robotic exploration, wave manipulation, and control of liquids in the Leidenfrost state"
+      ],
+      "prefix": "10.70675",
+      "author": [
+        {
+          "ORCID": "https://orcid.org/0000-0003-1817-0772",
+          "authenticated-orcid": false,
+          "given": "Samuel",
+          "family": "Hidalgo Caballero",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "id": [
+                {
+                  "id": "https://ror.org/013cjyk83",
+                  "id-type": "ROR",
+                  "asserted-by": "publisher"
+                }
+              ],
+              "name": "Université Paris sciences et lettres"
+            }
+          ],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "51494",
+      "contributor": [
+        {
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            null
+          ]
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2026,
+            4,
+            7
+          ]
+        ],
+        "date-time": "2026-04-07T10:29:42Z",
+        "timestamp": 1775557782000
+      },
+      "score": 26.175106,
+      "degree": [
+        "Doctorat ès Physique",
+        "PhD"
+      ],
+      "resource": {
+        "primary": {
+          "URL": "https://theses.fr/2022UPSLS047"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            null
+          ]
+        ]
+      },
+      "references-count": 0,
+      "alternative-id": [
+        "2022UPSLS047"
+      ],
+      "URL": "https://doi.org/10.70675/7a9a331fz9434z4568za059z021d647c3d9c"
+    }
+  ]
+}

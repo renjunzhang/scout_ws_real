@@ -1,0 +1,42 @@
+[
+  {
+    "code": "R34",
+    "url": "https://iris.unimore.it/bitstream/11380/1072756/5/ExponentialJerk_PostPrint.pdf",
+    "final_url": "https://iris.unimore.it/bitstream/11380/1072756/5/ExponentialJerk_PostPrint.pdf",
+    "http_status": 200,
+    "bytes": 938759,
+    "pdf": true
+  },
+  {
+    "code": "R35",
+    "url": "https://iris.unimore.it/bitstream/11380/1169606/1/HarmonicFilter4Sloshing_IROS2018_final.pdf",
+    "final_url": "https://iris.unimore.it/bitstream/11380/1169606/1/HarmonicFilter4Sloshing_IROS2018_final.pdf",
+    "http_status": 200,
+    "bytes": 2397529,
+    "pdf": true
+  },
+  {
+    "code": "profiles_landing",
+    "url": "https://cris.unibo.it/handle/11585/889873",
+    "final_url": "https://cris.unibo.it/handle/11585/889873",
+    "http_status": 200,
+    "bytes": 56938,
+    "pdf": false
+  },
+  {
+    "code": "classic_mit",
+    "url": "https://dspace.mit.edu/handle/1721.1/6048",
+    "final_url": "https://dspace.mit.edu/entities/publication/a4b1d339-171a-4641-80c4-85d8c48f166b",
+    "http_status": 200,
+    "bytes": 563538,
+    "pdf": false
+  },
+  {
+    "code": "active2014_metadata",
+    "url": "https://api.crossref.org/works/10.1299/mej.2014dr0061",
+    "final_url": "https://api.crossref.org/works/10.1299/mej.2014dr0061",
+    "http_status": 200,
+    "bytes": 5880,
+    "pdf": false
+  }
+]

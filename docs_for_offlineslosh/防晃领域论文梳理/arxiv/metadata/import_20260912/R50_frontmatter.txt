@@ -1,0 +1,85 @@
+                                                1
+
+
+
+
+  Response Regimes in Equivalent Mechanical Model of Moderately
+                              Nonlinear Liquid Sloshing
+                                M. Farid* and O. V. Gendelman
+
+        Faculty of Mechanical Engineering, Technion – Israel Institute of Technology
+
+        *contacting author, maorfarid@gmail.com.
+
+The paper considers non-stationary responses in reduced-order model (ROM) of partially
+liquid-filled tank under external forcing. The model involves one common degree of freedom
+for the tank and the non-sloshing portion of the liquid, and the other one – for the sloshing
+portion of the liquid. The coupling between these degrees of freedom is nonlinear, with the
+lowest-order potential dictated by symmetry considerations. Since the mass of the sloshing
+liquid in realistic conditions does not exceed 10% of the total mass of the system, the
+reduced-order model turns to be formally equivalent to well-studied oscillatory systems with
+nonlinear energy sinks (NES). Exploiting this analogy, and applying the methodology known
+from the studies of the systems with NES, we predict a multitude of possible nonstationary
+responses in the considered ROM. These responses conform, at least on the qualitative level,
+to the responses observed in experimental sloshing settings, multi-modal theoretical models
+and full-scale numeric simulations.
+
+
+
+
+    1. Introduction
+Partially filled liquid storage tanks of different shapes are used in many fields of engineering ,
+including vehicles, sea crafts, aircrafts, for the storage of various, maybe hazardous, liquids.
+The term “sloshing” refers to oscillatory relative motion of the liquid with respect to the
+containing vessel. The liquid sloshing may be hazardous for the vessel safety, since dynamic
+loads related to the sloshing may have direct and rather strong calamitous effect on the vessel
+stability and robustness.
+
+While being most interesting and potentially hazardous, high-amplitude liquid sloshing in
+partially filled vessels still lacks thorough analytic representation. The sloshing liquid has
+infinite number of degrees of freedom; boundary conditions on the free surface are nonlinear
+and time-dependent. Near a resonance,one can encounter high-amplitude steep sloshing
+waves and hydraulic jumps. In the former case, nonlinear dynamical features may take place,
+for example multiple periodic solutions ('jump' phenomenon) [1], weakly quasi-periodic [2],
+                                                 2
+
+
+[3] and strongly modulated responses [4]. Based on experimental results, it was pointed that
+cubic spring seems to describe the dynamical regimes in the best way [5]. When the hydraulic
+jumps are involved, significant hydraulic impacts are applied to the vessel inner walls [6].
+Hydraulic jumps and wave collisions with the vessel shells express the strong non-linearities
+in the system [7]–[10].
+
+Dynamics of the liquid sloshing in partially filled vessels depends on the liquid depth. For
+shallow free-surface, waves and hydraulic jumps show in vicinity of resonance and apply
+high loads on vessel walls. Lepelletier and Raichlen [11] show that in rectangular tanks under
+horizontal excitation experimental results are in good agreement with thelinear sloshing
+theory. Forced sloshing and nonlinear resonance phenomena were studied by Moiseev [12].
+However, as the excitation frequency approaches the natural frequency of the lowest sloshing
+mode, nonlinear and dissipative theory must be used. Hydraulic jumps and wave collisions
+with vessel shells are the source of strong nonlinearities in the system. Moreover, they can
+cause significant local stresses in the containing structure and can affect the structure stability,
+resistance and robustness.
+
+Due to computational complexity and cumulative error originated in the complex interaction
+between different bulks, the numerical solvers have limited ability to accurately describe the
+loads caused by the fluid-structure interactions over long time intervals. That is the
+motivation to look for analytical or semi-analytical methods. Comprehensive studies were
+made to identify and predict nonlinear sloshing regimes that appear near the resonance, with
+the help of asymptotic approaches. Most of those methods were based on assumptions of
+smooth container inner walls, and neglected viscosity [7], [8], [11]. Therefore, potential flow
+theory can be applied. In this work we focus on tanks with walls perpendicular to the
+undisturbed liquid free surface. Even though steady-state asymptotic modal theory might have
+a limited ability to quantitatively describe sloshing regimes in certain conditions (for example,
+when water impact on the tank top takes place), it may be instrumental for analysis of the
+moderately nonlinear responses, their stability and sensitivity to external perturbations.
+Moreover, the major advantage of the reduced-order model (ROM) is very small
+computational time compared to the CFD methods. Besides, the coupling between sloshing
+and the containing structure due to stochastic external excitation can be analyzed for long
+time intervals, and stability of the response regimes can be analyzed analytically.
+
+Hill [13]and Hill and Frandsen [14] studied the wave height and nonlinear beating amplitude
+by solving analytically the third-order amplitude evolution equation is in terms of Jacoby
+elliptic functions and considering a single sloshing mode. Their solution is valid for finite
+depth and non-breaking waves. Steady-state asymptotic modal theory succeeded to predict
+

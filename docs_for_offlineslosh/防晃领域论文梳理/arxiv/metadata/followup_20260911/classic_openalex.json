@@ -1,0 +1,973 @@
+{
+  "id": "https://openalex.org/W1999177683",
+  "doi": "https://doi.org/10.1115/1.2894142",
+  "title": "Preshaping Command Inputs to Reduce System Vibration",
+  "display_name": "Preshaping Command Inputs to Reduce System Vibration",
+  "publication_year": 1990,
+  "publication_date": "1990-03-01",
+  "ids": {
+    "openalex": "https://openalex.org/W1999177683",
+    "doi": "https://doi.org/10.1115/1.2894142",
+    "mag": "1999177683"
+  },
+  "language": "en",
+  "primary_location": {
+    "id": "doi:10.1115/1.2894142",
+    "is_oa": false,
+    "landing_page_url": "https://doi.org/10.1115/1.2894142",
+    "pdf_url": null,
+    "source": {
+      "id": "https://openalex.org/S182161918",
+      "display_name": "Journal of Dynamic Systems Measurement and Control",
+      "issn_l": "0022-0434",
+      "issn": [
+        "0022-0434",
+        "1528-9028"
+      ],
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": true,
+      "host_organization": "https://openalex.org/P4310316053",
+      "host_organization_name": "ASM International",
+      "host_organization_lineage": [
+        "https://openalex.org/P4310316053"
+      ],
+      "host_organization_lineage_names": [
+        "ASM International"
+      ],
+      "type": "journal"
+    },
+    "license": null,
+    "license_id": null,
+    "version": "publishedVersion",
+    "is_accepted": true,
+    "is_published": true,
+    "raw_source_name": "Journal of Dynamic Systems, Measurement, and Control",
+    "raw_type": "journal-article"
+  },
+  "type": "article",
+  "indexed_in": [
+    "crossref"
+  ],
+  "open_access": {
+    "is_oa": true,
+    "oa_status": "green",
+    "oa_url": "http://hdl.handle.net/1721.1/6048",
+    "any_repository_has_fulltext": true
+  },
+  "authorships": [
+    {
+      "author_position": "first",
+      "author": {
+        "id": "https://openalex.org/A5112517083",
+        "display_name": "Neil C. Singer",
+        "orcid": null
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I63966007",
+          "display_name": "Massachusetts Institute of Technology",
+          "ror": "https://ror.org/042nb2s44",
+          "country_code": "US",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I63966007"
+          ]
+        }
+      ],
+      "countries": [
+        "US"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "N. C. Singer",
+      "raw_affiliation_strings": [
+        "Department of Mechanical Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139",
+        "Department of Mechanical Engineering , Massachusetts Institute of Technology , Cambridge , MA , 02139"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Mechanical Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139",
+          "institution_ids": [
+            "https://openalex.org/I63966007"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Mechanical Engineering , Massachusetts Institute of Technology , Cambridge , MA , 02139",
+          "institution_ids": [
+            "https://openalex.org/I63966007"
+          ]
+        }
+      ]
+    },
+    {
+      "author_position": "last",
+      "author": {
+        "id": "https://openalex.org/A5030177743",
+        "display_name": "Warren Seering",
+        "orcid": "https://orcid.org/0000-0001-8846-4851"
+      },
+      "institutions": [
+        {
+          "id": "https://openalex.org/I63966007",
+          "display_name": "Massachusetts Institute of Technology",
+          "ror": "https://ror.org/042nb2s44",
+          "country_code": "US",
+          "type": "education",
+          "lineage": [
+            "https://openalex.org/I63966007"
+          ]
+        }
+      ],
+      "countries": [
+        "US"
+      ],
+      "is_corresponding": false,
+      "raw_author_name": "W. P. Seering",
+      "raw_affiliation_strings": [
+        "Department of Mechanical Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139",
+        "Department of Mechanical Engineering , Massachusetts Institute of Technology , Cambridge , MA , 02139"
+      ],
+      "raw_orcid": null,
+      "affiliations": [
+        {
+          "raw_affiliation_string": "Department of Mechanical Engineering, Massachusetts Institute of Technology, Cambridge, MA 02139",
+          "institution_ids": [
+            "https://openalex.org/I63966007"
+          ]
+        },
+        {
+          "raw_affiliation_string": "Department of Mechanical Engineering , Massachusetts Institute of Technology , Cambridge , MA , 02139",
+          "institution_ids": [
+            "https://openalex.org/I63966007"
+          ]
+        }
+      ]
+    }
+  ],
+  "institutions": [],
+  "countries_distinct_count": 1,
+  "institutions_distinct_count": 1,
+  "corresponding_author_ids": [],
+  "corresponding_institution_ids": [
+    "https://openalex.org/I63966007"
+  ],
+  "apc_list": null,
+  "apc_paid": null,
+  "fwci": 18.9321,
+  "has_fulltext": false,
+  "cited_by_count": 1641,
+  "citation_normalized_percentile": {
+    "value": 0.99439876,
+    "is_in_top_1_percent": true,
+    "is_in_top_10_percent": true
+  },
+  "cited_by_percentile_year": {
+    "min": 99,
+    "max": 100
+  },
+  "biblio": {
+    "volume": "112",
+    "issue": "1",
+    "first_page": "76",
+    "last_page": "82"
+  },
+  "is_retracted": false,
+  "is_paratext": false,
+  "is_xpac": false,
+  "primary_topic": {
+    "id": "https://openalex.org/T11394",
+    "display_name": "Dynamics and Control of Mechanical Systems",
+    "score": 0.9865000247955322,
+    "subfield": {
+      "id": "https://openalex.org/subfields/2207",
+      "display_name": "Control and Systems Engineering"
+    },
+    "field": {
+      "id": "https://openalex.org/fields/22",
+      "display_name": "Engineering"
+    },
+    "domain": {
+      "id": "https://openalex.org/domains/3",
+      "display_name": "Physical Sciences"
+    }
+  },
+  "topics": [
+    {
+      "id": "https://openalex.org/T11394",
+      "display_name": "Dynamics and Control of Mechanical Systems",
+      "score": 0.9865000247955322,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2207",
+        "display_name": "Control and Systems Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T12449",
+      "display_name": "Spacecraft Design and Technology",
+      "score": 0.9817000031471252,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2202",
+        "display_name": "Aerospace Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    },
+    {
+      "id": "https://openalex.org/T11701",
+      "display_name": "Space Satellite Systems and Control",
+      "score": 0.9812999963760376,
+      "subfield": {
+        "id": "https://openalex.org/subfields/2202",
+        "display_name": "Aerospace Engineering"
+      },
+      "field": {
+        "id": "https://openalex.org/fields/22",
+        "display_name": "Engineering"
+      },
+      "domain": {
+        "id": "https://openalex.org/domains/3",
+        "display_name": "Physical Sciences"
+      }
+    }
+  ],
+  "keywords": [
+    {
+      "id": "https://openalex.org/keywords/vibration",
+      "display_name": "Vibration",
+      "score": 0.7891446948051453
+    },
+    {
+      "id": "https://openalex.org/keywords/input-shaping",
+      "display_name": "Input shaping",
+      "score": 0.6883542537689209
+    },
+    {
+      "id": "https://openalex.org/keywords/residual",
+      "display_name": "Residual",
+      "score": 0.6626948118209839
+    },
+    {
+      "id": "https://openalex.org/keywords/control-theory",
+      "display_name": "Control theory (sociology)",
+      "score": 0.6453903913497925
+    },
+    {
+      "id": "https://openalex.org/keywords/reduction",
+      "display_name": "Reduction (mathematics)",
+      "score": 0.5957419872283936
+    },
+    {
+      "id": "https://openalex.org/keywords/computer-science",
+      "display_name": "Computer science",
+      "score": 0.5177785158157349
+    },
+    {
+      "id": "https://openalex.org/keywords/manipulator",
+      "display_name": "Manipulator (device)",
+      "score": 0.4837758243083954
+    },
+    {
+      "id": "https://openalex.org/keywords/vibration-control",
+      "display_name": "Vibration control",
+      "score": 0.4130699336528778
+    },
+    {
+      "id": "https://openalex.org/keywords/control-engineering",
+      "display_name": "Control engineering",
+      "score": 0.39133939146995544
+    },
+    {
+      "id": "https://openalex.org/keywords/simulation",
+      "display_name": "Simulation",
+      "score": 0.3824150562286377
+    },
+    {
+      "id": "https://openalex.org/keywords/engineering",
+      "display_name": "Engineering",
+      "score": 0.33401408791542053
+    },
+    {
+      "id": "https://openalex.org/keywords/control",
+      "display_name": "Control (management)",
+      "score": 0.13894253969192505
+    },
+    {
+      "id": "https://openalex.org/keywords/robot",
+      "display_name": "Robot",
+      "score": 0.13839465379714966
+    },
+    {
+      "id": "https://openalex.org/keywords/mathematics",
+      "display_name": "Mathematics",
+      "score": 0.12912407517433167
+    },
+    {
+      "id": "https://openalex.org/keywords/acoustics",
+      "display_name": "Acoustics",
+      "score": 0.12405848503112793
+    },
+    {
+      "id": "https://openalex.org/keywords/algorithm",
+      "display_name": "Algorithm",
+      "score": 0.10941919684410095
+    },
+    {
+      "id": "https://openalex.org/keywords/artificial-intelligence",
+      "display_name": "Artificial intelligence",
+      "score": 0.10478505492210388
+    },
+    {
+      "id": "https://openalex.org/keywords/physics",
+      "display_name": "Physics",
+      "score": 0.09827029705047607
+    }
+  ],
+  "concepts": [
+    {
+      "id": "https://openalex.org/C198394728",
+      "wikidata": "https://www.wikidata.org/wiki/Q3695508",
+      "display_name": "Vibration",
+      "level": 2,
+      "score": 0.7891446948051453
+    },
+    {
+      "id": "https://openalex.org/C2778512855",
+      "wikidata": "https://www.wikidata.org/wiki/Q6036808",
+      "display_name": "Input shaping",
+      "level": 4,
+      "score": 0.6883542537689209
+    },
+    {
+      "id": "https://openalex.org/C155512373",
+      "wikidata": "https://www.wikidata.org/wiki/Q287450",
+      "display_name": "Residual",
+      "level": 2,
+      "score": 0.6626948118209839
+    },
+    {
+      "id": "https://openalex.org/C47446073",
+      "wikidata": "https://www.wikidata.org/wiki/Q5165890",
+      "display_name": "Control theory (sociology)",
+      "level": 3,
+      "score": 0.6453903913497925
+    },
+    {
+      "id": "https://openalex.org/C111335779",
+      "wikidata": "https://www.wikidata.org/wiki/Q3454686",
+      "display_name": "Reduction (mathematics)",
+      "level": 2,
+      "score": 0.5957419872283936
+    },
+    {
+      "id": "https://openalex.org/C41008148",
+      "wikidata": "https://www.wikidata.org/wiki/Q21198",
+      "display_name": "Computer science",
+      "level": 0,
+      "score": 0.5177785158157349
+    },
+    {
+      "id": "https://openalex.org/C2781347998",
+      "wikidata": "https://www.wikidata.org/wiki/Q1587588",
+      "display_name": "Manipulator (device)",
+      "level": 3,
+      "score": 0.4837758243083954
+    },
+    {
+      "id": "https://openalex.org/C49240428",
+      "wikidata": "https://www.wikidata.org/wiki/Q3305953",
+      "display_name": "Vibration control",
+      "level": 3,
+      "score": 0.4130699336528778
+    },
+    {
+      "id": "https://openalex.org/C133731056",
+      "wikidata": "https://www.wikidata.org/wiki/Q4917288",
+      "display_name": "Control engineering",
+      "level": 1,
+      "score": 0.39133939146995544
+    },
+    {
+      "id": "https://openalex.org/C44154836",
+      "wikidata": "https://www.wikidata.org/wiki/Q45045",
+      "display_name": "Simulation",
+      "level": 1,
+      "score": 0.3824150562286377
+    },
+    {
+      "id": "https://openalex.org/C127413603",
+      "wikidata": "https://www.wikidata.org/wiki/Q11023",
+      "display_name": "Engineering",
+      "level": 0,
+      "score": 0.33401408791542053
+    },
+    {
+      "id": "https://openalex.org/C2775924081",
+      "wikidata": "https://www.wikidata.org/wiki/Q55608371",
+      "display_name": "Control (management)",
+      "level": 2,
+      "score": 0.13894253969192505
+    },
+    {
+      "id": "https://openalex.org/C90509273",
+      "wikidata": "https://www.wikidata.org/wiki/Q11012",
+      "display_name": "Robot",
+      "level": 2,
+      "score": 0.13839465379714966
+    },
+    {
+      "id": "https://openalex.org/C33923547",
+      "wikidata": "https://www.wikidata.org/wiki/Q395",
+      "display_name": "Mathematics",
+      "level": 0,
+      "score": 0.12912407517433167
+    },
+    {
+      "id": "https://openalex.org/C24890656",
+      "wikidata": "https://www.wikidata.org/wiki/Q82811",
+      "display_name": "Acoustics",
+      "level": 1,
+      "score": 0.12405848503112793
+    },
+    {
+      "id": "https://openalex.org/C11413529",
+      "wikidata": "https://www.wikidata.org/wiki/Q8366",
+      "display_name": "Algorithm",
+      "level": 1,
+      "score": 0.10941919684410095
+    },
+    {
+      "id": "https://openalex.org/C154945302",
+      "wikidata": "https://www.wikidata.org/wiki/Q11660",
+      "display_name": "Artificial intelligence",
+      "level": 1,
+      "score": 0.10478505492210388
+    },
+    {
+      "id": "https://openalex.org/C121332964",
+      "wikidata": "https://www.wikidata.org/wiki/Q413",
+      "display_name": "Physics",
+      "level": 0,
+      "score": 0.09827029705047607
+    },
+    {
+      "id": "https://openalex.org/C2524010",
+      "wikidata": "https://www.wikidata.org/wiki/Q8087",
+      "display_name": "Geometry",
+      "level": 1,
+      "score": 0.0
+    }
+  ],
+  "mesh": [],
+  "locations_count": 4,
+  "locations": [
+    {
+      "id": "doi:10.1115/1.2894142",
+      "is_oa": false,
+      "landing_page_url": "https://doi.org/10.1115/1.2894142",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S182161918",
+        "display_name": "Journal of Dynamic Systems Measurement and Control",
+        "issn_l": "0022-0434",
+        "issn": [
+          "0022-0434",
+          "1528-9028"
+        ],
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": true,
+        "host_organization": "https://openalex.org/P4310316053",
+        "host_organization_name": "ASM International",
+        "host_organization_lineage": [
+          "https://openalex.org/P4310316053"
+        ],
+        "host_organization_lineage_names": [
+          "ASM International"
+        ],
+        "type": "journal"
+      },
+      "license": null,
+      "license_id": null,
+      "version": "publishedVersion",
+      "is_accepted": true,
+      "is_published": true,
+      "raw_source_name": "Journal of Dynamic Systems, Measurement, and Control",
+      "raw_type": "journal-article"
+    },
+    {
+      "id": "pmh:oai:CiteSeerX.psu:10.1.1.18.4338",
+      "is_oa": false,
+      "landing_page_url": "http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.18.4338",
+      "pdf_url": null,
+      "source": null,
+      "license": null,
+      "license_id": null,
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": "ftp://publications.ai.mit.edu/ai-publications/pdf/AIM-1027.pdf",
+      "raw_type": "text"
+    },
+    {
+      "id": "pmh:oai:CiteSeerX.psu:10.1.1.18.6422",
+      "is_oa": false,
+      "landing_page_url": "http://citeseerx.ist.psu.edu/viewdoc/summary?doi=10.1.1.18.6422",
+      "pdf_url": null,
+      "source": null,
+      "license": null,
+      "license_id": null,
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": "ftp://publications.ai.mit.edu/ai-publications/1000-1499/AIM-1027.ps",
+      "raw_type": "text"
+    },
+    {
+      "id": "pmh:oai:dspace.mit.edu:1721.1/6048",
+      "is_oa": true,
+      "landing_page_url": "http://hdl.handle.net/1721.1/6048",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S4306400425",
+        "display_name": "DSpace@MIT (Massachusetts Institute of Technology)",
+        "issn_l": null,
+        "issn": null,
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": false,
+        "host_organization": "https://openalex.org/I63966007",
+        "host_organization_name": "Massachusetts Institute of Technology",
+        "host_organization_lineage": [
+          "https://openalex.org/I63966007"
+        ],
+        "host_organization_lineage_names": [],
+        "type": "repository"
+      },
+      "license": "cc-by-nc",
+      "license_id": "https://openalex.org/licenses/cc-by-nc",
+      "version": "submittedVersion",
+      "is_accepted": false,
+      "is_published": false,
+      "raw_source_name": null,
+      "raw_type": null
+    }
+  ],
+  "best_oa_location": {
+    "id": "pmh:oai:dspace.mit.edu:1721.1/6048",
+    "is_oa": true,
+    "landing_page_url": "http://hdl.handle.net/1721.1/6048",
+    "pdf_url": null,
+    "source": {
+      "id": "https://openalex.org/S4306400425",
+      "display_name": "DSpace@MIT (Massachusetts Institute of Technology)",
+      "issn_l": null,
+      "issn": null,
+      "is_oa": false,
+      "is_in_doaj": false,
+      "is_core": false,
+      "host_organization": "https://openalex.org/I63966007",
+      "host_organization_name": "Massachusetts Institute of Technology",
+      "host_organization_lineage": [
+        "https://openalex.org/I63966007"
+      ],
+      "host_organization_lineage_names": [],
+      "type": "repository"
+    },
+    "license": "cc-by-nc",
+    "license_id": "https://openalex.org/licenses/cc-by-nc",
+    "version": "submittedVersion",
+    "is_accepted": false,
+    "is_published": false,
+    "raw_source_name": null,
+    "raw_type": null
+  },
+  "sustainable_development_goals": [
+    {
+      "display_name": "Affordable and clean energy",
+      "score": 0.6499999761581421,
+      "id": "https://metadata.un.org/sdg/7"
+    }
+  ],
+  "awards": [],
+  "funders": [
+    {
+      "id": "https://openalex.org/F4320306101",
+      "display_name": "National Aeronautics and Space Administration",
+      "ror": "https://ror.org/027ka1x80"
+    },
+    {
+      "id": "https://openalex.org/F4320309015",
+      "display_name": "Charles Stark Draper Laboratory",
+      "ror": "https://ror.org/04378d909"
+    },
+    {
+      "id": "https://openalex.org/F4320309369",
+      "display_name": "Massachusetts Institute of Technology",
+      "ror": "https://ror.org/042nb2s44"
+    }
+  ],
+  "has_content": {
+    "grobid_xml": false,
+    "pdf": false
+  },
+  "content_urls": null,
+  "referenced_works_count": 0,
+  "referenced_works": [],
+  "related_works": [
+    "https://openalex.org/W2163542194",
+    "https://openalex.org/W2616781458",
+    "https://openalex.org/W2137720398",
+    "https://openalex.org/W2146301637",
+    "https://openalex.org/W2383122751",
+    "https://openalex.org/W1540273480",
+    "https://openalex.org/W1992292580",
+    "https://openalex.org/W2326791273",
+    "https://openalex.org/W2887661264",
+    "https://openalex.org/W3104544565"
+  ],
+  "abstract_inverted_index": {
+    "A": [
+      0,
+      32
+    ],
+    "method": [
+      1
+    ],
+    "is": [
+      2,
+      37,
+      54,
+      81
+    ],
+    "presented": [
+      3
+    ],
+    "for": [
+      4,
+      98
+    ],
+    "generating": [
+      5
+    ],
+    "shaped": [
+      6
+    ],
+    "command": [
+      7
+    ],
+    "inputs": [
+      8,
+      18
+    ],
+    "which": [
+      9
+    ],
+    "significantly": [
+      10
+    ],
+    "reduce": [
+      11
+    ],
+    "or": [
+      12
+    ],
+    "eliminate": [
+      13
+    ],
+    "endpoint": [
+      14,
+      95
+    ],
+    "vibration.": [
+      15,
+      31
+    ],
+    "Desired": [
+      16
+    ],
+    "system": [
+      17,
+      24,
+      57
+    ],
+    "are": [
+      19
+    ],
+    "altered": [
+      20
+    ],
+    "so": [
+      21
+    ],
+    "that": [
+      22
+    ],
+    "the": [
+      23,
+      26,
+      40,
+      46,
+      85,
+      102
+    ],
+    "completes": [
+      25
+    ],
+    "requested": [
+      27
+    ],
+    "move": [
+      28,
+      34
+    ],
+    "without": [
+      29
+    ],
+    "residual": [
+      30,
+      96
+    ],
+    "short": [
+      33
+    ],
+    "time": [
+      35
+    ],
+    "penalty": [
+      36
+    ],
+    "incurred": [
+      38
+    ],
+    "(on": [
+      39
+    ],
+    "order": [
+      41
+    ],
+    "of": [
+      42,
+      45,
+      49,
+      91,
+      101
+    ],
+    "one": [
+      43
+    ],
+    "period": [
+      44
+    ],
+    "first": [
+      47
+    ],
+    "mode": [
+      48
+    ],
+    "vibration).": [
+      50
+    ],
+    "The": [
+      51,
+      71
+    ],
+    "preshaping": [
+      52
+    ],
+    "technique": [
+      53
+    ],
+    "robust": [
+      55
+    ],
+    "under": [
+      56
+    ],
+    "parameter": [
+      58
+    ],
+    "uncertainty": [
+      59
+    ],
+    "and": [
+      60,
+      67
+    ],
+    "may": [
+      61
+    ],
+    "be": [
+      62
+    ],
+    "applied": [
+      63
+    ],
+    "to": [
+      64,
+      83
+    ],
+    "both": [
+      65
+    ],
+    "open": [
+      66
+    ],
+    "closed": [
+      68
+    ],
+    "loop": [
+      69
+    ],
+    "systems.": [
+      70
+    ],
+    "Draper": [
+      72
+    ],
+    "Laboratory’s": [
+      73
+    ],
+    "Space": [
+      74
+    ],
+    "Shuttle": [
+      75
+    ],
+    "Remote": [
+      76
+    ],
+    "Manipulator": [
+      77
+    ],
+    "System": [
+      78
+    ],
+    "simulator": [
+      79
+    ],
+    "(DRS)": [
+      80
+    ],
+    "used": [
+      82
+    ],
+    "evaluate": [
+      84
+    ],
+    "method.": [
+      86
+    ],
+    "Results": [
+      87
+    ],
+    "show": [
+      88
+    ],
+    "a": [
+      89
+    ],
+    "factor": [
+      90
+    ],
+    "25": [
+      92
+    ],
+    "reduction": [
+      93
+    ],
+    "in": [
+      94
+    ],
+    "vibration": [
+      97
+    ],
+    "typical": [
+      99
+    ],
+    "moves": [
+      100
+    ],
+    "DRS.": [
+      103
+    ]
+  },
+  "counts_by_year": [
+    {
+      "year": 2026,
+      "cited_by_count": 33
+    },
+    {
+      "year": 2025,
+      "cited_by_count": 46
+    },
+    {
+      "year": 2024,
+      "cited_by_count": 35
+    },
+    {
+      "year": 2023,
+      "cited_by_count": 42
+    },
+    {
+      "year": 2022,
+      "cited_by_count": 44
+    },
+    {
+      "year": 2021,
+      "cited_by_count": 39
+    },
+    {
+      "year": 2020,
+      "cited_by_count": 50
+    },
+    {
+      "year": 2019,
+      "cited_by_count": 52
+    },
+    {
+      "year": 2018,
+      "cited_by_count": 63
+    },
+    {
+      "year": 2017,
+      "cited_by_count": 70
+    },
+    {
+      "year": 2016,
+      "cited_by_count": 58
+    },
+    {
+      "year": 2015,
+      "cited_by_count": 61
+    },
+    {
+      "year": 2014,
+      "cited_by_count": 62
+    },
+    {
+      "year": 2013,
+      "cited_by_count": 65
+    },
+    {
+      "year": 2012,
+      "cited_by_count": 54
+    }
+  ],
+  "updated_date": "2026-09-02T07:38:04.252551",
+  "created_date": "2025-10-10T00:00:00"
+}

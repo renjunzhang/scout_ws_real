@@ -1,0 +1,295 @@
+[
+  {
+    "name": "C06_wiley",
+    "url": "https://ietresearch.onlinelibrary.wiley.com/doi/pdf/10.1049/csy2.12121",
+    "final_url": "https://ietresearch.onlinelibrary.wiley.com/doi/pdf/10.1049/csy2.12121",
+    "status": 403,
+    "type": "html",
+    "bytes": 5632
+  },
+  {
+    "name": "C06_html",
+    "url": "https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/csy2.12121",
+    "final_url": "https://ietresearch.onlinelibrary.wiley.com/doi/10.1049/csy2.12121",
+    "status": 403,
+    "type": "html",
+    "bytes": 5620
+  },
+  {
+    "name": "C06_openalex",
+    "url": "https://api.openalex.org/works/https://doi.org/10.1049/csy2.12121",
+    "final_url": "https://api.openalex.org/works/https://doi.org/10.1049/csy2.12121",
+    "status": 200,
+    "type": "json",
+    "bytes": 18847,
+    "title": "Anti‐sloshing control: Flatness‐based trajectory planning and tracking control with an integrated extended state observer",
+    "best_oa_location": {
+      "id": "doi:10.1049/csy2.12121",
+      "is_oa": true,
+      "landing_page_url": "https://doi.org/10.1049/csy2.12121",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S4210228108",
+        "display_name": "IET Cyber-Systems and Robotics",
+        "issn_l": "2631-6315",
+        "issn": [
+          "2631-6315",
+          "2097-3608"
+        ],
+        "is_oa": true,
+        "is_in_doaj": true,
+        "is_core": true,
+        "host_organization": "https://openalex.org/P4310311714",
+        "host_organization_name": "Institution of Engineering and Technology",
+        "host_organization_lineage": [
+          "https://openalex.org/P4310311714"
+        ],
+        "host_organization_lineage_names": [
+          "Institution of Engineering and Technology"
+        ],
+        "type": "journal"
+      },
+      "license": "cc-by-nd",
+      "license_id": "https://openalex.org/licenses/cc-by-nd",
+      "version": "publishedVersion",
+      "is_accepted": true,
+      "is_published": true,
+      "raw_source_name": "IET Cyber-Systems and Robotics",
+      "raw_type": "journal-article"
+    },
+    "locations": [
+      {
+        "id": "doi:10.1049/csy2.12121",
+        "is_oa": true,
+        "landing_page_url": "https://doi.org/10.1049/csy2.12121",
+        "pdf_url": null,
+        "source": {
+          "id": "https://openalex.org/S4210228108",
+          "display_name": "IET Cyber-Systems and Robotics",
+          "issn_l": "2631-6315",
+          "issn": [
+            "2631-6315",
+            "2097-3608"
+          ],
+          "is_oa": true,
+          "is_in_doaj": true,
+          "is_core": true,
+          "host_organization": "https://openalex.org/P4310311714",
+          "host_organization_name": "Institution of Engineering and Technology",
+          "host_organization_lineage": [
+            "https://openalex.org/P4310311714"
+          ],
+          "host_organization_lineage_names": [
+            "Institution of Engineering and Technology"
+          ],
+          "type": "journal"
+        },
+        "license": "cc-by-nd",
+        "license_id": "https://openalex.org/licenses/cc-by-nd",
+        "version": "publishedVersion",
+        "is_accepted": true,
+        "is_published": true,
+        "raw_source_name": "IET Cyber-Systems and Robotics",
+        "raw_type": "journal-article"
+      },
+      {
+        "id": "pmh:oai:doaj.org/article:bbcb9b3bdd2e4126970751aba3fd7a2b",
+        "is_oa": false,
+        "landing_page_url": "https://doaj.org/article/bbcb9b3bdd2e4126970751aba3fd7a2b",
+        "pdf_url": null,
+        "source": {
+          "id": "https://openalex.org/S4306401280",
+          "display_name": "DOAJ (DOAJ: Directory of Open Access Journals)",
+          "issn_l": null,
+          "issn": null,
+          "is_oa": false,
+          "is_in_doaj": false,
+          "is_core": false,
+          "host_organization": null,
+          "host_organization_name": null,
+          "host_organization_lineage": [],
+          "host_organization_lineage_names": [],
+          "type": "repository"
+        },
+        "license": null,
+        "license_id": null,
+        "version": "submittedVersion",
+        "is_accepted": false,
+        "is_published": false,
+        "raw_source_name": "IET Cyber-systems and Robotics, Vol 6, Iss 3, Pp n/a-n/a (2024)",
+        "raw_type": "article"
+      }
+    ]
+  },
+  {
+    "name": "multicup_openalex",
+    "url": "https://api.openalex.org/works/https://doi.org/10.1109/LRA.2025.3643281",
+    "final_url": "https://api.openalex.org/works/https://doi.org/10.1109/LRA.2025.3643281",
+    "status": 200,
+    "type": "json",
+    "bytes": 19404,
+    "title": "Time-Optimal Anti-Sloshing Trajectory Planning for Multiple Liquid-Filled Containers Subject to SCARA Motion",
+    "best_oa_location": {
+      "id": "doi:10.1109/lra.2025.3643281",
+      "is_oa": true,
+      "landing_page_url": "https://doi.org/10.1109/lra.2025.3643281",
+      "pdf_url": null,
+      "source": {
+        "id": "https://openalex.org/S4210169774",
+        "display_name": "IEEE Robotics and Automation Letters",
+        "issn_l": "2377-3766",
+        "issn": [
+          "2377-3766",
+          "2377-3774"
+        ],
+        "is_oa": false,
+        "is_in_doaj": false,
+        "is_core": true,
+        "host_organization": "https://openalex.org/P4310319808",
+        "host_organization_name": "Institute of Electrical and Electronics Engineers",
+        "host_organization_lineage": [
+          "https://openalex.org/P4310319808"
+        ],
+        "host_organization_lineage_names": [
+          "Institute of Electrical and Electronics Engineers"
+        ],
+        "type": "journal"
+      },
+      "license": "cc-by-nc-nd",
+      "license_id": "https://openalex.org/licenses/cc-by-nc-nd",
+      "version": "publishedVersion",
+      "is_accepted": true,
+      "is_published": true,
+      "raw_source_name": "IEEE Robotics and Automation Letters",
+      "raw_type": "journal-article"
+    },
+    "locations": [
+      {
+        "id": "doi:10.1109/lra.2025.3643281",
+        "is_oa": true,
+        "landing_page_url": "https://doi.org/10.1109/lra.2025.3643281",
+        "pdf_url": null,
+        "source": {
+          "id": "https://openalex.org/S4210169774",
+          "display_name": "IEEE Robotics and Automation Letters",
+          "issn_l": "2377-3766",
+          "issn": [
+            "2377-3766",
+            "2377-3774"
+          ],
+          "is_oa": false,
+          "is_in_doaj": false,
+          "is_core": true,
+          "host_organization": "https://openalex.org/P4310319808",
+          "host_organization_name": "Institute of Electrical and Electronics Engineers",
+          "host_organization_lineage": [
+            "https://openalex.org/P4310319808"
+          ],
+          "host_organization_lineage_names": [
+            "Institute of Electrical and Electronics Engineers"
+          ],
+          "type": "journal"
+        },
+        "license": "cc-by-nc-nd",
+        "license_id": "https://openalex.org/licenses/cc-by-nc-nd",
+        "version": "publishedVersion",
+        "is_accepted": true,
+        "is_published": true,
+        "raw_source_name": "IEEE Robotics and Automation Letters",
+        "raw_type": "journal-article"
+      },
+      {
+        "id": "pmh:oai:iris.unimore.it:11380/1393228",
+        "is_oa": true,
+        "landing_page_url": "https://hdl.handle.net/11380/1393228",
+        "pdf_url": "https://iris.unimore.it/bitstream/11380/1393228/1/Time-Optimal_Anti-Sloshing_Trajectory_Planning_for_Multiple_Liquid-Filled_Containers_Subject_to_SCARA_Motion.pdf",
+        "source": {
+          "id": "https://openalex.org/S4306400718",
+          "display_name": "IRIS UNIMORE (University of Modena and Reggio Emilia)",
+          "issn_l": null,
+          "issn": null,
+          "is_oa": false,
+          "is_in_doaj": false,
+          "is_core": false,
+          "host_organization": "https://openalex.org/I122346577",
+          "host_organization_name": "University of Modena and Reggio Emilia",
+          "host_organization_lineage": [
+            "https://openalex.org/I122346577"
+          ],
+          "host_organization_lineage_names": [],
+          "type": "repository"
+        },
+        "license": "cc-by",
+        "license_id": "https://openalex.org/licenses/cc-by",
+        "version": "submittedVersion",
+        "is_accepted": false,
+        "is_published": false,
+        "raw_source_name": null,
+        "raw_type": "info:eu-repo/semantics/article"
+      },
+      {
+        "id": "pmh:oai:cris.unibo.it:11585/1034673",
+        "is_oa": true,
+        "landing_page_url": "https://hdl.handle.net/11585/1034673",
+        "pdf_url": null,
+        "source": {
+          "id": "https://openalex.org/S4306402579",
+          "display_name": "Archivio istituzionale della ricerca (Alma Mater Studiorum Università di Bologna)",
+          "issn_l": null,
+          "issn": null,
+          "is_oa": false,
+          "is_in_doaj": false,
+          "is_core": false,
+          "host_organization": "https://openalex.org/I4210117483",
+          "host_organization_name": "Istituto di Ematologia di Bologna",
+          "host_organization_lineage": [
+            "https://openalex.org/I4210117483"
+          ],
+          "host_organization_lineage_names": [],
+          "type": "repository"
+        },
+        "license": "other-oa",
+        "license_id": "https://openalex.org/licenses/other-oa",
+        "version": "submittedVersion",
+        "is_accepted": false,
+        "is_published": false,
+        "raw_source_name": null,
+        "raw_type": "info:eu-repo/semantics/article"
+      }
+    ]
+  },
+  {
+    "name": "shaping_openalex",
+    "url": "https://api.openalex.org/works/https://doi.org/10.1109/IROS.2010.5650412",
+    "final_url": "https://api.openalex.org/works/https://doi.org/10.1109/IROS.2010.5650412",
+    "status": 200,
+    "type": "json",
+    "bytes": 15619,
+    "title": "Input shaping control to suppress sloshing on liquid container transfer using multi-joint robot arm",
+    "best_oa_location": null,
+    "locations": [
+      {
+        "id": "doi:10.1109/iros.2010.5650412",
+        "is_oa": false,
+        "landing_page_url": "https://doi.org/10.1109/iros.2010.5650412",
+        "pdf_url": null,
+        "source": null,
+        "license": null,
+        "license_id": null,
+        "version": "publishedVersion",
+        "is_accepted": true,
+        "is_published": true,
+        "raw_source_name": "2010 IEEE/RSJ International Conference on Intelligent Robots and Systems",
+        "raw_type": "proceedings-article"
+      }
+    ]
+  },
+  {
+    "name": "duckduckgo",
+    "url": "https://html.duckduckgo.com/html/?q=%22Anti-sloshing+control%22+%22Flatness%22+pdf",
+    "final_url": "https://html.duckduckgo.com/html/?q=%22Anti-sloshing+control%22+%22Flatness%22+pdf",
+    "status": 202,
+    "type": "html",
+    "bytes": 14308
+  }
+]

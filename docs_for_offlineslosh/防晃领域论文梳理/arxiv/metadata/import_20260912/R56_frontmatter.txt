@@ -1,0 +1,109 @@
+                                                              Real-time data assimilation for the thermodynamic modeling
+                                                                               of cryogenic storage tanks
+
+                                                                              Pedro A. Marquesa,b,∗, Samuel Ahizia , Miguel A. Mendeza
+                                                                       a von Karman Institute, Waterloosesteenweg 72, 1640 Sint-Genesius-Rode, Belgium
+                                                                      b Université Libre de Bruxelles, Av. Franklin Roosevelt 50, 1050 Bruxelles, Belgium
+arXiv:2310.11399v2 [physics.flu-dyn] 20 Oct 2023
+
+
+
+
+                                                   Abstract
+                                                   The thermal management of cryogenic storage tanks requires advanced control strategies to minimize the
+                                                   boil-off losses produced by heat leakages and sloshing-enhanced heat and mass transfer. This work presents
+                                                   a data-assimilation approach to calibrate a 0D thermodynamic model for cryogenic fuel tanks from data
+                                                   collected in real time from multiple tanks. The model combines energy and mass balance between three
+                                                   control volumes (the ullage vapor, the liquid, and the solid tank) with an Artificial Neural Network (ANN)
+                                                   for predicting the heat transfer coefficients from the current tank state.
+                                                     The proposed approach combines ideas from traditional data assimilation and multi-environment rein-
+                                                   forcement learning, where an agent’s training (model assimilation) is carried out simultaneously on multiple
+                                                   environments (systems). The real-time assimilation uses a mini-batch version of the Limited-memory Broy-
+                                                   den–Fletcher–Goldfarb–Shanno with bounds (L-BFGS-B) and adjoint-based gradient computation for solv-
+                                                   ing the underlying optimization problem. The approach is tested on synthetic datasets simulating multiple
+                                                   tanks undergoing different operation phases (pressurization, hold, long-term storage, and sloshing). The
+                                                   results show that the assimilation is robust against measurement noise and uses it to explore the parameter
+                                                   space further. Moreover, we show that sampling from multiple environments simultaneously accelerates the
+                                                   assimilation.
+                                                   Keywords: Thermodynamics; Cryogenics; Sloshing; Modeling; Machine learning; Data assimilation.
+
+
+                                                   1. Introduction                                                 and the absence of pollutant emission make LH2 a
+                                                                                                                   promising energy carrier for a carbon-neutral fu-
+                                                     The current energy crisis has accelerated the in-             ture [24, 3]. While the large-scale deployment of
+                                                   terest in sustainable energy sources and cryogenic              LH2 still requires significant technological advance-
+                                                   propellants, liquid hydrogen (LH2 ) or liquefied nat-           ments and infrastructure development, LNG could
+                                                   ural gas (LNG). These fuels are stored at extremely             serve as a cleaner alternative to traditional fossil
+                                                   low temperatures (typically ≈-170 ◦ C for LNG and               fuels [46] during the transition to a fully renewable
+                                                   ≈-250 ◦ C LH2 ). LH2 has been mainly used in rocket             energy economy [3].
+                                                   engines [1] but is now actively explored as an alter-             Nevertheless, storage at cryogenic temperatures
+                                                   native to fossil fuels in many applications, includ-            requires a complex thermal management system,
+                                                   ing naval [19] and aeronautical [3] industries. Stor-           which poses significant challenges to applications
+                                                   age at cryogenic temperatures allows for maximiz-               requiring long holding times, from marine to aero-
+                                                   ing the volumetric energy density without resort-               nautical, from ground transportation to deep space
+                                                   ing to extreme operating pressures (> 300 bars for              exploration. No insulating system can entirely pre-
+                                                   gaseous H2 )[15, 27]. The higher thrust-to-weight               vent heat exchanges with the surroundings; thus,
+                                                   ratio compared to classical propulsive solutions [15]           some liquid unavoidably evaporates over time and
+                                                                                                                   increases the tank pressure [40, 13, 39]. Additional
+                                                     ∗ Corresponding author                                        challenges are faced in tanks installed on vehicles,
+                                                      Email address: pedro.marques@vki.ac.be (Pedro A.             as external accelerations induce sloshing. Sloshing,
+                                                   Marques )                                                       defined as the movement of the free liquid surface,
+                                                   Preprint submitted to Energy                                                                              October 23, 2023
+Nomenclature
+
+Greek symbols                                         Lv       latent heat of vaporization, J/kg
+                              2
+α     thermal diffusivity, m /s                       m        mass, kg
+                                             −1
+β     volumetric thermal expansion, K                 p        pressure, Pa
+γ     state equation surrogate model                  Q̇       heat transfer rate, W
+δ     Peng-Robinson coefficient                       R        covariance matrix
+ϵ     width of radial basis functions                 R        specific ideal gas constant, J/kgK
+θ     vector of parameters                            R        radius, m
+κ     kernel of radial basis functions                s̃, ỹ   reference states and observations
+λ     adjoint variable                                s, y     predicted states and observations
+ν     kinematic viscosity, m2 /s                      T        temperature, K
+ρ     mass-specific density, kg/m3                    t        time, s
+σ     ANN activation function
+                                                      U        internal energy, J
+Letter symbols
+                                                      u        mass-specific internal energy, J/kg
+A     augmented Lagrangian function
+                                                      V        volume, m3
+A     area, m2
+                                                      Vm       molar volume, m3 /mol
+A0    forcing amplitude, m
+                                                      w        closure parameters
+B     approximation of the inverse Hessian
+                                                      Ẇ       work, W
+b     maximum wave amplitude, m
+                                                      Non-dimensional numbers
+c     radial basis functions coefficients
+                                                      Gr       Grashof
+Cp    isobaric specific heat, J/(kgK)
+                                                      Pr       Prandtl
+Cv    isochoric specific heat, J/(kgK)
+                                                      Ra       Rayleigh
+e     observation error
+                                                      Re       Reynolds
+f     forward model function
+fe    excitation frequency, Hz                        Subscripts and superscripts
+
+f11   natural frequency, Hz                           a        ambient
+
+g     closure law function                            c        critical conditions
+g     gravitational acceleration, m/s2                i        interface
+h     observation operator                            {j}      environment counter
+h     mass-specific enthalpy, J/kg                    (k)      iteration counter
+H     height, m                                       l        liquid
+                                         2            ph       phase change
+h     heat transfer coefficient, W/(m K)
+J     cost function                                   sat      saturation
+k     thermal conductivity, W/(mK)                    v        vapor
+L     Lagrangian function                             w        walls
+
+
+
+
+                                                  2
+

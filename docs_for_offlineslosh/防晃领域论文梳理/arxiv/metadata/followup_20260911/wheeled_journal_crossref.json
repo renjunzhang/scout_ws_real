@@ -1,0 +1,868 @@
+{
+  "request_url": "https://api.crossref.org/works?query.bibliographic=liquid+sloshing+wheeled+mobile+robot+optimal+control&rows=5",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2022,
+            4,
+            3
+          ]
+        ],
+        "date-time": "2022-04-03T07:17:01Z",
+        "timestamp": 1648970221712
+      },
+      "reference-count": 0,
+      "publisher": "Japan Society of Mechanical Engineers",
+      "issue": "0",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [
+        "ICAM"
+      ],
+      "published-print": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "DOI": "10.1299/jsmeicam.2004.4.52_3",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "page": "52",
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "prefix": "10.1299",
+      "volume": "2004.4",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Shimane Univ."
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "124",
+      "container-title": [
+        "The Abstracts of the international conference on advanced mechatronics : toward evolutionary fusion of IT and mechatronics : ICAM"
+      ],
+      "original-title": [
+        "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container(Featured Robot 2,Session: TP2-B)"
+      ],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            7,
+            22
+          ]
+        ],
+        "date-time": "2017-07-22T18:16:26Z",
+        "timestamp": 1500747386000
+      },
+      "score": 45.36911,
+      "resource": {
+        "primary": {
+          "URL": "https://www.jstage.jst.go.jp/article/jsmeicam/2004.4/0/2004.4_52_3/_article"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      },
+      "references-count": 0,
+      "journal-issue": {
+        "issue": "0",
+        "published-print": {
+          "date-parts": [
+            [
+              2004
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1299/jsmeicam.2004.4.52_3",
+      "ISSN": [
+        "2424-3116"
+      ],
+      "issn-type": [
+        {
+          "value": "2424-3116",
+          "type": "electronic"
+        }
+      ],
+      "published": {
+        "date-parts": [
+          [
+            2004
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2026,
+            8,
+            26
+          ]
+        ],
+        "date-time": "2026-08-26T15:58:01Z",
+        "timestamp": 1787759881473,
+        "version": "build-2784847793"
+      },
+      "reference-count": 7,
+      "publisher": "IEEE",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "DOI": "10.1109/icma.2005.1626862",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2006,
+            8,
+            15
+          ]
+        ],
+        "date-time": "2006-08-15T17:58:12Z",
+        "timestamp": 1155664692000
+      },
+      "page": "1959-1964",
+      "source": "Crossref",
+      "is-referenced-by-count": 7,
+      "title": [
+        "Path design and trace control of a wheeled mobile robot to damp liquid sloshing in a cylindrical container"
+      ],
+      "prefix": "10.1109",
+      "volume": "4",
+      "author": [
+        {
+          "given": "M.",
+          "family": "Hamaguchi",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "Yu.",
+          "family": "Yoshida",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Kihara",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        },
+        {
+          "given": "T.",
+          "family": "Taniguchi",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "vocabulary": "crossref",
+              "role": "author"
+            }
+          ]
+        }
+      ],
+      "member": "263",
+      "reference": [
+        {
+          "key": "ref4",
+          "article-title": "Transfer Control and Curved Path Design for Cylindrical Liquid Container",
+          "author": "hamaguchi",
+          "year": "2002",
+          "journal-title": "Proceedings of the 15th World Congress of IFAC"
+        },
+        {
+          "key": "ref3",
+          "first-page": "233",
+          "article-title": "Modeling and Control of Sloshing with Swirling in a Cylindrical Container during a Curved Path Transfer",
+          "volume": "i",
+          "author": "hamaguchi",
+          "year": "1997",
+          "journal-title": "Proceedings of the 2nd Asian Control Conference"
+        },
+        {
+          "key": "ref6",
+          "article-title": "Transfer Control and Path Design of a Wheeled Mobile Robot to Damp Liquid Sloshing in a Cylindrical Container",
+          "author": "hamaguchi",
+          "year": "2004",
+          "journal-title": "Proceedings of the 4th international conference on advanced mechatronics"
+        },
+        {
+          "key": "ref5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/IROS.2004.1389775"
+        },
+        {
+          "key": "ref7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1115/1.2894142"
+        },
+        {
+          "key": "ref2",
+          "first-page": "193",
+          "article-title": "Liquid Container Transfer Considering the Suppression of Sloshing for the Change of Liquid Level",
+          "volume": "b",
+          "author": "yano",
+          "year": "1996",
+          "journal-title": "Proceedings of the 13th World Congress of IFAC"
+        },
+        {
+          "key": "ref1",
+          "first-page": "379",
+          "article-title": "Modeling and Optimal Control of Liquid Vibration in Transferring a Rectangular Container",
+          "volume": "1",
+          "author": "hamaguchi",
+          "year": "1994",
+          "journal-title": "Proc FLUCOME"
+        }
+      ],
+      "event": {
+        "name": "2005 IEEE International Conference on Mechatronics and Automation",
+        "location": "Niagara Falls, Ont., Canada",
+        "acronym": "ICMA-05"
+      },
+      "container-title": [
+        "IEEE International Conference Mechatronics and Automation, 2005"
+      ],
+      "link": [
+        {
+          "URL": "http://xplorestaging.ieee.org/ielx5/10831/34149/01626862.pdf?arnumber=1626862",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            3,
+            14
+          ]
+        ],
+        "date-time": "2017-03-14T17:52:18Z",
+        "timestamp": 1489513938000
+      },
+      "score": 41.516956,
+      "resource": {
+        "primary": {
+          "URL": "http://ieeexplore.ieee.org/document/1626862/"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            null
+          ]
+        ]
+      },
+      "references-count": 7,
+      "URL": "https://doi.org/10.1109/icma.2005.1626862"
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2022,
+            3,
+            30
+          ]
+        ],
+        "date-time": "2022-03-30T06:28:52Z",
+        "timestamp": 1648621732268
+      },
+      "reference-count": 0,
+      "publisher": "Azzaytuna University",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2018
+          ]
+        ]
+      },
+      "DOI": "10.35778/1742-000-025-012",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2019,
+            10,
+            2
+          ]
+        ],
+        "date-time": "2019-10-02T07:39:08Z",
+        "timestamp": 1570001948000
+      },
+      "page": "1",
+      "source": "Crossref",
+      "is-referenced-by-count": 0,
+      "title": [
+        "Optimal Control Design For Two Wheeled Mobile Robot"
+      ],
+      "prefix": "10.35778",
+      "author": [
+        {
+          "given": "Adel A.",
+          "family": "Abosdeal",
+          "sequence": "first",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Ahmed Jaber",
+          "family": "Abougarair",
+          "sequence": "additional",
+          "affiliation": [],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "21491",
+      "container-title": [
+        "مجلة جامعة الزيتونة"
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2019,
+            10,
+            2
+          ]
+        ],
+        "date-time": "2019-10-02T07:42:36Z",
+        "timestamp": 1570002156000
+      },
+      "score": 38.51593,
+      "resource": {
+        "primary": {
+          "URL": "https://search.mandumah.com/Record/906297"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2018
+          ]
+        ]
+      },
+      "references-count": 0,
+      "alternative-id": [
+        "906297"
+      ],
+      "URL": "https://doi.org/10.35778/1742-000-025-012",
+      "published": {
+        "date-parts": [
+          [
+            2018
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            9,
+            8
+          ]
+        ],
+        "date-time": "2024-09-08T10:21:47Z",
+        "timestamp": 1725790907782
+      },
+      "reference-count": 0,
+      "publisher": "SCITEPRESS - Science and Technology Publications",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2017
+          ]
+        ]
+      },
+      "DOI": "10.5220/0006398702390246",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2017,
+            8,
+            2
+          ]
+        ],
+        "date-time": "2017-08-02T08:53:08Z",
+        "timestamp": 1501663988000
+      },
+      "page": "239-246",
+      "source": "Crossref",
+      "is-referenced-by-count": 2,
+      "title": [
+        "Time-energy Optimal Trajectory Planning over a Fixed Path for a Wheeled Mobile Robot"
+      ],
+      "prefix": "10.5220",
+      "author": [
+        {
+          "given": "Werther Alexandre de Oliveira",
+          "family": "Serralheiro",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Federal Institute of Santa Catarina, Brazil"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Newton",
+          "family": "Maruyama",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Polytechnic School of the University of São Paulo, Brazil"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "3171",
+      "event": {
+        "name": "14th International Conference on Informatics in Control, Automation and Robotics",
+        "start": {
+          "date-parts": [
+            [
+              2017,
+              7,
+              26
+            ]
+          ]
+        },
+        "location": "Madrid, Spain",
+        "end": {
+          "date-parts": [
+            [
+              2017,
+              7,
+              28
+            ]
+          ]
+        }
+      },
+      "container-title": [
+        "Proceedings of the 14th International Conference on Informatics in Control, Automation and Robotics"
+      ],
+      "original-title": [
+        "Time-energy Optimal Trajectory Planning over a Fixed Path for a Wheeled Mobile Robot"
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2017,
+            8,
+            4
+          ]
+        ],
+        "date-time": "2017-08-04T09:25:31Z",
+        "timestamp": 1501838731000
+      },
+      "score": 37.36214,
+      "resource": {
+        "primary": {
+          "URL": "http://www.scitepress.org/DigitalLibrary/Link.aspx?doi=10.5220/0006398702390246"
+        }
+      },
+      "subtitle": [
+        ""
+      ],
+      "issued": {
+        "date-parts": [
+          [
+            2017
+          ]
+        ]
+      },
+      "references-count": 0,
+      "URL": "https://doi.org/10.5220/0006398702390246",
+      "published": {
+        "date-parts": [
+          [
+            2017
+          ]
+        ]
+      }
+    },
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2024,
+            10,
+            31
+          ]
+        ],
+        "date-time": "2024-10-31T03:28:14Z",
+        "timestamp": 1730345294109,
+        "version": "3.28.0"
+      },
+      "publisher-location": "Reston, Virginia",
+      "reference-count": 21,
+      "publisher": "American Institute of Aeronautics and Astronautics",
+      "content-domain": {
+        "domain": [
+          "arc.aiaa.org"
+        ],
+        "crossmark-restriction": true
+      },
+      "published-print": {
+        "date-parts": [
+          [
+            2017,
+            1,
+            9
+          ]
+        ]
+      },
+      "DOI": "10.2514/6.2017-1503",
+      "type": "proceedings-article",
+      "created": {
+        "date-parts": [
+          [
+            2017,
+            1,
+            5
+          ]
+        ],
+        "date-time": "2017-01-05T21:52:57Z",
+        "timestamp": 1483653177000
+      },
+      "update-policy": "http://dx.doi.org/10.2514/aiaa_crossmarkpolicy",
+      "source": "Crossref",
+      "is-referenced-by-count": 1,
+      "title": [
+        "Optimal Trajectory Planning of Wheeled Mobile Robot Using Nonlinear Receding Horizon"
+      ],
+      "prefix": "10.2514",
+      "author": [
+        {
+          "given": "Kamran",
+          "family": "Turkoglu",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "San Jose State University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Matthew",
+          "family": "Miller",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "San Jose State University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "1387",
+      "published-online": {
+        "date-parts": [
+          [
+            2017,
+            1,
+            5
+          ]
+        ]
+      },
+      "reference": [
+        {
+          "issue": "1",
+          "key": "p_1",
+          "first-page": "87",
+          "volume": "2",
+          "author": "Sulaiman Noor Ayikin",
+          "year": "2010",
+          "journal-title": "Journal of Mechanical Engineering and Technology"
+        },
+        {
+          "key": "p_2",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TRO.2009.2014123"
+        },
+        {
+          "key": "p_3",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TRO.2005.851357"
+        },
+        {
+          "key": "p_4",
+          "doi-asserted-by": "crossref",
+          "unstructured": "4Zohar, Ilan, Amit Ailon, and Raul Rabinovici. ”Mobile robot characterized by dynamic and kinematic equations and actuator dynamics: Trajectory tracking and related application.” Robotics and autonomous systems 59.6 (2011): 343-353.",
+          "DOI": "10.1016/j.robot.2010.12.001"
+        },
+        {
+          "key": "p_5",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/S0890-6955(98)00080-7"
+        },
+        {
+          "issue": "1",
+          "key": "p_6",
+          "first-page": "87",
+          "volume": "2",
+          "author": "Sulaiman Noor Ayikin",
+          "year": "2010",
+          "journal-title": "Journal of Mechanical Engineering and Technology"
+        },
+        {
+          "key": "p_7",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.mechatronics.2008.09.004"
+        },
+        {
+          "key": "p_8",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/ICMA.2005.1626717"
+        },
+        {
+          "key": "p_9",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.conengprac.2008.03.004"
+        },
+        {
+          "key": "p_10",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TRO.2004.837240"
+        },
+        {
+          "key": "p_11",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TSMCB.2002.1018768"
+        },
+        {
+          "key": "p_12",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/TCST.2006.872512"
+        },
+        {
+          "key": "p_13",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/37.753931"
+        },
+        {
+          "key": "p_14",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1016/j.neucom.2007.04.014"
+        },
+        {
+          "key": "p_15",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/70.768190"
+        },
+        {
+          "key": "p_16",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/CACSD.2010.5612665"
+        },
+        {
+          "key": "p_17",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1109/MCS.2003.1188772"
+        },
+        {
+          "key": "p_18",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.1002/(SICI)1097-4563(199703)14:3<149::AID-ROB1>3.0.CO;2-R"
+        },
+        {
+          "key": "p_19",
+          "doi-asserted-by": "publisher",
+          "DOI": "10.2514/2.4215"
+        },
+        {
+          "key": "p_20",
+          "volume-title": "Advances in Robotics and Automation",
+          "volume": "2",
+          "author": "Dhaouadi",
+          "year": "2013"
+        },
+        {
+          "volume-title": "The MathWorks",
+          "key": "p_21"
+        }
+      ],
+      "event": {
+        "name": "AIAA Guidance, Navigation, and Control Conference",
+        "location": "Grapevine, Texas"
+      },
+      "container-title": [
+        "AIAA Guidance, Navigation, and Control Conference"
+      ],
+      "link": [
+        {
+          "URL": "http://arc.aiaa.org/doi/pdf/10.2514/6.2017-1503",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2021,
+            5,
+            7
+          ]
+        ],
+        "date-time": "2021-05-07T18:37:19Z",
+        "timestamp": 1620412639000
+      },
+      "score": 36.96438,
+      "resource": {
+        "primary": {
+          "URL": "https://arc.aiaa.org/doi/10.2514/6.2017-1503"
+        }
+      },
+      "issued": {
+        "date-parts": [
+          [
+            2017,
+            1,
+            5
+          ]
+        ]
+      },
+      "references-count": 21,
+      "alternative-id": [
+        "10.2514/6.2017-1503",
+        "10.2514/MGNC17"
+      ],
+      "URL": "https://doi.org/10.2514/6.2017-1503",
+      "published": {
+        "date-parts": [
+          [
+            2017,
+            1,
+            5
+          ]
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,233 @@
+{
+  "request_url": "https://api.crossref.org/works/10.1299/mej.2014dr0061",
+  "retrieved_on": "2026-09-11",
+  "items": [
+    {
+      "indexed": {
+        "date-parts": [
+          [
+            2023,
+            8,
+            19
+          ]
+        ],
+        "date-time": "2023-08-19T04:52:18Z",
+        "timestamp": 1692420738177
+      },
+      "reference-count": 12,
+      "publisher": "Japan Society of Mechanical Engineers",
+      "issue": "6",
+      "content-domain": {
+        "domain": [],
+        "crossmark-restriction": false
+      },
+      "short-container-title": [],
+      "published-print": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      },
+      "DOI": "10.1299/mej.2014dr0061",
+      "type": "journal-article",
+      "created": {
+        "date-parts": [
+          [
+            2014,
+            12,
+            14
+          ]
+        ],
+        "date-time": "2014-12-14T23:19:09Z",
+        "timestamp": 1418599149000
+      },
+      "page": "DR0061-DR0061",
+      "source": "Crossref",
+      "is-referenced-by-count": 2,
+      "title": [
+        "Damping control of sloshing during liquid container transfer by active vibration reducer with 6-DOF parallel linkage (In the case of straight path on horizontal plane)"
+      ],
+      "prefix": "10.1299",
+      "volume": "1",
+      "author": [
+        {
+          "given": "Masafumi",
+          "family": "HAMAGUCHI",
+          "sequence": "first",
+          "affiliation": [
+            {
+              "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        },
+        {
+          "given": "Takao",
+          "family": "TANIGUCHI",
+          "sequence": "additional",
+          "affiliation": [
+            {
+              "name": "Interdisciplinary Graduate School of Science and Engineering, Shimane University"
+            }
+          ],
+          "role": [
+            {
+              "role": "author",
+              "vocabulary": "crossref"
+            }
+          ]
+        }
+      ],
+      "member": "124",
+      "reference": [
+        {
+          "key": "1",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Aboel-Hassan, A., Arafa, M. and Nassef, A., Design and optimization of input shapers for liquid slosh suppression, Journal of Sound and Vibration, Vol. 320 (2009), pp. 1-15.",
+          "DOI": "10.1016/j.jsv.2008.07.015"
+        },
+        {
+          "key": "2",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Chen, S.-L. and You, I.-T., Kinematic and singularity analyses of a six DOF 6-3-3 parallel link machine tool, International Journal of Advanced Manufacturing Technology, Vol. 16, No. 11 (2000), pp. 835-842.",
+          "DOI": "10.1007/s001700070018"
+        },
+        {
+          "key": "3",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Choi, S.-B., Park, D.-W. and Cho, M.-S., Position control of a parallel link manipulator using electro-rheological valve actuators, Mechatronics, Vol. 11, No. 2 (2001), pp. 157-181.",
+          "DOI": "10.1016/S0957-4158(00)00011-8"
+        },
+        {
+          "key": "4",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hamaguchi, M., Motegi, H., Terashima, K. and Nomura, H., Optimal control of transferring a liquid container with boundary element analysis, Transactions of the Society of Instrument and Control Engineers, Vol. 31, No. 9 (1995), pp. 1442-1451 (in Japanese).",
+          "DOI": "10.9746/sicetr1965.31.1442"
+        },
+        {
+          "key": "5",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hamaguchi, M. and Taniguchi, T., Sloshing damping control in a cylindrical container on a wheeled mobile robot using dual-swing active-vibration reduction, Journal of Robotics and Mechatronics, Vol. 21, No. 5 (2009), pp. 642-646.",
+          "DOI": "10.20965/jrm.2009.p0642"
+        },
+        {
+          "key": "6",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Hong, J. and Yamamoto, M., A calculation method of the reaction force and moment for a Delta-type parallel link robot fixed with a frame, Robotica, Vol. 27, No. 4 (2009), pp. 579-587.",
+          "DOI": "10.1017/S0263574708004967"
+        },
+        {
+          "key": "7",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Masuda, T., Fujiwara, M. and Arai, T., Kinematics analysis of the parallel mechanism having vertically fixed linear actuators, Transactions of the Japan Society of Mechanical Engineers Series C, Vol. 65, No. 638 (1999), pp. 4076-4083 (in Japanese).",
+          "DOI": "10.1299/kikaic.65.4076"
+        },
+        {
+          "key": "8",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Preumont, A., Horodinca, M., Romanescu, I., Marneffe, B., Avraam, M., Deraemaeker, A., Bossens, F. and Hanieh A. A., A six-axis single-stage active vibration isolator based on Stewart platform, Journal of Sound and Vibration, Vol. 300 (2007), pp. 644-661.",
+          "DOI": "10.1016/j.jsv.2006.07.050"
+        },
+        {
+          "key": "9",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Terashima, K., Hamaguchi, M. and Kaneshige, A., Optimal control of three dimensional liquid container transfer and robustness of sloshing suppression for the change of liquid level and viscosity, Transactions of the Institute of Systems, Control and Information Engineers, Vol. 9, No. 4 (1996), pp. 162-171 (in Japanese).",
+          "DOI": "10.5687/iscie.9.162"
+        },
+        {
+          "key": "10",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Terashima, K. and Yano, K., Sloshing analysis and suppression control of tilting-type automatic pouring machine, Control Engineering Practice, Vol. 9, No. 6 (2001), pp. 607-620.",
+          "DOI": "10.1016/S0967-0661(01)00023-5"
+        },
+        {
+          "key": "11",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Yano, K. and Terashima, K., Robust liquid container transfer control for complete sloshing suppression, IEEE Transactions on Control Systems Technology, Vol. 9, No. 3 (2001), pp. 483-493.",
+          "DOI": "10.1109/87.918901"
+        },
+        {
+          "key": "12",
+          "doi-asserted-by": "crossref",
+          "unstructured": "Yano, K. and Terashima, K., Sloshing suppression control of liquid transfer systems considering a 3-D transfer path, IEEE/ASME Transactions on Mechatronics, Vol. 10, No. 1 (2005), pp. 8-16.",
+          "DOI": "10.1109/TMECH.2004.839033"
+        }
+      ],
+      "container-title": [
+        "Mechanical Engineering Journal"
+      ],
+      "original-title": [],
+      "language": "en",
+      "link": [
+        {
+          "URL": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_pdf",
+          "content-type": "unspecified",
+          "content-version": "vor",
+          "intended-application": "similarity-checking"
+        }
+      ],
+      "deposited": {
+        "date-parts": [
+          [
+            2021,
+            4,
+            9
+          ]
+        ],
+        "date-time": "2021-04-09T20:33:57Z",
+        "timestamp": 1618000437000
+      },
+      "score": 1,
+      "resource": {
+        "primary": {
+          "URL": "https://www.jstage.jst.go.jp/article/mej/1/6/1_2014dr0061/_article"
+        }
+      },
+      "subtitle": [],
+      "short-title": [],
+      "issued": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      },
+      "references-count": 12,
+      "journal-issue": {
+        "issue": "6",
+        "published-print": {
+          "date-parts": [
+            [
+              2014
+            ]
+          ]
+        }
+      },
+      "URL": "https://doi.org/10.1299/mej.2014dr0061",
+      "relation": {},
+      "ISSN": [
+        "2187-9745"
+      ],
+      "issn-type": [
+        {
+          "value": "2187-9745",
+          "type": "electronic"
+        }
+      ],
+      "subject": [],
+      "published": {
+        "date-parts": [
+          [
+            2014
+          ]
+        ]
+      }
+    }
+  ]
+}

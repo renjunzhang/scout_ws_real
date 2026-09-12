@@ -1,0 +1,76 @@
+{
+  "retrieved_on": "2026-09-11",
+  "request_url": "https://api.crossref.org/works?query.bibliographic=Output-Lifted+Learning+Model+Predictive+Control&rows=5",
+  "doi_api_url": "https://api.crossref.org/works/10.1016/j.ifacol.2021.08.571",
+  "match_review": "Title (including documented variant for R18), author list and DOI reviewed; publication identity matched, manuscript-version equivalence not audited.",
+  "record": {
+    "DOI": "10.1016/j.ifacol.2021.08.571",
+    "title": [
+      "Output-Lifted Learning Model Predictive Control"
+    ],
+    "author": [
+      {
+        "given": "Siddharth H.",
+        "family": "Nair",
+        "sequence": "first",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Ugo",
+        "family": "Rosolia",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      },
+      {
+        "given": "Francesco",
+        "family": "Borrelli",
+        "sequence": "additional",
+        "affiliation": [],
+        "role": [
+          {
+            "role": "author",
+            "vocabulary": "crossref"
+          }
+        ]
+      }
+    ],
+    "type": "journal-article",
+    "container-title": [
+      "IFAC-PapersOnLine"
+    ],
+    "published": {
+      "date-parts": [
+        [
+          2021
+        ]
+      ]
+    },
+    "published-print": {
+      "date-parts": [
+        [
+          2021
+        ]
+      ]
+    },
+    "volume": "54",
+    "issue": "6",
+    "page": "365-370",
+    "publisher": "Elsevier BV",
+    "URL": "https://doi.org/10.1016/j.ifacol.2021.08.571",
+    "ISSN": [
+      "2405-8963"
+    ]
+  }
+}

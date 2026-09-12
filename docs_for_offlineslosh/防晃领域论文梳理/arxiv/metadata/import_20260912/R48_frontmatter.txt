@@ -1,0 +1,78 @@
+                                                   Sloshing suppression with a controlled elastic baffle via
+                                                      deep reinforcement learning and SPH simulation
+arXiv:2505.02354v1 [physics.flu-dyn] 5 May 2025
+
+
+
+
+                                                    Mai Yea , Yaru Renb,∗, Silong Zhangc , Hao Mad , Xiangyu Hua,∗, Oskar J.
+                                                                                    Haidna
+                                                              a
+                                                                 TUM School of Engineering and Design, Technical University of
+                                                                                Munich, 85748, Garching, Germany
+                                                        b
+                                                          State Key Laboratory of Hydraulics and Mountain River Engineering, Sichuan
+                                                                                University, 610065, Chengdu, China
+                                                                 c
+                                                                   School of Energy Science and Engineering, Harbin Institute of
+                                                                                 Technology, 150001, Harbin, China
+                                                                    d
+                                                                      School of Aerospace Engineering, Zhengzhou University of
+                                                                              Aeronautics, 450046, Zhengzhou, China
+
+
+
+
+                                                  Abstract
+
+                                                  This study employed smoothed particle hydrodynamics (SPH) as the numer-
+                                                  ical environment, integrated with deep reinforcement learning (DRL) real-
+                                                  time control algorithms to optimize the sloshing suppression in a tank with
+                                                  a centrally positioned vertical elastic baffle. Compared to rigid baffle move-
+                                                  ment and active strain control methods, the active-controlled movable elastic
+                                                  baffle, which remains undeformed at its base, achieved the best performance
+                                                  with an 81.63% reduction in mean free surface amplitude. A cosine-based
+                                                  expert policy derived from DRL data is also extracted, resulting in a com-
+                                                  parable 76.86% reduction in a three-dimensional (3D) numerical simulation.
+                                                  Energy analyses showed that elastic baffle motion effectively decreased sys-
+
+                                                    ∗
+                                                        Corresponding author
+                                                        Email addresses: renyaru818@163.com (Yaru Ren), xiangyu.hu@tum.de (Xiangyu
+                                                  Hu)
+
+
+
+
+                                                  Preprint submitted to Ocean Engineering                                   May 6, 2025
+tem energy by performing negative work on the fluid, reducing kinetic and
+potential energy. The DRL-based and expert policies also demonstrated ro-
+bust performance across varying excitation frequencies and water depths.
+Specifically, rigid baffles proved more effective at frequencies below the sys-
+tem’s first natural frequency, while elastic baffles exhibited superior perfor-
+mance at higher frequencies. Changes in water depth minimally affected the
+effectiveness of control policies, though they significantly influenced elastic
+baffle deformation behavior. Overall, the sloshing suppression efficiency con-
+sistently ranged between 70% and 80%, confirming DRL-informed control
+methods’ versatility and effectiveness under diverse operating conditions.
+Keywords: Smoothed particle hydrodynamics, fluid-structure interaction,
+deep reinforcement learning, sloshing suppression
+
+
+1. Introduction
+
+   In partially filled containers, the free surface of the liquid is often dis-
+turbed by the motion of the container, leading to sloshing. This phenomenon
+is commonly observed in various engineering applications, including fluid-
+transporting tank trucks [1], marine liquefied natural gas (LNG) carriers [2],
+spacecraft fuel tanks [3, 4], and aircraft wing-tank sloshing[5]. With the rapid
+advancement of computer technology, the past decades have witnessed signif-
+icant progress in numerical and experimental studies on sloshing mechanisms
+[6]. Faltinsen and Timokha [7] developed a multimodal method for calculat-
+ing nonlinear sloshing in two-dimensional (2D) rectangular tanks with finite
+water depth. Building on this work, they extended their research to reso-
+nant nonlinear sloshing in three-dimensional (3D) square-base basins, ana-
+
+
+                                       2
+

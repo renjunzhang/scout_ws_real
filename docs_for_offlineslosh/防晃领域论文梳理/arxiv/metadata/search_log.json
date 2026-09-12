@@ -1,0 +1,90 @@
+[
+  {
+    "group": "liquid",
+    "url": "https://export.arxiv.org/api/query?search_query=%28%28ti%3Asloshing+OR+ti%3Aslosh+OR+ti%3Aliquid%29+AND+%28all%3Arobot+OR+all%3Acontrol+OR+all%3Atrajectory%29%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=40&sortBy=relevance",
+    "status": 200,
+    "count": 40
+  },
+  {
+    "group": "contouring",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22contouring+control%22+OR+ti%3A%22model+predictive+path-following%22%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=25&sortBy=relevance",
+    "status": 200,
+    "count": 22
+  },
+  {
+    "group": "funnel",
+    "url": "https://export.arxiv.org/api/query?search_query=%28%28ti%3Afunnel+AND+all%3Aplanning%29+OR+ti%3AFaSTrack%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=20&sortBy=relevance",
+    "status": 200,
+    "count": 14
+  },
+  {
+    "group": "safety_learning",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22predictive+safety+filter%22+OR+ti%3A%22learning+model+predictive+control%22%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=25&sortBy=relevance",
+    "status": 200,
+    "count": 25
+  },
+  {
+    "group": "retiming",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22time-optimal+path+parameterization%22+OR+ti%3A%22trajectory+retiming%22%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=20&sortBy=relevance",
+    "status": 200,
+    "count": 7
+  },
+  {
+    "group": "robust",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22robust+model+predictive+control%22+AND+all%3Anonlinear%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=20&sortBy=relevance",
+    "status": 200,
+    "count": 20
+  },
+  {
+    "group": "governor",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22reference+governor%22+AND+%28all%3Alearning+OR+all%3Aliquid+OR+all%3Asloshing%29%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&start=0&max_results=12&sortBy=relevance",
+    "status": 200,
+    "count": 3
+  },
+  {
+    "group": "slosh_focus",
+    "error": "429 Client Error: Unknown Error for url: https://export.arxiv.org/api/query?search_query=%28ti%3Asloshing+OR+ti%3Aslosh+OR+ti%3A%22spill-free%22+OR+ti%3A%22anti-slosh%22%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&max_results=90&sortBy=relevance"
+  },
+  {
+    "group": "liquid_transport",
+    "url": "https://export.arxiv.org/api/query?search_query=%28ti%3A%22liquid+transport%22+OR+ti%3A%22liquid+transportation%22+OR+ti%3A%22Clutter-Aware%22+OR+ti%3A%22input+shaping%22%29+AND+%28all%3Arobot+OR+all%3Asloshing+OR+all%3Arobust%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&max_results=30&sortBy=relevance",
+    "status": 200,
+    "count": 9
+  },
+  {
+    "group": "known_ids",
+    "url": "https://export.arxiv.org/api/query?id_list=2108.11052%2C2011.02726&max_results=2",
+    "status": 200,
+    "count": 2
+  },
+  {
+    "group": "slosh_robot",
+    "url": "https://export.arxiv.org/api/query?search_query=%28%28ti%3Aslosh+OR+ti%3Asloshing+OR+ti%3A%22spill-free%22%29+AND+%28all%3Arobot+OR+all%3Acontrol%29%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&max_results=30&sortBy=relevance",
+    "status": 200,
+    "count": 17
+  },
+  {
+    "group": "clutter_liquid",
+    "url": "https://export.arxiv.org/api/query?search_query=%28all%3A%22Clutter-Aware%22+AND+all%3Aliquid%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&max_results=30&sortBy=relevance",
+    "status": 200,
+    "count": 1
+  },
+  {
+    "group": "shaping_slosh",
+    "url": "https://export.arxiv.org/api/query?search_query=%28all%3A%22input+shaping%22+AND+all%3Asloshing%29+AND+submittedDate%3A%5B199001010000+TO+202609112359%5D&max_results=30&sortBy=relevance",
+    "status": 200,
+    "count": 0
+  },
+  {
+    "group": "lmpc_foundation",
+    "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22Learning+Model+Predictive+Control+for+Iterative+Tasks%22&max_results=10",
+    "status": 200,
+    "count": 3
+  },
+  {
+    "group": "path_stability",
+    "url": "https://export.arxiv.org/api/query?search_query=ti%3A%22Nonlinear+Model+Predictive+Path-Following+Control%22&max_results=10",
+    "status": 200,
+    "count": 1
+  }
+]
