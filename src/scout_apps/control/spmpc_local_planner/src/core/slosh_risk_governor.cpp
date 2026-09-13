@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <limits>
 
 namespace spmpc_local_planner {
 namespace {
@@ -103,7 +104,11 @@ SloshRiskGovernor::RolloutResult SloshRiskGovernor::rollout(
         const double ax_unclamped = (target_v - v_sim) / dt;
         const double ax = clampValue(ax_unclamped, -accel_bound, accel_bound);
         const double ay = v_sim * omega_sim;
-        state = slosh_dyn_.step(state, ax, ay, omega_sim);
+        const double alpha = std::isfinite(params_.omega_decay_tau) && params_.omega_decay_tau > 0.0
+            ? -omega_sim / params_.omega_decay_tau : 0.0;
+        if (!slosh_dyn_.stepWithDt(state, {ax, ay, omega_sim, alpha}, dt, state)) {
+            return out;
+        }
 
         const double h = height(state, omega_sim);
         out.h_peak_m = std::max(out.h_peak_m, h);
@@ -113,6 +118,7 @@ SloshRiskGovernor::RolloutResult SloshRiskGovernor::rollout(
 
         v_sim = clampValue(v_sim + ax * dt, 0.0, input.nominal_v_ref);
     }
+    out.valid = true;
     return out;
 }
 
@@ -154,7 +160,7 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
         const double ratio = grid == 1 ? 0.0 : static_cast<double>(i) / static_cast<double>(grid - 1);
         const double beta = 1.0 - ratio * (1.0 - params_.beta_min);
         const RolloutResult candidate = rollout(input, beta);
-        if (riskAdmissible(candidate.risk_peak, params_.risk_threshold)) {
+        if (candidate.valid && riskAdmissible(candidate.risk_peak, params_.risk_threshold)) {
             selected_beta = beta;
             selected_index = i;
             found_feasible = true;
@@ -180,14 +186,22 @@ SloshRiskGovernorOutput SloshRiskGovernor::update(const SloshRiskGovernorInput& 
         filtered_beta = std::max(selected_beta, previous_beta - params_.beta_rate_down_per_sec * dt);
     }
     filtered_beta = clampValue(filtered_beta, params_.beta_min, 1.0);
-    beta_filtered_ = filtered_beta;
-    have_beta_filtered_ = true;
     out.beta_filtered = filtered_beta;
 
     const double min_v_ref = std::min(std::max(0.0, params_.min_v_ref), input.nominal_v_ref);
     out.governed_v_ref = clampValue(filtered_beta * input.nominal_v_ref, min_v_ref, input.nominal_v_ref);
 
     const RolloutResult filtered_rollout = rollout(input, filtered_beta);
+    if (!filtered_rollout.valid) {
+        auto failed = passThrough(input, "DYNAMICS_FAILED");
+        failed.feasible_found = false;
+        failed.predicted_risk_admissible = false;
+        failed.h_peak_m = failed.risk_peak = failed.risk_margin =
+            std::numeric_limits<double>::quiet_NaN();
+        return finish(failed);
+    }
+    beta_filtered_ = filtered_beta;
+    have_beta_filtered_ = true;
     out.risk_peak = filtered_rollout.risk_peak;
     out.h_peak_m = filtered_rollout.h_peak_m;
     out.risk_margin = params_.risk_threshold - out.risk_peak;

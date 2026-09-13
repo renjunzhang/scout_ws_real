@@ -100,8 +100,8 @@ TEST(LiquidStateNowcaster, ConstantExcitationMatchesDirectDynamicsPropagation) {
     ASSERT_TRUE(dynamics.configure(slosh_params));
     SloshState first;
     SloshState expected;
-    ASSERT_TRUE(dynamics.stepWithDt(input.state, 0.12, -0.08, 0.1, 0.02, first));
-    ASSERT_TRUE(dynamics.stepWithDt(first, 0.12, -0.08, 0.1, 0.01, expected));
+    ASSERT_TRUE(dynamics.stepWithDt(input.state, {0.12, -0.08, 0.1, 0.0}, 0.02, first));
+    ASSERT_TRUE(dynamics.stepWithDt(first, {0.12, -0.08, 0.1, 0.0}, 0.01, expected));
     expectStateNear(result.predicted_state, expected, 1.0e-12);
 }
 

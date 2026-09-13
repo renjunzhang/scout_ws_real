@@ -182,9 +182,7 @@ LiquidStateNowcastResult LiquidStateNowcaster::predict(
         SloshState next;
         if (!dynamics_.stepWithDt(
                 state,
-                input.excitation.ax,
-                input.excitation.ay,
-                input.excitation.omega_z,
+                input.excitation.atContainer(),
                 step,
                 next) ||
             !finiteState(next)) {

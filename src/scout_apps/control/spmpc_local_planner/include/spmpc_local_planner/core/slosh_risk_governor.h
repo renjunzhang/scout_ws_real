@@ -66,6 +66,7 @@ public:
 
 private:
     struct RolloutResult {
+        bool valid = false;
         double risk_peak = 0.0;
         double h_peak_m = 0.0;
     };

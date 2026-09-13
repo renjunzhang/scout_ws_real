@@ -18,6 +18,7 @@
 import argparse
 import os
 import sys
+from pathlib import Path
 
 import numpy as np
 import yaml
@@ -44,6 +45,8 @@ from spmpc_acados_constraints import (  # noqa: E402
     set_constraints_direct_omega_legacy,
     set_constraints_slosh,
 )
+
+from model_contract import MODEL_VERSION, RK4_SUBSTEPS, require_codegen_version
 
 MODELS = {
     "b0": {"export": export_spmpc_b0_symbols, "with_slosh": False},
@@ -195,6 +198,8 @@ def build_check(cfg, model_key):
 
 
 def generate(cfg, output_root, model_key, qp_cond_n=None):
+    import casadi as ca
+    require_codegen_version(ca.__version__)
     try:
         from acados_template import AcadosModel, AcadosOcp, AcadosOcpSolver
     except ImportError:
@@ -266,6 +271,12 @@ def generate(cfg, output_root, model_key, qp_cond_n=None):
     json_path = os.path.join(export_dir, f"acados_ocp_{sym['name']}.json")
 
     AcadosOcpSolver(ocp, json_file=json_path)
+    if not direct_omega_legacy:
+        prefix = sym["name"].upper()
+        Path(export_dir, sym["name"] + "_model_contract.h").write_text(
+            "/* Generated model contract; do not edit. */\n#pragma once\n"
+            f"#define {prefix}_LIQUID_MODEL_VERSION {MODEL_VERSION}\n"
+            f"#define {prefix}_RK4_SUBSTEPS {RK4_SUBSTEPS}\n")
     print(f"[ok] acados 求解器 '{model_key}' 已生成 -> {export_dir}")
     return 0
 

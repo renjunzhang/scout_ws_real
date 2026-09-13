@@ -3,6 +3,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -16,6 +17,12 @@ class InternalSloshMetricsTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        # These are synthetic metric/protocol tests, independent of whether
+        # this host has a built ROS1 workspace. Fingerprint checks have their
+        # own freeze tests; production still requires real artifact hashes.
+        identity = patch.object(METRICS, "_current_evaluation_chain_sha", return_value="test-chain")
+        identity.start()
+        self.addCleanup(identity.stop)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -85,6 +92,13 @@ class InternalSloshMetricsTest(unittest.TestCase):
         self.assertAlmostEqual(report["monitor_height_mm"]["task"]["imu"]["peak_mm"], 2.5, delta=0.01)
         self.assertTrue(report["monitor_height_mm"]["task"]["imu"]["coverage_valid"])
         self.assertTrue(report["tracking"]["snapshot_time_order_valid"])
+
+    def test_rotating_model_cannot_pass_historical_v2_evaluation(self):
+        topics = self._topics()
+        topics["imu"][0]["value"]["liquid_model_version"] = 1
+        report = METRICS.analyze_topics(topics, self.root / "v1.bag")
+        self.assertFalse(report["eligible_for_comparison"])
+        self.assertIn("new protocol", report["error"])
 
     def test_invalid_monitor_is_fail_closed(self):
         bag = self.root / "invalid.bag"

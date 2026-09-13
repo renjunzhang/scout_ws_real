@@ -1,6 +1,8 @@
 std_msgs/Header header
 
 uint32 schema_version
+# 0: historical uncoupled oscillator; 1: rotating-container modal dynamics.
+uint32 liquid_model_version
 
 uint8 SOURCE_UNKNOWN=0
 uint8 SOURCE_ODOM=1
@@ -9,7 +11,7 @@ uint8 source
 
 # For this diagnostic message, header.frame_id and excitation_axes_frame name
 # the axes used by ax/ay/omega/alpha.  The point at which the acceleration acts
-# is named separately so an ICR proxy is never mistaken for base_link.
+# is named separately. Model v1 assumes container centre coincides with base_link.
 string excitation_axes_frame
 string excitation_reference_point
 

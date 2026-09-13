@@ -91,6 +91,11 @@ class EvaluationFreezeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.create()
 
+    def test_rotating_model_cannot_create_v2_lock(self):
+        self.chain["liquid_model_version"] = 1
+        with self.assertRaisesRegex(ValueError, "newly frozen protocol"):
+            self.create()
+
     def test_nonliquid_cost_difference_and_tampered_dump_rejected(self):
         launch = self.root / "smooth_launch_params.yaml"
         launch.write_text(launch.read_text().replace("w_smooth: 0.1", "w_smooth: 1.0"))

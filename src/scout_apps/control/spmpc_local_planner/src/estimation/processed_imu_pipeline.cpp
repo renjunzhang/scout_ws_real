@@ -218,12 +218,6 @@ ProcessedImuOutput ProcessedImuPipeline::process(const ImuSample& sample) {
     latest_alpha_radps2_ = (gyro_filter_.value - old_gyro_filtered) / filter_dt_sec;
     last_filter_stamp_ns_ = sample.source_stamp_ns;
 
-    const double omega_sq = gyro_filter_.value * gyro_filter_.value;
-    const double rx = params_.lever_arm_imu_to_target_x_m;
-    const double ry = params_.lever_arm_imu_to_target_y_m;
-    const double target_ax = accel_x_filter_.value - latest_alpha_radps2_ * ry - omega_sq * rx;
-    const double target_ay = accel_y_filter_.value + latest_alpha_radps2_ * rx - omega_sq * ry;
-
     const double warmup_elapsed_sec = static_cast<double>(
         sample.source_stamp_ns - filter_start_stamp_ns_) / kNanosecondsPerSecond;
     const bool filter_ready = warmup_elapsed_sec >= params_.filter_warmup_sec;
@@ -235,11 +229,17 @@ ProcessedImuOutput ProcessedImuPipeline::process(const ImuSample& sample) {
     output_.alpha_radps2 = latest_alpha_radps2_;
     output_.filter_ready = filter_ready;
     output_.excitation.valid = filter_ready;
-    output_.excitation.ax = target_ax;
-    output_.excitation.ay = target_ay;
-    output_.excitation.omega_z = gyro_filter_.value;
-    output_.excitation.alpha_z = latest_alpha_radps2_;
-    output_.excitation.sample_dt_sec = filter_dt_sec;
+    alignment_history_.push_back({output_.excitation.measurement_stamp_ns,
+        {{accel_x_filter_.value, accel_y_filter_.value,
+          gyro_filter_.value, latest_alpha_radps2_}}});
+    // A bounded causal buffer. Missing brackets fail closed; never extrapolate
+    // or merely relabel differently delayed values as simultaneous.
+    while (alignment_history_.size() > 512) alignment_history_.pop_front();
+    if (!alignExcitation(output_)) {
+        output_.status = ImuPipelineStatusCode::FilterWarmup;
+        output_.filter_ready = false;
+        output_.excitation.valid = false;
+    }
     return output_;
 }
 
@@ -285,6 +285,8 @@ void ProcessedImuPipeline::clearTransientState(bool increment_epoch) {
     gyro_filter_ = OnePoleState();
     previous_gyro_filtered_radps_ = 0.0;
     latest_alpha_radps2_ = 0.0;
+    alignment_history_.clear();
+    last_aligned_stamp_ns_ = 0;
 }
 
 bool ProcessedImuPipeline::validateParams(const ProcessedImuParams& p) const {
@@ -420,6 +422,52 @@ void ProcessedImuPipeline::initializeFilters(
     filter_start_stamp_ns_ = source_stamp_ns;
     last_filter_stamp_ns_ = source_stamp_ns;
     filters_initialized_ = true;
+    alignment_history_.push_back({source_stamp_ns - secondsToNanoseconds(params_.sensor_delay_sec),
+        {{accel_base[0], accel_base[1], omega_calibrated, 0.0}}});
+}
+
+bool ProcessedImuPipeline::alignExcitation(ProcessedImuOutput& output) {
+    const double delays[4] = {params_.accel_phase_delay_sec, params_.accel_phase_delay_sec,
+                              params_.gyro_phase_delay_sec, params_.alpha_phase_delay_sec};
+    const double maximum_delay = *std::max_element(delays, delays + 4);
+    const auto target = output.excitation.measurement_stamp_ns - secondsToNanoseconds(maximum_delay);
+    if (target <= 0 || alignment_history_.empty() ||
+        (last_aligned_stamp_ns_ > 0 && target <= last_aligned_stamp_ns_)) return false;
+    std::array<double, 4> aligned{};
+    for (std::size_t channel = 0; channel < aligned.size(); ++channel) {
+        const auto wanted = target + secondsToNanoseconds(delays[channel]);
+        const auto upper = std::lower_bound(alignment_history_.begin(), alignment_history_.end(), wanted,
+            [](const FilteredSample& value, std::int64_t stamp) { return value.measurement_stamp_ns < stamp; });
+        if (upper == alignment_history_.end()) return false;
+        if (upper->measurement_stamp_ns == wanted) {
+            aligned[channel] = upper->values[channel];
+        } else {
+            if (upper == alignment_history_.begin()) return false;
+            const auto lower = std::prev(upper);
+            const double span = static_cast<double>(upper->measurement_stamp_ns - lower->measurement_stamp_ns);
+            if (!(span > 0.0) || span / kNanosecondsPerSecond > params_.max_sample_gap_sec) return false;
+            const double fraction = static_cast<double>(wanted - lower->measurement_stamp_ns) / span;
+            aligned[channel] = lower->values[channel] + fraction * (upper->values[channel] - lower->values[channel]);
+        }
+    }
+    const double omega = aligned[2], alpha = aligned[3];
+    const double rx = params_.lever_arm_imu_to_target_x_m;
+    const double ry = params_.lever_arm_imu_to_target_y_m;
+    output.excitation.ax = aligned[0] - alpha * ry - omega * omega * rx;
+    output.excitation.ay = aligned[1] + alpha * rx - omega * omega * ry;
+    output.excitation.omega_z = omega;
+    output.excitation.alpha_z = alpha;
+    if (last_aligned_stamp_ns_ > 0) {
+        output.excitation.sample_dt_sec = static_cast<double>(target - last_aligned_stamp_ns_) / kNanosecondsPerSecond;
+    }
+    output.excitation.measurement_stamp_ns = target;
+    output.excitation.accel_effective_stamp_ns = target;
+    output.excitation.gyro_effective_stamp_ns = target;
+    output.excitation.alpha_effective_stamp_ns = target;
+    last_aligned_stamp_ns_ = target;
+    // The fixed phase delays remain an identified-band approximation; this
+    // interpolation does not establish broadband physical clock calibration.
+    return true;
 }
 
 double ProcessedImuPipeline::updateOnePole(

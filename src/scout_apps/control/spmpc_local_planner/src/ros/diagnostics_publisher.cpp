@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
+#include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include <algorithm>
 #include <cmath>
 #include <tf2/LinearMath/Quaternion.h>
@@ -1119,7 +1120,8 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 5;
+    msg.schema_version = 6;
+    msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
     msg.valid = horizon.valid;
@@ -1200,7 +1202,8 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 5;
+    msg.schema_version = 6;
+    msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
     msg.valid = snapshot.valid;

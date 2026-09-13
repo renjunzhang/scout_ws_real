@@ -105,11 +105,14 @@ add_library(${PROJECT_NAME}
   src/reference/progress_projector.cpp
   src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
+  src/dynamics/actual_motion_propagator.cpp
+  src/dynamics/generated/slosh_kernel_generated.c
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/liquid_state_nowcaster.cpp
   src/estimation/slosh_observer_bank.cpp
   src/estimation/slosh_observer_selector.cpp
   src/warm_start/diff_drive_flatness_warm_start.cpp
+  src/warm_start/explicit_actuator_warm_start.cpp
   src/warm_start/mecanum_warm_start.cpp
   src/warm_start/warm_start_factory.cpp
   src/solvers/rollout_sampling_solver.cpp
@@ -224,6 +227,13 @@ if(CATKIN_ENABLE_TESTING)
   catkin_add_gtest(test_diff_drive_flatness_warm_start test/test_diff_drive_flatness_warm_start.cpp)
   if(TARGET test_diff_drive_flatness_warm_start)
     target_link_libraries(test_diff_drive_flatness_warm_start
+      ${PROJECT_NAME}
+      ${catkin_LIBRARIES}
+    )
+  endif()
+  catkin_add_gtest(test_explicit_actuator_warm_start test/test_explicit_actuator_warm_start.cpp)
+  if(TARGET test_explicit_actuator_warm_start)
+    target_link_libraries(test_explicit_actuator_warm_start
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )

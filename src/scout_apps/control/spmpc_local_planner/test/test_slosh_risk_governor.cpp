@@ -87,7 +87,9 @@ double rolloutRiskPeak(const SloshModelParams& slosh_params,
         const double accel_limit = std::max(0.0, params.accel_limit);
         const double ax = std::max(-accel_limit, std::min(accel_limit, (target_v - v_sim) / dt));
         const double ay = v_sim * omega_sim;
-        state = dynamics.step(state, ax, ay, omega_sim);
+        EXPECT_TRUE(dynamics.stepWithDt(state,
+            {ax, ay, omega_sim, (std::isfinite(params.omega_decay_tau) && params.omega_decay_tau > 0.0 ? -omega_sim / params.omega_decay_tau : 0.0)},
+            dt, state));
         risk_peak = std::max(risk_peak, dynamics.height(state, omega_sim) / params.height_limit_m);
         v_sim = std::max(0.0, std::min(v_sim + ax * dt, input.nominal_v_ref));
     }
@@ -353,6 +355,27 @@ TEST(SloshRiskGovernor, GovernedReferenceNeverAmplifiesNominal) {
 
     EXPECT_LE(out.governed_v_ref, input.nominal_v_ref);
     EXPECT_NEAR(out.governed_v_ref, input.nominal_v_ref, 1e-12);
+}
+
+TEST(SloshRiskGovernor, FailedPropagationIsNotAdmissibleAndDoesNotAdvanceFilter) {
+    SloshRiskGovernor governor, reference;
+    const auto params = makeGovernorParams();
+    ASSERT_TRUE(governor.configure(makeSloshParams(), params));
+    ASSERT_TRUE(reference.configure(makeSloshParams(), params));
+    auto invalid = makeInput();
+    invalid.robot_omega = std::numeric_limits<double>::quiet_NaN();
+    const auto failed = governor.update(invalid);
+    EXPECT_EQ(failed.status, "DYNAMICS_FAILED");
+    EXPECT_FALSE(failed.active);
+    EXPECT_FALSE(failed.feasible_found);
+    EXPECT_FALSE(failed.predicted_risk_admissible);
+    EXPECT_TRUE(std::isnan(failed.risk_peak));
+    auto input = makeInput();
+    input.slosh = makeSloshAtRisk(2., params.height_limit_m);
+    const auto after = governor.update(input);
+    const auto expected = reference.update(input);
+    EXPECT_DOUBLE_EQ(after.beta_filtered, expected.beta_filtered);
+    EXPECT_DOUBLE_EQ(after.governed_v_ref, expected.governed_v_ref);
 }
 
 }  // namespace spmpc_local_planner

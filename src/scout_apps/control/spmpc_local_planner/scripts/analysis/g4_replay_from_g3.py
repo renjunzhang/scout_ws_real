@@ -26,6 +26,7 @@ from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import rosbag
 import yaml
+from horizon_liquid_replay import require_legacy_liquid_model
 
 
 SNAPSHOT_TOPIC = "/spmpc/debug/pre_solve_snapshot"
@@ -355,6 +356,7 @@ def read_snapshot_pairs(
     previous_horizon: Any = None
     with rosbag.Bag(str(bag_path), "r") as bag:
         for topic, msg, _bag_stamp in bag.read_messages(topics=[HORIZON_TOPIC, SNAPSHOT_TOPIC]):
+            require_legacy_liquid_model(msg)
             if topic == HORIZON_TOPIC:
                 previous_horizon = msg
                 continue

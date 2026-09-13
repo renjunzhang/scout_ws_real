@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <vector>
 
 namespace spmpc_local_planner {
@@ -62,9 +63,8 @@ struct ProcessedImuParams {
     double gyro_scale = 1.001773;
     double gyro_offset_radps = -0.000297;
     double imu_to_base_yaw_rad = 0.0;
-    // Configured nominal planar vector from the IMU origin to the development
-    // liquid-observer/ICR proxy, expressed in base axes.  This does not claim a
-    // numerically identified physical base_link origin or full extrinsic.
+    // IMU -> container centre, in base/container axes. This version assumes
+    // container centre == base_link and retains the existing IMU extrinsic.
     double lever_arm_imu_to_target_x_m = -0.100;
     double lever_arm_imu_to_target_y_m = 0.045;
 
@@ -121,6 +121,11 @@ private:
         bool initialized = false;
         double value = 0.0;
     };
+    struct FilteredSample {
+        std::int64_t measurement_stamp_ns;
+        std::array<double, 4> values;  // filtered ax, ay, omega, estimated alpha
+    };
+    bool alignExcitation(ProcessedImuOutput& output);
 
     void clearState(bool increment_epoch);
     void clearTransientState(bool increment_epoch);
@@ -166,6 +171,8 @@ private:
     OnePoleState gyro_filter_;
     double previous_gyro_filtered_radps_ = 0.0;
     double latest_alpha_radps2_ = 0.0;
+    std::deque<FilteredSample> alignment_history_;
+    std::int64_t last_aligned_stamp_ns_ = 0;
     ProcessedImuOutput output_;
 };
 

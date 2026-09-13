@@ -1,12 +1,21 @@
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
-#include <algorithm>
+#include "integration_policy.h"
 #include <cmath>
 #include <slosh_models/liquid_slosh_model.h>
-#include <unsupported/Eigen/MatrixFunctions>
+#include "generated/slosh_kernel_generated.h"
+#include "generated/slosh_kernel_contract.h"
+#include <array>
 
 namespace spmpc_local_planner {
 
 bool SloshDynamics::configure(const SloshModelParams& params) {
+    configured_ = false;
+    if (!std::isfinite(params.dt) || params.dt <= 1e-4 ||
+        !std::isfinite(params.container_radius) || !std::isfinite(params.liquid_height) ||
+        !std::isfinite(params.liquid_density) || !std::isfinite(params.damping_ratio) ||
+        params.damping_ratio < 0.0) {
+        return false;
+    }
     params_ = params;
 
     slosh_models::LiquidSloshModel model;
@@ -25,84 +34,42 @@ bool SloshDynamics::configure(const SloshModelParams& params) {
         return false;
     }
 
-    model.getDiscreteMatrices(Ad_, Bd_);
     omega_n_ = model.getModalParams().omega_n;
     height_coeff_ = model.getModalParams().height_coeff;
     configured_ = true;
     return true;
 }
 
-SloshState SloshDynamics::step(
-    const SloshState& state,
-    double ax,
-    double ay,
-    double /*omega_z*/) const {
-    if (!configured_) {
-        return state;
-    }
-    Eigen::Vector2d u;
-    u << ax, ay;
-    return fromEigen(Ad_ * toEigen(state) + Bd_ * u);
-}
+static_assert(SPMPC_LIQUID_KERNEL_VERSION == SloshDynamics::modelVersion(),
+              "Regenerate the shared rotating-container kernel");
 
 bool SloshDynamics::stepWithDt(
-    const SloshState& state,
-    double ax,
-    double ay,
-    double omega_z,
-    double dt_sec,
-    SloshState& next_state) const {
+    const SloshState& state, const ContainerExcitation& input,
+    double dt_sec, SloshState& next_state) const {
     next_state = state;
-    const Eigen::Vector4d x = toEigen(state);
-    if (!configured_ || !x.allFinite() || !std::isfinite(ax) || !std::isfinite(ay) ||
-        !std::isfinite(dt_sec) || dt_sec <= 1e-9 || !std::isfinite(omega_n_) ||
-        omega_n_ <= 0.0 || !std::isfinite(params_.damping_ratio)) {
+    if (!configured_ || !integration_policy::validInterval(dt_sec) || !finiteSloshState(state) ||
+        !std::isfinite(input.ax) || !std::isfinite(input.ay) ||
+        !std::isfinite(input.omega) || !std::isfinite(input.alpha)) {
         return false;
     }
-
-    if (std::abs(dt_sec - params_.dt) <= 1e-12) {
-        const SloshState cached_step = step(state, ax, ay, omega_z);
-        const Eigen::Vector4d cached = toEigen(cached_step);
-        if (!cached.allFinite()) {
-            return false;
+    double x[4] = {state.eta_x, state.eta_x_dot, state.eta_y, state.eta_y_dot};
+    const double excitation[4] = {input.ax, input.ay, input.omega, input.alpha};
+    const auto physical = coefficients().values();
+    const int count = integration_policy::substeps(dt_sec);
+    const double dt = dt_sec / count;
+    double next[4];
+    const double* arg[] = {x, excitation, physical.data(), &dt};
+    double* res[] = {next};
+    std::array<casadi_int, spmpc_slosh_rk4_SZ_IW + 1> iw{};
+    std::array<double, spmpc_slosh_rk4_SZ_W + 1> work{};
+    for (int k = 0; k < count; ++k) {
+        if (spmpc_slosh_rk4(arg, res, iw.data(), work.data(), 0) != 0) return false;
+        for (int i = 0; i < 4; ++i) {
+            if (!std::isfinite(next[i])) return false;
+            x[i] = next[i];
         }
-        next_state = cached_step;
-        return true;
     }
-
-    Eigen::Matrix4d continuous_a = Eigen::Matrix4d::Zero();
-    const double omega_sq = omega_n_ * omega_n_;
-    const double damping = 2.0 * params_.damping_ratio * omega_n_;
-    continuous_a(0, 1) = 1.0;
-    continuous_a(1, 0) = -omega_sq;
-    continuous_a(1, 1) = -damping;
-    continuous_a(2, 3) = 1.0;
-    continuous_a(3, 2) = -omega_sq;
-    continuous_a(3, 3) = -damping;
-
-    Eigen::Matrix<double, 4, 2> continuous_b =
-        Eigen::Matrix<double, 4, 2>::Zero();
-    continuous_b(1, 0) = -1.0;
-    continuous_b(3, 1) = -1.0;
-
-    Eigen::Matrix<double, 6, 6> augmented =
-        Eigen::Matrix<double, 6, 6>::Zero();
-    augmented.block<4, 4>(0, 0) = continuous_a * dt_sec;
-    augmented.block<4, 2>(0, 4) = continuous_b * dt_sec;
-    const Eigen::Matrix<double, 6, 6> discretized = augmented.exp();
-    const Eigen::Matrix4d ad = discretized.block<4, 4>(0, 0);
-    const Eigen::Matrix<double, 4, 2> bd = discretized.block<4, 2>(0, 4);
-    if (!ad.allFinite() || !bd.allFinite()) {
-        return false;
-    }
-
-    Eigen::Vector2d input;
-    input << ax, ay;
-    const Eigen::Vector4d next = ad * x + bd * input;
-    if (!next.allFinite()) {
-        return false;
-    }
-    next_state = fromEigen(next);
+    next_state = {x[0], x[1], x[2], x[3]};
     return true;
 }
 
@@ -125,21 +92,6 @@ double SloshDynamics::etaNorm(const SloshState& state) const {
 
 double SloshDynamics::etaDotNorm(const SloshState& state) const {
     return std::hypot(state.eta_x_dot, state.eta_y_dot);
-}
-
-Eigen::Vector4d SloshDynamics::toEigen(const SloshState& state) const {
-    Eigen::Vector4d x;
-    x << state.eta_x, state.eta_x_dot, state.eta_y, state.eta_y_dot;
-    return x;
-}
-
-SloshState SloshDynamics::fromEigen(const Eigen::Vector4d& state) const {
-    SloshState out;
-    out.eta_x = state(0);
-    out.eta_x_dot = state(1);
-    out.eta_y = state(2);
-    out.eta_y_dot = state(3);
-    return out;
 }
 
 }  // namespace spmpc_local_planner

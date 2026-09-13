@@ -1,7 +1,6 @@
 #pragma once
 
-#include "spmpc_local_planner/core/types.h"
-#include <Eigen/Dense>
+#include "spmpc_local_planner/dynamics/slosh_types.h"
 
 namespace spmpc_local_planner {
 
@@ -26,31 +25,27 @@ public:
     bool configure(const SloshModelParams& params);
     bool configured() const { return configured_; }
 
-    SloshState step(const SloshState& state, double ax, double ay, double omega_z) const;
-    // Exact ZOH step at a caller-provided interval without mutating the cached
-    // nominal discretization. Timestamp admission remains the caller's
-    // responsibility; very short positive tail steps are valid for rollout.
+    // Held container excitation, shared RK4 RHS. Caller owns timestamps.
+    // Always check the return value. On failure next_state equals state.
+    // Changing actuator response belongs to actual_motion_propagator.h.
     bool stepWithDt(const SloshState& state,
-                    double ax,
-                    double ay,
-                    double omega_z,
+                    const ContainerExcitation& excitation,
                     double dt_sec,
                     SloshState& next_state) const;
+    static constexpr int modelVersion() { return 1; }
     double height(const SloshState& state, double omega_z = 0.0) const;
     double etaNorm(const SloshState& state) const;
     double etaDotNorm(const SloshState& state) const;
 
     double omegaN() const { return omega_n_; }
     double heightCoeff() const { return height_coeff_; }
+    SloshCoefficients coefficients() const {
+        return {2.0 * params_.damping_ratio * omega_n_, omega_n_ * omega_n_, 1.0, 1.0};
+    }
     const SloshModelParams& params() const { return params_; }
 
 private:
-    Eigen::Vector4d toEigen(const SloshState& state) const;
-    SloshState fromEigen(const Eigen::Vector4d& state) const;
-
     SloshModelParams params_;
-    Eigen::Matrix4d Ad_ = Eigen::Matrix4d::Identity();
-    Eigen::Matrix<double, 4, 2> Bd_ = Eigen::Matrix<double, 4, 2>::Zero();
     double omega_n_ = 0.0;
     double height_coeff_ = 0.0;
     bool configured_ = false;

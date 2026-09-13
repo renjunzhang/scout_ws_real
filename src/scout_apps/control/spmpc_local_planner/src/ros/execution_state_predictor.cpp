@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
+#include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 
 #include <algorithm>
 #include <cmath>
@@ -8,18 +9,11 @@ namespace spmpc_local_planner {
 bool ExecutionStatePredictor::configure(
     const SloshModelParams& slosh_params,
     double explicit_prefix_step_sec) {
-    slosh_configured_ = slosh_dynamics_.configure(slosh_params);
-    explicit_prefix_slosh_configured_ = false;
-    if (slosh_configured_ && std::isfinite(explicit_prefix_step_sec) &&
-        explicit_prefix_step_sec > 1e-9) {
-        SloshModelParams prefix_params = slosh_params;
-        prefix_params.dt = explicit_prefix_step_sec;
-        explicit_prefix_slosh_configured_ =
-            explicit_prefix_slosh_dynamics_.configure(prefix_params);
-    }
-    return slosh_configured_ &&
-           (explicit_prefix_step_sec <= 1e-9 ||
-            explicit_prefix_slosh_configured_);
+    // The generated kernel accepts each interval directly; no discrete-matrix
+    // cache or second model configuration is needed for the prefix step.
+    slosh_configured_ = std::isfinite(explicit_prefix_step_sec) &&
+        explicit_prefix_step_sec >= 0.0 && slosh_dynamics_.configure(slosh_params);
+    return slosh_configured_;
 }
 
 ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_robot,
@@ -113,18 +107,17 @@ ExecutionStatePrediction ExecutionStatePredictor::predict(const RobotState& raw_
         robot.y += v * std::sin(robot.yaw) * step;
         robot.yaw = normalizeYaw(robot.yaw + omega * step);
         robot.v = v;
+        const double alpha_actual = (omega - robot.omega) / std::max(1e-6, step);
         robot.omega = omega;
 
         if (slosh_configured_) {
-            SloshDynamics step_model = slosh_dynamics_;
-            if (std::abs(step - step_model.params().dt) > 1e-6) {
-                auto slosh_params = step_model.params();
-                slosh_params.dt = step;
-                step_model.configure(slosh_params);
-            }
             const double ax = (v - prev_v) / std::max(1e-6, step);
             const double ay = v * omega;
-            slosh = step_model.step(slosh, ax, ay, omega);
+            if (!slosh_dynamics_.stepWithDt(slosh, {ax, ay, omega, alpha_actual}, step, slosh)) {
+                out.status_code = DelayPhaseStatusCode::DynamicsFailure;
+                out.status = delayPhaseStatusName(out.status_code);
+                return out;
+            }
         }
         prev_v = v;
 
@@ -217,49 +210,13 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
             return out;
         }
 
-        const double linear_target =
-            params.linear_gain * linear_delayed.linear.x;
-        const double angular_target =
-            params.angular_gain * angular_delayed.angular.z;
-        const double linear_decay = std::exp(-step / params.linear_tau_sec);
-        const double angular_decay = std::exp(-step / params.angular_tau_sec);
-        const double next_v =
-            linear_target + (robot.v - linear_target) * linear_decay;
-        const double next_omega =
-            angular_target + (robot.omega - angular_target) * angular_decay;
-        const double v_mid = 0.5 * (robot.v + next_v);
-        const double omega_mid = 0.5 * (robot.omega + next_omega);
-        const double yaw_mid = robot.yaw + 0.5 * omega_mid * step;
-
-        robot.x += v_mid * std::cos(yaw_mid) * step;
-        robot.y += v_mid * std::sin(yaw_mid) * step;
-        robot.yaw = normalizeYaw(robot.yaw + omega_mid * step);
-
-        if (slosh_configured_) {
-            const double a_actual = (next_v - robot.v) / step;
-            const double ay_actual = v_mid * omega_mid;
-            if (explicit_prefix_slosh_configured_ &&
-                std::abs(step -
-                         explicit_prefix_slosh_dynamics_.params().dt) <= 1e-12) {
-                slosh = explicit_prefix_slosh_dynamics_.step(
-                    slosh, a_actual, ay_actual, omega_mid);
-            } else {
-                SloshState next_slosh;
-                if (!slosh_dynamics_.stepWithDt(
-                        slosh,
-                        a_actual,
-                        ay_actual,
-                        omega_mid,
-                        step,
-                        next_slosh)) {
-                    out.status = "SLOSH_PREFIX_DISCRETIZATION_FAILED";
-                    return out;
-                }
-                slosh = next_slosh;
-            }
+        if (!propagateActualMotion(
+                robot, slosh, {linear_delayed.linear.x, angular_delayed.angular.z},
+                params, slosh_dynamics_, step)) {
+            out.status = "COUPLED_ACTUATOR_LIQUID_PROPAGATION_FAILED";
+            return out;
         }
-        robot.v = next_v;
-        robot.omega = next_omega;
+        robot.yaw = normalizeYaw(robot.yaw);
         elapsed += step;
         t += ros::Duration(step);
     }

@@ -649,12 +649,6 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
                   "fixed_closed_loop/fixed_robot_only cannot be enabled together");
         return false;
     }
-    if (solver_params.solver_backend == kSolverBackendContinuousMpccAcados &&
-        actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator) {
-        ROS_FATAL("[spmpc_local_planner] continuous_mpcc_acados was generated "
-                  "for explicit_actuator; legacy_instantaneous is historical-only");
-        return false;
-    }
     if (solver_params.terminal.mpc_stop_handoff_enable &&
         (actuator_model_params_.mode != ExecutionModelMode::ExplicitActuator ||
          solver_params.solver_backend != kSolverBackendContinuousMpccAcados)) {
@@ -665,6 +659,14 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     solver_params.slosh.dt = dt_;
     const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
     slosh_risk_governor_params_ = loadSloshRiskGovernorParams();
+    if (!supportsCurrentLiquidModel(solver_params.solver_backend, actuator_model_params_.mode)) {
+        ROS_FATAL("rotating-container model v1 requires continuous_mpcc_acados + explicit_actuator; "
+                  "legacy solver dynamics have not been adapted");
+        return false;
+    }
+    ROS_INFO("[spmpc_local_planner] liquid_model_version=%d container_offset=(0,0) "
+             "RK4_substeps=4; existing IMU extrinsic, aligned excitation",
+             SloshDynamics::modelVersion());
 
     variant_ = makeVariantConfig(variant_name);
     if (variant_name != "B0" && variant_.name == "B0") {
@@ -1211,6 +1213,7 @@ void SpmpcLocalPlannerROS::applySloshRiskGovernor(SolverInput& input) {
         last_slosh_governor_output_.status == "DISABLED" ||
         last_slosh_governor_output_.status == "NOT_SLOSH_VARIANT" ||
         last_slosh_governor_output_.status == "INVALID_CONFIG" ||
+        last_slosh_governor_output_.status == "DYNAMICS_FAILED" ||
         !std::isfinite(last_slosh_governor_output_.governed_v_ref)) {
         return;
     }
@@ -2720,10 +2723,11 @@ void SpmpcLocalPlannerROS::publishOdomSloshObserverDebug(
     SloshObserverDebug msg;
     msg.header = odom.header;
     msg.header.frame_id = odom.child_frame_id.empty() ? robot_base_frame_ : odom.child_frame_id;
-    msg.schema_version = 2;
+    msg.schema_version = 3;
+    msg.liquid_model_version = SloshDynamics::modelVersion();
     msg.source = SloshObserverDebug::SOURCE_ODOM;
     msg.excitation_axes_frame = msg.header.frame_id;
-    msg.excitation_reference_point = msg.header.frame_id;
+    msg.excitation_reference_point = "container_center_assumed_base_link";
     msg.configured = snapshot.configured;
     msg.valid = excitation.valid && snapshot.valid;
     msg.input_status_code = 0;
@@ -2769,10 +2773,11 @@ void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
     SloshObserverDebug msg;
     msg.header = imu.header;
     msg.header.frame_id = robot_base_frame_;
-    msg.schema_version = 2;
+    msg.schema_version = 3;
+    msg.liquid_model_version = SloshDynamics::modelVersion();
     msg.source = SloshObserverDebug::SOURCE_PROCESSED_IMU;
     msg.excitation_axes_frame = robot_base_frame_;
-    msg.excitation_reference_point = "liquid_observer_target_icr_proxy";
+    msg.excitation_reference_point = "container_center_assumed_base_link";
     msg.configured = snapshot.configured;
     msg.valid = output.excitation.valid && snapshot.valid;
     msg.input_status_code = static_cast<std::uint8_t>(output.status);
@@ -2787,10 +2792,8 @@ void SpmpcLocalPlannerROS::publishImuSloshObserverDebug(
     msg.alpha_effective_stamp = rosTimeFromNanoseconds(excitation.alpha_effective_stamp_ns);
     msg.receive_stamp = rosTimeFromNanoseconds(excitation.receive_stamp_ns);
     msg.state_stamp = rosTimeFromNanoseconds(snapshot.state_stamp_ns);
-    // The filtered acceleration/gyro/alpha components have distinct phase
-    // delays.  Until explicit component re-alignment is introduced, the
-    // observer's nominal combined time is source minus sensor delay; the three
-    // component-effective stamps above preserve the exact alternatives.
+    // Valid inputs have been interpolated to one common effective time,
+    // using the existing nominal component phase delays before lever-arm correction.
     msg.header.stamp = msg.measurement_stamp;
     msg.transport_age_sec = output.transport_age_sec;
     msg.measurement_age_sec = ageSeconds(

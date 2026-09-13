@@ -21,6 +21,10 @@ contour / lag 在 cost 模块中据此解析计算。
 
 import casadi as ca
 
+from model_contract import RK4_SUBSTEPS
+from slosh_kernel import rk4_step
+from actual_motion_kernel import actual_motion_rhs
+
 LINEAR_DELAY_STEPS = 5
 ANGULAR_DELAY_STEPS = 10
 ACTUATOR_CORE_NX = 8
@@ -143,48 +147,24 @@ def _export_explicit_actuator_symbols(name, with_slosh):
     gain_v = p[pidx["actuator_gain_v"]]
     gain_omega = p[pidx["actuator_gain_omega"]]
 
+    actuator = ca.vertcat(tau_v, tau_omega, gain_v, gain_omega)
+    liquid = ca.vertcat(*(p[pidx[key]] for key in
+                         ("two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y"))) if with_slosh else ca.SX.zeros(4)
+
     def rhs(z):
-        delayed_v_cmd = z[LINEAR_QUEUE_START]
-        delayed_omega_cmd = z[ANGULAR_QUEUE_START]
-        a_actual = (gain_v * delayed_v_cmd - z[3]) / tau_v
-        alpha_actual = (gain_omega * delayed_omega_cmd - z[5]) / tau_omega
-        values = [
-            z[3] * ca.cos(z[2]),
-            z[3] * ca.sin(z[2]),
-            z[5],
-            a_actual,
-            u[2],
-            alpha_actual,
-            u[0],
-            u[1],
-        ]
-        values.extend([0.0] * (LINEAR_DELAY_STEPS + ANGULAR_DELAY_STEPS))
-        # a_cmd_memory 是离散记忆状态，interval 末由 disc_dyn 直接覆盖为当前 a_cmd。
-        values.append(0.0)
+        eta_state = z[SLOSH_STATE_OFFSET:SLOSH_STATE_OFFSET + 4] if with_slosh else ca.SX.zeros(4)
+        motion = ca.vertcat(z[0:4], z[5], eta_state)
+        delayed = ca.vertcat(z[LINEAR_QUEUE_START], z[ANGULAR_QUEUE_START])
+        actual = actual_motion_rhs(motion, delayed, actuator, liquid)
+        values = [actual[0:4], u[2], actual[4], u[0], u[1],
+                  ca.SX.zeros(LINEAR_DELAY_STEPS + ANGULAR_DELAY_STEPS + 1)]
         if with_slosh:
-            eta_x = z[SLOSH_STATE_OFFSET]
-            eta_x_dot = z[SLOSH_STATE_OFFSET + 1]
-            eta_y = z[SLOSH_STATE_OFFSET + 2]
-            eta_y_dot = z[SLOSH_STATE_OFFSET + 3]
-            two_zeta_omega_n = p[pidx["two_zeta_omega_n"]]
-            omega_n_sq = p[pidx["omega_n_sq"]]
-            kappa_x = p[pidx["kappa_x"]]
-            kappa_y = p[pidx["kappa_y"]]
-            values.extend([
-                eta_x_dot,
-                -two_zeta_omega_n * eta_x_dot - omega_n_sq * eta_x
-                - kappa_x * a_actual,
-                eta_y_dot,
-                -two_zeta_omega_n * eta_y_dot - omega_n_sq * eta_y
-                - kappa_y * z[3] * z[5],
-            ])
+            values.append(actual[5:9])
         return ca.vertcat(*values)
 
-    k1 = rhs(x)
-    k2 = rhs(x + 0.5 * dt * k1)
-    k3 = rhs(x + 0.5 * dt * k2)
-    k4 = rhs(x + dt * k3)
-    integrated = x + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    integrated = x
+    for _ in range(RK4_SUBSTEPS):
+        integrated = rk4_step(rhs, integrated, dt / RK4_SUBSTEPS)
 
     next_q_v = ca.vertcat(
         x[LINEAR_QUEUE_START + 1:ANGULAR_QUEUE_START], integrated[6])

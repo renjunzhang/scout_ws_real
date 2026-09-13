@@ -1,0 +1,4 @@
+# Frozen CasADi generator version for the checked-in C kernel (acados v0.5.4).
+casadi==3.7.2
+numpy>=1.24,<2
+PyYAML>=6

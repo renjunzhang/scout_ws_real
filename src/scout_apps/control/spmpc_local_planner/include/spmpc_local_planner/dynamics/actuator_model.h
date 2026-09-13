@@ -44,6 +44,13 @@ struct ActuatorModelParams {
     bool require_complete_history = true;
 };
 
+// One held command after the corresponding history/FIFO delay has been applied.
+// This type is deliberately separate from measured ContainerExcitation.
+struct DelayedActuatorCommand {
+    double v = 0.0;
+    double omega = 0.0;
+};
+
 struct ActuatorState {
     bool valid = false;
     double v_cmd = 0.0;

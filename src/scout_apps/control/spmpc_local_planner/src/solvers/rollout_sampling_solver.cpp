@@ -257,13 +257,20 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
     heights.reserve(input.horizon_steps);
 
     double prev_v = input.robot.v;
+    double prev_omega = input.robot.omega;
     for (int k = 0; k < input.horizon_steps; ++k) {
         const auto& control = controls[std::min(static_cast<size_t>(k), controls.size() - 1)];
         const double cmd_v = control.first;
         const double cmd_omega = control.second;
         const double ax = (cmd_v - prev_v) / std::max(1e-3, input.dt);
         const double ay = cmd_v * cmd_omega;
-        slosh = slosh_dynamics_.step(slosh, ax, ay, cmd_omega);
+        if (!slosh_dynamics_.stepWithDt(slosh,
+                {ax, ay, cmd_omega, (cmd_omega - prev_omega) / std::max(1e-3, input.dt)},
+                input.dt, slosh)) {
+            output.status = "LIQUID_PROPAGATION_FAILED";
+            return output;
+        }
+        prev_omega = cmd_omega;
 
         const double h = slosh_dynamics_.height(slosh, cmd_omega);
         heights.push_back(h);

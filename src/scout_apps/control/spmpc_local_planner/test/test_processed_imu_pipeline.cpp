@@ -362,8 +362,11 @@ TEST(ProcessedImuPipelineDynamics, ComputesAlphaAndLeverArmWithFrozenSigns) {
     ASSERT_TRUE(out.excitation.valid);
     EXPECT_NEAR(out.gyro_filtered_radps, 0.5, 1e-12);
     EXPECT_NEAR(out.alpha_radps2, 15.0, 1e-10);
-    EXPECT_NEAR(out.excitation.ax, 0.35, 1e-10);
-    EXPECT_NEAR(out.excitation.ay, -3.51125, 1e-10);
+    const double aligned_omega = 0.5 - 15.0 * (params.alpha_phase_delay_sec - params.gyro_phase_delay_sec);
+    EXPECT_NEAR(out.excitation.omega_z, aligned_omega, 1e-12);
+    EXPECT_NEAR(out.excitation.alpha_z, 15.0, 1e-10);
+    EXPECT_NEAR(out.excitation.ax, 1.0 - 15.0 * .045 + .100 * aligned_omega * aligned_omega, 1e-10);
+    EXPECT_NEAR(out.excitation.ay, -2.0 - 15.0 * .100 - .045 * aligned_omega * aligned_omega, 1e-10);
 }
 
 TEST(ProcessedImuPipelineDynamics, MatchesEndToEndGoldenVector) {
@@ -381,8 +384,21 @@ TEST(ProcessedImuPipelineDynamics, MatchesEndToEndGoldenVector) {
     EXPECT_NEAR(out.accel_filtered_base_mps2[1], -1.4307809133279414, 1e-12);
     EXPECT_NEAR(out.gyro_filtered_radps, 0.43359196880281814, 1e-12);
     EXPECT_NEAR(out.alpha_radps2, 11.679598440140905, 1e-10);
-    EXPECT_NEAR(out.excitation.ax, 0.20860872639866035, 1e-10);
-    EXPECT_NEAR(out.excitation.ay, -2.6072008471354957, 1e-10);
+    // Independent interpolation of the two known filtered samples to the
+    // alpha effective time, followed by exactly one IMU -> container shift.
+    const double fraction_a = 1 - (params.alpha_phase_delay_sec - params.accel_phase_delay_sec) / .02;
+    const double fraction_w = 1 - (params.alpha_phase_delay_sec - params.gyro_phase_delay_sec) / .02;
+    const double aligned_ax = fraction_a * 0.7153904566639707;
+    const double aligned_ay = fraction_a * -1.4307809133279414;
+    const double aligned_w = .2 + fraction_w * (0.43359196880281814 - .2);
+    const double alpha = 11.679598440140905;
+    EXPECT_NEAR(out.excitation.ax, aligned_ax - alpha*.045 + aligned_w*aligned_w*.100, 1e-10);
+    EXPECT_NEAR(out.excitation.ay, aligned_ay - alpha*.100 - aligned_w*aligned_w*.045, 1e-10);
+    const auto common = base + seconds(.021 - params.sensor_delay_sec - params.alpha_phase_delay_sec);
+    EXPECT_EQ(out.excitation.measurement_stamp_ns, common);
+    EXPECT_EQ(out.excitation.accel_effective_stamp_ns, common);
+    EXPECT_EQ(out.excitation.gyro_effective_stamp_ns, common);
+    EXPECT_EQ(out.excitation.alpha_effective_stamp_ns, common);
 }
 
 TEST(ProcessedImuPipelineTime, PreservesRawReceiveAndAllFrozenEffectiveStamps) {
@@ -403,6 +419,28 @@ TEST(ProcessedImuPipelineTime, PreservesRawReceiveAndAllFrozenEffectiveStamps) {
     EXPECT_EQ(out.excitation.gyro_effective_stamp_ns, seconds(99.979980));
     EXPECT_EQ(out.excitation.alpha_effective_stamp_ns, seconds(99.969999));
     EXPECT_NEAR(out.transport_age_sec, 0.040, 1e-12);
+}
+
+TEST(ProcessedImuPipelineTime, AlignmentWaitsForHistoryAndNeverExtrapolates) {
+    auto params = quickReadyParams();
+    params.alpha_phase_delay_sec = .06;
+    ProcessedImuPipeline pipeline;
+    ASSERT_TRUE(pipeline.configure(params));
+    const auto base = seconds(10.0);
+    initializeQuickFilters(pipeline, params, base, {{0., 0., 0.}}, 0.);
+    auto out = pipeline.process(identitySample(base + seconds(.021), params, {{1., 0., 0.}}, .1));
+    EXPECT_FALSE(out.excitation.valid);
+    EXPECT_EQ(out.status, ImuPipelineStatusCode::FilterWarmup);
+    out = pipeline.process(identitySample(base + seconds(.041), params, {{1., 0., 0.}}, .1));
+    EXPECT_FALSE(out.excitation.valid);
+    out = pipeline.process(identitySample(base + seconds(.061), params, {{1., 0., 0.}}, .1));
+    ASSERT_TRUE(out.excitation.valid);
+    EXPECT_EQ(out.excitation.measurement_stamp_ns, base + seconds(.061 - .015 - .06));
+    // A gap discards the old interpolation history, even though bias is kept.
+    out = pipeline.process(identitySample(base + seconds(.201), params));
+    EXPECT_FALSE(out.excitation.valid);
+    out = pipeline.process(identitySample(base + seconds(.221), params));
+    EXPECT_FALSE(out.excitation.valid);
 }
 
 TEST(ProcessedImuPipelineOrdering, DuplicateAndSmallOutOfOrderSamplesDoNotMutateState) {

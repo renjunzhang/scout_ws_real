@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import math
+import re
 from pathlib import Path
 import sys
 import time
@@ -34,21 +35,31 @@ def digest_json(value):
 
 def chain_identity(root=ROOT):
     """Freeze model/filter sources, loaded build artifacts and evaluator code."""
-    directories = [PLANNER / "src", PLANNER / "include",
+    directories = [PLANNER / "src", PLANNER / "include", PLANNER / "msg",
                    Path("src/scout_apps/control/slosh_models/src"),
                    Path("src/scout_apps/control/slosh_models/include")]
     files = [p for directory in directories for p in (root / directory).rglob("*") if p.is_file()]
+    files += list((root / PLANNER / "scripts/acados").glob("*.py"))
+    files.append(root / PLANNER / "scripts/acados/requirements.txt")
     files += [root / p for p in (
         "devel/lib/spmpc_local_planner/spmpc_local_planner_node",
         "devel/lib/libspmpc_local_planner.so", "devel/lib/libslosh_models.so")]
     files += [root / PLANNER / "scripts/analysis" / name for name in (
         "analyze_internal_slosh_pair.py", "freeze_internal_slosh_evaluation.py",
         "validate_spmpc_comparison_recording.py", "validate_spmpc_ablation_smoke.py",
-        "validate_explicit_actuator_runtime_smoke.py", "validate_i0_failclosed_fixed_abba_bag.py")]
+        "validate_explicit_actuator_runtime_smoke.py", "validate_i0_failclosed_fixed_abba_bag.py",
+        "horizon_liquid_replay.py", "rotating_liquid_replay.py")]
     files += [root / PLANNER / "generated/acados" / variant / ("libacados_ocp_solver_" + variant + ".so")
               for variant in ("spmpc_b0", "spmpc_slosh")]
     manifest = {str(p.relative_to(root)): sha256(p) for p in sorted(files)}
-    return {"sha256": digest_json(manifest), "files": manifest}
+    contract = root / PLANNER / "src/dynamics/generated/slosh_kernel_contract.h"
+    version = int(re.search(r"SPMPC_LIQUID_KERNEL_VERSION\s+(\d+)", contract.read_text())[1]) if contract.exists() else 0
+    return {"sha256": digest_json(manifest), "files": manifest, "liquid_model_version": version}
+
+
+def require_v2_model(chain):
+    if chain.get("liquid_model_version", 0) != 0:
+        raise ValueError("C03 V2 is historical liquid model 0; model 1 needs a newly frozen protocol")
 
 
 def check_params(params, condition, weight):
@@ -93,6 +104,7 @@ def create_lock(full_path, smooth_path, primary, reason, output, chain=None):
     if primary not in ("imu", "odom") or not reason.strip():
         raise ValueError("select imu/odom once and record a selection reason")
     chain = chain or chain_identity()
+    require_v2_model(chain)
     full, full_params, full_sha = read_candidate(full_path, "full", chain)
     smooth, smooth_params, smooth_sha = read_candidate(smooth_path, "smooth", chain)
     common = lambda params: {k: v for k, v in params.items() if k not in LIQUID_KEYS}
@@ -128,11 +140,13 @@ def create_lock(full_path, smooth_path, primary, reason, output, chain=None):
 
 
 def check_lock(lock, condition, row, launch_text, path_sha, map_sha, chain=None):
+    chain = chain or chain_identity()
+    require_v2_model(chain)
     if lock.get("schema_version") != 1 or lock.get("protocol") != PROTOCOL or lock.get("rows") != ROWS:
         raise ValueError("invalid V2 evaluation lock")
     if ROWS.get(row) != condition or lock.get("primary_monitor") not in ("imu", "odom"):
         raise ValueError("expected 01 full -> 02 smooth -> 03 smooth -> 04 full")
-    if lock.get("evaluation_chain_sha256") != (chain or chain_identity())["sha256"]:
+    if lock.get("evaluation_chain_sha256") != chain["sha256"]:
         raise ValueError("model/build/evaluator changed after freezing")
     if lock.get("path_sha256") != path_sha or lock.get("map_sha256") != map_sha:
         raise ValueError("path/map changed after freezing")

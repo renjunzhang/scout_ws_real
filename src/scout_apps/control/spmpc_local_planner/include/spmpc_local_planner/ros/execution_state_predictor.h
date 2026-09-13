@@ -32,9 +32,7 @@ private:
     static double normalizeYaw(double yaw);
 
     SloshDynamics slosh_dynamics_;
-    SloshDynamics explicit_prefix_slosh_dynamics_;
     bool slosh_configured_ = false;
-    bool explicit_prefix_slosh_configured_ = false;
 };
 
 }  // namespace spmpc_local_planner

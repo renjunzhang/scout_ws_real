@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Pure numerical kernels for liquid-horizon and observer replay.
 
-This module intentionally has no ROS imports, filesystem access, logging, or
-global mutable state.  It provides four small, independently testable pieces:
+This module has no ROS dependency. Version 1 lazily imports the shared CasADi
+kernel; historical version-0 replay needs only the standard library. It provides:
 
 * cubic-Hermite interpolation of ``q = [eta_x, eta_x_dot, eta_y, eta_y_dot]``;
-* an exact zero-order-hold step of the forced two-axis modal oscillator;
+* historical exact ZOH (version 0) and shared rotating RK4 (version 1);
 * strict replay of accepted observer inputs from an already-updated ``q0``;
 * high-accuracy replay of piecewise-constant planned ``a/alpha`` controls while
   integrating ``v`` and ``omega`` continuously with RK4.
@@ -38,6 +38,14 @@ class ReplayContractError(ValueError):
     """Raised when replay inputs violate their declared temporal contract."""
 
 
+def require_legacy_liquid_model(message):
+    """Frozen historical bag analyses must never silently consume model v1."""
+    if int(getattr(message, "liquid_model_version", 0)) != 0:
+        raise ReplayContractError(
+            "historical analysis supports liquid model 0 only; use version-1 "
+            "rotating replay and a newly frozen evaluation protocol")
+
+
 def _finite(name: str, value: float) -> float:
     result = float(value)
     if not math.isfinite(result):
@@ -54,7 +62,7 @@ def _nonnegative_int(name: str, value: int) -> int:
 
 @dataclass(frozen=True)
 class ModalState:
-    """Two independent first-mode liquid coordinates and their derivatives."""
+    """First-mode coordinates and relative derivatives in container axes."""
 
     eta_x: float = 0.0
     eta_x_dot: float = 0.0
@@ -79,15 +87,17 @@ class ModalState:
 class ModalParameters:
     """Continuous modal parameters shared by observer and planned replay.
 
-    The per-axis dynamics are
+    The historical version-0 per-axis dynamics are
 
     ``eta_ddot + two_zeta_omega_n * eta_dot + omega_n_sq * eta = -kappa * a``.
+    Version 1 adds rotating-frame terms through the production shared kernel.
     """
 
     two_zeta_omega_n: float
     omega_n_sq: float
     kappa_x: float = 1.0
     kappa_y: float = 1.0
+    liquid_model_version: int = 0
 
     def __post_init__(self) -> None:
         damping = _finite("two_zeta_omega_n", self.two_zeta_omega_n)
@@ -98,6 +108,8 @@ class ModalParameters:
             raise ReplayContractError("two_zeta_omega_n must be nonnegative")
         if stiffness <= 0.0:
             raise ReplayContractError("omega_n_sq must be positive")
+        if self.liquid_model_version not in (0, 1):
+            raise ReplayContractError("unsupported liquid_model_version")
 
 
 def cubic_hermite_q(
@@ -234,6 +246,8 @@ def exact_zoh_forced_modal_step(
     input state unchanged.
     """
 
+    if parameters.liquid_model_version != 0:
+        raise ReplayContractError("exact uncoupled ZOH is only valid for liquid model version 0")
     duration = _finite("dt_sec", dt_sec)
     input_x = _finite("ax", ax)
     input_y = _finite("ay", ay)
@@ -261,6 +275,19 @@ def exact_zoh_forced_modal_step(
     return ModalState(eta_x, eta_x_dot, eta_y, eta_y_dot)
 
 
+def measured_modal_step(state, ax, ay, omega, alpha, dt_sec, parameters):
+    """Replay held container acceleration using the declared model version."""
+    if parameters.liquid_model_version == 0:
+        return exact_zoh_forced_modal_step(state, ax, ay, dt_sec, parameters)
+    if omega is None or alpha is None:
+        raise ReplayContractError("rotating replay requires actual omega and alpha")
+    from rotating_liquid_replay import measured_step
+    return ModalState(*measured_step(
+        state.as_tuple(), (ax, ay, omega, alpha),
+        (parameters.two_zeta_omega_n, parameters.omega_n_sq,
+         parameters.kappa_x, parameters.kappa_y), dt_sec))
+
+
 @dataclass(frozen=True)
 class ObserverAnchor:
     """An accepted observer state after ``update_count`` has been consumed."""
@@ -286,6 +313,8 @@ class ObserverInputSample:
     reset_epoch: int
     ax: float
     ay: float
+    omega: Optional[float] = None
+    alpha: Optional[float] = None
 
     def __post_init__(self) -> None:
         _nonnegative_int("state_stamp_ns", self.state_stamp_ns)
@@ -295,6 +324,10 @@ class ObserverInputSample:
             raise ReplayContractError("sample_dt_sec must be positive")
         _finite("ax", self.ax)
         _finite("ay", self.ay)
+        if self.omega is not None:
+            _finite("omega", self.omega)
+        if self.alpha is not None:
+            _finite("alpha", self.alpha)
 
 
 @dataclass(frozen=True)
@@ -309,6 +342,8 @@ class ObserverReplayPoint:
     ax: Optional[float] = None
     ay: Optional[float] = None
     epoch_reset_applied: bool = False
+    omega: Optional[float] = None
+    alpha: Optional[float] = None
 
 
 @dataclass(frozen=True)
@@ -407,8 +442,9 @@ def replay_observer_inputs(
                     "{:.12g} vs {:.12g}".format(sample.sample_dt_sec, stamp_dt)
                 )
 
-        current_state = exact_zoh_forced_modal_step(
-            current_state, sample.ax, sample.ay, sample.sample_dt_sec, parameters
+        current_state = measured_modal_step(
+            current_state, sample.ax, sample.ay, sample.omega, sample.alpha,
+            sample.sample_dt_sec, parameters
         )
         current_stamp = sample.state_stamp_ns
         current_count = sample.update_count
@@ -424,6 +460,8 @@ def replay_observer_inputs(
                 sample.ax,
                 sample.ay,
                 epoch_changed,
+                sample.omega,
+                sample.alpha,
             )
         )
 
@@ -460,8 +498,8 @@ def sample_observer_replay(
     if right.ax is None or right.ay is None:
         raise ReplayContractError("right replay point has no applied input")
     partial_dt = float(query - left.state_stamp_ns) * 1.0e-9
-    return exact_zoh_forced_modal_step(
-        left.q, right.ax, right.ay, partial_dt, parameters
+    return measured_modal_step(
+        left.q, right.ax, right.ay, right.omega, right.alpha, partial_dt, parameters
     )
 
 
@@ -540,6 +578,10 @@ def replay_planned_controls(
     inferred; ``time_sec`` is relative to the horizon origin.
     """
 
+    if parameters.liquid_model_version != 0:
+        raise ReplayContractError(
+            "version 1 requires actual actuator states and delay queues; "
+            "use rotating_liquid_replay.replay_ocp instead of command a/alpha replay")
     v0 = _finite("initial_v", initial_v)
     omega0 = _finite("initial_omega", initial_omega)
     max_step = _finite("max_substep_sec", max_substep_sec)

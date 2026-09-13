@@ -14,6 +14,13 @@ constexpr const char* kSolverBackendContinuousMpccDirectOmegaLegacy = "continuou
 // 判断后端名是否被工厂识别（供 ROS 层校验并告警，core/solvers 自身不依赖 ROS）。
 bool isKnownSolverBackend(const std::string& backend);
 
+// Supported runtime combination for the current rotating liquid model. Keep
+// capability policy here; ROS only reports the error and refuses startup.
+inline bool supportsCurrentLiquidModel(const std::string& backend, ExecutionModelMode mode) {
+    return backend == kSolverBackendContinuousMpccAcados &&
+           mode == ExecutionModelMode::ExplicitActuator;
+}
+
 // 按后端名创建 solver；调用方应先校验后端名，未识别名称会抛出异常而不是回退到 primitive。
 std::unique_ptr<SpmpcSolver> makeSolver(const std::string& backend);
 

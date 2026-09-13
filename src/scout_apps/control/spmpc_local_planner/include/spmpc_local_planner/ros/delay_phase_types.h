@@ -33,6 +33,7 @@ enum class DelayPhaseStatusCode {
     InvalidParams = 10,
     FixedClosedLoopOk = 11,
     FixedRobotOnlyOk = 12,
+    DynamicsFailure = 13,
 };
 
 struct DelayPhaseParams {
@@ -303,6 +304,8 @@ inline std::string delayPhaseStatusName(DelayPhaseStatusCode status) {
         return "ODOM_STALE";
     case DelayPhaseStatusCode::InvalidParams:
         return "INVALID_PARAMS";
+    case DelayPhaseStatusCode::DynamicsFailure:
+        return "DYNAMICS_FAILURE";
     case DelayPhaseStatusCode::Off:
     default:
         return "OFF";

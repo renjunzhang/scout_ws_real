@@ -3,6 +3,8 @@
 
 std_msgs/Header header
 uint32 schema_version
+# Schema 6: 1 identifies the shared rotating-container RK4 model.
+uint32 liquid_model_version
 uint64 cycle_id
 time cycle_start_stamp
 time raw_robot_state_stamp

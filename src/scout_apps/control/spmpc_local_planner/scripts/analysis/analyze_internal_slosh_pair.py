@@ -385,6 +385,11 @@ def analyze_topics(
     }
     report["postflight_details"] = postflight_details
     try:
+        versions = {int(entry["value"].get("liquid_model_version", 0))
+                    for topic in ("snapshot", "imu", "odom") for entry in topics.get(topic, [])}
+        report["liquid_model_versions"] = sorted(versions)
+        if versions - {0}:
+            raise ValueError("C03 V2 metrics are frozen for liquid model 0; model 1 requires a new protocol")
         start, end = _motion_window(audits)
         windows["pre1s"] = [start - 1.0, start]
         windows["task"] = [start, end]

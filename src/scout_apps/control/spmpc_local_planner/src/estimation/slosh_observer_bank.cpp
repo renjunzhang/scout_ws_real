@@ -51,20 +51,14 @@ bool SloshObserverBank::stepOdom(const MotionExcitation& excitation) {
         return false;
     }
 
-    // Preserve the pre-refactor odom behavior: discretize at the message dt.
-    if (std::abs(excitation.sample_dt_sec - odom_dynamics_.params().dt) > 1e-4) {
-        SloshModelParams params = base_params_;
-        params.dt = excitation.sample_dt_sec;
-        if (!odom_dynamics_.configure(params)) {
-            odom_snapshot_.configured = false;
-            odom_snapshot_.valid = false;
-            odom_snapshot_.excitation = excitation;
-            return false;
-        }
+    SloshState next_state;
+    if (!odom_dynamics_.stepWithDt(
+            odom_snapshot_.state, excitation.atContainer(), excitation.sample_dt_sec, next_state)) {
+        odom_snapshot_.valid = false;
+        odom_snapshot_.excitation = excitation;
+        return false;
     }
-
-    odom_snapshot_.state = odom_dynamics_.step(
-        odom_snapshot_.state, excitation.ax, excitation.ay, excitation.omega_z);
+    odom_snapshot_.state = next_state;
     odom_snapshot_.configured = true;
     odom_snapshot_.valid = true;
     odom_snapshot_.excitation = excitation;
@@ -94,15 +88,11 @@ bool SloshObserverBank::stepImu(const MotionExcitation& excitation) {
         return false;
     }
 
-    // Use the accepted sensor interval so the shadow state's physical time
-    // cannot drift from its published timestamp.  This exact variable-dt path
-    // is isolated from the fixed-step solver/odom dynamics.
+    // Accepted, aligned excitation interval; the same RHS/integrator as OCP.
     SloshState next_state;
     if (!imu_dynamics_.stepWithDt(
             imu_snapshot_.state,
-            excitation.ax,
-            excitation.ay,
-            excitation.omega_z,
+            excitation.atContainer(),
             excitation.sample_dt_sec,
             next_state)) {
         imu_snapshot_.valid = false;

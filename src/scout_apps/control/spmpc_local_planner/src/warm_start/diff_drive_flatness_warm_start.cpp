@@ -169,7 +169,14 @@ bool DiffDriveFlatnessWarmStart::generate(
             const double ax = output.controls[k].a;
             const double omega = output.states[k].omega;
             const double ay = output.states[k].v * omega;
-            slosh = input.slosh_dynamics->step(slosh, ax, ay, omega);
+            if (!input.slosh_dynamics->stepWithDt(
+                    slosh, {ax, ay, omega, output.controls[k].alpha}, input.dt, slosh)) {
+                diagnostics.failure_reason = "LIQUID_PROPAGATION_FAILED";
+                diagnostics.warm_start_valid = output.valid = false;
+                output.fallback_reason = diagnostics.failure_reason;
+                output.diagnostics = diagnostics;
+                return false;
+            }
             copySlosh(slosh, output.states[k + 1]);
         }
     } else {

@@ -75,7 +75,9 @@ SloshState independentlyDiscretizedStep(
     step_params.dt = excitation.sample_dt_sec;
     SloshDynamics dynamics;
     EXPECT_TRUE(dynamics.configure(step_params));
-    return dynamics.step(state, excitation.ax, excitation.ay, excitation.omega_z);
+    SloshState next;
+    EXPECT_TRUE(dynamics.stepWithDt(state, excitation.atContainer(), step_params.dt, next));
+    return next;
 }
 
 void expectExcitationExactlyEqual(
@@ -117,21 +119,18 @@ void expectZeroState(const SloshState& state) {
     EXPECT_EQ(state.eta_y_dot, 0.0);
 }
 
-// This is the exact pre-bank odom update sequence formerly used by
-// SpmpcLocalPlannerROS::updateSloshObserverFromOdom().
-SloshState legacyOdomStep(
+// Compare against direct propagation at each supplied dt, including changes
+// below the old discrete-matrix reconfiguration threshold.
+SloshState directOdomStep(
     SloshDynamics& dynamics,
     const SloshState& state,
     const MotionExcitation& excitation) {
-    if (std::abs(excitation.sample_dt_sec - dynamics.params().dt) > 1e-4) {
-        SloshModelParams params = dynamics.params();
-        params.dt = excitation.sample_dt_sec;
-        EXPECT_TRUE(dynamics.configure(params));
-    }
-    return dynamics.step(state, excitation.ax, excitation.ay, excitation.omega_z);
+    SloshState next;
+    EXPECT_TRUE(dynamics.stepWithDt(state, excitation.atContainer(), excitation.sample_dt_sec, next));
+    return next;
 }
 
-TEST(SloshObserverBank, OdomVariableDtIsStepwiseIdenticalToLegacyDynamics) {
+TEST(SloshObserverBank, OdomVariableDtUsesEveryActualSampleInterval) {
     const SloshModelParams params = makeParams();
     SloshObserverBank bank;
     ASSERT_TRUE(bank.configure(params, 0.02));
@@ -145,7 +144,7 @@ TEST(SloshObserverBank, OdomVariableDtIsStepwiseIdenticalToLegacyDynamics) {
                        0.40, 0.0, 1),
         makeExcitation(MotionExcitationSource::Odom, true, 0.020, -0.28, 0.23,
                        -0.35, 1.2, 2),
-        // Inside the legacy 1e-4 tolerance: neither implementation reconfigures.
+        // Inside the old 1e-4 tolerance: v1 must still use this exact interval.
         makeExcitation(MotionExcitationSource::Odom, true, 0.02005, 0.11, 0.07,
                        0.20, -0.8, 3),
         makeExcitation(MotionExcitationSource::Odom, true, 0.047, -0.42, -0.19,
@@ -156,7 +155,7 @@ TEST(SloshObserverBank, OdomVariableDtIsStepwiseIdenticalToLegacyDynamics) {
 
     for (std::size_t i = 0; i < sequence.size(); ++i) {
         SCOPED_TRACE(i);
-        legacy_state = legacyOdomStep(legacy_dynamics, legacy_state, sequence[i]);
+        legacy_state = directOdomStep(legacy_dynamics, legacy_state, sequence[i]);
         ASSERT_TRUE(bank.stepOdom(sequence[i]));
 
         expectStateExactlyEqual(bank.solverState(), legacy_state);
@@ -430,11 +429,9 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
     const MotionExcitation second = makeExcitation(
         MotionExcitationSource::ProcessedImu, true, 0.02, -0.21, 0.38,
         -0.44, -0.9, 31, 3u);
-    reference_state = reference_dynamics.step(
-        reference_state, first.ax, first.ay, first.omega_z);
+    ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, first.atContainer(), observer_dt_sec, reference_state));
     ASSERT_TRUE(bank.stepImu(first));
-    reference_state = reference_dynamics.step(
-        reference_state, second.ax, second.ay, second.omega_z);
+    ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, second.atContainer(), observer_dt_sec, reference_state));
     ASSERT_TRUE(bank.stepImu(second));
     expectStateExactlyEqual(bank.imu().state, reference_state);
     ASSERT_EQ(bank.imu().update_count, 2u);
@@ -463,9 +460,7 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
     const MotionExcitation after_invalid = makeExcitation(
         MotionExcitationSource::ProcessedImu, true, 0.02, 0.16, 0.24,
         0.31, -0.5, 33, 3u);
-    reference_state = reference_dynamics.step(
-        reference_state, after_invalid.ax, after_invalid.ay,
-        after_invalid.omega_z);
+    ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, after_invalid.atContainer(), observer_dt_sec, reference_state));
     ASSERT_TRUE(bank.stepImu(after_invalid));
     EXPECT_EQ(bank.imu().update_count, 3u);
     expectStateExactlyEqual(bank.imu().state, reference_state);
@@ -533,7 +528,7 @@ TEST(SloshObserverBank, SolverHeightRetainsLegacyOdomDynamicsSemantics) {
             MotionExcitationSource::Odom, true, 0.046, 0.39, -0.26,
             1.12, -1.7, static_cast<std::int64_t>(40u + option));
         SloshState legacy_state;
-        legacy_state = legacyOdomStep(legacy_dynamics, legacy_state, odom);
+        legacy_state = directOdomStep(legacy_dynamics, legacy_state, odom);
         ASSERT_TRUE(bank.stepOdom(odom));
         expectStateExactlyEqual(bank.solverState(), legacy_state);
         EXPECT_EQ(bank.solverHeight(bank.solverState(), odom.omega_z),

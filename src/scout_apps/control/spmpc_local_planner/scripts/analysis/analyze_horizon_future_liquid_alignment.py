@@ -30,9 +30,9 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
-import rosbag
 
 from horizon_liquid_replay import (
+    require_legacy_liquid_model,
     ModalParameters,
     ModalState,
     ObserverAnchor,
@@ -541,6 +541,7 @@ class RunData:
 
 
 def read_run(bag_path: Path, postflight_path: Path) -> RunData:
+    import rosbag
     postflight = json.loads(postflight_path.read_text(encoding="utf-8"))
     horizons: List[Tuple[float, Any]] = []
     selections: List[Tuple[float, Any]] = []
@@ -570,6 +571,7 @@ def read_run(bag_path: Path, postflight_path: Path) -> RunData:
                 )
 
         for topic, msg, bag_stamp in bag.read_messages(topics=list(required_types)):
+            require_legacy_liquid_model(msg)
             bag_stamp_sec = float(bag_stamp.to_sec())
             if topic == HORIZON_TOPIC:
                 horizons.append((bag_stamp_sec, msg))
