@@ -844,6 +844,16 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     terminal.data[14] = static_cast<float>(td.cmd_v_post_clamp);
     terminal.layout.dim[0].label += ",command_owned";
     terminal.data.push_back(td.command_owned ? 1.0f : 0.0f);
+    terminal.layout.dim[0].label += ",complete_stop_enabled,delay_queues_clear,excitation_quiet,vehicle_stopped,liquid_stable,settle_timed_out,predicted_tail_valid,residual_height_m,stable_duration_sec,vehicle_stop_time_sec,liquid_stable_time_sec,predicted_stop_distance_m,predicted_tail_duration_sec,predicted_tail_peak_height_m,predicted_tail_residual_height_m";
+    terminal.data.insert(terminal.data.end(), {
+        static_cast<float>(td.complete_stop_enabled), static_cast<float>(td.delay_queues_clear),
+        static_cast<float>(td.excitation_quiet), static_cast<float>(td.vehicle_stopped),
+        static_cast<float>(td.liquid_stable), static_cast<float>(td.settle_timed_out),
+        static_cast<float>(td.predicted_tail_valid), static_cast<float>(td.residual_height_m),
+        static_cast<float>(td.stable_duration_sec), static_cast<float>(td.vehicle_stop_time_sec),
+        static_cast<float>(td.liquid_stable_time_sec), static_cast<float>(td.predicted_stop_distance_m),
+        static_cast<float>(td.predicted_tail_duration_sec), static_cast<float>(td.predicted_tail_peak_height_m),
+        static_cast<float>(td.predicted_tail_residual_height_m)});
     terminal.layout.dim[0].size = terminal.data.size();
     terminal.layout.dim[0].stride = terminal.data.size();
     terminal_pub_.publish(terminal);
@@ -895,17 +905,17 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray cost;
     cost.layout.dim.resize(1);
     cost.layout.dim[0].label =
-        "total,J_contour,J_lag,J_progress,J_v,J_control,J_smooth,J_terminal,J_corridor,J_obstacle,J_slosh_eta,J_slosh_eta_dot,pct_contour,pct_lag,pct_progress,pct_v,pct_control,pct_smooth,pct_terminal,pct_corridor,pct_obstacle,pct_slosh_total";
-    cost.layout.dim[0].size = 22;
-    cost.layout.dim[0].stride = 22;
-    cost.data.assign(22, 0.0f);
+        "total,J_contour,J_lag,J_progress,J_v,J_control,J_smooth,J_terminal,J_corridor,J_obstacle,J_slosh_eta,J_slosh_eta_dot,pct_contour,pct_lag,pct_progress,pct_v,pct_control,pct_smooth,pct_terminal,pct_corridor,pct_obstacle,pct_slosh_total,J_anti_creep,J_v_actual,J_v_s,J_slack,solver_total,reconstruction_error,reconstruction_valid,J_stop";
+    cost.layout.dim[0].size = 30;
+    cost.layout.dim[0].stride = 30;
+    cost.data.assign(30, 0.0f);
     const double total = output.cost.total();
     // 占比分母用各项绝对值之和, 而非 |total|: 后者含负的 J_progress 奖励, total 近零时百分比会爆炸。
     const auto& c = output.cost;
     const double abs_sum =
         std::abs(c.J_contour) + std::abs(c.J_lag) + std::abs(c.J_progress) + std::abs(c.J_v) +
         std::abs(c.J_control) + std::abs(c.J_smooth) + std::abs(c.J_terminal) + std::abs(c.J_corridor) +
-        std::abs(c.J_obstacle) + std::abs(c.J_slosh_eta) + std::abs(c.J_slosh_eta_dot);
+        std::abs(c.J_obstacle) + std::abs(c.J_anti_creep) + std::abs(c.J_slack) + std::abs(c.J_stop) + std::abs(c.J_slosh_eta) + std::abs(c.J_slosh_eta_dot);
     const double denom = abs_sum > 1e-9 ? abs_sum : 1.0;
     cost.data[0] = static_cast<float>(total);
     cost.data[1] = static_cast<float>(output.cost.J_contour);
@@ -929,6 +939,14 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.data[19] = static_cast<float>(100.0 * output.cost.J_corridor / denom);
     cost.data[20] = static_cast<float>(100.0 * output.cost.J_obstacle / denom);
     cost.data[21] = static_cast<float>(100.0 * (output.cost.J_slosh_eta + output.cost.J_slosh_eta_dot) / denom);
+    cost.data[22] = static_cast<float>(c.J_anti_creep);
+    cost.data[23] = static_cast<float>(c.J_v_actual);
+    cost.data[24] = static_cast<float>(c.J_v_s);
+    cost.data[25] = static_cast<float>(c.J_slack);
+    cost.data[26] = static_cast<float>(c.solver_total);
+    cost.data[27] = static_cast<float>(c.reconstruction_error);
+    cost.data[28] = c.reconstruction_valid ? 1.0f : 0.0f;
+    cost.data[29] = static_cast<float>(c.J_stop);
     cost_breakdown_pub_.publish(cost);
 
     const auto& sm = output.slosh_cost_monitor;
@@ -1029,10 +1047,10 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray hard_effective;
     hard_effective.layout.dim.resize(1);
     hard_effective.layout.dim[0].label =
-        "enabled,h_modal_limit_mm,height_coeff,eta_max,eta_max_sq,h_modal_peak_pred_mm,modal_margin_mm,peak_k,modal_only,solver_uses_parabola";
-    hard_effective.layout.dim[0].size = 10;
-    hard_effective.layout.dim[0].stride = 10;
-    hard_effective.data.resize(10, 0.0f);
+        "enabled,h_modal_limit_mm,height_coeff,eta_max,eta_max_sq,h_modal_peak_pred_mm,modal_margin_mm,peak_k,modal_only,solver_uses_parabola,recovery_enabled,recovery_used,strict_target_satisfied,recovery_budget_mm,cap_mm,initial_height_mm,maximum_excess_mm,exceedance_nodes,physical_boundary_known,physical_boundary_mm";
+    hard_effective.layout.dim[0].size = 20;
+    hard_effective.layout.dim[0].stride = 20;
+    hard_effective.data.resize(20, 0.0f);
     hard_effective.data[0] = hc.enabled ? 1.0f : 0.0f;
     hard_effective.data[1] = static_cast<float>(1000.0 * hc.h_limit);
     hard_effective.data[2] = static_cast<float>(hc.height_coeff);
@@ -1043,6 +1061,16 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     hard_effective.data[7] = static_cast<float>(hc.peak_k);
     hard_effective.data[8] = hc.modal_only ? 1.0f : 0.0f;
     hard_effective.data[9] = hc.solver_uses_parabola ? 1.0f : 0.0f;
+    hard_effective.data[10] = hc.recovery_enabled;
+    hard_effective.data[11] = hc.recovery_used;
+    hard_effective.data[12] = hc.strict_target_satisfied;
+    hard_effective.data[13] = 1000.0 * hc.recovery_budget_m;
+    hard_effective.data[14] = 1000.0 * hc.cap_m;
+    hard_effective.data[15] = 1000.0 * hc.initial_height_m;
+    hard_effective.data[16] = 1000.0 * hc.maximum_excess_m;
+    hard_effective.data[17] = hc.exceedance_nodes;
+    hard_effective.data[18] = hc.physical_boundary_known;
+    hard_effective.data[19] = 1000.0 * hc.physical_boundary_m;
     slosh_hard_constraint_effective_pub_.publish(hard_effective);
 }
 
@@ -1120,7 +1148,8 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 6;
+    msg.schema_version = 7;
+    msg.cost_model_version = 2;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
@@ -1202,7 +1231,8 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 6;
+    msg.schema_version = 7;
+    msg.cost_model_version = 2;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;

@@ -3,6 +3,8 @@
 #ifdef SPMPC_WITH_ACADOS
 
 #include "spmpc_local_planner/reference/progress_projector.h"
+#include "spmpc_local_planner/core/ocp_cost_evaluator.h"
+#include "../core/generated/ocp_cost_contract.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
 #include "spmpc_local_planner/warm_start/explicit_actuator_warm_start.h"
@@ -36,11 +38,12 @@ enum Param {
     E_C_REF, E_L_REF,
     V_REF,
     ACTUATOR_DT, ACTUATOR_TAU_V, ACTUATOR_TAU_OMEGA,
-    ACTUATOR_GAIN_V, ACTUATOR_GAIN_OMEGA,
+    ACTUATOR_GAIN_V, ACTUATOR_GAIN_OMEGA, ANTICREEP_GAIN,
+    STOP_ACTIVE, STOP_GOAL_S, STOP_BRAKE_ACCEL, STOP_DELAY_MARGIN, STOP_VELOCITY_WEIGHT,
     // 以下仅 slosh 模型（接在 explicit-actuator B0 参数之后）
     TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
     ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
-    ETA_MAX_SQ,
+    ETA_TARGET_SQ, SLACK_LINEAR_WEIGHT, SLACK_QUADRATIC_WEIGHT, ETA_MAX_SQ,
     PARAM_MAX,
 };
 
@@ -48,7 +51,7 @@ enum Param {
 static_assert(SPMPC_B0_LIQUID_MODEL_VERSION == SPMPC_LIQUID_KERNEL_VERSION &&
               SPMPC_B0_RK4_SUBSTEPS == SPMPC_LIQUID_RK4_SUBSTEPS,
               "Regenerate B0 for the shared RK4 motion model");
-static_assert(ACTUATOR_GAIN_OMEGA + 1 == SPMPC_B0_NP,
+static_assert(STOP_VELOCITY_WEIGHT + 1 == SPMPC_B0_NP,
               "B0 参数布局与生成的 spmpc_b0 求解器不一致");
 static_assert(SPMPC_B0_NX == kExplicitActuatorB0StateSize,
               "B0 状态布局与生成的 spmpc_b0 求解器不一致");
@@ -64,6 +67,11 @@ static_assert(SPMPC_SLOSH_NX == kExplicitActuatorSloshStateSize,
 static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
 static_assert(SPMPC_SLOSH_NG == 1,
               "Regenerate slosh acados artifacts for the full-horizon jerk switch");
+#endif
+
+static_assert(SPMPC_B0_COST_VERSION == SPMPC_COST_VERSION, "Regenerate B0 cost v2");
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+static_assert(SPMPC_SLOSH_COST_VERSION == SPMPC_COST_VERSION, "Regenerate slosh cost v2");
 #endif
 
 constexpr double kDisabledEtaMaxSq = 1e12;
@@ -407,10 +415,11 @@ std::vector<std::string> parameterNames(int width) {
         "w_du_a", "w_du_vs", "a_prev", "vs_prev",
         "e_c_ref", "e_l_ref", "v_ref",
         "actuator_dt", "actuator_tau_v", "actuator_tau_omega",
-        "actuator_gain_v", "actuator_gain_omega",
+        "actuator_gain_v", "actuator_gain_omega", "anticreep_gain",
+        "stop_active", "stop_goal_s", "stop_brake_accel", "stop_delay_margin", "stop_velocity_weight",
         "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
         "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
-        "eta_max_sq",
+        "eta_target_sq", "slack_linear_weight", "slack_quadratic_weight", "eta_max_sq",
     };
     const int count = static_cast<int>(sizeof(names) / sizeof(names[0]));
     const int n = std::max(0, std::min(width, count));
@@ -679,6 +688,10 @@ bool ContinuousMpccSolverAcados::solve(
         output.status = "INVALID_ABLATION_CONFIG";
         return false;
     }
+    if (!std::isfinite(params_.anticreep_gain) || params_.anticreep_gain < 0.0) {
+        output.status = "INVALID_COST_CONFIG";
+        return false;
+    }
     if (capsule_ == nullptr) {
         output.status = "ACADOS_NOT_CREATED";
         return false;
@@ -818,6 +831,14 @@ bool ContinuousMpccSolverAcados::solve(
     double eta_max = 0.0;
     double eta_max_sq = kDisabledEtaMaxSq;
     double h_limit = 0.0;
+    LiquidLimitPolicy liquid_limit;
+    std::string liquid_limit_error;
+    if (!makeLiquidLimitPolicy(slosh && variant_.slosh_constraint_enable,
+            params_.slosh.slosh_height_max, params_.liquid_limit, liquid_limit, liquid_limit_error)) {
+        output.status = liquid_limit_error;
+        snapshot.solver_status = output.status;
+        return false;
+    }
     double omega_n = 0.0;
     double two_zeta_omega_n = 0.0, omega_n_sq = 0.0;
     if (slosh && slosh_dyn_.configured()) {
@@ -831,21 +852,40 @@ bool ContinuousMpccSolverAcados::solve(
         // eta_dot_ref 与 eta_ref 同口径：omega_n × eta_ref = omega_n × h_ref / c_h
         // 原曾误写为 omega_n × h_ref（比设计值大 c_h 倍），导致 eta_dot 惩罚被人为压小
         eta_dot_ref = std::max(1e-6, omega_n * eta_ref);
-        if (variant_.slosh_constraint_enable) {
-            h_limit = std::max(1e-6, params_.slosh.slosh_height_max);
-            eta_max = std::max(1e-6, h_limit / c_h);
+        if (liquid_limit.enabled) {
+            h_limit = liquid_limit.target_m;
+            eta_max = liquid_limit.cap_m / c_h;
             eta_max_sq = eta_max * eta_max;
         }
     }
-    output.slosh_summary.hard_constraint_enable = (slosh && variant_.slosh_constraint_enable &&
-                                                   eta_max_sq < kDisabledEtaMaxSq);
+    output.slosh_summary.hard_constraint_enable = liquid_limit.enabled && !liquid_limit.recovery_enabled;
     output.slosh_summary.h_limit = h_limit;
     output.slosh_summary.h_limit_margin = h_limit;
     output.slosh_hard_constraint.enabled = output.slosh_summary.hard_constraint_enable;
+    output.slosh_hard_constraint.recovery_enabled = liquid_limit.recovery_enabled;
+    output.slosh_hard_constraint.recovery_budget_m = liquid_limit.recovery_budget_m;
+    output.slosh_hard_constraint.cap_m = liquid_limit.cap_m;
+    output.slosh_hard_constraint.physical_boundary_known = liquid_limit.physical_boundary_known;
+    output.slosh_hard_constraint.physical_boundary_m = liquid_limit.physical_boundary_m;
+    output.slosh_hard_constraint.initial_height_m = slosh_dyn_.height(observed_input.slosh);
+    if (liquid_limit.enabled && params_.zero_liquid_initial_state) {
+        output.status = "NOSTATE_INCOMPATIBLE_WITH_LIQUID_LIMIT";
+        snapshot.solver_status = output.status;
+        return false;
+    }
+    if (liquid_limit.enabled &&
+        (output.slosh_hard_constraint.initial_height_m > liquid_limit.cap_m + 1e-9 ||
+         (liquid_limit.physical_boundary_known && output.slosh_hard_constraint.initial_height_m >= liquid_limit.physical_boundary_m))) {
+        output.status = liquid_limit.physical_boundary_known &&
+            output.slosh_hard_constraint.initial_height_m >= liquid_limit.physical_boundary_m
+            ? "LIQUID_PHYSICAL_BOUNDARY" : "LIQUID_RECOVERY_BUDGET_EXCEEDED";
+        snapshot.solver_status = output.status;
+        return false;
+    }
     output.slosh_hard_constraint.h_limit = h_limit;
     output.slosh_hard_constraint.height_coeff = c_h;
-    output.slosh_hard_constraint.eta_max = output.slosh_summary.hard_constraint_enable ? eta_max : 0.0;
-    output.slosh_hard_constraint.eta_max_sq = output.slosh_summary.hard_constraint_enable ? eta_max_sq : 0.0;
+    output.slosh_hard_constraint.eta_max = liquid_limit.enabled ? eta_max : 0.0;
+    output.slosh_hard_constraint.eta_max_sq = liquid_limit.enabled ? eta_max_sq : 0.0;
     output.slosh_hard_constraint.h_limit_margin = h_limit;
     // Solver 硬约束/代价诊断统一采用 modal-only 高度 c_h·||eta||。
     // slosh/use_parabola_term 只属于 observer/可视化 total-height proxy；在当前 R=18.5mm、常用角速度下
@@ -878,6 +918,13 @@ bool ContinuousMpccSolverAcados::solve(
     p[ACTUATOR_TAU_OMEGA] = params_.actuator.angular_tau_sec;
     p[ACTUATOR_GAIN_V] = params_.actuator.linear_gain;
     p[ACTUATOR_GAIN_OMEGA] = params_.actuator.angular_gain;
+    p[ANTICREEP_GAIN] = params_.anticreep_gain;
+    p[STOP_ACTIVE] = input.task_stop_active ? 1.0 : 0.0;
+    p[STOP_GOAL_S] = input.task_stop_goal_s;
+    p[STOP_BRAKE_ACCEL] = params_.a_max;
+    p[STOP_DELAY_MARGIN] = params_.actuator.linear_delay_sec + params_.actuator.linear_tau_sec +
+        params_.a_max / params_.jerk_max;
+    p[STOP_VELOCITY_WEIGHT] = params_.task_stop.velocity_cost_weight;
     if (slosh) {
         p[TWO_ZETA_OMEGA_N] = two_zeta_omega_n;
         p[OMEGA_N_SQ] = omega_n_sq;
@@ -886,6 +933,9 @@ bool ContinuousMpccSolverAcados::solve(
         p[ETA_REF] = eta_ref;
         p[ETA_DOT_REF] = eta_dot_ref;
         p[ETA_MAX_SQ] = eta_max_sq;
+        p[ETA_TARGET_SQ] = liquid_limit.enabled ? (h_limit/c_h)*(h_limit/c_h) : kDisabledEtaMaxSq;
+        p[SLACK_LINEAR_WEIGHT] = liquid_limit.linear_weight;
+        p[SLACK_QUADRATIC_WEIGHT] = liquid_limit.quadratic_weight;
     }
 
     for (int stage = 0; stage <= n; ++stage) {
@@ -1032,7 +1082,6 @@ bool ContinuousMpccSolverAcados::solve(
     }
 
     // 读轨迹 + 诊断量（contour/lag/slosh/控制），按 §11.5 对齐 primitive。
-    const double inv_n = 1.0 / static_cast<double>(std::max(1, n));
     output.trajectory.reserve(n + 1);
     output.predicted_horizon.backend = "continuous_mpcc_acados_explicit_actuator";
     output.predicted_horizon.variant = variant_.name;
@@ -1066,14 +1115,6 @@ bool ContinuousMpccSolverAcados::solve(
             makeHorizonState(solved_state, params_.actuator, slosh,
                              solved_h_modal));
 
-        const double xref = polyEval(cx, pt.s);
-        const double yref = polyEval(cy, pt.s);
-        const double phi = std::atan2(polyDeriv(cy, pt.s), polyDeriv(cx, pt.s));
-        const double e_c = std::sin(phi) * (pt.x - xref) - std::cos(phi) * (pt.y - yref);
-        const double e_l = -std::cos(phi) * (pt.x - xref) - std::sin(phi) * (pt.y - yref);
-        output.cost.J_contour += variant_.w_contour * (e_c / e_c_ref) * (e_c / e_c_ref) * inv_n;
-        output.cost.J_lag += variant_.w_lag * (e_l / e_l_ref) * (e_l / e_l_ref) * inv_n;
-
         if (slosh) {
             const double ex = xk[kExplicitActuatorSloshStateOffset];
             const double exd = xk[kExplicitActuatorSloshStateOffset + 1];
@@ -1094,12 +1135,7 @@ bool ContinuousMpccSolverAcados::solve(
             output.slosh_summary.eta_dot_norm_peak = std::max(output.slosh_summary.eta_dot_norm_peak, eta_dot_norm);
             output.slosh_cost_monitor.eta_norm_peak = std::max(output.slosh_cost_monitor.eta_norm_peak, eta_norm);
             output.slosh_cost_monitor.eta_dot_norm_peak = std::max(output.slosh_cost_monitor.eta_dot_norm_peak, eta_dot_norm);
-            const double stage_scale = sloshCostStageScale(variant_, k, n);
-            output.cost.J_slosh_eta += variant_.w_slosh * stage_scale *
-                (eta_norm / eta_ref) * (eta_norm / eta_ref) * inv_n;
-            output.cost.J_slosh_eta_dot += variant_.w_slosh * stage_scale *
-                params_.slosh.slosh_eta_dot_ratio *
-                (eta_dot_norm / eta_dot_ref) * (eta_dot_norm / eta_dot_ref) * inv_n;
+
         }
     }
 
@@ -1129,10 +1165,6 @@ bool ContinuousMpccSolverAcados::solve(
         head.yaw_error = wrapAngle(state.theta - phi);
     }
 
-    const double a_ref = std::max(0.1, params_.a_max);
-    const double omega_ref = std::max(1e-3, params_.omega_max);
-    const double alpha_ref = std::max(1e-3, params_.alpha_max);
-    const double vs_ref = std::max(0.1, params_.v_max);
     std::vector<WarmStartControl> solved_controls;
     solved_controls.reserve(n);
     double uk[3], u0[3] = {0, 0, 0};
@@ -1142,27 +1174,22 @@ bool ContinuousMpccSolverAcados::solve(
         output.predicted_horizon.controls.push_back(
             makeHorizonControl(solved_controls.back()));
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
-        const double an = uk[0] / a_ref;                          // a (控制)
-        const double aln = uk[1] / alpha_ref;                     // alpha = omega-rate (控制)
-        const double wn = solved_states[k].omega / omega_ref;     // omega 现在是状态
-        output.cost.J_control += ((variant_.w_control + variant_.w_accel) * an * an +
-                                  variant_.w_control * wn * wn +
-                                  variant_.w_alpha * aln * aln) * inv_n;
-        output.cost.J_progress += -variant_.w_progress * (uk[2] / vs_ref) * inv_n;
-        const double vn = (solved_states[k].v - v_ref) / vs_ref;
-        const double vsn = (uk[2] - v_ref) / vs_ref;
-        output.cost.J_v += (variant_.w_v * vn * vn + variant_.w_vs * vsn * vsn) * inv_n;
+    }
 
-        // a_cmd_memory(k)=a_cmd(k-1)：统计与 solver 一致的全时域 Δa_cmd 代价。
-        const double da =
-            (uk[0] - solved_states[static_cast<size_t>(k)].a_cmd_memory) /
-            a_ref;
-        output.cost.J_smooth += variant_.w_du_a * da * da * inv_n;
-        // v_s 仍仅有跨周期第一帧连续性。
-        if (k == 0 && have_u_prev_) {
-            const double dvs = (uk[2] - u_prev_[2]) / vs_ref;
-            output.cost.J_smooth += variant_.w_du_vs * dvs * dvs * inv_n;
-        }
+    if (!evaluateOcpCost(output.predicted_horizon, snapshot.stage_parameters, gen->np, output.cost)) {
+        output.status = "COST_RECONSTRUCTION_FAILED";
+        snapshot.solver_status = output.status;
+        return false;
+    }
+    ocp_nlp_eval_cost(gen->solver(), nlp_in, nlp_out);
+    ocp_nlp_get(gen->solver(), "cost_value", &output.cost.solver_total);
+    output.cost.reconstruction_error = output.cost.total() - output.cost.solver_total;
+    output.cost.reconstruction_valid = std::isfinite(output.cost.solver_total) &&
+        std::abs(output.cost.reconstruction_error) <= 1e-8 * (1.0 + std::abs(output.cost.solver_total));
+    if (!output.cost.reconstruction_valid) {
+        output.status = "COST_RECONSTRUCTION_MISMATCH";
+        snapshot.solver_status = output.status;
+        return false;
     }
 
     if (params_.jerk_limit_enable) {
@@ -1189,7 +1216,20 @@ bool ContinuousMpccSolverAcados::solve(
             static_cast<size_t>(std::floor(0.95 * (sorted.size() - 1))));
         output.slosh_summary.h_p95_pred = sorted[idx];
     }
-    if (output.slosh_summary.hard_constraint_enable) {
+    if (liquid_limit.enabled) {
+        auto& limit = output.slosh_hard_constraint;
+        limit.maximum_excess_m = std::max(0.0, output.slosh_summary.h_peak_pred - h_limit);
+        limit.exceedance_nodes = static_cast<int>(std::count_if(heights.begin(), heights.end(),
+            [&](double h) { return h > h_limit + 1e-9; }));
+        limit.recovery_used = limit.exceedance_nodes > 0;
+        limit.strict_target_satisfied = !limit.recovery_used;
+        if (output.slosh_summary.h_peak_pred > liquid_limit.cap_m + 1e-7 ||
+            (liquid_limit.physical_boundary_known && output.slosh_summary.h_peak_pred >= liquid_limit.physical_boundary_m)) {
+            output.status = "LIQUID_RECOVERY_CAP_VIOLATION";
+            snapshot.solver_status = output.status;
+            output.predicted_horizon.solver_status = output.status;
+            return false;
+        }
         output.slosh_summary.h_limit_margin = output.slosh_summary.h_limit - output.slosh_summary.h_peak_pred;
     }
     output.slosh_hard_constraint.h_peak_pred = output.slosh_summary.h_peak_pred;
@@ -1199,6 +1239,7 @@ bool ContinuousMpccSolverAcados::solve(
     const double abs_sum =
         std::abs(output.cost.J_contour) + std::abs(output.cost.J_lag) + std::abs(output.cost.J_progress) +
         std::abs(output.cost.J_v) + std::abs(output.cost.J_control) + std::abs(output.cost.J_smooth) +
+        std::abs(output.cost.J_anti_creep) + std::abs(output.cost.J_slack) + std::abs(output.cost.J_stop) +
         std::abs(output.cost.J_terminal) + std::abs(output.cost.J_corridor) + std::abs(output.cost.J_obstacle) +
         std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
     const double slosh_abs = std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);

@@ -1,0 +1,42 @@
+# 在 common/platform/container 配置之后加载。用于新版本离线/部署验证，不能混入旧 C03 冻结记录。
+# 当前仍缺实测杯沿余量；freeboard_m=0 明确表示物理边界未知。
+anticreep_gain: 8.0  # 离线关掉后减速更明显，但未显示稳定降晃收益；保留基准，可单独改为 0 对照。
+# OCP/停车模块继续执行原 v/omega/a/alpha/jerk 边界；避免发布层按另一时间步二次改写。
+platform:
+  shared_constraints:
+    linear_accel_limit_enable: false
+    angular_limit_enable: false
+execution_contract:
+  fail_closed_on_post_limit_change: true
+  max_post_limit_delta_v: 0.0001
+  max_post_limit_delta_omega: 0.0001
+ablation:
+  zero_liquid_initial_state: false
+  jerk_limit_enable: true
+terminal:
+  enable: true
+  mpc_stop_handoff_enable: true
+  complete_stop:
+    enable: true
+    residual_height_m: 0.001  # 模型稳定阈值，须随新协议固定
+    stable_hold_sec: 0.3
+    max_settle_sec: 15.0
+    max_tail_prediction_sec: 8.0
+    quiet_v: 0.001
+    quiet_omega: 0.001
+    command_zero_tolerance: 0.000001
+    velocity_cost_weight: 1.0
+slosh:
+  slosh_height_max: 0.001  # 沿用既有 1 mm 性能目标；不宣称已通过真实模型验证
+  freeboard_m: 0.0        # 待填写实测静液面至杯沿距离，不能用性能目标代替
+  physical_margin_m: 0.0  # 待按倾斜/误差预算填写
+  recovery:
+    enable: true
+    budget_m: 0.003       # 离线开发预算；物理边界已知时还会受其截断
+    linear_weight: 10.0
+    quadratic_weight: 100.0
+variants:
+  B_slosh:
+    slosh_constraint_enable: true
+  B_slosh_hard:
+    slosh_constraint_enable: true

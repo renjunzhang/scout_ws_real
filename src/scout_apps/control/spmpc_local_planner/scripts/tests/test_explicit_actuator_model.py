@@ -47,11 +47,11 @@ class ExplicitActuatorModelTest(unittest.TestCase):
     def test_dimensions_and_parameter_contract(self):
         b0 = export_spmpc_b0_symbols()
         slosh = export_spmpc_slosh_symbols()
-        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (24, 3, 28))
+        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (24, 3, 34))
         self.assertEqual(
-            (slosh["nx"], slosh["nu"], slosh["np"]), (28, 3, 37)
+            (slosh["nx"], slosh["nu"], slosh["np"]), (28, 3, 46)
         )
-        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (24, 28, 28, 37))
+        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (24, 28, 34, 46))
         self.assertEqual((ACCEL_MEMORY_INDEX, SLOSH_STATE_OFFSET), (23, 24))
 
     def test_partial_condensing_horizon_is_frozen(self):

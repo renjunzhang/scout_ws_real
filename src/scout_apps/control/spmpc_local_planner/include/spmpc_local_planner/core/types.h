@@ -75,15 +75,35 @@ struct CostBreakdown {
     double J_obstacle = 0.0;
     double J_slosh_eta = 0.0;
     double J_slosh_eta_dot = 0.0;
+    double J_anti_creep = 0.0;
+    double J_slack = 0.0;
+    double J_stop = 0.0;
+    // Detail fields; J_v already contains both, so total() does not add them twice.
+    double J_v_actual = 0.0;
+    double J_v_s = 0.0;
+    double solver_total = 0.0;
+    double reconstruction_error = 0.0;
+    bool reconstruction_valid = false;
 
     double total() const {
         return J_contour + J_lag + J_progress + J_v + J_control + J_smooth +
-               J_terminal + J_corridor + J_obstacle + J_slosh_eta + J_slosh_eta_dot;
+               J_terminal + J_corridor + J_obstacle + J_slosh_eta + J_slosh_eta_dot +
+               J_anti_creep + J_slack + J_stop;
     }
 };
 
 struct SloshHardConstraintDebug {
     bool enabled = false;
+    bool recovery_enabled = false;
+    bool recovery_used = false;
+    bool strict_target_satisfied = false;
+    bool physical_boundary_known = false;
+    double recovery_budget_m = 0.0;
+    double cap_m = 0.0;
+    double physical_boundary_m = 0.0;
+    double initial_height_m = 0.0;
+    double maximum_excess_m = 0.0;
+    int exceedance_nodes = 0;
     double h_limit = 0.0;
     double height_coeff = 0.0;
     double eta_max = 0.0;
@@ -457,6 +477,8 @@ struct SolverInput {
     bool has_v_ref_current = false;
     double v_ref_current = 0.0;
     std::string v_ref_status = "VARIANT_FALLBACK";
+    bool task_stop_active = false;
+    double task_stop_goal_s = 0.0;
     ControlCycleTimingDebug cycle_timing;
 };
 

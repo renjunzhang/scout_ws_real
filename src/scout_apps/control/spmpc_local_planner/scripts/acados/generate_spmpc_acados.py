@@ -46,7 +46,7 @@ from spmpc_acados_constraints import (  # noqa: E402
     set_constraints_slosh,
 )
 
-from model_contract import MODEL_VERSION, RK4_SUBSTEPS, require_codegen_version
+from model_contract import MODEL_VERSION, RK4_SUBSTEPS, COST_VERSION, require_codegen_version
 
 MODELS = {
     "b0": {"export": export_spmpc_b0_symbols, "with_slosh": False},
@@ -146,6 +146,11 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
     else:
         p[idx["w_alpha"]] = cfg["w_alpha"]   # 转向角加速度权重(抗 chatter，所有 stage 生效)
     p[idx["v_ref"]] = cfg["v_ref"]
+    if "anticreep_gain" in idx:
+        p[idx["anticreep_gain"]] = cfg["anticreep_gain"]
+        p[idx["stop_brake_accel"]] = cfg["a_max"]
+        p[idx["stop_delay_margin"]] = 1.0
+        p[idx["stop_velocity_weight"]] = 1.0
     if "actuator_dt" in idx:
         p[idx["actuator_dt"]] = cfg["actuator_dt"]
         p[idx["actuator_tau_v"]] = cfg["actuator_tau_v"]
@@ -171,6 +176,7 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
         p[idx["w_slosh_eta_dot"]] = cfg["w_slosh"]
         if "eta_max_sq" in idx:
             p[idx["eta_max_sq"]] = 1e12
+            p[idx["eta_target_sq"]] = 1e12
     return p
 
 
@@ -231,6 +237,8 @@ def generate(cfg, output_root, model_key, qp_cond_n=None):
     ocp.solver_options.N_horizon = cfg["N"]
     ocp.solver_options.tf = cfg["Tf"]
 
+    if not direct_omega_legacy:
+        ocp.solver_options.cost_scaling = np.ones(cfg["N"] + 1)
     ocp.cost.cost_type = "EXTERNAL"
     ocp.cost.cost_type_e = "EXTERNAL"
     ocp.model.cost_expr_ext_cost = stage_cost_expr(sym, cfg)
@@ -272,11 +280,15 @@ def generate(cfg, output_root, model_key, qp_cond_n=None):
 
     AcadosOcpSolver(ocp, json_file=json_path)
     if not direct_omega_legacy:
+        # Keep the runtime statistics on the same constants/expressions as OCP.
+        from generate_cost_kernel import generate as generate_cost_components
+        generate_cost_components(Path(PKG_DIR) / "src/core/generated", cfg)
         prefix = sym["name"].upper()
         Path(export_dir, sym["name"] + "_model_contract.h").write_text(
             "/* Generated model contract; do not edit. */\n#pragma once\n"
             f"#define {prefix}_LIQUID_MODEL_VERSION {MODEL_VERSION}\n"
-            f"#define {prefix}_RK4_SUBSTEPS {RK4_SUBSTEPS}\n")
+            f"#define {prefix}_RK4_SUBSTEPS {RK4_SUBSTEPS}\n"
+            f"#define {prefix}_COST_VERSION {COST_VERSION}\n")
     print(f"[ok] acados 求解器 '{model_key}' 已生成 -> {export_dir}")
     return 0
 

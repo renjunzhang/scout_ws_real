@@ -1,4 +1,5 @@
 <launch>
+  <arg name="planner_overlay_file" default="" doc="Optional YAML loaded last; overrides matching launch parameters. Empty keeps the base configuration."/>
   <arg name="terminal_mpc_stop_handoff_enable" default="false" doc="MPC slowdown followed by latched terminal stop; explicit actuator only"/>
   <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
   <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
@@ -169,5 +170,7 @@
            if="$(eval float(arg('w_du_a')) >= 0.0)"/>
     <param name="variants/$(arg planner_variant)/w_du_vs" value="$(arg w_du_vs)"
            if="$(eval float(arg('w_du_vs')) >= 0.0)"/>
+    <rosparam file="$(arg planner_overlay_file)" command="load"
+              if="$(eval arg('planner_overlay_file') != '')"/>
   </node>
 </launch>

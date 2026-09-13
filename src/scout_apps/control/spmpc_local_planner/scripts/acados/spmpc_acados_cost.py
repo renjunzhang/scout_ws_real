@@ -1,9 +1,9 @@
 """SPMPC 连续 MPCC —— acados 外部代价（EXTERNAL cost，纯 CasADi）。
 
-只产出 CasADi 代价表达式，不依赖 acados。覆盖 alpha-state 主线和
-RouteB direct-omega 诊断模型。表达式按 §4.4 口径：
+只产出 CasADi 代价表达式，不依赖 acados。覆盖显式执行器主线和
+RouteB direct-omega 诊断模型。主线采用：
   - 误差类项无量纲化（除以参考尺度）；
-  - 所有逐步累加项除以 N，保证不同 horizon / 与 primitive 后端权重可迁移；
+  - running 项除以 N、终端项计一次，acados scaling 显式设为 1；
   - 速度/路径进度单独处理（v_s 负向奖励 + v/v_s 对 v_ref 的跟踪，避免弯处 creep）。
 
 contour / lag 用 s 的参考多项式解析计算（局部 MPCC）。
@@ -12,7 +12,8 @@ contour / lag 用 s 的参考多项式解析计算（局部 MPCC）。
 import casadi as ca
 
 from spmpc_acados_model import (
-    ACCEL_MEMORY_INDEX,
+    ACCEL_MEMORY_INDEX, LINEAR_QUEUE_START, ANGULAR_QUEUE_START,
+    LINEAR_DELAY_STEPS, ANGULAR_DELAY_STEPS,
     PIDX, PIDX_SLOSH, PIDX_DIRECT_OMEGA_LEGACY, PIDX_SLOSH_DIRECT_OMEGA,
 )
 
@@ -74,30 +75,17 @@ def _curvature_limited_vref(x, p, cfg, pidx=PIDX):
     return ca.fmax(0.3 * v_cruise, v_eff)
 
 
-def _path_speed_cost(x, u, p, cfg, pidx=PIDX, curvature_aware=False, anticreep=False):
-    """物理速度/虚拟路径进度速度代价：线性进度奖励 + v_ref 跟踪惩罚。
-
-    curvature_aware=True 时 v_ref 随路径曲率自适应（弯前预减速、弯中仍 >0）。
-    anticreep=True 时对 "v / v_s 低于 v_ref 的亏空" 额外重罚（非对称 relu，仅惩罚低于侧）：
-      使 "塌到 v_ref 以下" 比 "弯处那点 contour 误差" 更贵，从源头堵住停滞；
-      高于 v_ref 不额外罚（上侧仍由 j_v/j_vs 处理）。权重复用 w_v × 常量增益，不引入新参数。
-    两个开关默认 False，legacy 诊断后端调用不传 → 行为字节级不变。
-    """
+def _path_speed_cost(x, u, p, cfg, pidx=PIDX):
+    """仅供 legacy：固定参考速度下的进度奖励与物理/虚拟速度跟踪。"""
     v = x[3]
     v_s = u[2]
     v_max = cfg["v_max"]
     vs_max = cfg["vs_max"]
-    v_ref = _curvature_limited_vref(x, p, cfg, pidx) if curvature_aware else p[pidx["v_ref"]]
+    v_ref = p[pidx["v_ref"]]
     j_progress = -p[pidx["w_progress"]] * (v_s / vs_max)
     j_v = p[pidx["w_v"]] * ((v - v_ref) / v_max) ** 2
     j_vs = p[pidx["w_vs"]] * ((v_s - v_ref) / vs_max) ** 2
-    cost = j_progress + j_v + j_vs
-    if anticreep:
-        gain = cfg.get("anticreep_gain", 8.0)   # 亏空相对 w_v 的放大倍数（codegen 常量，可调）
-        short_v = ca.fmax(0.0, v_ref - v) / v_max
-        short_vs = ca.fmax(0.0, v_ref - v_s) / vs_max
-        cost = cost + gain * p[pidx["w_v"]] * (short_v * short_v + short_vs * short_vs)
-    return cost
+    return j_progress + j_v + j_vs
 
 
 def _slosh_cost(x, p, pidx_slosh=PIDX_SLOSH, eta_base=6):
@@ -168,55 +156,72 @@ def terminal_cost_expr_direct_omega_legacy(sym, cfg):
 
 
 
+# Stable component ABI for generated C diagnostics. Terminal terms are evaluated
+# separately; slack/stop have their own totals including terminal contributions.
+COST_COMPONENT_NAMES = ("contour", "lag", "progress", "v_actual", "v_s",
+                        "anti_creep", "control", "smooth", "slosh_eta", "slosh_eta_dot", "slack", "stop")
+
+
+def cost_components(sym, cfg, terminal=False):
+    """Single definition consumed by both the objective and runtime diagnostics."""
+    x, u, p = sym["x"], sym["u"], sym["p"]
+    idx = PIDX_SLOSH if sym.get("with_slosh") else PIDX
+    rx, ry, phi = _reference_terms(x, p, idx)
+    ec = ca.sin(phi) * (x[0] - rx) - ca.cos(phi) * (x[1] - ry)
+    el = -ca.cos(phi) * (x[0] - rx) - ca.sin(phi) * (x[1] - ry)
+    terms = [p[idx["w_contour"]] * (ec / p[idx["e_c_ref"]])**2,
+             p[idx["w_lag"]] * (el / p[idx["e_l_ref"]])**2] + [ca.SX(0)] * 10
+    if sym.get("with_slosh"):
+        b = sym["eta_base"]
+        terms[8] = p[idx["w_slosh_eta"]] * (x[b]**2 + x[b+2]**2) / p[idx["eta_ref"]]**2
+        terms[9] = p[idx["w_slosh_eta_dot"]] * (x[b+1]**2 + x[b+3]**2) / p[idx["eta_dot_ref"]]**2
+        # Eliminate epsilon analytically: the minimizing nonnegative slack is
+        # max(||eta||^2 - target^2, 0). A separate hard cap bounds its budget.
+        # Positive linear/quadratic penalties make this equivalent to an explicit
+        # bounded slack variable, while retaining the existing state/control ABI.
+        slack = ca.fmax(0, x[b]**2 + x[b+2]**2 - p[idx["eta_target_sq"]]) / p[idx["eta_ref"]]**2
+        terms[10] = p[idx["slack_linear_weight"]]*slack + p[idx["slack_quadratic_weight"]]*slack**2
+    remaining = ca.fmax(0, p[idx["stop_goal_s"]] - x[4])
+    brake = p[idx["stop_brake_accel"]]
+    delay = p[idx["stop_delay_margin"]]
+    # Includes a delay/actuator/jerk margin, with finite derivatives at rest.
+    stop_v = ca.sqrt((brake*delay)**2 + 2*brake*remaining) - brake*delay
+    nominal_vref = _curvature_limited_vref(x, p, cfg, idx)
+    stopping = p[idx["stop_active"]]
+    vref = (1-stopping)*nominal_vref + stopping*ca.fmin(nominal_vref, stop_v)
+    near_goal = stopping*ca.fmax(0, 1-remaining/ca.fmax(.1, p[idx["v_ref"]]*delay))
+    # Clear command/actual motion and the delayed command tail at the true goal.
+    stop_energy = (x[3]**2+x[6]**2)/cfg["v_max"]**2 + (x[5]**2+x[7]**2)/cfg["omega_max"]**2
+    stop_energy += ca.sumsqr(x[LINEAR_QUEUE_START:ANGULAR_QUEUE_START])/(LINEAR_DELAY_STEPS*cfg["v_max"]**2) + ca.sumsqr(x[ANGULAR_QUEUE_START:ACCEL_MEMORY_INDEX])/(ANGULAR_DELAY_STEPS*cfg["omega_max"]**2)
+    stop_energy += (x[ACCEL_MEMORY_INDEX]/cfg["a_max"])**2
+    terms[11] = p[idx["stop_velocity_weight"]]*near_goal*stop_energy
+    if sym.get("with_slosh"):
+        b=sym["eta_base"]
+        residual_energy = x[b]**2+x[b+2]**2+(x[b+1]**2+x[b+3]**2)/p[idx["omega_n_sq"]]
+        terms[11] += near_goal*p[idx["w_slosh_eta"]]*residual_energy/p[idx["eta_ref"]]**2
+    if not terminal:
+        terms[2] = -p[idx["w_progress"]] * u[2] / cfg["vs_max"] * ((1-stopping) + stopping*ca.fmin(1, stop_v/ca.fmax(1e-6,nominal_vref)))
+        terms[3] = p[idx["w_v"]] * ((x[3] - vref) / cfg["v_max"])**2
+        terms[4] = p[idx["w_vs"]] * ((u[2] - vref) / cfg["vs_max"])**2
+        terms[5] = p[idx["anticreep_gain"]] * p[idx["w_v"]] * (
+            (ca.fmax(0, vref-x[3]) / cfg["v_max"])**2 +
+            (ca.fmax(0, vref-u[2]) / cfg["vs_max"])**2)
+        terms[6] = (p[idx["w_a"]] * (u[0]/cfg["a_max"])**2 +
+                    p[idx["w_omega"]] * (x[5]/cfg["omega_max"])**2 +
+                    p[idx["w_alpha"]] * (u[1]/cfg["alpha_max"])**2)
+        terms[7] = (p[idx["w_du_a"]] * ((u[0]-x[ACCEL_MEMORY_INDEX])/cfg["a_max"])**2 +
+                    p[idx["w_du_vs"]] * ((u[2]-p[idx["vs_prev"]])/cfg["vs_max"])**2)
+    # Average running cost + one terminal cost. acados scaling is explicitly 1.
+    return ca.vertcat(*terms) / (1. if terminal else float(cfg["N"]))
+
+
 def stage_cost_expr(sym, cfg):
-    """stage k 的 EXTERNAL 代价表达式。"""
     if sym.get("direct_omega_legacy"):
         return stage_cost_expr_direct_omega_legacy(sym, cfg)
-    x = sym["x"]
-    u = sym["u"]
-    p = sym["p"]
-    a, alpha, v_s = u[0], u[1], u[2]
-    omega = x[5]   # actual omega 状态
-
-    a_max = cfg["a_max"]
-    omega_max = cfg["omega_max"]
-    vs_max = cfg["vs_max"]
-    alpha_max = cfg["alpha_max"]
-    n_steps = float(cfg["N"])
-
-    j_track = _tracking_cost(x, p)
-    j_path_speed = _path_speed_cost(x, u, p, cfg, curvature_aware=True, anticreep=True)  # 曲率v_ref + 非对称anti-creep
-
-    # 幅值：a 是控制，omega 是状态(转向幅值)，alpha 是转向角加速度控制；v_s 单独由 path-speed 项处理。
-    # w_alpha 在所有 stage 生效 -> horizon 内 Δomega 平滑，直接抑制直道甩舵 chattering。
-    j_control = (
-        p[PIDX["w_a"]] * (a / a_max) ** 2
-        + p[PIDX["w_omega"]] * (omega / omega_max) ** 2
-        + p[PIDX["w_alpha"]] * (alpha / alpha_max) ** 2
-    )
-
-    # a_cmd_memory(k+1)=a_cmd(k)，因此同一表达式在所有控制 stage 约束
-    # a_cmd(k)-a_cmd(k-1)。stage 0 的 memory 由最终发布命令历史初始化。
-    # omega 已是状态，Δomega 由全时域 w_alpha 间接平滑；本轮不增加 Δalpha。
-    du_a = (a - x[ACCEL_MEMORY_INDEX]) / a_max
-    du_vs = (v_s - p[PIDX["vs_prev"]]) / vs_max
-    j_smooth = (
-        p[PIDX["w_du_a"]] * du_a ** 2
-        + p[PIDX["w_du_vs"]] * du_vs ** 2
-    )
-
-    j_slosh = _slosh_cost(
-        x, p, PIDX_SLOSH, sym.get("eta_base", 6)) if sym.get("with_slosh") else 0.0
-    return (j_track + j_path_speed + j_control + j_smooth + j_slosh) / n_steps
+    return ca.sum1(cost_components(sym, cfg))
 
 
 def terminal_cost_expr(sym, cfg):
-    """stage N 的 EXTERNAL 终端代价：跟踪 + 残余模态能量（§5.4），无控制项。"""
     if sym.get("direct_omega_legacy"):
         return terminal_cost_expr_direct_omega_legacy(sym, cfg)
-    x = sym["x"]
-    p = sym["p"]
-    j = _tracking_cost(x, p)
-    if sym.get("with_slosh"):
-        j = j + _slosh_cost(x, p, PIDX_SLOSH, sym.get("eta_base", 6))
-    return j
+    return ca.sum1(cost_components(sym, cfg, terminal=True))

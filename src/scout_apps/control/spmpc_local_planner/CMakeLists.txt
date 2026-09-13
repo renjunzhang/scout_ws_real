@@ -97,6 +97,10 @@ add_library(${PROJECT_NAME}
   src/core/costmap_grid.cpp
   src/core/spmpc_problem.cpp
   src/core/slosh_risk_governor.cpp
+  src/core/ocp_cost_evaluator.cpp
+  src/core/liquid_limit_policy.cpp
+  src/core/task_stop_manager.cpp
+  src/core/generated/ocp_cost_generated.c
   src/core/speed_safety_contract.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
@@ -237,6 +241,10 @@ if(CATKIN_ENABLE_TESTING)
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )
+  endif()
+  catkin_add_gtest(test_task_stop_manager test/test_task_stop_manager.cpp)
+  if(TARGET test_task_stop_manager)
+    target_link_libraries(test_task_stop_manager ${PROJECT_NAME} ${catkin_LIBRARIES})
   endif()
   catkin_add_gtest(test_terminal_controller test/test_terminal_controller.cpp)
   if(TARGET test_terminal_controller)

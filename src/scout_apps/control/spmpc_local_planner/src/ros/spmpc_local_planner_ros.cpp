@@ -655,6 +655,22 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_FATAL("terminal MPC stop handoff requires the explicit-actuator MPCC backend");
         return false;
     }
+    pnh_.param("anticreep_gain", solver_params.anticreep_gain, solver_params.anticreep_gain);
+    pnh_.param("slosh/recovery/enable", solver_params.liquid_limit.recovery_enable, solver_params.liquid_limit.recovery_enable);
+    pnh_.param("slosh/recovery/budget_m", solver_params.liquid_limit.recovery_budget_m, solver_params.liquid_limit.recovery_budget_m);
+    pnh_.param("slosh/recovery/linear_weight", solver_params.liquid_limit.slack_linear_weight, solver_params.liquid_limit.slack_linear_weight);
+    pnh_.param("slosh/recovery/quadratic_weight", solver_params.liquid_limit.slack_quadratic_weight, solver_params.liquid_limit.slack_quadratic_weight);
+    pnh_.param("slosh/freeboard_m", solver_params.liquid_limit.freeboard_m, solver_params.liquid_limit.freeboard_m);
+    pnh_.param("slosh/physical_margin_m", solver_params.liquid_limit.physical_margin_m, solver_params.liquid_limit.physical_margin_m);
+    pnh_.param("terminal/complete_stop/enable", solver_params.task_stop.enable, solver_params.task_stop.enable);
+    pnh_.param("terminal/complete_stop/residual_height_m", solver_params.task_stop.residual_height_m, solver_params.task_stop.residual_height_m);
+    pnh_.param("terminal/complete_stop/stable_hold_sec", solver_params.task_stop.stable_hold_sec, solver_params.task_stop.stable_hold_sec);
+    pnh_.param("terminal/complete_stop/max_settle_sec", solver_params.task_stop.max_settle_sec, solver_params.task_stop.max_settle_sec);
+    pnh_.param("terminal/complete_stop/max_tail_prediction_sec", solver_params.task_stop.max_tail_prediction_sec, solver_params.task_stop.max_tail_prediction_sec);
+    pnh_.param("terminal/complete_stop/quiet_v", solver_params.task_stop.quiet_v, solver_params.task_stop.quiet_v);
+    pnh_.param("terminal/complete_stop/quiet_omega", solver_params.task_stop.quiet_omega, solver_params.task_stop.quiet_omega);
+    pnh_.param("terminal/complete_stop/command_zero_tolerance", solver_params.task_stop.command_zero_tolerance, solver_params.task_stop.command_zero_tolerance);
+    pnh_.param("terminal/complete_stop/velocity_cost_weight", solver_params.task_stop.velocity_cost_weight, solver_params.task_stop.velocity_cost_weight);
     solver_params.slosh = loadSloshParams();
     solver_params.slosh.dt = dt_;
     const ProcessedImuParams processed_imu_params = loadProcessedImuParams();
@@ -686,6 +702,15 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_FATAL("[spmpc_local_planner] invalid ablation configuration: "
                   "NoState requires liquid prediction; jerk_max must be finite and positive; "
                   "ablation switches require the explicit-actuator MPCC backend");
+        return false;
+    }
+    if (solver_params.task_stop.enable &&
+        (!solver_params.terminal.enable || !solver_params.terminal.mpc_stop_handoff_enable ||
+         !solver_params.jerk_limit_enable || solver_params.zero_liquid_initial_state ||
+         !state_timing_params_.require_common_epoch ||
+         !command_contract_params_.fail_closed_on_post_limit_change)) {
+        ROS_FATAL("complete_stop requires terminal/MPC handoff, jerk, common epoch and "
+                  "fail-closed publication contract; NoState must be disabled");
         return false;
     }
     ROS_INFO("[spmpc_local_planner] ablation zero_liquid_initial_state=%s "
@@ -1384,7 +1409,6 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
     debug.publish_cmd_vel = publish_cmd_vel_;
     debug.published_cmd_v = 0.0;
     debug.published_cmd_omega = 0.0;
-    diagnostics_.publishCommandIntervention(debug);
     if (audit) {
         audit->v_safe_max = speed_safety_contract_.params().v_safe_max;
         audit->speed_safety_latched =
@@ -1393,6 +1417,7 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
             audit->zero_due_to_speed_safety || speed_safety_contract_.latched();
     }
     if (!publish_cmd_vel_) {
+        diagnostics_.publishCommandIntervention(debug);
         if (audit) {
             audit->publish_cmd_vel = false;
             audit->command_was_published = false;
@@ -1404,11 +1429,12 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
         return;
     }
     geometry_msgs::Twist cmd;
-    const auto stamp = ros::Time::now();
     CommandPublishMeta meta;
     meta.is_zero_cmd = true;
-    recordPublishedCommand(cmd, stamp, meta);
+    const auto stamp = ros::Time::now();
     cmd_pub_.publish(cmd);
+    recordPublishedCommand(cmd, stamp, meta);
+    diagnostics_.publishCommandIntervention(debug);
     if (audit) {
         audit->timing.command_publish_stamp_ns =
             static_cast<std::int64_t>(stamp.toNSec());
@@ -1482,18 +1508,13 @@ void SpmpcLocalPlannerROS::publishCommand(
         const bool speed_fail_closed =
             speed_decision.enabled && speed_decision.latched;
         CommandInterventionDebug debug = intervention;
+        if (speed_fail_closed) debug.output_success = false;
         debug.zero_due_to_speed_safety = speed_fail_closed;
         debug.speed_safety_violation = speed_decision.violation;
         debug.speed_safety_latched = speed_decision.latched;
         debug.v_safe_max = speed_decision.v_safe_max;
         debug.publish_cmd_vel = false;
         diagnostics_.publishCommandIntervention(debug);
-        if (speed_fail_closed) {
-            diagnostics_.publishStatus(
-                speed_decision.violation
-                    ? "SPEED_SAFETY_CONTRACT_VIOLATION"
-                    : "SPEED_SAFETY_CONTRACT_LATCHED");
-        }
         if (audit) {
             audit->publish_cmd_vel = false;
             audit->command_was_published = false;
@@ -1535,14 +1556,9 @@ void SpmpcLocalPlannerROS::publishCommand(
         command_contract_params_.fail_closed_on_post_limit_change;
     if (contract_fail_closed) {
         cmd = geometry_msgs::Twist();
-        diagnostics_.publishStatus("COMMAND_EXECUTION_CONTRACT_VIOLATION");
     }
     if (speed_fail_closed) {
         cmd = geometry_msgs::Twist();
-        const char* status = speed_decision.violation
-            ? "SPEED_SAFETY_CONTRACT_VIOLATION"
-            : "SPEED_SAFETY_CONTRACT_LATCHED";
-        diagnostics_.publishStatus(status);
         if (speed_decision.newly_latched) {
             ROS_ERROR("[spmpc_local_planner] speed safety latched: status=%s "
                       "solver_v=%.6f post_gate_v=%.6f publish_candidate_v=%.6f "
@@ -1564,7 +1580,9 @@ void SpmpcLocalPlannerROS::publishCommand(
     meta.linear_limited = linear_limited;
     meta.angular_rate_limited = angular_rate_limited;
     meta.angular_accel_limited = angular_accel_limited;
-    recordPublishedCommand(cmd, stamp, meta);
+    const auto publish_stamp = ros::Time::now();
+    cmd_pub_.publish(cmd);
+    recordPublishedCommand(cmd, publish_stamp, meta);
     diagnostics_.publishCommandOutput(
         desired, cmd, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
     CommandInterventionDebug debug = intervention;
@@ -1574,16 +1592,16 @@ void SpmpcLocalPlannerROS::publishCommand(
     debug.angular_rate_limited = angular_rate_limited;
     debug.angular_accel_limited = angular_accel_limited;
     debug.zero_due_to_command_contract = contract_fail_closed;
+    if (contract_fail_closed || speed_fail_closed) debug.output_success = false;
     debug.zero_due_to_speed_safety = speed_fail_closed;
     debug.speed_safety_violation = speed_decision.violation;
     debug.speed_safety_latched = speed_decision.latched;
     debug.v_safe_max = speed_decision.v_safe_max;
     debug.publish_cmd_vel = true;
     diagnostics_.publishCommandIntervention(debug);
-    cmd_pub_.publish(cmd);
     if (audit) {
         audit->timing.command_publish_stamp_ns =
-            static_cast<std::int64_t>(stamp.toNSec());
+            static_cast<std::int64_t>(publish_stamp.toNSec());
         audit->publish_cmd_vel = true;
         audit->command_was_published = true;
         audit->command_contract_violation = command_contract_violation;
@@ -1597,6 +1615,8 @@ void SpmpcLocalPlannerROS::publishCommand(
         audit->published_cmd_v = cmd.linear.x;
         audit->published_cmd_omega = cmd.angular.z;
         if (contract_fail_closed) {
+            audit->command_accepted = false;
+            audit->safety_gate_intervened = true;
             audit->status = "COMMAND_EXECUTION_CONTRACT_VIOLATION";
         }
         if (speed_fail_closed) {
@@ -1913,7 +1933,8 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             odom_observer_health,
             imu_observer_health,
             static_cast<std::int64_t>(observer_selection_now.toNSec()));
-    const bool solver_consumes_selected_state = variant_.slosh_enable;
+    const bool solver_consumes_selected_state =
+        problem_.requiresLiquidState() || slosh_risk_governor_params_.enable;
     cycle_audit.observer_source =
         static_cast<std::uint8_t>(observer_selection.effective_source);
     cycle_audit.odom_excitation = makeExcitationAudit(
@@ -2367,6 +2388,23 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.safety_gate_intervened =
         terminal_spin_blocked || tracking_safety_blocked;
     cycle_audit.status = output.status;
+    // Dispatch the accepted command before serializing the full debug horizon.
+    // The effective state was predicted to the pre-solve epoch; diagnostics
+    // must not add avoidable latency between that epoch and command dispatch.
+    if (!output.success) {
+        publishZeroCommand(intervention, &cycle_audit);
+    } else {
+        geometry_msgs::Twist cmd;
+        cmd.linear.x = output.cmd_v;
+        cmd.angular.z = output.cmd_omega;
+        publishCommand(cmd, intervention, &cycle_audit);
+    }
+    output.cycle_timing = cycle_audit.timing;
+    if (!cycle_audit.command_accepted) {
+        output.success = false;
+        output.status = cycle_audit.status;
+        output.terminal_diagnostics.reached = false;
+    }
     diagnostics_.publishStatus(output.status);
     // Observer-derived/pre-ablation diagnostics stay continuous in NoState.
     // The effective (possibly zero) OCP x0 is in solver_input_state and the
@@ -2404,15 +2442,6 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         have_previous_shifted_plan_ = false;
     }
 
-    if (!output.success) {
-        publishZeroCommand(intervention, &cycle_audit);
-        return;
-    }
-
-    geometry_msgs::Twist cmd;
-    cmd.linear.x = output.cmd_v;
-    cmd.angular.z = output.cmd_omega;
-    publishCommand(cmd, intervention, &cycle_audit);
 }
 
 RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& odom) const {

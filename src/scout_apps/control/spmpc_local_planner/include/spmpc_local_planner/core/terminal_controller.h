@@ -32,6 +32,7 @@ struct TerminalControllerParams {
 
 struct TerminalGoalInfo {
     bool valid = false;
+    bool task_end_approach = true;
     bool position_reached = false;
     double distance_to_goal = std::numeric_limits<double>::infinity();
     double remaining_s = std::numeric_limits<double>::infinity();
@@ -66,7 +67,8 @@ public:
         const TerminalGoalInfo& goal,
         double current_v,
         double current_omega,
-        double a_brake);
+        double a_brake,
+        bool completion_ready = true);
 
     TerminalClampOutput clampCommand(
         double cmd_v,

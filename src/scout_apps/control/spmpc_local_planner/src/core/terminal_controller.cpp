@@ -36,7 +36,7 @@ TerminalPlan TerminalController::updateAndPlan(
     const TerminalGoalInfo& goal,
     double current_v,
     double current_omega,
-    double a_brake) {
+    double a_brake, bool completion_ready) {
     diagnostics_ = TerminalDiagnostics{};
     diagnostics_.enabled = params_.enable;
     diagnostics_.distance_to_goal = goal.distance_to_goal;
@@ -53,6 +53,9 @@ TerminalPlan TerminalController::updateAndPlan(
         return plan;
     }
 
+    // Legacy callers keep completion_ready=true. Complete-stop callers must
+    // reacquire their live quiet/stability gates after an external disturbance.
+    if (reached_latched_ && !completion_ready) reached_latched_ = false;
     if (reached_latched_) {
         plan.owns_command = params_.mpc_stop_handoff_enable;
         diagnostics_.command_owned = plan.owns_command;
@@ -70,6 +73,12 @@ TerminalPlan TerminalController::updateAndPlan(
         diagnostics_.stop_pending = plan.stop_pending;
         diagnostics_.v_envelope = plan.v_envelope;
         diagnostics_.reached = true;
+        diagnostics_.mode = plan.mode;
+        return plan;
+    }
+
+    if (!goal.task_end_approach && !stop_owned_) {
+        plan.mode = "TRACKING";
         diagnostics_.mode = plan.mode;
         return plan;
     }
@@ -103,7 +112,7 @@ TerminalPlan TerminalController::updateAndPlan(
     plan.terminal_phase = terminal_phase;
     plan.pre_terminal_phase = !terminal_phase;
     plan.v_envelope = envelope;
-    if (goal.position_reached && diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached) {
+    if (goal.position_reached && diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached && completion_ready) {
         reached_latched_ = true;
         plan.mode = "REACHED";
         diagnostics_.reached = true;

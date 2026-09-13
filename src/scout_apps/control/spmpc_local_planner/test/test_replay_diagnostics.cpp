@@ -1,7 +1,9 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
+#include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <cmath>
 #include <limits>
 
@@ -177,9 +179,9 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, 60);
     EXPECT_EQ(first.pre_solve_snapshot.state_width, 24);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 28);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 28u);
-    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 28u);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 34);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 34u);
+    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 34u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), 61u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), 60u);
     EXPECT_FALSE(first.pre_solve_snapshot.have_previous_solution);
@@ -192,7 +194,7 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
             .model_state[static_cast<size_t>(kExplicitActuatorAccelMemoryIndex)],
         input.actuator.a_cmd_memory);
     for (int stage : {0, 1, 59, 60}) {
-        const size_t base = static_cast<size_t>(stage * 28);
+        const size_t base = static_cast<size_t>(stage * 34);
         EXPECT_DOUBLE_EQ(
             first.pre_solve_snapshot.stage_parameters[base + 16],
             makeB0Variant().w_du_a);
@@ -361,6 +363,243 @@ TEST(ReplayDiagnostics, RejectsInvalidAblationConfiguration) {
     solver.configure(params, makeB0Variant());
     EXPECT_FALSE(solver.solve(makeInput(), makeStraightReference(), output));
     EXPECT_EQ(output.status, "INVALID_ABLATION_CONFIG");
+}
+
+#ifdef SPMPC_TEST_WITH_SLOSH
+TEST(LiquidRecovery, RetainsTrueInitialStateAndReportsRecoveryInsteadOfStrictPass) {
+    auto params=makeParams(); params.jerk_limit_enable=true;
+    params.liquid_limit.recovery_enable=true;
+    params.liquid_limit.recovery_budget_m=.003;
+    auto variant=makeB0Variant();variant.slosh_enable=true;variant.slosh_constraint_enable=true;variant.w_slosh=1.;
+    auto input=makeInput();
+    SloshDynamics liquid;ASSERT_TRUE(liquid.configure(params.slosh));
+    input.actuator.a_cmd_memory=0.; // Consistent stationary command history.
+    input.slosh.eta_x=.002/liquid.heightCoeff(); // 2 mm initial height > 1 mm target.
+    ContinuousMpccSolverAcados solver;solver.configure(params,variant);
+    SolverOutput output;
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),output)) << output.status;
+    EXPECT_DOUBLE_EQ(input.slosh.eta_x,output.pre_solve_snapshot.slosh.eta_x);
+    EXPECT_NEAR(output.predicted_horizon.states.front().eta_x,input.slosh.eta_x,1e-10);
+    EXPECT_TRUE(output.slosh_hard_constraint.recovery_enabled);
+    EXPECT_TRUE(output.slosh_hard_constraint.recovery_used);
+    EXPECT_FALSE(output.slosh_hard_constraint.strict_target_satisfied);
+    EXPECT_FALSE(output.slosh_summary.hard_constraint_enable);
+    EXPECT_GT(output.cost.J_slack,0.);
+    EXPECT_TRUE(output.cost.reconstruction_valid);
+    EXPECT_NEAR(output.cost.total(),output.cost.solver_total,1e-8);
+    EXPECT_LE(output.slosh_summary.h_peak_pred,output.slosh_hard_constraint.cap_m+1e-7);
+}
+
+TEST(LiquidRecovery, NonzeroDelayPrefixMayExceedTargetWithoutChangingHistory) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.slosh.slosh_height_max=.00005;params.liquid_limit.recovery_enable=true;
+    auto variant=makeB0Variant();variant.slosh_enable=true;variant.slosh_constraint_enable=true;variant.w_slosh=1.;
+    auto input=makeInput();input.robot.v=.2;input.actuator.a_cmd_memory=0;
+    input.actuator.v_cmd=.2/params.actuator.linear_gain;
+    input.actuator.omega_cmd=.5/params.actuator.angular_gain;
+    input.actuator.linear_delay_queue.fill(input.actuator.v_cmd);
+    input.actuator.angular_delay_queue.fill(input.actuator.omega_cmd);
+    const auto history=input.actuator;
+    ContinuousMpccSolverAcados solver;solver.configure(params,variant);SolverOutput out;
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),out))<<out.status;
+    EXPECT_TRUE(out.slosh_hard_constraint.recovery_used);
+    EXPECT_EQ(input.actuator.linear_delay_queue,history.linear_delay_queue);
+    EXPECT_EQ(input.actuator.angular_delay_queue,history.angular_delay_queue);
+    EXPECT_EQ(out.pre_solve_snapshot.actuator.angular_delay_queue,history.angular_delay_queue);
+    params.liquid_limit.recovery_enable=false;solver.configure(params,variant);
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),out));
+}
+
+TEST(LiquidRecovery, RefusesExhaustedBudgetAndNoStateWithoutAlteringHistory) {
+    auto params=makeParams();params.liquid_limit.recovery_enable=true;
+    params.liquid_limit.recovery_budget_m=.0001;
+    auto variant=makeB0Variant();variant.slosh_enable=true;variant.slosh_constraint_enable=true;
+    auto input=makeInput();input.slosh.eta_x=.004;
+    input.actuator.linear_delay_queue.fill(.3);
+    ContinuousMpccSolverAcados solver;solver.configure(params,variant);
+    SolverOutput output;
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
+    EXPECT_EQ(output.status,"LIQUID_RECOVERY_BUDGET_EXCEEDED");
+    EXPECT_DOUBLE_EQ(output.pre_solve_snapshot.slosh.eta_x,.004);
+    EXPECT_EQ(output.pre_solve_snapshot.actuator.linear_delay_queue,input.actuator.linear_delay_queue);
+    EXPECT_DOUBLE_EQ(output.cmd_v,0.);
+    params.zero_liquid_initial_state=true;solver.configure(params,variant);
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
+    EXPECT_EQ(output.status,"NOSTATE_INCOMPATIBLE_WITH_LIQUID_LIMIT");
+}
+
+TEST(LiquidRecovery, PhysicalBoundaryClipsBudgetAndRequiresMeasuredFreeboard) {
+    LiquidLimitParams params;params.recovery_enable=true;params.recovery_budget_m=.004;
+    params.freeboard_m=.004;params.physical_margin_m=.001;
+    LiquidLimitPolicy policy;std::string error;
+    ASSERT_TRUE(makeLiquidLimitPolicy(true,.001,params,policy,error));
+    EXPECT_TRUE(policy.physical_boundary_known);
+    EXPECT_DOUBLE_EQ(policy.cap_m,.003);
+    EXPECT_DOUBLE_EQ(policy.recovery_budget_m,.002);
+    params.freeboard_m=0;
+    EXPECT_FALSE(makeLiquidLimitPolicy(true,.001,params,policy,error));
+    EXPECT_EQ(error,"LIQUID_FREEBOARD_NOT_MEASURED");
+}
+#endif
+
+TEST(CompleteStop, WaitsForQueuesAndModalVelocityWithoutReenteringOcp) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+    params.task_stop.stable_hold_sec=.1;
+    SpmpcProblem problem;problem.configure(params,makeB0Variant());
+    const auto path=makeStraightReference();problem.setReferencePath(path);
+    auto input=makeInput();input.robot.x=4.9;input.actuator.a_cmd_memory=0;
+    input.actuator.angular_delay_queue.back()=.1;input.slosh.eta_x_dot=.1;
+    SolverOutput out;ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_FALSE(out.ocp_solve_attempted);EXPECT_FALSE(out.terminal_diagnostics.delay_queues_clear);
+    EXPECT_NE(out.status,"GOAL_REACHED");
+    input.actuator.angular_delay_queue.fill(0);
+    ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_EQ(out.status,"TERMINAL_SETTLING");EXPECT_FALSE(out.terminal_diagnostics.liquid_stable);
+    EXPECT_DOUBLE_EQ(out.cmd_v,0.);
+    input.slosh={};
+    for(int k=0;k<4;++k) {problem.setReferencePath(path);ASSERT_TRUE(problem.solve(input,out))<<out.status;}
+    EXPECT_EQ(out.status,"GOAL_REACHED");EXPECT_FALSE(out.ocp_solve_attempted);
+    EXPECT_TRUE(out.terminal_diagnostics.delay_queues_clear);
+    EXPECT_LT(out.terminal_diagnostics.vehicle_stop_time_sec,out.terminal_diagnostics.liquid_stable_time_sec);
+}
+
+TEST(CompleteStop, OnlyTrueTaskEndActivatesStageStopReference) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+    SpmpcProblem problem;problem.configure(params,makeB0Variant());problem.setReferencePath(makeStraightReference());
+    auto input=makeInput();input.actuator.a_cmd_memory=0;
+    SolverOutput out;ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    const auto names=out.pre_solve_snapshot.parameter_names;
+    const size_t active=std::find(names.begin(),names.end(),"stop_active")-names.begin();
+    ASSERT_LT(active,names.size());
+    EXPECT_EQ(out.pre_solve_snapshot.stage_parameters[active],0.);
+    EXPECT_GT(out.predicted_horizon.states.back().v,.01);
+    input.robot.x=4.;
+    ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_EQ(out.pre_solve_snapshot.stage_parameters[active],1.);
+    EXPECT_EQ(out.pre_solve_snapshot.v_ref_status,"TASK_GOAL_STOP_PROFILE");
+    EXPECT_DOUBLE_EQ(out.cmd_v,out.predicted_horizon.states[1].v_cmd);
+    EXPECT_TRUE(out.cost.reconstruction_valid);
+}
+
+TEST(CompleteStop, B0ConsumesLiquidAndReacquiresStabilityAfterDisturbance) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+    params.task_stop.stable_hold_sec=.05;params.task_stop.max_settle_sec=.15;
+    SpmpcProblem problem;problem.configure(params,makeB0Variant());
+    EXPECT_TRUE(problem.requiresLiquidState());
+    problem.setReferencePath(makeStraightReference());
+    auto input=makeInput();input.robot.x=4.9;input.actuator.a_cmd_memory=0;
+    SolverOutput out;
+    for (int k=0;k<4;++k) ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_EQ(out.status,"GOAL_REACHED");
+    const double first_stable=out.terminal_diagnostics.liquid_stable_time_sec;
+    input.slosh.eta_x_dot=.1;
+    ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_EQ(out.status,"TERMINAL_SETTLING");
+    EXPECT_FALSE(out.terminal_diagnostics.reached);
+    EXPECT_FALSE(out.terminal_diagnostics.liquid_stable);
+    EXPECT_DOUBLE_EQ(out.terminal_diagnostics.liquid_stable_time_sec,first_stable);
+    for (int k=0;k<6;++k) problem.solve(input,out);
+    EXPECT_EQ(out.status,"LIQUID_SETTLE_TIMEOUT");
+    params.task_stop.enable=false;problem.configure(params,makeB0Variant());
+    EXPECT_FALSE(problem.requiresLiquidState());
+}
+
+TEST(CompleteStop, SettleTimeoutRemainsFailedAfterLiquidBecomesQuiet) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+    params.task_stop.max_settle_sec=.1;params.task_stop.stable_hold_sec=.05;
+    SpmpcProblem problem;problem.configure(params,makeB0Variant());
+    const auto path=makeStraightReference();problem.setReferencePath(path);
+    auto input=makeInput();input.robot.x=4.9;input.actuator.a_cmd_memory=0;
+    input.slosh.eta_x_dot=.1;
+    SolverOutput out;
+    for(int k=0;k<6;++k) problem.solve(input,out);
+    EXPECT_EQ(out.status,"LIQUID_SETTLE_TIMEOUT");
+    input.slosh={};
+    for(int k=0;k<6;++k) {
+        problem.setReferencePath(path); // Republishing the same task cannot reset failure.
+        EXPECT_FALSE(problem.solve(input,out));
+        EXPECT_EQ(out.status,"LIQUID_SETTLE_TIMEOUT");
+        EXPECT_FALSE(out.terminal_diagnostics.reached);
+        EXPECT_FALSE(out.ocp_solve_attempted);
+    }
+}
+
+#ifdef SPMPC_TEST_WITH_SLOSH
+TEST(CompleteStop, PhysicalBoundaryCannotBeBypassedByLiquidStabilityOrGoalLatch) {
+    auto params=makeParams();params.jerk_limit_enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+    params.task_stop.stable_hold_sec=.05;params.task_stop.residual_height_m=.002;
+    params.liquid_limit.recovery_enable=true;params.liquid_limit.freeboard_m=.0015;
+    auto variant=makeB0Variant();variant.slosh_enable=true;variant.slosh_constraint_enable=true;
+    SpmpcProblem problem;problem.configure(params,variant);problem.setReferencePath(makeStraightReference());
+    SloshDynamics liquid;ASSERT_TRUE(liquid.configure(params.slosh));
+    auto input=makeInput();input.robot.x=4.9;input.actuator.a_cmd_memory=0;
+    input.slosh.eta_x=.0016/liquid.heightCoeff();
+    SolverOutput out;
+    for(int k=0;k<6;++k) {
+        EXPECT_FALSE(problem.solve(input,out));
+        EXPECT_EQ(out.status,"STOP_LIQUID_RECOVERY_CAP");
+        EXPECT_FALSE(out.terminal_diagnostics.reached);
+    }
+    input.slosh={};
+    for(int k=0;k<3;++k) ASSERT_TRUE(problem.solve(input,out))<<out.status;
+    EXPECT_EQ(out.status,"GOAL_REACHED");
+    input.slosh.eta_x=.0016/liquid.heightCoeff();
+    EXPECT_FALSE(problem.solve(input,out));
+    EXPECT_EQ(out.status,"STOP_LIQUID_RECOVERY_CAP");
+    EXPECT_FALSE(out.terminal_diagnostics.reached);
+    // Invalid physical configuration is rejected even when starting at the goal.
+    params.liquid_limit.freeboard_m=0;params.liquid_limit.physical_margin_m=.001;
+    problem.configure(params,variant);input.slosh={};
+    EXPECT_FALSE(problem.solve(input,out));
+    EXPECT_EQ(out.status,"LIQUID_FREEBOARD_NOT_MEASURED");
+}
+#endif
+
+TEST(CompleteStop, FullClosedLoopReachesGoalWithJerkQueuesAndLiquidSettled) {
+    std::vector<bool> models={false};
+#ifdef SPMPC_TEST_WITH_SLOSH
+    models.push_back(true);
+#endif
+    for(bool liquid_enabled:models) {
+        auto params=makeParams();params.jerk_limit_enable=true;
+        params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
+        params.liquid_limit.recovery_enable=true;
+        auto variant=makeB0Variant();variant.slosh_enable=liquid_enabled;
+        variant.slosh_constraint_enable=liquid_enabled;variant.w_slosh=liquid_enabled ? 1.:0.;
+        SpmpcProblem problem;problem.configure(params,variant);
+        auto points=makeStraightReference().points();points.resize(31);
+        ReferencePath path;path.setPoints(points,"map");problem.setReferencePath(path);
+        auto input=makeInput();input.actuator.a_cmd_memory=0;
+        SloshDynamics liquid;ASSERT_TRUE(liquid.configure(params.slosh));
+        bool reached=false;SolverOutput out;
+        for(int k=0;k<600;++k) {
+            input.cycle_timing.solver_input_epoch_ns=1000000000LL+std::llround(k*input.dt*1e9);
+            ASSERT_TRUE(problem.solve(input,out))<<"model="<<liquid_enabled<<" step="<<k<<" "<<out.status;
+            EXPECT_EQ(out.cycle_timing.solver_input_epoch_ns,input.cycle_timing.solver_input_epoch_ns);
+            const double a=(out.cmd_v-input.actuator.v_cmd)/input.dt;
+            EXPECT_LE(std::abs(a-input.actuator.a_cmd_memory),params.jerk_max*input.dt+1e-6)<<"step="<<k;
+            if(out.status=="GOAL_REACHED") {reached=true;break;}
+            ASSERT_TRUE(propagateActualMotion(input.robot,input.slosh,
+                {input.actuator.linear_delay_queue.front(),input.actuator.angular_delay_queue.front()},params.actuator,liquid,input.dt));
+            std::move(input.actuator.linear_delay_queue.begin()+1,input.actuator.linear_delay_queue.end(),input.actuator.linear_delay_queue.begin());
+            std::move(input.actuator.angular_delay_queue.begin()+1,input.actuator.angular_delay_queue.end(),input.actuator.angular_delay_queue.begin());
+            input.actuator.linear_delay_queue.back()=input.actuator.v_cmd=out.cmd_v;
+            input.actuator.angular_delay_queue.back()=input.actuator.omega_cmd=out.cmd_omega;
+            input.actuator.a_cmd_memory=a;
+        }
+        ASSERT_TRUE(reached)<<"model="<<liquid_enabled<<" x="<<input.robot.x<<" "<<out.status;
+        EXPECT_LT(std::abs(input.robot.x-path.length()),params.terminal.goal_tolerance);
+        EXPECT_TRUE(out.terminal_diagnostics.delay_queues_clear);
+        EXPECT_TRUE(out.terminal_diagnostics.excitation_quiet);
+        EXPECT_TRUE(out.terminal_diagnostics.liquid_stable);
+        EXPECT_LE(out.terminal_diagnostics.residual_height_m,params.task_stop.residual_height_m);
+        EXPECT_LT(out.terminal_diagnostics.vehicle_stop_time_sec,out.terminal_diagnostics.liquid_stable_time_sec);
+    }
 }
 
 }  // namespace spmpc_local_planner

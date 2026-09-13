@@ -29,6 +29,8 @@ public:
     ros::Time latestStamp() const;
 
     bool sampleAt(const ros::Time& stamp, TimedCommandSample& sample) const;
+    bool sampleBefore(const ros::Time& stamp, TimedCommandSample& sample) const;
+    bool nextStampAfter(const ros::Time& stamp, ros::Time& next_stamp) const;
     std::vector<TimedCommandSample> segment(const ros::Time& start, const ros::Time& end) const;
 
 private:

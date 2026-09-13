@@ -1,6 +1,8 @@
 #pragma once
 
 #include "spmpc_local_planner/core/types.h"
+#include "spmpc_local_planner/core/liquid_limit_policy.h"
+#include "spmpc_local_planner/core/task_stop_manager.h"
 #include "spmpc_local_planner/core/start_lock_recovery.h"  // SolverParams.start_lock_recovery 需要完整参数
 #include "spmpc_local_planner/core/terminal_controller.h"  // SolverParams.terminal 需要完整 TerminalControllerParams
 #include "spmpc_local_planner/core/variant_config.h"
@@ -37,10 +39,13 @@ struct SolverParams {
     bool zero_liquid_initial_state = false;
     bool jerk_limit_enable = false;
     double jerk_max = 1.0;  // m/s^3; development candidate, inactive by default
+    double anticreep_gain = 8.0;  // Runtime A/B parameter; 0 removes only the extra low-speed penalty.
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable
     // continuous_mpcc_acados: SPMPC mainline MPCC; direct_omega: RouteB diagnostic; primitive: debug rollout fallback only.
     std::string solver_backend = "continuous_mpcc_acados";
     SloshModelParams slosh;
+    LiquidLimitParams liquid_limit;
+    TaskStopParams task_stop;
 };
 
 class SpmpcSolver {

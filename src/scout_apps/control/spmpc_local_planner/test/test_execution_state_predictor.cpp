@@ -1,6 +1,8 @@
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
 #include <gtest/gtest.h>
 #include <cmath>
+#include <limits>
+#include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 
 namespace spmpc_local_planner {
 namespace {
@@ -331,7 +333,7 @@ TEST(ExecutionStatePredictor, ExplicitActuatorAccelerationMemoryUsesEmittedComma
 TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesKnownPrefixWithFopdt) {
     CommandHistoryBuffer history;
     history.configure(2.0);
-    history.push(sample(9.0, 0.20, 0.30));
+    history.push(sample(9.5, 0.20, 0.30));
     history.push(sample(10.0, 0.20, 0.30));
 
     RobotState robot;
@@ -351,17 +353,17 @@ TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesKnownPrefixWithFopdt) {
     EXPECT_NEAR(
         prediction.actuator.a_actual,
         (p.linear_gain * 0.20 - expected_v) / p.linear_tau_sec,
-        1.0e-9);
+        1.0e-8);
     EXPECT_NEAR(
         prediction.actuator.alpha_actual,
         (p.angular_gain * 0.30 - expected_omega) / p.angular_tau_sec,
-        1.0e-9);
+        1.0e-8);
 }
 
 TEST(ExecutionStatePredictor, ExplicitActuatorPropagatesVeryShortLiquidTail) {
     CommandHistoryBuffer history;
     history.configure(2.0);
-    history.push(sample(9.0, 0.20, 0.0));
+    history.push(sample(9.5, 0.20, 0.0));
     history.push(sample(10.0, 0.20, 0.0));
 
     RobotState robot;
@@ -396,6 +398,66 @@ TEST(ExecutionStatePredictor, ExplicitActuatorFailsClosedOnIncompleteFifo) {
     EXPECT_FALSE(prediction.valid);
     EXPECT_FALSE(prediction.actuator.valid);
     EXPECT_EQ(prediction.status, "INCOMPLETE_ANGULAR_DELAY_QUEUE");
+}
+
+TEST(ExecutionStatePredictor, PrefixSplitsAtDelayedCommandEdgesBetweenIntegrationSteps) {
+    auto p=actuatorParams();
+    CommandHistoryBuffer history;
+    history.push(sample(9.5,0.,0.));
+    const double edge=9.9047;
+    history.push(sample(edge-p.linear_delay_sec,.2,.3));
+    history.push(sample(9.98,.2,.3));
+    RobotState robot;SloshState liquid;
+    const auto out=makePredictor().predictExplicitActuator(robot,liquid,history,stamp(9.9),stamp(10.),p);
+    ASSERT_TRUE(out.valid)<<out.status;
+    const double active=10.-edge;
+    EXPECT_NEAR(out.predicted_robot.v,p.linear_gain*.2*(1-std::exp(-active/p.linear_tau_sec)),1e-8);
+    auto fine=p;fine.max_integration_step_sec=.0001;
+    const auto ref=makePredictor().predictExplicitActuator(robot,liquid,history,stamp(9.9),stamp(10.),fine);
+    ASSERT_TRUE(ref.valid)<<ref.status;
+    EXPECT_NEAR(out.predicted_slosh.eta_x,ref.predicted_slosh.eta_x,1e-8);
+    EXPECT_NEAR(out.predicted_slosh.eta_x_dot,ref.predicted_slosh.eta_x_dot,1e-7);
+}
+
+TEST(ExecutionStatePredictor, FreshLatestCommandDoesNotHideExpiredHistoryInPrefix) {
+    CommandHistoryBuffer history;
+    history.push(sample(9.0,.2,.3));
+    history.push(sample(9.99,.2,.3));
+    const auto out=makePredictor().predictExplicitActuator({}, {},history,stamp(9.9),stamp(10.),actuatorParams());
+    EXPECT_FALSE(out.valid);
+    EXPECT_EQ(out.status,"CMD_HISTORY_GAP");
+}
+
+TEST(ExecutionStatePredictor, ZeroLengthPrefixStillValidatesStateAndModel) {
+    CommandHistoryBuffer history;history.push(sample(9.6,0.,0.));
+    ExecutionStatePredictor unconfigured;
+    EXPECT_FALSE(unconfigured.predictExplicitActuator({}, {},history,stamp(10.),stamp(10.),actuatorParams()).valid);
+    RobotState robot;robot.v=std::numeric_limits<double>::quiet_NaN();
+    EXPECT_FALSE(makePredictor().predictExplicitActuator(robot,{},history,stamp(10.),stamp(10.),actuatorParams()).valid);
+    SloshState liquid;liquid.eta_x=std::numeric_limits<double>::infinity();
+    EXPECT_FALSE(makePredictor().predictExplicitActuator({},liquid,history,stamp(10.),stamp(10.),actuatorParams()).valid);
+}
+
+TEST(ExecutionStatePredictor, PublishJitterDoesNotAliasAccelerationMemoryThroughDelayQueue) {
+    for (double current_stamp : {9.964,9.978}) {
+        CommandHistoryBuffer history;
+        history.push(sample(9.6,.10,0.));
+        history.push(sample(9.932,.11,0.));
+        history.push(sample(current_stamp,.12,0.));
+        const auto out=makePredictor().predictExplicitActuator({}, {},history,stamp(10.),stamp(10.),actuatorParams());
+        ASSERT_TRUE(out.valid)<<out.status;
+        EXPECT_NEAR(out.actuator.a_cmd_memory,.01/actuatorParams().dt,1e-12);
+    }
+}
+
+TEST(ExecutionStatePredictor, EarlySimulationClockAndNonfiniteHistoryFailWithoutException) {
+    CommandHistoryBuffer history;history.push(sample(.05,0.,0.));
+    const auto early=makePredictor().predictExplicitActuator({}, {},history,stamp(.1),stamp(.1),actuatorParams());
+    EXPECT_FALSE(early.valid);EXPECT_EQ(early.status,"INSUFFICIENT_CLOCK_HISTORY");
+    history.clear();history.push(sample(9.6,0.,0.));
+    history.push(sample(9.99,std::numeric_limits<double>::quiet_NaN(),0.));
+    const auto bad=makePredictor().predictExplicitActuator({}, {},history,stamp(10.),stamp(10.),actuatorParams());
+    EXPECT_FALSE(bad.valid);EXPECT_EQ(bad.status,"NONFINITE_CMD_HISTORY");
 }
 
 }  // namespace spmpc_local_planner

@@ -218,6 +218,15 @@ TEST(TerminalController, StopUsesPublishedCommandAndNeverReacceleratesFromZero) 
     EXPECT_DOUBLE_EQ(zero.cmd_omega_post, 0.0);
 }
 
+TEST(TerminalController, NearbyIntermediatePathPassDoesNotActivateTaskStop) {
+    TerminalController controller;TerminalControllerParams params;
+    params.mpc_stop_handoff_enable=true;controller.setParams(params);
+    TerminalGoalInfo goal;goal.valid=true;goal.distance_to_goal=.01;goal.remaining_s=5.;
+    goal.task_end_approach=false;
+    const auto plan=controller.updateAndPlan(goal,.1,0.,.6,false);
+    EXPECT_EQ(plan.mode,"TRACKING");EXPECT_FALSE(plan.owns_command);EXPECT_FALSE(plan.terminal_phase);
+}
+
 }  // namespace spmpc_local_planner
 
 int main(int argc, char** argv) {

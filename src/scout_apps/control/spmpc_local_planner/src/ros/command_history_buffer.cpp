@@ -72,6 +72,22 @@ bool CommandHistoryBuffer::sampleAt(const ros::Time& stamp, TimedCommandSample& 
     return true;
 }
 
+bool CommandHistoryBuffer::sampleBefore(const ros::Time& stamp, TimedCommandSample& sample) const {
+    const auto it = std::lower_bound(samples_.begin(), samples_.end(), stamp,
+        [](const TimedCommandSample& lhs, const ros::Time& rhs) { return lhs.stamp < rhs; });
+    if (it == samples_.begin()) return false;
+    sample = *std::prev(it);
+    return true;
+}
+
+bool CommandHistoryBuffer::nextStampAfter(const ros::Time& stamp, ros::Time& next_stamp) const {
+    const auto it = std::upper_bound(samples_.begin(), samples_.end(), stamp,
+        [](const ros::Time& lhs, const TimedCommandSample& rhs) { return lhs < rhs.stamp; });
+    if (it == samples_.end()) return false;
+    next_stamp = it->stamp;
+    return true;
+}
+
 std::vector<TimedCommandSample> CommandHistoryBuffer::segment(const ros::Time& start, const ros::Time& end) const {
     std::vector<TimedCommandSample> out;
     if (samples_.empty() || end < start) {

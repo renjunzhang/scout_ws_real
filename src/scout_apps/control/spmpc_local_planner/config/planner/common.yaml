@@ -3,6 +3,19 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
+# Runtime anti-creep A/B control. Keep 8 until measured benefit supports changing it.
+anticreep_gain: 8.0
+
+# 明确复位开发开关，避免同一 ROS master 上一次启动留下的参数继续生效。
+slosh:
+  freeboard_m: 0.0
+  physical_margin_m: 0.0
+  recovery:
+    enable: false
+    budget_m: 0.003
+    linear_weight: 10.0
+    quadratic_weight: 100.0
+
 # solver 后端:
 #   continuous_mpcc_acados: SPMPC 主线 continuous MPCC
 #   continuous_mpcc_direct_omega_legacy: RouteB diagnostic/legacy continuous MPCC
@@ -142,6 +155,16 @@ reference:
   min_segment_length: 0.001
 
 terminal:
+  complete_stop:
+    enable: false
+    residual_height_m: 0.001
+    stable_hold_sec: 0.3
+    max_settle_sec: 15.0
+    max_tail_prediction_sec: 8.0
+    quiet_v: 0.001
+    quiet_omega: 0.001
+    command_zero_tolerance: 0.000001
+    velocity_cost_weight: 1.0
   mpc_stop_handoff_enable: false  # New ablation smoke explicitly enables latched final stop.
   enable: true
   goal_tolerance: 0.20   # 与 TEB/DWA 统一成功判定距离(原 0.15)

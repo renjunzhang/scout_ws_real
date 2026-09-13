@@ -157,9 +157,22 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
         out.status = "INVALID_ACTUATOR_PARAMS:" + params_error;
         return out;
     }
+    if (!slosh_configured_ || !finiteSloshState(raw_slosh) ||
+        !std::isfinite(raw_robot.x) || !std::isfinite(raw_robot.y) ||
+        !std::isfinite(raw_robot.yaw) || !std::isfinite(raw_robot.v) ||
+        !std::isfinite(raw_robot.omega)) {
+        out.status = "INVALID_ACTUATOR_INITIAL_STATE_OR_MODEL";
+        return out;
+    }
     if (state_epoch.isZero() || target_epoch.isZero() ||
         target_epoch < state_epoch) {
         out.status = "INVALID_ACTUATOR_EPOCH";
+        return out;
+    }
+    // ROS time is unsigned. During simulation clock startup there may not yet
+    // be enough clock history to subtract the calibrated delays.
+    if (state_epoch.toSec() < std::max(params.linear_delay_sec, params.angular_delay_sec)) {
+        out.status = "INSUFFICIENT_CLOCK_HISTORY";
         return out;
     }
     out.prefix_duration_sec = (target_epoch - state_epoch).toSec();
@@ -180,10 +193,23 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
     }
 
     bool complete = true;
+    std::string history_error;
     const auto sampleCommand = [&](const ros::Time& stamp,
-                                   geometry_msgs::Twist& cmd) {
+                                   geometry_msgs::Twist& cmd, double hold_sec = 0.0) {
         TimedCommandSample sample;
         if (history.sampleAt(stamp, sample)) {
+            if (!std::isfinite(sample.cmd.linear.x) || !std::isfinite(sample.cmd.angular.z)) {
+                history_error = "NONFINITE_CMD_HISTORY";
+                return false;
+            }
+            // A fresh last publication cannot repair an earlier watchdog-size
+            // gap. Reject the unknown execution interval instead of assuming
+            // an old nonzero command was held indefinitely.
+            if (params.cmd_timeout_sec > 0.0 &&
+                (stamp - sample.stamp).toSec() + hold_sec > params.cmd_timeout_sec + 1e-9) {
+                history_error = "CMD_HISTORY_GAP";
+                return false;
+            }
             cmd = sample.cmd;
             return true;
         }
@@ -195,18 +221,25 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
     RobotState robot = raw_robot;
     SloshState slosh = raw_slosh;
     ros::Time t = state_epoch;
-    double elapsed = 0.0;
-    while (elapsed < out.prefix_duration_sec - 1e-9) {
-        const double step = std::min(
-            params.max_integration_step_sec,
-            out.prefix_duration_sec - elapsed);
+    while (t < target_epoch) {
+        ros::Time end = std::min(target_epoch, t + ros::Duration(params.max_integration_step_sec));
+        // Both channels are ZOH at their own delayed publication edges.
+        // Split there before integrating; a smaller RK4 step alone cannot
+        // correct holding the wrong command across a discontinuity.
+        for (double delay : {params.linear_delay_sec, params.angular_delay_sec}) {
+            ros::Time next_stamp;
+            if (history.nextStampAfter(t - ros::Duration(delay), next_stamp))
+                end = std::min(end, next_stamp + ros::Duration(delay));
+        }
+        const double step = (end - t).toSec();
+        if (step <= 0.0) { out.status = "INVALID_PREFIX_STEP"; return out; }
         geometry_msgs::Twist linear_delayed;
         geometry_msgs::Twist angular_delayed;
         if (!sampleCommand(t - ros::Duration(params.linear_delay_sec),
-                           linear_delayed) ||
+                           linear_delayed, step) ||
             !sampleCommand(t - ros::Duration(params.angular_delay_sec),
-                           angular_delayed)) {
-            out.status = "INCOMPLETE_CMD_HISTORY";
+                           angular_delayed, step)) {
+            out.status = history_error.empty() ? "INCOMPLETE_CMD_HISTORY" : history_error;
             return out;
         }
 
@@ -217,13 +250,12 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
             return out;
         }
         robot.yaw = normalizeYaw(robot.yaw);
-        elapsed += step;
-        t += ros::Duration(step);
+        t = end;
     }
 
     geometry_msgs::Twist current_cmd;
     if (!sampleCommand(target_epoch, current_cmd)) {
-        out.status = "NO_CURRENT_COMMAND";
+        out.status = history_error.empty() ? "NO_CURRENT_COMMAND" : history_error;
         return out;
     }
     out.actuator.v_cmd = current_cmd.linear.x;
@@ -234,7 +266,7 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
         const int steps_ago = kExplicitLinearDelaySteps - i;
         if (!sampleCommand(
                 target_epoch - ros::Duration(steps_ago * params.dt), cmd)) {
-            out.status = "INCOMPLETE_LINEAR_DELAY_QUEUE";
+            out.status = history_error.empty() ? "INCOMPLETE_LINEAR_DELAY_QUEUE" : history_error;
             return out;
         }
         out.actuator.linear_delay_queue[static_cast<size_t>(i)] =
@@ -245,19 +277,34 @@ ExplicitActuatorPrediction ExecutionStatePredictor::predictExplicitActuator(
         const int steps_ago = kExplicitAngularDelaySteps - i;
         if (!sampleCommand(
                 target_epoch - ros::Duration(steps_ago * params.dt), cmd)) {
-            out.status = "INCOMPLETE_ANGULAR_DELAY_QUEUE";
+            out.status = history_error.empty() ? "INCOMPLETE_ANGULAR_DELAY_QUEUE" : history_error;
             return out;
         }
         out.actuator.angular_delay_queue[static_cast<size_t>(i)] =
             cmd.angular.z;
     }
 
-    // The queue tail is the final command emitted one OCP interval before
-    // target_epoch.  Use final published commands, rather than the previous
-    // solver candidate, as the stage-0 acceleration-memory authority.
-    out.actuator.a_cmd_memory =
-        (out.actuator.v_cmd - out.actuator.linear_delay_queue.back()) /
-        params.dt;
+    // Acceleration memory belongs to consecutive emitted commands, whereas
+    // the delay FIFO is sampled by time. Under publication jitter the FIFO tail
+    // may contain the current command or skip a publication; it is not the
+    // previous command in the OCP's discrete acceleration recurrence.
+    TimedCommandSample current_sample, previous_sample;
+    history.sampleAt(target_epoch, current_sample);
+    if (history.sampleBefore(current_sample.stamp, previous_sample)) {
+        if (!std::isfinite(previous_sample.cmd.linear.x)) {
+            out.status = "NONFINITE_CMD_HISTORY";
+            return out;
+        }
+        out.actuator.a_cmd_memory = (current_cmd.linear.x - previous_sample.cmd.linear.x) / params.dt;
+    } else {
+        // A lone command can establish a steady history only after one whole
+        // nominal interval. Never invent its predecessor at startup.
+        if ((target_epoch - current_sample.stamp).toSec() < params.dt) {
+            out.status = "INCOMPLETE_ACCEL_COMMAND_HISTORY";
+            return out;
+        }
+        out.actuator.a_cmd_memory = 0.0;
+    }
     if (!std::isfinite(out.actuator.a_cmd_memory)) {
         out.status = "INVALID_ACCEL_COMMAND_MEMORY";
         return out;

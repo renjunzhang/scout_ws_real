@@ -53,6 +53,12 @@ PARAM_NAMES = [
     "actuator_tau_omega",                  # 角速度一阶惯性时间常数
     "actuator_gain_v",                     # 线速度稳态增益
     "actuator_gain_omega",                 # 角速度稳态增益
+    "anticreep_gain",                      # runtime cost parameter; 0 disables the extra low-speed penalty
+    "stop_active",                         # only the true task goal activates this profile
+    "stop_goal_s",
+    "stop_brake_accel",
+    "stop_delay_margin",
+    "stop_velocity_weight",
 ]
 NP = len(PARAM_NAMES)
 PIDX = {name: i for i, name in enumerate(PARAM_NAMES)}
@@ -89,6 +95,9 @@ SLOSH_EXTRA_NAMES = [
     "w_slosh_eta_dot",   # 模态速度权重
 ]
 SLOSH_HARD_EXTRA_NAMES = [
+    "eta_target_sq",     # performance target; recovery penalty uses the true excess
+    "slack_linear_weight",
+    "slack_quadratic_weight",
     "eta_max_sq",        # 硬约束阈值: eta_x^2 + eta_y^2 <= eta_max_sq（mainline slosh only）
 ]
 PARAM_NAMES_SLOSH = PARAM_NAMES + SLOSH_EXTRA_NAMES + SLOSH_HARD_EXTRA_NAMES

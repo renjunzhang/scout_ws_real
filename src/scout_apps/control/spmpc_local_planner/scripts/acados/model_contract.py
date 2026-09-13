@@ -11,3 +11,5 @@ def require_codegen_version(version):
         raise RuntimeError(
             f"reproducible codegen requires CasADi {CASADI_CODEGEN_VERSION}; "
             "install scripts/acados/requirements.txt")
+
+COST_VERSION = 2

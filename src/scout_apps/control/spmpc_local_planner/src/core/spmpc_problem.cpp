@@ -44,6 +44,13 @@ SpmpcProblem::SpmpcProblem() = default;
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
+    liquid_state_required_ = variant.slosh_enable || solver_params_.task_stop.enable;
+    liquid_limit_enabled_ = variant.slosh_enable && variant.slosh_constraint_enable;
+    task_stop_configured_ = !solver_params_.task_stop.enable ||
+        (solver_params_.terminal.enable && solver_params_.terminal.mpc_stop_handoff_enable &&
+         solver_params_.jerk_limit_enable && !solver_params_.zero_liquid_initial_state &&
+         task_stop_manager_.configure(solver_params_.task_stop, solver_params_.actuator,
+             solver_params_.slosh, solver_params_.a_max, solver_params_.alpha_max, solver_params_.jerk_max));
     configured_v_ref_ = variant.v_ref;
     terminal_controller_.setParams(solver_params_.terminal);
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
@@ -57,6 +64,7 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
     if (!same_path) {
         last_progress_s_ = 0.0;
         terminal_controller_.reset();
+        task_stop_manager_.reset();
         start_lock_recovery_.reset();
     }
 }
@@ -130,16 +138,89 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     goal_info.distance_to_goal = distance_to_goal;
     goal_info.dx_robot = std::cos(input.robot.yaw) * dx + std::sin(input.robot.yaw) * dy;
     goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
+    if (solver_params_.task_stop.enable) {
+        goal_info.task_end_approach = remaining_s <= solver_params_.terminal.slowdown_distance;
+        goal_info.position_reached = goal_info.position_reached && remaining_s <= solver_params_.terminal.goal_tolerance;
+    }
 
+    StopReadiness stop_readiness;
+    StopTailPrediction stop_tail;
+    std::string stop_failure;
+    const bool complete_stop = solver_params_.task_stop.enable;
+    if (complete_stop) {
+        if (!task_stop_configured_) {
+            output = SolverOutput{}; output.status = "INVALID_COMPLETE_STOP_CONFIG"; return false;
+        }
+        LiquidLimitPolicy limit;
+        std::string error;
+        if (!makeLiquidLimitPolicy(liquid_limit_enabled_, solver_params_.slosh.slosh_height_max,
+                                   solver_params_.liquid_limit, limit, error)) {
+            output = SolverOutput{}; output.status = error; return false;
+        }
+        stop_readiness = task_stop_manager_.observe(input, goal_info.position_reached,
+            solver_params_.terminal.goal_reached_max_speed, solver_params_.terminal.goal_reached_max_omega);
+        if (!stop_readiness.valid) {
+            output = SolverOutput{}; output.status = "INVALID_COMPLETE_STOP_STATE"; return false;
+        }
+        if (goal_info.task_end_approach || terminal_controller_.diagnostics().command_owned ||
+            terminal_controller_.reached()) {
+            stop_tail = task_stop_manager_.predict(input);
+            if (!stop_tail.valid) stop_failure = stop_tail.status;
+            else if (limit.enabled && (stop_tail.peak_height_m > limit.cap_m + 1e-7 ||
+                     (limit.physical_boundary_known && stop_tail.peak_height_m >= limit.physical_boundary_m)))
+                stop_failure = "STOP_LIQUID_RECOVERY_CAP";
+            else if (stop_tail.first_command.v > solver_params_.v_max + 1e-9 ||
+                     std::abs(stop_tail.first_command.omega) > solver_params_.omega_max + 1e-9)
+                stop_failure = "STOP_COMMAND_BOUND_VIOLATION";
+        }
+        if (stop_readiness.timed_out) stop_failure = "LIQUID_SETTLE_TIMEOUT";
+    }
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
-        goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max));
+        goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max),
+        !complete_stop || (stop_failure.empty() && stop_tail.valid && stop_readiness.vehicle_stopped &&
+                          stop_readiness.excitation_quiet && stop_readiness.liquid_stable));
+    const auto stamp_terminal = [&]() {
+        output.cycle_timing = input.cycle_timing;
+        output.terminal_diagnostics = terminal_controller_.diagnostics();
+        auto& d = output.terminal_diagnostics;
+        d.complete_stop_enabled = complete_stop;
+        if (!complete_stop) return;
+        d.delay_queues_clear = stop_readiness.queues_clear;
+        d.vehicle_stopped = stop_readiness.vehicle_stopped;
+        d.excitation_quiet = stop_readiness.excitation_quiet;
+        d.liquid_stable = stop_readiness.liquid_stable;
+        d.settle_timed_out = stop_readiness.timed_out;
+        d.residual_height_m = stop_readiness.residual_height_m;
+        d.stable_duration_sec = stop_readiness.stable_duration_sec;
+        d.vehicle_stop_time_sec = stop_readiness.vehicle_stop_time_sec;
+        d.liquid_stable_time_sec = stop_readiness.liquid_stable_time_sec;
+        d.predicted_stop_distance_m = stop_tail.distance_m;
+        d.predicted_tail_valid = stop_tail.valid;
+        d.predicted_tail_duration_sec = stop_tail.duration_sec;
+        d.predicted_tail_peak_height_m = stop_tail.peak_height_m;
+        d.predicted_tail_residual_height_m = stop_tail.residual_height_m;
+        if (terminal_plan.owns_command && !d.reached) d.mode = output.status;
+    };
+    // Apply the same tail/cap/timeout checks before both STOP and GOAL_REACHED,
+    // including calls after the legacy terminal controller latched completion.
+    if (complete_stop && terminal_plan.owns_command && !stop_failure.empty()) {
+        output = SolverOutput{};
+        output.status = stop_failure;
+        output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
+        output.progress_abs_s = proj.s;
+        stamp_terminal();
+        output.terminal_diagnostics.reached = false;
+        output.terminal_diagnostics.mode = stop_failure;
+        updateStartLockRecovery(input, false, output);
+        return false;
+    }
     if (!terminal_controller_.params().enable && goal_info.position_reached) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";
         output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
         output.progress_abs_s = proj.s;
-        output.terminal_diagnostics = terminal_controller_.diagnostics();
+        stamp_terminal();
         updateStartLockRecovery(input, true, output);
         return true;
     }
@@ -151,7 +232,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         output.progress_abs_s = proj.s;
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
-        output.terminal_diagnostics = terminal_controller_.diagnostics();
+        stamp_terminal();
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
         updateStartLockRecovery(input, true, output);
         return true;
@@ -159,12 +240,21 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
 
     if (terminal_plan.owns_command) {
         output = SolverOutput{};
-        const bool valid_history = input.actuator.valid &&
+        bool valid_history = input.actuator.valid &&
             std::isfinite(input.actuator.v_cmd) && std::isfinite(input.actuator.omega_cmd) &&
             std::isfinite(input.dt) && input.dt > 0.0;
         output.success = valid_history;
         output.status = valid_history ? "TERMINAL_STOP" : "TERMINAL_STOP_HISTORY_FAILED";
-        if (valid_history && !(goal_info.dx_robot < solver_params_.terminal.goal_behind_x)) {
+        if (complete_stop) {
+            valid_history = stop_tail.valid;
+            output.status = stop_tail.valid ? (stop_readiness.vehicle_stopped ? "TERMINAL_SETTLING" : "TERMINAL_DRAINING") : stop_tail.status;
+            if (stop_tail.valid) {
+                output.cmd_v = stop_tail.first_command.v;
+                output.cmd_omega = stop_tail.first_command.omega;
+            }
+            if (!valid_history) output.cmd_v = output.cmd_omega = 0.0;
+            output.success = valid_history;
+        } else if (valid_history && !(goal_info.dx_robot < solver_params_.terminal.goal_behind_x)) {
             const auto stop = terminal_controller_.stopCommand(
                 input.actuator.v_cmd, input.actuator.omega_cmd, input.dt,
                 solver_params_.a_max, solver_params_.alpha_max);
@@ -173,7 +263,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         }
         output.progress_s = len > 1e-6 ? proj.s / len : 0.0;
         output.progress_abs_s = proj.s;
-        output.terminal_diagnostics = terminal_controller_.diagnostics();
+        stamp_terminal();
         last_progress_s_ = std::max(last_progress_s_, proj.s);
         updateStartLockRecovery(input, valid_history, output);
         return valid_history;
@@ -189,6 +279,16 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
             terminal_plan.v_envelope);
         guarded_input.v_ref_status = "TERMINAL_MPC_SLOWDOWN";
     }
+    if (complete_stop && terminal_plan.terminal_phase) {
+        guarded_input.task_stop_active = true;
+        guarded_input.task_stop_goal_s = std::max(0.0, len - 0.5*solver_params_.terminal.goal_tolerance);
+        // Stopping reference is evaluated at each predicted progress state in OCP.
+        // Use nominal cruise here; the old current-only envelope would impose a
+        // second, inconsistent speed reference over the entire horizon.
+        guarded_input.has_v_ref_current = input.has_v_ref_current;
+        guarded_input.v_ref_current = input.v_ref_current;
+        guarded_input.v_ref_status = "TASK_GOAL_STOP_PROFILE";
+    }
     const bool ok = solver_->solve(guarded_input, reference_, output);
     output.ocp_solve_attempted = true;
     if (ok && output.success) {
@@ -201,7 +301,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         }
         last_progress_s_ = std::max(last_progress_s_, output.progress_abs_s);
     }
-    output.terminal_diagnostics = terminal_controller_.diagnostics();
+    stamp_terminal();
     updateStartLockRecovery(input, ok && output.success, output);
     return ok;
 }
