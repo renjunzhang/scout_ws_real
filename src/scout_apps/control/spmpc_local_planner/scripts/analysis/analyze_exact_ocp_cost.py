@@ -131,6 +131,15 @@ def freeze_bundle(output, root=ROOT):
         models[name] = {"nx": nx, "np": len(names), "N": 60, "library": library,
                         "parameter_names": names, "cost_scaling": scaling.tolist(),
                         "time_steps": options["time_steps"], "functions": cost_sources}
+        integration_file = folder / "integration_metadata.json"
+        if integration_file.exists():
+            integration = json.loads(integration_file.read_text())
+            require(integration["solver_library_sha256"] == files[library],
+                    "integration metadata does not match solver library")
+            require(integration["model_source_sha256"] == sha256(source) and integration["model"] == name,
+                    "integration metadata does not match current model source")
+            models[name]["integration"] = integration
+            copy(integration_file, name + "/integration_metadata.json")
     copy(source, "sources/spmpc_acados_model.py")
     copy(planner / "scripts/acados/spmpc_acados_cost.py", "sources/spmpc_acados_cost.py")
     for filename in (Path(__file__).name, "analyze_internal_slosh_pair.py",

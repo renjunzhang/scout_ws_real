@@ -29,6 +29,31 @@ class ExactCostTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
+    def test_integration_metadata_is_archived_with_the_actual_library(self):
+        for name, model in self.manifest["models"].items():
+            integration = model["integration"]
+            self.assertEqual(integration["integration_substeps"], 4)
+            self.assertEqual(integration["solver_library_sha256"],
+                             self.manifest["files"][model["library"]])
+            self.assertEqual(integration["model_source_sha256"],
+                             self.manifest["files"]["sources/spmpc_acados_model.py"])
+            self.assertIn(name + "/integration_metadata.json", self.manifest["files"])
+
+    def test_stale_integration_metadata_is_rejected_during_freeze(self):
+        original_read = Path.read_text
+        for field in ("solver_library_sha256", "model_source_sha256"):
+            def stale_read(path, *args, **kwargs):
+                contents = original_read(path, *args, **kwargs)
+                if path.name == "integration_metadata.json":
+                    payload = json.loads(contents)
+                    payload[field] = "0" * 64
+                    return json.dumps(payload)
+                return contents
+
+            with self.subTest(field=field), mock.patch.object(Path, "read_text", new=stale_read):
+                with self.assertRaisesRegex(ValueError, "integration metadata does not match"):
+                    cost.freeze_bundle(self.root / ("stale_" + field))
+
     def parameters(self, evaluator):
         p = np.zeros(evaluator.meta["np"])
         for key, value in {"rx1": 1, "e_c_ref": .2, "e_l_ref": .1, "v_ref": .2,

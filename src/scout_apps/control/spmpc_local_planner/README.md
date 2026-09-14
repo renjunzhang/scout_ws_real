@@ -8,6 +8,14 @@
 slosh-aware continuous MPCC + acados SQP-RTI
 ```
 
+**2026-09-14 实物主线：** Full/Smooth 共用显式执行器与命令延迟 FIFO；30 Hz、N=60，
+每个 OCP 区间的车体/执行器/液体连续状态使用四子步 RK4，FIFO 和加速度记忆在周期末各更新一次。
+Full 消费 IMU 驱动液体监视器提供的初态，并优化未来液体代价；Smooth 保留相同运动模型和硬 jerk，关闭液体优化。
+IMU/odom 在线模型高度是内部评价参考，OCP 高度是未来计划预测，两者均非直接液面测量。
+本轮只修正积分精度，已编译并通过软件检查；实车 smoke 和降晃收益仍待验证。
+后续局部规划目标以降晃为重点、参考路径提供路线/进度引导的结构改造仍在讨论，详见
+[当日主分析第 11 节](../../../../docs/实物实验注意事项/对比试验/实物对比试验分析/20260914_C03当前版本J0.6_Full与Smooth修改前基线分析.md)。
+
 它每个控制周期在同一个滚动时域优化问题中同时处理：
 
 ```text
@@ -27,7 +35,7 @@ ROS 闭环执行与诊断发布
 
 ```text
 continuous_mpcc_acados
-  当前主线 alpha-state MPCC：omega 是状态，alpha=d(omega)/dt 是控制。
+  当前主线显式执行器 MPCC：命令与实际速度分开，a_cmd/alpha_cmd/v_s 为控制。
 
 continuous_mpcc_direct_omega_legacy
   RouteB / direct-omega 诊断后端：omega 是控制，alpha_max 用作输出 cmd_omega rate clamp。
@@ -175,40 +183,43 @@ robot:
 
 ---
 
-## 3. 方法主线：alpha-state continuous MPCC
+## 3. 方法主线：显式执行器 continuous MPCC
 
 ### 3.1 状态与控制
 
-当前主线 `continuous_mpcc_acados` 将 `omega` 提升为 OCP 状态，将角加速度 `alpha` 作为控制输入。
+当前主线 `continuous_mpcc_acados` 区分命令速度与实际速度，以命令加速度为控制；实际运动由延迟 FIFO 和一阶执行器响应预测。
 
-B0 / non-slosh 模型为 6D：
+B0 / non-slosh 生成模型为 24D，供当前 Smooth 组复用：
 
 ```text
-x_b0 = [px, py, theta, v, s, omega]
-u    = [a, alpha, v_s]
+x_b0 = [px, py, theta, v_actual, s, omega_actual, v_cmd, omega_cmd,
+        q_v[5], q_omega[10], a_cmd_memory]
+u    = [a_cmd, alpha_cmd, v_s]
 ```
 
-slosh-aware 模型为 10D：
+Full 的 slosh-aware 模型为 28D：
 
 ```text
-x_slosh = [px, py, theta, v, s, omega, eta_x, eta_x_dot, eta_y, eta_y_dot]
-u       = [a, alpha, v_s]
+x_slosh = [x_b0, eta_x, eta_x_dot, eta_y, eta_y_dot]
+u       = [a_cmd, alpha_cmd, v_s]
 ```
 
 含义：
 
 ```text
-a       底盘切向加速度
-alpha   底盘角加速度，即 omega_dot
-v_s     虚拟路径进度速度，用于推进 MPCC 路径参数 s
-omega   底盘角速度状态
+a_cmd / alpha_cmd    命令速度/角速度的变化率
+v_actual / omega_actual    执行器预测的实际速度/角速度
+v_s                  虚拟路径进度速度，用于推进 MPCC 路径参数 s
+a_cmd_memory         上个控制区间的命令加速度，用于全时域 jerk 约束和代价
 ```
 
-对应输出边界为：
+每个 33.3 ms 区间固定控制量和 FIFO 头，连续状态分四个 RK4 子步积分；周期末 FIFO 移位一次、追加新命令状态，`a_cmd_memory` 更新一次。30 Hz/N60 对应 2 秒预测时域，线/角延迟仍为 5/10 个控制周期。
+
+候选命令取下一节点的命令状态，随后经过既有发布边界及停车/安全处理：
 
 ```text
-cmd_vel.linear.x  = clamp(v_current + a_0 * dt, 0, v_max)
-cmd_vel.angular.z = clamp(omega_current + alpha_0 * dt, -omega_max, omega_max)
+candidate_v     = v_cmd(0)     + a_cmd(0)     * dt
+candidate_omega = omega_cmd(0) + alpha_cmd(0) * dt
 ```
 
 ### 3.2 路径误差与进度
@@ -229,10 +240,10 @@ v / v_s tracking    物理速度和虚拟进度速度 anti-creep
 ```text
 w_v     物理速度 v 对 v_ref 的 tracking penalty
 w_vs    虚拟进度速度 v_s 对 v_ref 的 tracking penalty
-v_ref   参考速度，当前统一初值 0.25 m/s
+v_ref   参考速度，当前 C03 实物共同设置 0.20 m/s
 ```
 
-`/spmpc/cost_breakdown` 的字段布局保持不变；当前 `J_v` 口径表示物理速度 `v` 与虚拟进度速度 `v_s` tracking penalty 的合计。
+`/spmpc/cost_breakdown` 的 `J_v` 表示物理速度与虚拟进度速度 tracking penalty 的在线合计；它仍缺完整 anti-creep 及阶段/终端缩放口径，精确数量级使用已归档的 `analyze_exact_ocp_cost.py` 离线重建。
 
 ### 3.3 液体模态
 
@@ -248,9 +259,9 @@ eta_x, eta_x_dot, eta_y, eta_y_dot
 h_model = c_h * sqrt(eta_x^2 + eta_y^2)
 ```
 
-该量用于控制器内部优化和 `/spmpc/*` 诊断，是模型 proxy；论文和实物报告中的真实液面指标以离线 RGB max-LCR 为准。
+该量用于控制器内部优化和 `/spmpc/*` 诊断，是模型 proxy。当前 C03 以 IMU 驱动模型的全任务高度 RMS 为内部主指标，odom 并列参考，RGB 后置；不能把这两条模型高度或 OCP 计划高度当作真实液面测量。
 
-在 alpha-state 主线里，slosh 动力学使用预测状态中的 `omega`；在 RouteB direct-omega 里，slosh 动力学使用控制输入中的 `omega`。
+在当前显式执行器主线里，液体激励为 `a_actual` 与 `v_actual*omega_actual`；IMU 监视器经对齐/前推提供 Full 初态，OCP 再预测未来候选动作的液体响应。Smooth 关闭液体优化，仍保留两条后台监视器。在 RouteB direct-omega 诊断中，`omega` 仍是控制输入。
 
 ---
 
@@ -303,13 +314,13 @@ alpha_max = 8.0 更快，但出现左摇右晃。
 
 ### 5.1 continuous_mpcc_acados：当前主线
 
-`continuous_mpcc_acados` 是当前主线后端。它通过 acados generated solver 求解 alpha-state continuous MPCC OCP。
+`continuous_mpcc_acados` 是当前主线后端。它通过 acados generated solver 求解带显式执行器的 MPCC OCP；采用四子步 RK4 构造的自定义 `DISCRETE` 动力学。
 
 生成模型：
 
 ```text
-spmpc_b0      6D alpha-state baseline continuous MPCC
-spmpc_slosh   10D alpha-state slosh-aware continuous MPCC
+spmpc_b0      24D non-slosh，28维参数，当前 Smooth 使用
+spmpc_slosh   28D slosh-aware，37维参数，当前 Full 使用
 ```
 
 编译宏：
@@ -365,16 +376,18 @@ primitive / anti-primitive 附录消融
 
 ---
 
-## 6. 主实验变体
+## 6. 当前 C03 分组与历史配置变体
 
-当前 alpha-state 主实验应在同一个 `continuous_mpcc_acados` 后端下比较：
+当前 C03 在同一个 `continuous_mpcc_acados` 后端下比较 Full/Smooth：两组复用 `B_slosh` 配置和共同非液体权重，均保留硬 jerk；仅按组开关液体优化，使用相同四子步积分。实际入口为 `run_spmpc_ablation_smoke.sh --experiment internal-slosh`。`smooth` 条件不同于历史 `B_smooth` 配置，关闭硬 jerk 的 `b0` 也不能替代它。
+
+以下保留历史配置变体的用途，状态维度按当前生成模型更新；该表不是本轮待录矩阵：
 
 | variant | backend | generated model | 状态维度 | slosh 状态/代价 | smooth | 用途 |
 |---|---|---|---:|---|---|---|
-| `B0` | `continuous_mpcc_acados` | `spmpc_b0` | 6D | 否 | 否 | 基础 alpha-state continuous MPCC baseline |
-| `B_smooth` | `continuous_mpcc_acados` | `spmpc_b0` | 6D | 否 | 是 | 只看控制平滑是否降晃 |
-| `B_slosh` | `continuous_mpcc_acados` | `spmpc_slosh` | 10D | 是 | 否 | 只看 slosh-aware 模型/代价是否有效 |
-| `B_ours` | `continuous_mpcc_acados` | `spmpc_slosh` | 10D | 是 | 是 | 完整方法 |
+| `B0` | `continuous_mpcc_acados` | `spmpc_b0` | 24D | 否 | 否 | 基础 continuous MPCC baseline |
+| `B_smooth` | `continuous_mpcc_acados` | `spmpc_b0` | 24D | 否 | 是 | 只看控制平滑是否降晃 |
+| `B_slosh` | `continuous_mpcc_acados` | `spmpc_slosh` | 28D | 是 | 否 | 只看 slosh-aware 模型/代价是否有效 |
+| `B_ours` | `continuous_mpcc_acados` | `spmpc_slosh` | 28D | 是 | 是 | 完整方法 |
 
 核心对照关系：
 

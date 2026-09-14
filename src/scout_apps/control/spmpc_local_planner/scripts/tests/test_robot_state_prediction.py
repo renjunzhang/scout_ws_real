@@ -130,8 +130,8 @@ class NumericalTest(unittest.TestCase):
         p = snapshot["stage_parameters"][:model.NP_SLOSH]
         discrete = np.array(step(x, np.zeros(3), p)).ravel()[[0, 1, 2, 3, 5]]
         continuous = core.constant_input_step(x[[0, 1, 2, 3, 5]], 0.2, 0.15, 0.112, 0.119, 1/30)
-        # The existing one-stage RK4 and exact continuous response differ slightly.
-        np.testing.assert_allclose(discrete, continuous, atol=2e-6)
+        # Four-substep OCP propagation agrees with the independent exact actuator response.
+        np.testing.assert_allclose(discrete, continuous, atol=1e-8, rtol=0)
 
     def test_marker_lever_arm_rotation_and_yaw_wrap(self):
         reference = checked_reference()

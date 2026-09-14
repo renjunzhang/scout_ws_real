@@ -605,6 +605,12 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/check_omega_smoke.py 
 
 ## acados/ 代码生成
 
+2026-09-14 起，显式执行器 Full/Smooth 共用 `EXPLICIT_ACTUATOR_RK4_SUBSTEPS=4`。
+每个 33.3 ms 控制周期内，连续状态分四个子步积分，控制量与延迟输入固定；
+FIFO 和加速度记忆只在周期末更新一次。N=60、30 Hz、物理参数及代价设置不随子步数改变。
+这是自定义 `DISCRETE` 模型内部的设置，修改 acados 的 ERK 积分选项不会改变它。
+求解前已有小步长/矩阵指数传播保持现状，用回归验证一致性。
+
 检查 CasADi 模型装配而不调用 acados：
 
 ```bash
@@ -623,6 +629,17 @@ python3 src/scout_apps/control/spmpc_local_planner/scripts/acados/generate_spmpc
 ```
 
 正式实验使用的 codegen 输出和 build log 必须先归档 hash 并进入 freeze manifest；正式采集期间禁止重新生成后继续沿用同一 `FREEZE_ID`。
+
+本机生成环境为 `/home/geist/acados_venv/bin/python`，两种主线 solver 均需重新生成后编译。
+生成目录的 `integration_metadata.json` 记录积分子步数、模型源码和实际 solver 库的 SHA256；
+`analysis/analyze_exact_ocp_cost.py freeze` 会核验并归档该信息。旧包继续使用其旧归档。
+录前入口继续运行不依赖 SciPy 的 `test_explicit_actuator_model.py`。
+开发用的独立精度测试依赖上述环境已有的 CasADi/SciPy，单独运行：
+
+```bash
+/home/geist/acados_venv/bin/python -m unittest discover \
+  -s src/scout_apps/control/spmpc_local_planner/scripts/tests -p test_explicit_actuator_integration_accuracy.py -v
+```
 
 ## analysis/estimate_cmd_odom_delay.py
 

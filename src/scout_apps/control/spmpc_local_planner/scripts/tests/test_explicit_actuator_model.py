@@ -2,6 +2,7 @@
 """Contracts for the generated explicit command/actual OCP model."""
 
 import json
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -64,6 +65,13 @@ class ExplicitActuatorModelTest(unittest.TestCase):
             self.assertEqual(payload["dims"]["nx"], expected_nx)
             self.assertEqual(payload["dims"]["N"], 60)
             self.assertEqual(payload["solver_options"]["qp_solver_cond_N"], 10)
+            self.assertEqual(payload["solver_options"]["integrator_type"], "DISCRETE")
+            metadata = json.loads((path.parent / "integration_metadata.json").read_text())
+            self.assertEqual(metadata["integration_substeps"], 4)
+            library = path.parent / ("libacados_ocp_solver_" + name + ".so")
+            self.assertEqual(metadata["solver_library_sha256"], hashlib.sha256(library.read_bytes()).hexdigest())
+            self.assertEqual(metadata["model_source_sha256"],
+                             hashlib.sha256((ACADOS_DIR / "spmpc_acados_model.py").read_bytes()).hexdigest())
 
     def test_fifo_shifts_and_appends_next_command_state(self):
         symbols = export_spmpc_b0_symbols()
@@ -173,6 +181,17 @@ class ExplicitActuatorModelTest(unittest.TestCase):
         np.testing.assert_allclose(
             result[SLOSH_STATE_OFFSET:NX_SLOSH], np.zeros(4), atol=1.0e-12
         )
+
+    def test_angular_fifo_remains_ten_control_cycles(self):
+        for symbols in (export_spmpc_b0_symbols(), export_spmpc_slosh_symbols()):
+            step = transition(symbols)
+            x = np.zeros(symbols["nx"])
+            p = default_parameter_values(self.cfg, with_slosh=symbols["with_slosh"])
+            for k in range(10):
+                x = np.asarray(step(x, [.0, .6 if k == 0 else .0, .0], p)).ravel()
+                self.assertAlmostEqual(x[5], 0, places=12)
+            x = np.asarray(step(x, np.zeros(3), p)).ravel()
+            self.assertGreater(x[5], 0)
 
 
 if __name__ == "__main__":

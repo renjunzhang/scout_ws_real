@@ -11,7 +11,8 @@ B0（无 slosh）采用显式 command/actual 执行器模型：
   连续性状态 = [a_cmd_memory]，满足 a_cmd_memory(k+1) = a_cmd(k)
   控制 u   = [a_cmd, alpha_cmd, v_s]
 
-每个 OCP interval 内以固定 FIFO 头作为延迟输入，用 RK4 离散连续 FOPDT；
+每个 OCP interval 内以固定控制量和 FIFO 头作为输入，用四子步 RK4
+积分车体、执行器及液体连续状态；FIFO/加速度记忆只在 interval 末更新一次。
 interval 末端把新 command state 写入 FIFO。车体和液体只消费 actual，
 /cmd_vel 则从下一拍 command state 提取。
 
@@ -21,6 +22,8 @@ contour / lag 在 cost 模块中据此解析计算。
 
 import casadi as ca
 
+# codegen 数值设置，Full/Smooth 共用；不改变控制周期、FIFO 延迟或物理阻尼。
+EXPLICIT_ACTUATOR_RK4_SUBSTEPS = 4
 LINEAR_DELAY_STEPS = 5
 ANGULAR_DELAY_STEPS = 10
 ACTUATOR_CORE_NX = 8
@@ -102,6 +105,21 @@ PIDX_SLOSH_DIRECT_OMEGA = {name: i for i, name in enumerate(PARAM_NAMES_SLOSH_DI
 NX_SLOSH_DIRECT_OMEGA = 9  # [px, py, theta, v, s, eta_x, eta_x_dot, eta_y, eta_y_dot]（omega 是控制, 无 omega 状态）
 
 
+def integrate_rk4(rhs, state, duration, substeps):
+    """只积分连续状态；离散队列/记忆的更新由调用者在周期边界处理。"""
+    if isinstance(substeps, bool) or not isinstance(substeps, int) or substeps < 1:
+        raise ValueError("RK4 substeps must be a positive integer")
+    step = duration / substeps
+    result = state
+    for _ in range(substeps):
+        k1 = rhs(result)
+        k2 = rhs(result + 0.5 * step * k1)
+        k3 = rhs(result + 0.5 * step * k2)
+        k4 = rhs(result + step * k3)
+        result = result + (step / 6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4)
+    return result
+
+
 def _export_explicit_actuator_symbols(name, with_slosh):
     """构造 command/actual 分离、固定离散 FIFO 延迟的 OCP 模型。"""
     px = ca.SX.sym("px")
@@ -143,9 +161,13 @@ def _export_explicit_actuator_symbols(name, with_slosh):
     gain_v = p[pidx["actuator_gain_v"]]
     gain_omega = p[pidx["actuator_gain_omega"]]
 
+    # 只打包连续状态，避免把采样系统的离散更新混进积分子步。
+    continuous = ca.vertcat(x[:ACTUATOR_CORE_NX], *eta)
+    delayed_v_cmd = x[LINEAR_QUEUE_START]
+    delayed_omega_cmd = x[ANGULAR_QUEUE_START]
+
     def rhs(z):
-        delayed_v_cmd = z[LINEAR_QUEUE_START]
-        delayed_omega_cmd = z[ANGULAR_QUEUE_START]
+        # u、p 和 FIFO 头在整个控制周期内固定。
         a_actual = (gain_v * delayed_v_cmd - z[3]) / tau_v
         alpha_actual = (gain_omega * delayed_omega_cmd - z[5]) / tau_omega
         values = [
@@ -158,14 +180,11 @@ def _export_explicit_actuator_symbols(name, with_slosh):
             u[0],
             u[1],
         ]
-        values.extend([0.0] * (LINEAR_DELAY_STEPS + ANGULAR_DELAY_STEPS))
-        # a_cmd_memory 是离散记忆状态，interval 末由 disc_dyn 直接覆盖为当前 a_cmd。
-        values.append(0.0)
         if with_slosh:
-            eta_x = z[SLOSH_STATE_OFFSET]
-            eta_x_dot = z[SLOSH_STATE_OFFSET + 1]
-            eta_y = z[SLOSH_STATE_OFFSET + 2]
-            eta_y_dot = z[SLOSH_STATE_OFFSET + 3]
+            eta_x = z[ACTUATOR_CORE_NX]
+            eta_x_dot = z[ACTUATOR_CORE_NX + 1]
+            eta_y = z[ACTUATOR_CORE_NX + 2]
+            eta_y_dot = z[ACTUATOR_CORE_NX + 3]
             two_zeta_omega_n = p[pidx["two_zeta_omega_n"]]
             omega_n_sq = p[pidx["omega_n_sq"]]
             kappa_x = p[pidx["kappa_x"]]
@@ -180,12 +199,9 @@ def _export_explicit_actuator_symbols(name, with_slosh):
             ])
         return ca.vertcat(*values)
 
-    k1 = rhs(x)
-    k2 = rhs(x + 0.5 * dt * k1)
-    k3 = rhs(x + 0.5 * dt * k2)
-    k4 = rhs(x + dt * k3)
-    integrated = x + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+    integrated = integrate_rk4(rhs, continuous, dt, EXPLICIT_ACTUATOR_RK4_SUBSTEPS)
 
+    # 周期边界：FIFO 恰好移位一次，a_cmd_memory 恰好更新一次。
     next_q_v = ca.vertcat(
         x[LINEAR_QUEUE_START + 1:ANGULAR_QUEUE_START], integrated[6])
     next_q_omega = ca.vertcat(
@@ -193,7 +209,7 @@ def _export_explicit_actuator_symbols(name, with_slosh):
     next_parts = [
         integrated[0:ACTUATOR_CORE_NX], next_q_v, next_q_omega, a_cmd]
     if with_slosh:
-        next_parts.append(integrated[SLOSH_STATE_OFFSET:SLOSH_STATE_OFFSET + 4])
+        next_parts.append(integrated[ACTUATOR_CORE_NX:ACTUATOR_CORE_NX + 4])
     disc_dyn = ca.vertcat(*next_parts)
 
     return {
@@ -203,6 +219,7 @@ def _export_explicit_actuator_symbols(name, with_slosh):
         "p": p,
         "disc_dyn": disc_dyn,
         "discrete": True,
+        "integration_substeps": EXPLICIT_ACTUATOR_RK4_SUBSTEPS,
         "nx": NX_SLOSH if with_slosh else NX,
         "nu": NU,
         "np": np_dim,

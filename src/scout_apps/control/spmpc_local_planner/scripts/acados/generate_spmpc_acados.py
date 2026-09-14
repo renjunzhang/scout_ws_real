@@ -16,6 +16,8 @@
 """
 
 import argparse
+import hashlib
+import json
 import os
 import sys
 
@@ -186,6 +188,8 @@ def build_check(cfg, model_key):
     print(f"  nx={sym['nx']} nu={sym['nu']} np={sym['np']} (= len(param_default)={len(p_default)})")
     dynamics = sym["disc_dyn"] if sym.get("discrete") else sym["f_expl"]
     print(f"  {'disc_dyn' if sym.get('discrete') else 'f_expl'} shape = {dynamics.shape}")
+    if sym.get("discrete"):
+        print(f"  continuous RK4 substeps = {sym['integration_substeps']}; FIFO/memory updates = 1")
     print(f"  stage_cost   shape = {ca.SX(stage).shape}")
     print(f"  terminal_cost shape = {ca.SX(terminal).shape}")
     print(f"  N={cfg['N']} dt={cfg['dt']} Tf={cfg['Tf']}")
@@ -266,6 +270,23 @@ def generate(cfg, output_root, model_key, qp_cond_n=None):
     json_path = os.path.join(export_dir, f"acados_ocp_{sym['name']}.json")
 
     AcadosOcpSolver(ocp, json_file=json_path)
+    if sym.get("discrete"):
+        # 与实际生成库绑定，供录前归档识别数值版本；不是运行时可调参数。
+        def file_hash(path):
+            with open(path, "rb") as stream:
+                return hashlib.sha256(stream.read()).hexdigest()
+
+        metadata = {
+            "schema_version": 1, "model": sym["name"],
+            "continuous_integrator": "RK4", "integration_substeps": sym["integration_substeps"],
+            "dt": cfg["dt"], "N": cfg["N"], "fifo_updates_per_interval": 1,
+            "acceleration_memory_updates_per_interval": 1,
+            "model_source_sha256": file_hash(os.path.join(os.path.dirname(__file__), "spmpc_acados_model.py")),
+            "solver_library_sha256": file_hash(os.path.join(export_dir, f"libacados_ocp_solver_{sym['name']}.so")),
+        }
+        with open(os.path.join(export_dir, "integration_metadata.json"), "w") as stream:
+            json.dump(metadata, stream, indent=2)
+            stream.write("\n")
     print(f"[ok] acados 求解器 '{model_key}' 已生成 -> {export_dir}")
     return 0
 
