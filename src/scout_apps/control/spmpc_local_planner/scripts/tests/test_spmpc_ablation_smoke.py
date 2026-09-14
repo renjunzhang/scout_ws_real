@@ -294,7 +294,9 @@ done
 
     def test_start_wait_option_reaches_replay_without_changing_defaults(self):
         runner = (SCRIPTS / 'run_spmpc_real_fixed_path_trial.sh').read_text()
-        # Execute only command construction, never the runner or ROS commands.
+        # Include all real argument checks before constructing the replay command.
+        # Truncate before the first ROS query: no nodes, recorder or cleanup run.
+        preflight = runner[:runner.index('if ! timeout 5s rostopic list')]
         command_builder = runner[runner.index('if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then\n  path_cmd=('):
                                  runner.index('path_command_string=')]
         for skip in ('false', 'true'):
@@ -303,16 +305,30 @@ done
             config = dict(line.split('=', 1) for line in profile.stdout.splitlines())
             self.assertEqual(config['SKIP_START_WAIT'], skip)
             self.assertEqual('_StartManual' in config['RUN_LABEL_PREFIX'], skip == 'true')
-            env = dict(os.environ, PATH_SOURCE_MODE='replay', SKIP_START_WAIT=skip,
-                       PATH_FILE='/tmp/frozen path.json', REF_TOPIC='/path', BASE_FRAME='base_link',
-                       START_POS_TOL='0.08', START_YAW_TOL='0.15', START_HOLD_SEC='0.5',
-                       PATH_PUBLISH_RATE='2')
-            result = subprocess.run(['bash', '-eu', '-c',
-                'truthy() { [[ "$1" == true ]]; }\n' + command_builder + '\nprintf "%s\\n" "${path_cmd[@]}"'],
-                env=env, text=True, capture_output=True, check=True)
-            args = result.stdout.splitlines()
-            self.assertEqual('--skip-start-wait' in args, skip == 'true')
-            self.assertEqual(args[args.index('--path-file') + 1], '/tmp/frozen path.json')
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                path = root / 'frozen path.json'
+                path.write_text('{}')
+                script = root / 'runner_preflight.sh'
+                script.write_text(preflight + command_builder + '\nprintf "%s\\n" "${path_cmd[@]}"')
+                env = dict(os.environ, MATRIX_PRESET='', PILOT_METHOD='', PILOT_MODE='true',
+                           PATH_SOURCE_MODE='replay', SKIP_START_WAIT=skip, PATH_FILE=str(path),
+                           RECORDER_SCRIPT=str(SCRIPTS / 'record_spmpc_full_rgb_bag.sh'),
+                           EXECUTION_MODEL_MODE='explicit_actuator', DELAY_PHASE_MODE='off')
+                # An unset flag must retain the old wait behavior too.
+                variants = [env] + ([{k: v for k, v in env.items() if k != 'SKIP_START_WAIT'}]
+                                    if skip == 'false' else [])
+                for settings in variants:
+                    result = subprocess.run(['bash', str(script)], env=settings,
+                                            text=True, capture_output=True)
+                    self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                    args = result.stdout.splitlines()
+                    self.assertEqual('--skip-start-wait' in args, skip == 'true')
+                    self.assertEqual(args[args.index('--path-file') + 1], str(path))
+                for invalid in ({'V_REF': 'typo'}, {'SKIP_START_WAIT': 'typo'}):
+                    result = subprocess.run(['bash', str(script)], env=dict(env, **invalid),
+                                            text=True, capture_output=True)
+                    self.assertNotEqual(result.returncode, 0)
         self.assertNotEqual(self.profile(ABLATION_SKIP_START_WAIT='typo').returncode, 0)
 
     def test_internal_validation_requires_lock_and_matching_row(self):
