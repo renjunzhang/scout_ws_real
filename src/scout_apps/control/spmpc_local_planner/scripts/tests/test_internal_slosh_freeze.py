@@ -103,6 +103,24 @@ class EvaluationFreezeTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.create()
 
+    def test_start_wait_mode_is_common_and_frozen_with_legacy_default(self):
+        full = json.loads(self.full.read_text())
+        full['prereg']['skip_start_wait'] = 'true'
+        self.full.write_text(json.dumps(full))
+        with self.assertRaisesRegex(ValueError, 'skip_start_wait'):
+            self.create()
+        smooth = json.loads(self.smooth.read_text())
+        smooth['prereg']['skip_start_wait'] = 'true'
+        self.smooth.write_text(json.dumps(smooth))
+        lock = self.create()
+        self.assertEqual(lock['skip_start_wait'], 'true')
+        for row, condition in freeze.ROWS.items():
+            launch = (self.root / (condition + '_launch_params.yaml')).read_text()
+            self.assertEqual(freeze.check_lock(lock, condition, row, launch, 'path-sha',
+                'map-sha', self.chain, skip_start_wait='true'), 'imu')
+            with self.assertRaisesRegex(ValueError, 'skip_start_wait'):
+                freeze.check_lock(lock, condition, row, launch, 'path-sha', 'map-sha', self.chain)
+
     def test_nonliquid_cost_difference_and_tampered_dump_rejected(self):
         launch = self.root / "smooth_launch_params.yaml"
         launch.write_text(launch.read_text().replace("w_smooth: 0.1", "w_smooth: 1.0"))

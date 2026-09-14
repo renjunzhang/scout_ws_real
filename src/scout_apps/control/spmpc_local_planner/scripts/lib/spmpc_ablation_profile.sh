@@ -1,6 +1,8 @@
 # Sourced only by the shared smoke engine's new ablation profile.
 # Historical profiles retain their own protocol IDs and defaults.
 ABLATION_CONDITION="${ABLATION_CONDITION:-full}"
+SKIP_START_WAIT="${ABLATION_SKIP_START_WAIT:-false}"
+case "${SKIP_START_WAIT}" in true|false) ;; *) fail "invalid skip-start-wait flag" ;; esac
 JERK_MAX="${ABLATION_JERK_MAX:-1.0}"
 JERK_MAX="$(python3 - "${JERK_MAX}" <<'PY'
 import math
@@ -198,3 +200,7 @@ fi
 if [[ "${EXPERIMENT_KIND}" != internal-slosh && -n "${EVALUATION_LOCK}${EVALUATION_ROW}" ]]; then
   fail "evaluation lock/row is only supported by internal-slosh V2"
 fi
+if [[ "${SKIP_START_WAIT}" == true ]]; then
+  RUN_LABEL_PREFIX="${RUN_LABEL_PREFIX}_StartManual"
+fi
+OPERATOR_NOTE="${OPERATOR_NOTE}; skip_start_wait=${SKIP_START_WAIT}"

@@ -294,6 +294,7 @@ else
 fi
 START_HOLD_SEC="${START_HOLD_SEC:-0.5}"
 START_GATE_TIMEOUT_SEC="${START_GATE_TIMEOUT_SEC:-120}"
+SKIP_START_WAIT="${SKIP_START_WAIT:-false}"
 PATH_PUBLISH_RATE="${PATH_PUBLISH_RATE:-2.0}"
 GENERATED_PATH_WAIT_SEC="${GENERATED_PATH_WAIT_SEC:-10}"
 
@@ -541,6 +542,7 @@ for kv in \
   "START_YAW_TOL=${START_YAW_TOL}" \
   "START_HOLD_SEC=${START_HOLD_SEC}" \
   "START_GATE_TIMEOUT_SEC=${START_GATE_TIMEOUT_SEC}" \
+  "SKIP_START_WAIT=${SKIP_START_WAIT}" \
   "PATH_PUBLISH_RATE=${PATH_PUBLISH_RATE}" \
   "GENERATED_PATH_WAIT_SEC=${GENERATED_PATH_WAIT_SEC}" \
   "V_REF=${V_REF}" \
@@ -847,6 +849,9 @@ else
     --publish-rate "${PATH_PUBLISH_RATE}"
     --publish-count 0
   )
+  if truthy "${SKIP_START_WAIT}"; then
+    path_cmd+=(--skip-start-wait)
+  fi
 fi
 path_command_string="$(printf '%q ' "${path_cmd[@]}")"
 
@@ -882,6 +887,7 @@ run_meta="${RUN_OUT_DIR}/${NAME}_one_click_meta.env"
   echo "start_yaw_tol=${START_YAW_TOL}"
   echo "start_hold_sec=${START_HOLD_SEC}"
   echo "start_gate_timeout_sec=${START_GATE_TIMEOUT_SEC}"
+  echo "skip_start_wait=${SKIP_START_WAIT}"
   echo "goal_topic=${GOAL_TOPIC}"
   echo "goal_frame=${GOAL_FRAME}"
   echo "goal_x=${GOAL_X}"
@@ -989,7 +995,11 @@ echo "  forbid_images = ${FORBID_IMAGE_STREAMS}"
 echo "  path_source   = ${PATH_SOURCE_MODE}"
 echo "  path_file     = ${PATH_FILE}"
 if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
-  echo "  start_gate    = ${START_POS_TOL} m / ${START_YAW_TOL} rad, hold ${START_HOLD_SEC}s"
+  if truthy "${SKIP_START_WAIT}"; then
+    echo "  start_gate    = skipped; operator confirms physical start pose"
+  else
+    echo "  start_gate    = ${START_POS_TOL} m / ${START_YAW_TOL} rad, hold ${START_HOLD_SEC}s"
+  fi
 else
   echo "  goal          = (${GOAL_X}, ${GOAL_Y}, ${GOAL_YAW}) in ${GOAL_FRAME}"
 fi
@@ -1122,7 +1132,7 @@ wait_for_reference() {
 prepare_reference() {
   local monitor_active_run="$1"
   if [[ "${PATH_SOURCE_MODE}" == "replay" ]]; then
-    echo "[path] waiting up to ${START_GATE_TIMEOUT_SEC}s for the relaxed start gate and ${REF_TOPIC}"
+    echo "[path] waiting up to ${START_GATE_TIMEOUT_SEC}s for ${REF_TOPIC}; skip_start_wait=${SKIP_START_WAIT}"
     if ! wait_for_reference "${START_GATE_TIMEOUT_SEC}" "replay start gate/path" "${monitor_active_run}"; then
       show_log_tail "${path_generator_log}" "fixed-path replay"
       fail "Timed out waiting for replay start gate/path on ${REF_TOPIC}"

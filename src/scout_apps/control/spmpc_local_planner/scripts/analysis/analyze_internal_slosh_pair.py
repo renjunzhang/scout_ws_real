@@ -595,6 +595,9 @@ def compare_reports(paths: Sequence[Path], output: Path, lock_path: Optional[Pat
             failures.append("row {} evaluation lock SHA mismatch".format(row))
         if report.get("prereg", {}).get("evaluation_primary_monitor") != primary:
             failures.append("row {} primary monitor mismatch".format(row))
+        skip_start_wait = report.get("prereg", {}).get("skip_start_wait", "false")
+        if skip_start_wait not in ("true", "false") or skip_start_wait != lock.get("skip_start_wait", "false"):
+            failures.append("row {} skip_start_wait mismatch".format(row))
         task_start = report.get("windows", {}).get("task", [None])[0]
         if not _finite(task_start) or float(task_start) <= float(lock.get("created_at_epoch_sec", math.inf)):
             failures.append("row {} task start is not newer than lock".format(row))

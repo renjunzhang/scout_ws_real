@@ -10,6 +10,7 @@ scene=20260829_c02
 observer_source=processed_imu
 source_comparison=false
 record_rgb=false
+skip_start_wait=false
 experiment=legacy
 w_slosh=
 w_v=
@@ -26,6 +27,7 @@ usage() {
   bash run_spmpc_ablation_smoke.sh [--condition full|nostate|smooth|b0|no_jerk]
        [--scene 20260829_c02|20260907_c03] [--jerk-max 1.0] [--validate-only | --run]
        [--observer-source imu|odom] [--record-rgb]
+       [--skip-start-wait]
        [--experiment ablation-rgb|internal-slosh --trial-id s01_full --phase screening|validation]
        [--w-slosh NUMBER --v-ref MPS]
        [--w-v NUMBER --w-contour NUMBER --w-lag NUMBER]
@@ -33,6 +35,8 @@ usage() {
 
 默认只检查，不启动 ROS 节点或底盘。--run 录一包 70 秒以内的低速开发 smoke，
 操作者须先完成急停、起点和净空检查。复用原运行、录包、停车和画图流程。
+--skip-start-wait：由操作者确认物理归位，跳过定位起点的位置/朝向等待；仍记录定位偏差。
+同批 Full/Smooth 须使用相同设置；不加此参数保留原起点门。
 full：完整方法；nostate：仅 OCP 液体初态置零；smooth：关闭液体优化，保留硬约束；
 b0：关闭液体优化和新增硬约束，保留共同软平滑权重；不是旧冻结 B0 参数。
 no_jerk：完整方法只关闭新增硬约束。其余参数保持相同，I0 监视器持续运行。
@@ -87,6 +91,7 @@ while (( $# )); do
     --run) run_motion=true; shift ;;
     --validate-only) run_motion=false; shift ;;
     --record-rgb) record_rgb=true; source_comparison=true; shift ;;
+    --skip-start-wait) skip_start_wait=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "未知参数：$1" >&2; usage >&2; exit 2 ;;
   esac
@@ -139,6 +144,7 @@ if [[ "${run_motion}" == true ]]; then
     ABLATION_SOURCE_COMPARISON="${source_comparison}" \
     ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
     ABLATION_SCENE="${scene}" \
+    ABLATION_SKIP_START_WAIT="${skip_start_wait}" \
     ABLATION_JERK_MAX="${jerk_max}" VALIDATE_ONLY=false \
     ARM_MOTION=YES CONFIRM_RUNTIME_SMOKE=YES CONFIRM_PATH_CLEAR=YES \
     bash "${SCRIPT_DIR}/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
@@ -151,5 +157,6 @@ exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
   ABLATION_SOURCE_COMPARISON="${source_comparison}" \
   ABLATION_OBSERVER_SOURCE="${observer_source}" ABLATION_RECORD_RGB="${record_rgb}" \
   ABLATION_SCENE="${scene}" \
+  ABLATION_SKIP_START_WAIT="${skip_start_wait}" \
   ABLATION_JERK_MAX="${jerk_max}" VALIDATE_ONLY=true \
   bash "${SCRIPT_DIR}/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"

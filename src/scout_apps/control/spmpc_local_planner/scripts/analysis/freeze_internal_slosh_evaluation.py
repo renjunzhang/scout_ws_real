@@ -139,6 +139,9 @@ def create_lock(full_path, smooth_path, primary, reason, output, chain=None, pro
         raise ValueError("V3 evaluation requires imu primary monitor")
     full, full_params, full_sha = read_candidate(full_path, "full", chain, protocol)
     smooth, smooth_params, smooth_sha = read_candidate(smooth_path, "smooth", chain, protocol)
+    skip_start_wait = full["prereg"].get("skip_start_wait", "false")
+    if skip_start_wait not in ("true", "false") or smooth["prereg"].get("skip_start_wait", "false") != skip_start_wait:
+        raise ValueError("Full/Smooth skip_start_wait differs or is invalid")
     common = lambda params: {k: v for k, v in params.items() if k not in LIQUID_KEYS}
     if common(full_params) != common(smooth_params):
         raise ValueError("Full/Smooth non-liquid launch parameters differ")
@@ -151,6 +154,7 @@ def create_lock(full_path, smooth_path, primary, reason, output, chain=None, pro
         "primary_monitor": primary, "selection_reason": reason, "rows": ROWS,
         "full_w_slosh": float(full["prereg"]["w_slosh"]),
         "jerk_max": float(full["prereg"].get("jerk_max", 0.6)),
+        "skip_start_wait": skip_start_wait,
         "launch_params_sha256": {"full": full_sha, "smooth": smooth_sha},
         "launch_params": {"full": full_params, "smooth": smooth_params},
         "evaluation_chain_sha256": chain["sha256"], "evaluation_chain_files": chain["files"],
@@ -175,7 +179,8 @@ def create_lock(full_path, smooth_path, primary, reason, output, chain=None, pro
     return lock
 
 
-def check_lock(lock, condition, row, launch_text, path_sha, map_sha, chain=None, protocol=None):
+def check_lock(lock, condition, row, launch_text, path_sha, map_sha, chain=None, protocol=None,
+               skip_start_wait="false"):
     lock_protocol = lock.get("protocol")
     requested = protocol or lock_protocol or PROTOCOL
     if requested not in SUPPORTED_PROTOCOLS or lock.get("schema_version") != 1 or lock_protocol != requested or lock.get("rows") != ROWS:
@@ -186,6 +191,8 @@ def check_lock(lock, condition, row, launch_text, path_sha, map_sha, chain=None,
         raise ValueError("model/build/evaluator changed after freezing")
     if lock.get("path_sha256") != path_sha or lock.get("map_sha256") != map_sha:
         raise ValueError("path/map changed after freezing")
+    if skip_start_wait not in ("true", "false") or lock.get("skip_start_wait", "false") != skip_start_wait:
+        raise ValueError("skip_start_wait changed after freezing")
     if hashlib.sha256(launch_text.encode()).hexdigest() != lock["launch_params_sha256"][condition]:
         raise ValueError("launch parameters differ from frozen " + condition)
     weights = {key: lock[key] for key in ("w_v", "w_contour", "w_lag")} if requested == PARAMETER_PROTOCOL else None
@@ -212,6 +219,7 @@ def main(argv=None):
     check.add_argument("--path-sha256", required=True)
     check.add_argument("--map-sha256", required=True)
     check.add_argument("--protocol", choices=SUPPORTED_PROTOCOLS)
+    check.add_argument("--skip-start-wait", choices=("true", "false"), default="false")
     args = parser.parse_args(argv)
     try:
         if args.action == "fingerprint":
@@ -221,7 +229,8 @@ def main(argv=None):
             print(str(args.output))
         else:
             print(check_lock(json.loads(args.lock.read_text()), args.condition, args.row,
-                             sys.stdin.read(), args.path_sha256, args.map_sha256, protocol=args.protocol))
+                             sys.stdin.read(), args.path_sha256, args.map_sha256, protocol=args.protocol,
+                             skip_start_wait=args.skip_start_wait))
     except (ValueError, OSError, KeyError, TypeError) as exc:
         parser.exit(2, "evaluation freeze: {}\n".format(exc))
     return 0

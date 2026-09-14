@@ -249,6 +249,15 @@ class InternalSloshMetricsTest(unittest.TestCase):
         value = result["pair_changes"]["01_vs_02"]["task"]["rms_mm_percent_change_full_vs_smooth"]
         self.assertAlmostEqual(value, 0.0)
 
+    def test_locked_compare_rejects_mixed_start_wait_modes(self):
+        reports, lock = self._write_locked_reports()
+        report = json.loads(reports[0].read_text())
+        report['prereg']['skip_start_wait'] = 'true'
+        reports[0].write_text(json.dumps(report))
+        result = METRICS.compare_reports(reports, self.root / 'mixed-start.json', lock)
+        self.assertEqual(result['status'], 'FAIL')
+        self.assertTrue(any('skip_start_wait mismatch' in failure for failure in result['gate_failures']))
+
     def test_locked_compare_rejects_wrong_primary_monitor_and_lock_sha(self):
         reports, lock = self._write_locked_reports()
         payload = json.loads(lock.read_text())

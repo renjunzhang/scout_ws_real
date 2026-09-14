@@ -117,11 +117,12 @@ class AblationEntryTest(unittest.TestCase):
                    ABLATION_TRIAL_ID='01_full', ABLATION_PHASE='screening',
                    ABLATION_W_SLOSH='', ABLATION_V_REF='0.2',
                    ABLATION_W_V='', ABLATION_W_CONTOUR='', ABLATION_W_LAG='',
+                   ABLATION_SKIP_START_WAIT='false',
                    ABLATION_EVALUATION_LOCK='', ABLATION_EVALUATION_ROW='')
         env.update(overrides)
         script = '''fail() { echo "$*" >&2; exit 2; }
 source "$1"
-for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH W_V W_CONTOUR W_LAG V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE; do
+for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH W_V W_CONTOUR W_LAG V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE SKIP_START_WAIT; do
   printf '%s=%s\\n' "$key" "${!key}"
 done
 '''
@@ -264,6 +265,7 @@ done
                     '--trial-id', '01_' + condition, '--w-slosh', weight, '--phase', 'validation',
                     '--v-ref', '0.2', '--jerk-max', '0.6',
                     '--w-v', '0.5', '--w-contour', '0.7', '--w-lag', '0.15',
+                    '--skip-start-wait',
                     '--evaluation-lock', '/tmp/test-lock.json', '--evaluation-row', '02' if condition == 'smooth' else '01', action],
                     capture_output=True, text=True, check=True)
                 env = json.loads(result.stdout)
@@ -272,6 +274,7 @@ done
                                 ABLATION_OBSERVER_SOURCE='processed_imu', ABLATION_W_SLOSH=weight,
                                 ABLATION_V_REF='0.2', ABLATION_JERK_MAX='0.6',
                                 ABLATION_W_V='0.5', ABLATION_W_CONTOUR='0.7', ABLATION_W_LAG='0.15',
+                                ABLATION_SKIP_START_WAIT='true',
                                 ABLATION_EVALUATION_LOCK='/tmp/test-lock.json',
                                 ABLATION_EVALUATION_ROW='02' if condition == 'smooth' else '01',
                                 ABLATION_TRIAL_ID='01_' + condition, ABLATION_PHASE='validation',
@@ -282,11 +285,35 @@ done
                                      '--trial-id', 'defaults'], capture_output=True, text=True, check=True)
             self.assertEqual(json.loads(result.stdout)['ABLATION_JERK_MAX'], '0.6')
             self.assertEqual(json.loads(result.stdout)['VALIDATE_ONLY'], 'true')
+            self.assertEqual(json.loads(result.stdout)['ABLATION_SKIP_START_WAIT'], 'false')
             for flags in (['--record-rgb', '--experiment', 'internal-slosh'],
                           ['--experiment', 'internal-slosh', '--record-rgb']):
                 result = subprocess.run(['bash', str(entry), *flags], capture_output=True, text=True)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertIn('internal-slosh 不录 RGB', result.stderr)
+
+    def test_start_wait_option_reaches_replay_without_changing_defaults(self):
+        runner = (SCRIPTS / 'run_spmpc_real_fixed_path_trial.sh').read_text()
+        # Execute only command construction, never the runner or ROS commands.
+        command_builder = runner[runner.index('if [[ "${PATH_SOURCE_MODE}" == "generate" ]]; then\n  path_cmd=('):
+                                 runner.index('path_command_string=')]
+        for skip in ('false', 'true'):
+            profile = self.profile(ABLATION_SKIP_START_WAIT=skip)
+            self.assertEqual(profile.returncode, 0, profile.stderr)
+            config = dict(line.split('=', 1) for line in profile.stdout.splitlines())
+            self.assertEqual(config['SKIP_START_WAIT'], skip)
+            self.assertEqual('_StartManual' in config['RUN_LABEL_PREFIX'], skip == 'true')
+            env = dict(os.environ, PATH_SOURCE_MODE='replay', SKIP_START_WAIT=skip,
+                       PATH_FILE='/tmp/frozen path.json', REF_TOPIC='/path', BASE_FRAME='base_link',
+                       START_POS_TOL='0.08', START_YAW_TOL='0.15', START_HOLD_SEC='0.5',
+                       PATH_PUBLISH_RATE='2')
+            result = subprocess.run(['bash', '-eu', '-c',
+                'truthy() { [[ "$1" == true ]]; }\n' + command_builder + '\nprintf "%s\\n" "${path_cmd[@]}"'],
+                env=env, text=True, capture_output=True, check=True)
+            args = result.stdout.splitlines()
+            self.assertEqual('--skip-start-wait' in args, skip == 'true')
+            self.assertEqual(args[args.index('--path-file') + 1], '/tmp/frozen path.json')
+        self.assertNotEqual(self.profile(ABLATION_SKIP_START_WAIT='typo').returncode, 0)
 
     def test_internal_validation_requires_lock_and_matching_row(self):
         defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false',

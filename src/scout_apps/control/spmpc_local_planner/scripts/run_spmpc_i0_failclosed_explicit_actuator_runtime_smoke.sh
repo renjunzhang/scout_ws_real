@@ -63,6 +63,7 @@ DATE="${DATE:-$(date +%Y%m%d)}"
 STAMP="${STAMP:-$(date +%H%M%S)}"
 MIN_FREE_GIB="${MIN_FREE_GIB:-5}"
 SMOKE_PROFILE="${SMOKE_PROFILE:-runtime_baseline}"
+SKIP_START_WAIT=false
 
 VARIANT=B_slosh
 W_SLOSH=5.0
@@ -431,6 +432,7 @@ if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
     EVALUATION_PRIMARY_MONITOR="$(python3 "${EVALUATION_TOOL}" check \
       --lock "${EVALUATION_LOCK}" --condition "${ABLATION_CONDITION}" --row "${EVALUATION_ROW}" \
       --protocol "${PROTOCOL_ID}" \
+      --skip-start-wait "${SKIP_START_WAIT}" \
       --path-sha256 "${FROZEN_PATH_SHA256}" --map-sha256 "${FROZEN_MAP_SHA256}" \
       <<< "${launch_dump}")" || fail "evaluation lock does not match this run"
   fi
@@ -471,6 +473,7 @@ echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
 echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   echo "  tracking       = w_v=${W_V}; w_contour=${W_CONTOUR}; w_lag=${W_LAG}; w_vs=0.3; w_progress=0.2"
+  echo "  skip_start_wait= ${SKIP_START_WAIT} (true: operator confirms physical start pose)"
 fi
 echo "  speed          = v_ref=${V_REF}; hard v_safe=${V_SAFE_MAX} m/s; horizon=2.0 s (30 Hz x N=60)"
 echo "  ablation       = ${ABLATION_CONDITION}; slosh=${SLOSH_ENABLE}; zero_x0=${ZERO_LIQUID_INITIAL_STATE}; jerk=${JERK_LIMIT_ENABLE}; j_max=${JERK_MAX}"
@@ -603,6 +606,7 @@ fi
   echo "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}"
   echo "jerk_limit_enable=${JERK_LIMIT_ENABLE}"
   echo "jerk_max=${JERK_MAX}"
+  echo "skip_start_wait=${SKIP_START_WAIT}"
   echo "terminal_mpc_stop_handoff_enable=${TERMINAL_MPC_STOP_HANDOFF_ENABLE}"
   echo "launch_params_sha256=$(printf '%s\n' "${launch_dump}" | sha256sum | awk '{print $1}')"
   echo "w_slosh=${W_SLOSH}"
@@ -657,6 +661,7 @@ env \
   PATH_SOURCE_MODE=replay PATH_FILE="${FROZEN_PATH_FILE}" \
   PATH_EXPECTED_SHA256="${FROZEN_PATH_SHA256}" REQUIRE_PATH_HASH=true \
   START_POS_TOL=0.08 START_YAW_TOL=0.15 START_HOLD_SEC=0.5 \
+  SKIP_START_WAIT="${SKIP_START_WAIT}" \
   START_GATE_TIMEOUT_SEC=120 PATH_PUBLISH_RATE=2.0 \
   SOLVER_BACKEND=continuous_mpcc_acados CMD_TOPIC="${CMD_TOPIC}" \
   REF_TOPIC="${REF_TOPIC}" COSTMAP_TOPIC="${COSTMAP_TOPIC}" \
