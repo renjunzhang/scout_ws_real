@@ -12,6 +12,9 @@ source_comparison=false
 record_rgb=false
 experiment=legacy
 w_slosh=
+w_v=
+w_contour=
+w_lag=
 v_ref=
 trial_id=
 phase=screening
@@ -25,6 +28,7 @@ usage() {
        [--observer-source imu|odom] [--record-rgb]
        [--experiment ablation-rgb|internal-slosh --trial-id s01_full --phase screening|validation]
        [--w-slosh NUMBER --v-ref MPS]
+       [--w-v NUMBER --w-contour NUMBER --w-lag NUMBER]
        [--evaluation-lock FILE --evaluation-row 01|02|03|04]
 
 默认只检查，不启动 ROS 节点或底盘。--run 录一包 70 秒以内的低速开发 smoke，
@@ -43,6 +47,10 @@ v_ref=0.20 m/s，jerk_max 单位 m/s³，默认 1.0 仍是开发候选。
 --experiment internal-slosh V2 是 C03/IMU 的 Full/Smooth-only 内部模型指标对比，
 不录 RGB/depth，保留 Tracker0、双监视器与四项验收，不要求相机启动。
 只支持 full/smooth，两组固定硬 jerk=0.6、v_ref=0.2、IMU 初态来源、2 秒时域和非液体权重。
+显式指定 --w-v/--w-contour/--w-lag 任一项，或 --jerk-max 不为 0.6，自动进入参数对照 V3。
+V3 默认 w_v=1、w_contour=1、w_lag=0.2；三项权重必须为有限正数且不大于 20，jerk 支持 0.6/1.0/1.2。
+主评价固定 IMU，v_ref 仍为 0.2；其余速度/进度、模型、时域及验收保持现状。
+只改变本轮要检验的因素，Full/Smooth 使用共同参数；参数写入独立 V3 包名、预注册和验收。
 smooth 只关闭液体优化，权重为 0；full 默认权重 1，可设 0<w_slosh<=20（首轮只建议 1/0.5）。
 旧 b0 关闭硬 jerk，不能作为本轮 Smooth；NoState/RGB 后置。
 必须指定 trial-id；组别、权重、实际 jerk 开关、速度、轮次/阶段写入包名和验收元数据。
@@ -57,7 +65,7 @@ EOF
 }
 while (( $# )); do
   case "$1" in
-    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--v-ref|--trial-id|--phase|--evaluation-lock|--evaluation-row)
+    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--w-v|--w-contour|--w-lag|--v-ref|--trial-id|--phase|--evaluation-lock|--evaluation-row)
       (( $# >= 2 )) || { usage >&2; exit 2; }
       case "$1" in
         --condition) condition="$2" ;;
@@ -66,6 +74,9 @@ while (( $# )); do
         --observer-source) observer_source="$2"; source_comparison=true ;;
         --experiment) experiment="$2" ;;
         --w-slosh) w_slosh="$2" ;;
+        --w-v) w_v="$2"; [[ -n "${w_v}" ]] || exit 2 ;;
+        --w-contour) w_contour="$2"; [[ -n "${w_contour}" ]] || exit 2 ;;
+        --w-lag) w_lag="$2"; [[ -n "${w_lag}" ]] || exit 2 ;;
         --v-ref) v_ref="$2" ;;
         --trial-id) trial_id="$2" ;;
         --phase) phase="$2" ;;
@@ -80,6 +91,9 @@ while (( $# )); do
     *) echo "未知参数：$1" >&2; usage >&2; exit 2 ;;
   esac
 done
+if [[ "${experiment}" != internal-slosh && -n "${w_v}${w_contour}${w_lag}" ]]; then
+  echo "--w-v/--w-contour/--w-lag 仅用于 --experiment internal-slosh 参数对照" >&2; exit 2
+fi
 case "${condition}" in
   full|nostate|smooth|b0|no_jerk) ;;
   *) echo "未知组别：${condition}" >&2; exit 2 ;;
@@ -119,6 +133,7 @@ fi
 if [[ "${run_motion}" == true ]]; then
   exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
     ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+    ABLATION_W_V="${w_v}" ABLATION_W_CONTOUR="${w_contour}" ABLATION_W_LAG="${w_lag}" \
     ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
     ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \
     ABLATION_SOURCE_COMPARISON="${source_comparison}" \
@@ -130,6 +145,7 @@ if [[ "${run_motion}" == true ]]; then
 fi
 exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
   ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+  ABLATION_W_V="${w_v}" ABLATION_W_CONTOUR="${w_contour}" ABLATION_W_LAG="${w_lag}" \
   ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
   ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \
   ABLATION_SOURCE_COMPARISON="${source_comparison}" \

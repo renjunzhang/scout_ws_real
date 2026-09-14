@@ -67,6 +67,9 @@ SMOKE_PROFILE="${SMOKE_PROFILE:-runtime_baseline}"
 VARIANT=B_slosh
 W_SLOSH=5.0
 W_ACCEL=0.0
+W_V=-1
+W_CONTOUR=-1
+W_LAG=-1
 V_REF=0.20
 V_SAFE_MAX=0.25
 SPEED_SAFETY_TOLERANCE=0.0001
@@ -366,6 +369,7 @@ launch_dump="$(roslaunch --dump-params \
   speed_safety_tolerance:="${SPEED_SAFETY_TOLERANCE}" \
   v_ref:="${V_REF}" w_slosh:="${W_SLOSH}" \
   w_accel:="${W_ACCEL}" \
+  w_v:="${W_V}" w_contour:="${W_CONTOUR}" w_lag:="${W_LAG}" \
   w_smooth:="${W_SMOOTH}" w_alpha:="${W_ALPHA}" \
   w_du_a:="${W_DU_A}" w_du_vs:="${W_DU_VS}" \
   slosh_height_max:="${SLOSH_HEIGHT_MAX}" alpha_max:="${ALPHA_MAX}")" \
@@ -407,6 +411,17 @@ require_dump_number "/spmpc_local_planner/variants/B_slosh/v_ref" "${V_REF}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_accel" "${W_ACCEL}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_alpha" "${W_ALPHA}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_du_a" "${W_DU_A}"
+parameter_expected_args=()
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  require_dump_number "/spmpc_local_planner/variants/B_slosh/w_v" "${W_V}"
+  require_dump_number "/spmpc_local_planner/variants/B_slosh/w_contour" "${W_CONTOUR}"
+  require_dump_number "/spmpc_local_planner/variants/B_slosh/w_lag" "${W_LAG}"
+  require_dump_number "/spmpc_local_planner/variants/B_slosh/w_vs" 0.3
+  require_dump_number "/spmpc_local_planner/variants/B_slosh/w_progress" 0.2
+  parameter_expected_args=(--expected-config "w_v=${W_V}"
+    --expected-config "w_contour=${W_CONTOUR}" --expected-config "w_lag=${W_LAG}"
+    --expected-config "w_vs=0.3" --expected-config "w_progress=0.2")
+fi
 
 require_dump_number "/spmpc_local_planner/ablation/jerk_max" "${JERK_MAX}"
 if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
@@ -415,6 +430,7 @@ if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
     EVALUATION_LOCK_SHA256="$(sha256sum "${EVALUATION_LOCK}" | awk '{print $1}')"
     EVALUATION_PRIMARY_MONITOR="$(python3 "${EVALUATION_TOOL}" check \
       --lock "${EVALUATION_LOCK}" --condition "${ABLATION_CONDITION}" --row "${EVALUATION_ROW}" \
+      --protocol "${PROTOCOL_ID}" \
       --path-sha256 "${FROZEN_PATH_SHA256}" --map-sha256 "${FROZEN_MAP_SHA256}" \
       <<< "${launch_dump}")" || fail "evaluation lock does not match this run"
   fi
@@ -453,6 +469,9 @@ echo "  observer       = ${SELECTED_OBSERVER_SOURCE}; fail_closed; common_epoch=
 echo "  execution      = explicit_actuator; legacy delay=off"
 echo "  solver runtime = N=60; qp_solver_cond_N=10; odom private queue=10"
 echo "  weights        = w_slosh=${W_SLOSH}; w_accel=${W_ACCEL}; w_du_a=${W_DU_A}; w_alpha=${W_ALPHA}"
+if [[ "${SMOKE_PROFILE}" == ablation ]]; then
+  echo "  tracking       = w_v=${W_V}; w_contour=${W_CONTOUR}; w_lag=${W_LAG}; w_vs=0.3; w_progress=0.2"
+fi
 echo "  speed          = v_ref=${V_REF}; hard v_safe=${V_SAFE_MAX} m/s; horizon=2.0 s (30 Hz x N=60)"
 echo "  ablation       = ${ABLATION_CONDITION}; slosh=${SLOSH_ENABLE}; zero_x0=${ZERO_LIQUID_INITIAL_STATE}; jerk=${JERK_LIMIT_ENABLE}; j_max=${JERK_MAX}"
 echo "  RGB            = ${SMOKE_RECORD_RGB}; 1920x1080@30 when enabled; raw stamped images + camera_info"
@@ -588,6 +607,9 @@ fi
   echo "launch_params_sha256=$(printf '%s\n' "${launch_dump}" | sha256sum | awk '{print $1}')"
   echo "w_slosh=${W_SLOSH}"
   echo "w_accel=${W_ACCEL}"
+  echo "w_v=${W_V}"
+  echo "w_contour=${W_CONTOUR}"
+  echo "w_lag=${W_LAG}"
   echo "v_ref=${V_REF}"
   echo "v_safe_max=${V_SAFE_MAX}"
   echo "observer=${SELECTED_OBSERVER_SOURCE}"
@@ -641,6 +663,7 @@ env \
   REFERENCE_TARGET_FRAME="${REFERENCE_TARGET_FRAME}" BASE_FRAME="${BASE_FRAME}" \
   V_REF="${V_REF}" W_SLOSH="${W_SLOSH}" W_SMOOTH="${W_SMOOTH}" \
   W_ACCEL="${W_ACCEL}" \
+  W_V="${W_V}" W_CONTOUR="${W_CONTOUR}" W_LAG="${W_LAG}" \
   W_ALPHA="${W_ALPHA}" W_DU_A="${W_DU_A}" W_DU_VS="${W_DU_VS}" \
   SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX}" ALPHA_MAX="${ALPHA_MAX}" \
   EXECUTION_MODEL_MODE="${EXECUTION_MODEL_MODE}" \
@@ -730,6 +753,7 @@ if [[ -s "${BAG_PATH}" ]]; then
     --expected-state-width "${EXPECTED_ACTIVE_STATE_WIDTH}" \
     --minimum-solver-schema-version "${MINIMUM_SOLVER_SCHEMA_VERSION}" \
     --expected-config "w_accel=${W_ACCEL}" \
+    "${parameter_expected_args[@]}" \
     --expected-config "w_smooth=${W_SMOOTH}" \
     --expected-config "w_alpha=${W_ALPHA}" \
     --expected-config "w_du_a=${W_DU_A}" \
@@ -813,6 +837,9 @@ printf '%s\n' \
   "evaluation_chain_sha256=${EVALUATION_CHAIN_SHA256}" \
   "trial_id=${TRIAL_ID}" \
   "w_slosh=${W_SLOSH}" \
+  "w_v=${W_V}" \
+  "w_contour=${W_CONTOUR}" \
+  "w_lag=${W_LAG}" \
   "v_ref=${V_REF}" \
   "scene=${SMOKE_SCENE}" \
   "observer=${SELECTED_OBSERVER_SOURCE}" \

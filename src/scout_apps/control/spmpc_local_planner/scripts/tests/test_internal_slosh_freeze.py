@@ -23,29 +23,41 @@ class EvaluationFreezeTest(unittest.TestCase):
         self.smooth = self.candidate("smooth")
         self.output = self.root / "lock.json"
 
-    def candidate(self, condition, weight=1.0):
+    def candidate(self, condition, weight=1.0, protocol=None, jerk_max=0.6,
+                  weights=None):
+        protocol = protocol or freeze.PROTOCOL
         prefix = "/spmpc_local_planner/"
         params = {prefix + k: v for k, v in {
             "planner_variant": "B_slosh", "slosh_observer/source": "processed_imu",
-            "ablation/jerk_limit_enable": True, "ablation/jerk_max": 0.6,
+            "ablation/jerk_limit_enable": True, "ablation/jerk_max": jerk_max,
             "ablation/zero_liquid_initial_state": False, "variants/B_slosh/v_ref": 0.2,
             "variants/B_slosh/slosh_enable": condition == "full",
             "variants/B_slosh/w_slosh": weight if condition == "full" else 0,
             "variants/B_slosh/w_smooth": 0.1,
             "slosh/natural_frequency": 32.4, "processed_imu/filter_hz": 20,
         }.items()}
+        if protocol == freeze.PARAMETER_PROTOCOL:
+            for key, value in (weights or {"w_v": 1.0, "w_contour": 1.0, "w_lag": 0.2}).items():
+                params[prefix + "variants/B_slosh/" + key] = value
         launch = self.root / (condition + "_launch_params.yaml")
         launch.write_text(yaml.safe_dump(params))
         report = {
             "bag": str(self.root / (condition + ".bag")),
             "status": "PASS", "eligible_for_comparison": True,
-            "prereg": {"protocol": freeze.PROTOCOL, "phase": "screening", "condition": condition,
+            "prereg": {"protocol": protocol, "phase": "screening", "condition": condition,
                        "w_slosh": str(weight if condition == "full" else 0),
+                       "jerk_max": str(jerk_max),
                        "evaluation_chain_sha256": self.chain["sha256"],
                        "launch_params_sha256": freeze.sha256(launch),
                        "path_sha256": "path-sha", "map_sha256": "map-sha"},
             "launch_params_file": str(launch), "launch_params_sha256": freeze.sha256(launch),
         }
+        if protocol == freeze.PARAMETER_PROTOCOL:
+            report["prereg"]["evaluation_primary_monitor"] = "imu"
+            report["prereg"].update({key: str(value) for key, value in (weights or {"w_v": 1.0, "w_contour": 1.0, "w_lag": 0.2}).items()})
+            report["effective_config_first"] = dict(
+                (weights or {"w_v": 1.0, "w_contour": 1.0, "w_lag": 0.2}),
+                jerk_max=jerk_max)
         target = self.root / (condition + ".json")
         target.write_text(json.dumps(report))
         return target
@@ -102,6 +114,54 @@ class EvaluationFreezeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "non-liquid"):
             self.create()
 
+    def test_v3_lock_and_protocol_monitor_and_parameter_rejections(self):
+        weights = {"w_v": 2.0, "w_contour": 1.5, "w_lag": 0.3}
+        self.full = self.candidate("full", protocol=freeze.PARAMETER_PROTOCOL,
+                                   jerk_max=1.0, weights=weights)
+        self.smooth = self.candidate("smooth", protocol=freeze.PARAMETER_PROTOCOL,
+                                     jerk_max=1.0, weights=weights)
+        lock = freeze.create_lock(self.full, self.smooth, "imu", "v3", self.output,
+                                  self.chain, freeze.PARAMETER_PROTOCOL)
+        launch = (self.root / "full_launch_params.yaml").read_text()
+        self.assertEqual(freeze.check_lock(lock, "full", "01", launch,
+                                           "path-sha", "map-sha", self.chain,
+                                           freeze.PARAMETER_PROTOCOL), "imu")
+        with self.assertRaises(ValueError):
+            freeze.check_lock(lock, "full", "01", launch, "path-sha", "map-sha",
+                              self.chain, freeze.PROTOCOL)
+        with self.assertRaises(ValueError):
+            freeze.create_lock(self.full, self.smooth, "odom", "v3", self.root / "odom.json",
+                               self.chain, freeze.PARAMETER_PROTOCOL)
+        for key, value in (("w_v", 0), ("w_contour", 21), ("w_lag", float("nan"))):
+            bad = dict(weights, **{key: value})
+            with self.assertRaises(ValueError):
+                freeze.check_params(yaml.safe_load(launch), "full", 1.0,
+                                    freeze.PARAMETER_PROTOCOL, 1.0, bad)
+        with self.assertRaises(ValueError):
+            freeze.check_params(yaml.safe_load(launch), "full", 1.0,
+                                freeze.PARAMETER_PROTOCOL, 0.7, weights)
+
+        full_text = self.full.read_text()
+        for source, key, value in (("prereg", "w_v", "0.5"),
+                                   ("effective_config_first", "w_contour", 0.5),
+                                   ("prereg", "evaluation_primary_monitor", "odom")):
+            report = json.loads(full_text)
+            report[source][key] = value
+            self.full.write_text(json.dumps(report))
+            with self.assertRaises(ValueError):
+                freeze.read_candidate(self.full, "full", self.chain, freeze.PARAMETER_PROTOCOL)
+        self.full.write_text(full_text)
+        # Individually valid reports with different common parameters must
+        # not become a paired candidate; V2/V3 cannot share a lock either.
+        self.smooth = self.candidate("smooth", protocol=freeze.PARAMETER_PROTOCOL,
+                                     jerk_max=1.0, weights=dict(weights, w_v=0.5))
+        with self.assertRaisesRegex(ValueError, "non-liquid"):
+            freeze.create_lock(self.full, self.smooth, "imu", "different common weights",
+                               self.root / "mismatch.json", self.chain, freeze.PARAMETER_PROTOCOL)
+        self.smooth = self.candidate("smooth")
+        with self.assertRaisesRegex(ValueError, "screening"):
+            freeze.create_lock(self.full, self.smooth, "imu", "mixed protocols",
+                               self.root / "mixed.json", self.chain, freeze.PARAMETER_PROTOCOL)
 
 if __name__ == "__main__":
     unittest.main()

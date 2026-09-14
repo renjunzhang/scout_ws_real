@@ -116,11 +116,12 @@ class AblationEntryTest(unittest.TestCase):
                    ABLATION_RECORD_RGB='true', ABLATION_JERK_MAX='0.6',
                    ABLATION_TRIAL_ID='01_full', ABLATION_PHASE='screening',
                    ABLATION_W_SLOSH='', ABLATION_V_REF='0.2',
+                   ABLATION_W_V='', ABLATION_W_CONTOUR='', ABLATION_W_LAG='',
                    ABLATION_EVALUATION_LOCK='', ABLATION_EVALUATION_ROW='')
         env.update(overrides)
         script = '''fail() { echo "$*" >&2; exit 2; }
 source "$1"
-for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE; do
+for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH W_V W_CONTOUR W_LAG V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE; do
   printf '%s=%s\\n' "$key" "${!key}"
 done
 '''
@@ -205,6 +206,49 @@ done
                        {'ABLATION_PHASE': 'typo'}, {'ABLATION_SOURCE_COMPARISON': 'true'}):
             self.assertNotEqual(self.profile(**dict(defaults, **change)).returncode, 0, change)
 
+    def test_parameter_study_preserves_pairs_and_labels_actual_weights(self):
+        defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false')
+        for condition in ('full', 'smooth'):
+            for change, expected in (
+                ({'ABLATION_W_V': '0.5'}, ('0.5', '1', '0.2', '0.6')),
+                ({'ABLATION_JERK_MAX': '1.0'}, ('1', '1', '0.2', '1')),
+                ({'ABLATION_W_CONTOUR': '0.5'}, ('1', '0.5', '0.2', '0.6')),
+                ({'ABLATION_W_LAG': '0.1'}, ('1', '1', '0.1', '0.6')),
+                ({'ABLATION_W_V': '1', 'ABLATION_JERK_MAX': '1.2'}, ('1', '1', '0.2', '1.2')),
+            ):
+                result = self.profile(**dict(defaults, ABLATION_CONDITION=condition, **change))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                values = dict(line.split('=', 1) for line in result.stdout.splitlines())
+                self.assertEqual(values['PROTOCOL_ID'], 'SMPCC_C03_INTERNAL_SLOSH_DEV_V3')
+                self.assertEqual(tuple(values[k] for k in ('W_V', 'W_CONTOUR', 'W_LAG', 'JERK_MAX')), expected)
+                self.assertEqual(values['JERK_LIMIT_ENABLE'], 'true')
+                self.assertEqual(values['SMOKE_RECORD_RGB'], 'false')
+                self.assertIn('_WV{}_WC{}_WL{}_J{}'.format(*expected), values['RUN_LABEL_PREFIX'])
+
+    def test_parameter_study_rejects_invalid_weights_and_jerk(self):
+        defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false')
+        for field in ('ABLATION_W_V', 'ABLATION_W_CONTOUR', 'ABLATION_W_LAG'):
+            for value in ('0', '-1', 'nan', 'inf', '20.1', 'typo'):
+                self.assertNotEqual(self.profile(**dict(defaults, **{field: value})).returncode, 0,
+                                    (field, value))
+        for jerk in ('0.4', '1.3', 'nan', 'inf'):
+            self.assertNotEqual(self.profile(**dict(defaults, ABLATION_W_V='0.5',
+                                                    ABLATION_JERK_MAX=jerk)).returncode, 0)
+
+    def test_launch_overrides_reach_selected_variant_only(self):
+        import yaml
+        # --dump-params never starts a ROS node or contacts the robot.
+        for liquid in ('true', 'false'):
+            result = subprocess.run(['roslaunch', '--dump-params', 'spmpc_local_planner',
+                'spmpc_fixed_path.launch', 'planner_variant:=B_slosh', 'slosh_enable:='+liquid,
+                'w_v:=0.5', 'w_contour:=0.7', 'w_lag:=0.15', 'jerk_max:=1.0'],
+                capture_output=True, text=True, check=True)
+            params = yaml.safe_load(result.stdout)
+            for key, value in (('w_v', 0.5), ('w_contour', 0.7), ('w_lag', 0.15)):
+                self.assertEqual(params['/spmpc_local_planner/variants/B_slosh/'+key], value)
+            self.assertEqual(params['/spmpc_local_planner/variants/B_slosh/slosh_enable'], liquid=='true')
+            self.assertEqual(params['/spmpc_local_planner/ablation/jerk_max'], 1.0)
+
     def test_cli_internal_protocol_forwards_explicit_parameters_without_rgb(self):
         # Only the copied engine is replaced; even --run cannot reach ROS.
         with tempfile.TemporaryDirectory() as tmp:
@@ -219,6 +263,7 @@ done
                     '--scene', '20260907_c03', '--condition', condition, '--observer-source', 'imu',
                     '--trial-id', '01_' + condition, '--w-slosh', weight, '--phase', 'validation',
                     '--v-ref', '0.2', '--jerk-max', '0.6',
+                    '--w-v', '0.5', '--w-contour', '0.7', '--w-lag', '0.15',
                     '--evaluation-lock', '/tmp/test-lock.json', '--evaluation-row', '02' if condition == 'smooth' else '01', action],
                     capture_output=True, text=True, check=True)
                 env = json.loads(result.stdout)
@@ -226,6 +271,7 @@ done
                                 ABLATION_SOURCE_COMPARISON='false', ABLATION_RECORD_RGB='false',
                                 ABLATION_OBSERVER_SOURCE='processed_imu', ABLATION_W_SLOSH=weight,
                                 ABLATION_V_REF='0.2', ABLATION_JERK_MAX='0.6',
+                                ABLATION_W_V='0.5', ABLATION_W_CONTOUR='0.7', ABLATION_W_LAG='0.15',
                                 ABLATION_EVALUATION_LOCK='/tmp/test-lock.json',
                                 ABLATION_EVALUATION_ROW='02' if condition == 'smooth' else '01',
                                 ABLATION_TRIAL_ID='01_' + condition, ABLATION_PHASE='validation',

@@ -43,6 +43,9 @@
   <arg name="v_ref" default="-1.0" doc="诊断/消融用: 覆盖 v_ref; 负值时用 variants.yaml 原值"/>
   <arg name="slosh_height_max" default="-1.0" doc="覆盖 slosh/slosh_height_max(m); 负值时用 container yaml"/>
   <arg name="w_accel" default="-1.0"/>
+  <arg name="w_v" default="-1.0"/>
+  <arg name="w_contour" default="-1.0"/>
+  <arg name="w_lag" default="-1.0"/>
   <arg name="w_smooth" default="-1.0"/>
   <arg name="w_alpha" default="-1.0"/>
   <arg name="w_du_a" default="-1.0"/>
@@ -115,6 +118,9 @@
     <arg name="v_ref" value="$(arg v_ref)"/>
     <arg name="slosh_height_max" value="$(arg slosh_height_max)"/>
     <arg name="w_accel" value="$(arg w_accel)"/>
+    <arg name="w_v" value="$(arg w_v)"/>
+    <arg name="w_contour" value="$(arg w_contour)"/>
+    <arg name="w_lag" value="$(arg w_lag)"/>
     <arg name="w_smooth" value="$(arg w_smooth)"/>
     <arg name="w_alpha" value="$(arg w_alpha)"/>
     <arg name="w_du_a" value="$(arg w_du_a)"/>

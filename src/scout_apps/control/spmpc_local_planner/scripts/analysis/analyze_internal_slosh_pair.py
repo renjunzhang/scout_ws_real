@@ -36,6 +36,8 @@ POSTFLIGHT_SUFFIXES = (
     "i0_explicit_actuator_contract_postflight",
 )
 PROTOCOL = "SMPCC_C03_INTERNAL_SLOSH_DEV_V2"
+PARAMETER_PROTOCOL = "SMPCC_C03_INTERNAL_SLOSH_DEV_V3"
+SUPPORTED_PROTOCOLS = (PROTOCOL, PARAMETER_PROTOCOL)
 MONITOR_MAX_GAP_SEC = {"imu": 0.035, "odom": 0.050}
 BSLOSH_WEIGHT_KEYS = (
     "/spmpc_local_planner/variants/B_slosh/w_slosh",
@@ -204,6 +206,31 @@ def _number(value: Any, default: float = 0.0) -> float:
 
 def _env_zero(values: Mapping[str, str], key: str) -> bool:
     return key in values and _finite(values.get(key)) and float(values[key]) == 0.0
+
+
+def _param_value(params: Mapping[str, Any], name: str) -> Any:
+    return params.get("/spmpc_local_planner/variants/B_slosh/" + name,
+                      params.get("variants/B_slosh/" + name,
+                                 params.get("/spmpc_local_planner/ablation/" + name,
+                                            params.get("ablation/" + name, params.get(name)))))
+
+
+def _v3_metadata_ok(report: Mapping[str, Any], config: Mapping[str, Any], launch_file: Path) -> bool:
+    prereg = report.get("prereg", {})
+    try:
+        import yaml
+        launch = yaml.safe_load(launch_file.read_text(encoding="utf-8")) or {}
+        for key in ("w_v", "w_contour", "w_lag"):
+            value = float(prereg[key])
+            if not math.isfinite(value) or not 0.0 < value <= 20.0:
+                return False
+            if not _close_number(_param_value(launch, key), value) or not _close_number(_param_value(config, key), value):
+                return False
+        jerk = float(prereg["jerk_max"])
+        return math.isfinite(jerk) and jerk in (0.6, 1.0, 1.2) and _close_number(
+            _param_value(launch, "jerk_max"), jerk) and _close_number(_param_value(config, "jerk_max"), jerk)
+    except (KeyError, TypeError, ValueError, OSError, ImportError):
+        return False
 
 
 @lru_cache(maxsize=1)
@@ -446,10 +473,15 @@ def analyze_topics(
         report["effective_config_consistent"] = bool(config_values) and all(
             _config_equal(config_values[0], value) for value in config_values[1:]
         )
+        protocol = report["prereg"].get("protocol")
+        report["protocol"] = protocol
         gates = []
         gates.append((all(report["postflights"].get(key) == "PASS" for key in POSTFLIGHT_SUFFIXES), "postflights"))
         gates.append((bool(report["prereg"]), "prereg"))
-        gates.append((report["prereg"].get("protocol") == PROTOCOL, "protocol"))
+        gates.append((protocol in SUPPORTED_PROTOCOLS, "protocol"))
+        if protocol == PARAMETER_PROTOCOL:
+            gates.append((_v3_metadata_ok(report, report["effective_config_first"], launch_file), "v3_parameter_metadata"))
+            gates.append((report["prereg"].get("evaluation_primary_monitor") == "imu", "v3_primary_monitor"))
         gates.append((_env_zero(report["prereg"], "runner_exit_code"), "runner_exit_code"))
         gates.append((_env_zero(report["prereg"], "diagnostics_exit_code"), "diagnostics_exit_code"))
         actual_launch_sha = report["launch_params_sha256"]
@@ -519,10 +551,14 @@ def compare_reports(paths: Sequence[Path], output: Path, lock_path: Optional[Pat
         output.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         return result
     lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    protocol = lock.get("protocol", PROTOCOL)
+    result["protocol"] = protocol
     lock_sha = _file_sha256(lock_path)
     failures: List[str] = []
-    if lock.get("schema_version") != 1 or lock.get("protocol") != PROTOCOL:
+    if lock.get("schema_version") != 1 or protocol not in SUPPORTED_PROTOCOLS:
         failures.append("invalid evaluation lock schema/protocol")
+    if protocol == PARAMETER_PROTOCOL and lock.get("primary_monitor") != "imu":
+        failures.append("V3 evaluation requires imu primary monitor")
     current_chain = _current_evaluation_chain_sha()
     if not lock.get("evaluation_chain_sha256") or current_chain is None or lock.get("evaluation_chain_sha256") != current_chain:
         failures.append("evaluation lock chain SHA does not match current evaluator")
@@ -553,7 +589,7 @@ def compare_reports(paths: Sequence[Path], output: Path, lock_path: Optional[Pat
             failures.append("row {} condition mismatch".format(row))
         if report.get("prereg", {}).get("phase") != "validation":
             failures.append("row {} phase is not validation".format(row))
-        if report.get("prereg", {}).get("protocol") != PROTOCOL:
+        if report.get("prereg", {}).get("protocol") != protocol:
             failures.append("row {} protocol mismatch".format(row))
         if report.get("prereg", {}).get("evaluation_lock_sha256") != lock_sha:
             failures.append("row {} evaluation lock SHA mismatch".format(row))

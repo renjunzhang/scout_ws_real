@@ -140,6 +140,56 @@ class InternalSloshMetricsTest(unittest.TestCase):
         self.assertFalse(report["eligible_for_comparison"])
         self.assertIn("diagnostics_exit_code", report["gate_failures"])
 
+    def test_v3_single_report_requires_complete_parameter_metadata(self):
+        bag = self.root / "v3.bag"
+        bag.touch()
+        for suffix in METRICS.POSTFLIGHT_SUFFIXES:
+            (self.root / ("v3_" + suffix + ".json")).write_text('{"status":"PASS"}')
+        values = {"w_v": 2.0, "w_contour": 1.5, "w_lag": 0.3, "jerk_max": 1.0}
+        config = dict(self._topics()["config"][0]["value"], **values)
+        topics = self._topics()
+        topics["config"] = [{"value": config}]
+        launch = self.root / "v3_launch_params.yaml"
+        launch.write_text("\n".join([
+            "/spmpc_local_planner/variants/B_slosh/{}: {}".format(k, v)
+            for k, v in values.items() if k != "jerk_max"
+        ] + ["/spmpc_local_planner/ablation/jerk_max: 1.0"]) + "\n")
+        launch_sha = hashlib.sha256(launch.read_bytes()).hexdigest()
+        prereg = self.root / "v3_prereg.env"
+        prereg.write_text("\n".join([
+            "condition=full", "phase=validation", "protocol={}".format(METRICS.PARAMETER_PROTOCOL),
+            "runner_exit_code=0", "diagnostics_exit_code=0", "evaluation_primary_monitor=imu",
+            "launch_params_sha256={}".format(launch_sha),
+        ] + ["{}={}".format(k, v) for k, v in values.items()] +
+            ["evaluation_chain_sha256={}".format(METRICS._current_evaluation_chain_sha())]) + "\n")
+        report = METRICS.analyze_topics(topics, bag, prereg_path=prereg)
+        self.assertEqual(report["status"], "PASS")
+        self.assertEqual(report["protocol"], METRICS.PARAMETER_PROTOCOL)
+        original_prereg = prereg.read_text()
+        for bad in ("w_v=0", "w_contour=21", "w_lag=nan", "jerk_max=0.7"):
+            changed = prereg.read_text().replace(bad.split("=")[0] + "=" + str(values[bad.split("=")[0]]), bad)
+            prereg.write_text(changed)
+            rejected = METRICS.analyze_topics(topics, bag, prereg_path=prereg)
+            self.assertIn("v3_parameter_metadata", rejected["gate_failures"])
+            prereg.write_text(prereg.read_text().replace(bad, bad.split("=")[0] + "=" + str(values[bad.split("=")[0]])))
+        for key in values:
+            # Valid numbers still fail if metadata differs from launch/config.
+            changed = original_prereg.replace('{}={}'.format(key, values[key]),
+                                               '{}={}'.format(key, 0.6 if key == 'jerk_max' else 0.5))
+            prereg.write_text(changed)
+            self.assertIn('v3_parameter_metadata', METRICS.analyze_topics(
+                topics, bag, prereg_path=prereg)['gate_failures'])
+        prereg.write_text(original_prereg)
+        topics['config'][0]['value']['w_v'] = 0.5
+        self.assertIn('v3_parameter_metadata', METRICS.analyze_topics(
+            topics, bag, prereg_path=prereg)['gate_failures'])
+        topics['config'][0]['value']['w_v'] = values['w_v']
+        for primary_line in ('', 'evaluation_primary_monitor=odom'):
+            prereg.write_text(original_prereg.replace('evaluation_primary_monitor=imu', primary_line))
+            self.assertIn('v3_primary_monitor', METRICS.analyze_topics(
+                topics, bag, prereg_path=prereg)['gate_failures'])
+        prereg.write_text(original_prereg)
+
     def test_screening_preserves_reports_without_selecting_winner(self):
         first = self.root / "first.json"
         second = self.root / "second.json"

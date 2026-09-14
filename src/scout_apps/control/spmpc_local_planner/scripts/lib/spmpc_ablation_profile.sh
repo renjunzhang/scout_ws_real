@@ -44,6 +44,10 @@ BLOCK_SEGMENT_ID="I0FC_EXPACT_ABLATION_${ABLATION_CONDITION}"
 W_ACCEL=0.3
 W_DU_A=0.1
 W_ALPHA=0.1
+W_V=1
+W_CONTOUR=1
+W_LAG=0.2
+PARAMETER_STUDY=false
 EXPECTED_B0_STATE_WIDTH=24
 EXPECTED_SLOSH_STATE_WIDTH=28
 MINIMUM_SOLVER_SCHEMA_VERSION=5
@@ -61,6 +65,9 @@ SOURCE_COMPARISON="${ABLATION_SOURCE_COMPARISON:-false}"
 SELECTED_OBSERVER_SOURCE="${ABLATION_OBSERVER_SOURCE:-processed_imu}"
 SMOKE_RECORD_RGB="${ABLATION_RECORD_RGB:-false}"
 EXPERIMENT_KIND="${ABLATION_EXPERIMENT:-legacy}"
+if [[ "${EXPERIMENT_KIND}" != internal-slosh && -n "${ABLATION_W_V:-}${ABLATION_W_CONTOUR:-}${ABLATION_W_LAG:-}" ]]; then
+  fail "tracking weight overrides require internal-slosh parameter protocol"
+fi
 COMPARISON_RECORDING=false
 TRIAL_ID=
 EXPERIMENT_PHASE=
@@ -77,7 +84,22 @@ case "${EXPERIMENT_KIND}" in
       case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
     else
       case "${ABLATION_CONDITION}" in smooth|full) ;; *) fail "internal-slosh V2 requires smooth or full; b0 disables hard jerk" ;; esac
-      [[ "${JERK_MAX}" == 0.6 ]] || fail "internal-slosh V2 freezes jerk_max=0.6"
+      if [[ -n "${ABLATION_W_V:-}${ABLATION_W_CONTOUR:-}${ABLATION_W_LAG:-}" || "${JERK_MAX}" != 0.6 ]]; then
+        PARAMETER_STUDY=true
+        parameter_numbers="$(python3 - "${JERK_MAX}" "${ABLATION_W_V:-1}" "${ABLATION_W_CONTOUR:-1}" "${ABLATION_W_LAG:-0.2}" <<'PY'
+import math
+import sys
+try:
+    jerk, *weights = map(float, sys.argv[1:])
+    if jerk not in (0.6, 1.0, 1.2) or not all(math.isfinite(w) and 0 < w <= 20 for w in weights):
+        raise ValueError()
+except ValueError:
+    raise SystemExit('V3 requires jerk=0.6|1.0|1.2 and finite 0<w_v,w_contour,w_lag<=20')
+print(*(format(w, '.12g') for w in weights))
+PY
+)" || fail "invalid internal-slosh parameter study"
+        read -r W_V W_CONTOUR W_LAG <<< "${parameter_numbers}"
+      fi
       [[ "${SMOKE_RECORD_RGB}" == false ]] || fail "internal-slosh requires RGB disabled"
     fi
     TRIAL_ID="${ABLATION_TRIAL_ID:-}"
@@ -151,6 +173,15 @@ elif [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
   SMOKE_SCOPE=frozen_evaluation_chain_internal_model_comparison
   SMOKE_PURPOSE="C03 full/smooth comparison; shared hard jerk; IMU/odom screening then frozen-chain validation; no RGB"
   OPERATOR_NOTE="phase=${EXPERIMENT_PHASE}; trial_id=${TRIAL_ID}; condition=${ABLATION_CONDITION}; w_slosh=${W_SLOSH}; jerk_enable=${JERK_LIMIT_ENABLE}; jerk_max=${JERK_MAX}; v_ref=${V_REF}; IMU; RGB=false"
+  if [[ "${PARAMETER_STUDY}" == true ]]; then
+    PROTOCOL_ID=SMPCC_C03_INTERNAL_SLOSH_DEV_V3
+    OUTPUT_SERIES=spmpc_internal_slosh_v3
+    RUN_LABEL_PREFIX="DEV_INTERNAL_SLOSH_V3_${EXPERIMENT_PHASE}_${TRIAL_ID}_${ABLATION_CONDITION}_W${W_SLOSH}_WV${W_V}_WC${W_CONTOUR}_WL${W_LAG}_J${jerk_label}_V${V_REF}"
+    BLOCK_SEGMENT_ID="INTERNAL_SLOSH_V3_${EXPERIMENT_PHASE}_${TRIAL_ID}"
+    EVALUATION_PRIMARY_MONITOR=imu
+    SMOKE_PURPOSE="C03 parameter comparison; paired Full/Smooth; fixed IMU primary; no RGB"
+    OPERATOR_NOTE="${OPERATOR_NOTE}; w_v=${W_V}; w_contour=${W_CONTOUR}; w_lag=${W_LAG}"
+  fi
 elif [[ "${SOURCE_COMPARISON}" == true ]]; then
   COMPARISON_RECORDING=true
   [[ "${ABLATION_CONDITION}" == full ]] || fail "source comparison requires full"
