@@ -44,6 +44,30 @@
 - `analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用顶层 `analyze_spmpc_delay_phase.py`；
 - `tests/` 保存 summary、正式 freeze validator 和动捕执行链工具的回归测试。
 
+## Full 预测高度硬约束开发包
+
+`run_spmpc_ablation_smoke.sh` 的 `--slosh-height-max-mm 0.6` 将上限设为
+0.6 mm（0.0006 m），只允许 `internal-slosh/full/screening`。复用现有四子步
+solver，保留 Full 液体代价和硬 jerk；未传该选项时 Full/Smooth 保持原行为。
+本包归入 V3 开发协议，包名含 `Hcap0.6mm`，预注册保存开关及以米为单位的上限。
+
+```bash
+bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ablation_smoke.sh \
+  --experiment internal-slosh --scene 20260907_c03 \
+  --condition full --w-slosh 1 --observer-source imu \
+  --jerk-max 0.6 --v-ref 0.2 --w-v 1 --w-contour 1 --w-lag 0.2 \
+  --slosh-height-max-mm 0.6 --skip-start-wait \
+  --phase screening --trial-id rk4s4_full_hcap06 --validate-only
+```
+
+无运动检查通过且运行文件已本地归档后，操作者将最后的 `--validate-only` 换成
+`--run` 录一包。沿用全部录制质量门、无 RGB/depth、Tracker0 和双监视器。
+节点 0 的初态不受限，预测节点 1..N（含终端）受限；延迟段超限仍可能导致不可行。
+录后检查实际配置、约束有效阈值和全部有效预测的未来高度，超过上限 0.001 mm
+即判超限，并报告近上限节点数与最大未来高度。此容差只用于数值验收，不改变 OCP。
+内部模型约束不构成真实液面保证；失败包和故障零速仍保留并判质量 FAIL。
+该选项暂不用于冻结后的四包 validation。
+
 ## 动捕场地地图前门
 
 动捕场地尚无地图时，执行链实验的固定顺序为：

@@ -94,6 +94,7 @@ def parse_args():
         "--report-schema",
         default="spmpc_i0_failclosed_fixed_abba_postflight_v1",
     )
+    parser.add_argument("--expected-slosh-constraint-enable", choices=("true", "false"), default="false")
     parser.add_argument("--expected-variant")
     parser.add_argument("--expected-slosh-cost-horizon-steps", type=int)
     parser.add_argument("--expected-slosh-cost-tail-discount", type=float)
@@ -360,7 +361,7 @@ def validate(args):
         "solver_backend_code": 1.0,
         "delay_phase_mode_code": args.expected_delay_mode_code,
         "slosh_enable": 1.0 if expected_slosh else 0.0,
-        "slosh_constraint_enable": 0.0,
+        "slosh_constraint_enable": float(getattr(args, "expected_slosh_constraint_enable", "false") == "true"),
         "smooth_priority_enable": 0.0,
         "w_slosh": expected_weight,
         "v_ref": args.expected_v_ref,

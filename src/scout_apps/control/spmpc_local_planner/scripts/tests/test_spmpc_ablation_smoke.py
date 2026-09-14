@@ -45,6 +45,54 @@ def pair(zero=False, jerk=True, liquid=True):
 
 
 class AblationPostflightTest(unittest.TestCase):
+    def test_height_cap_exempts_initial_node_but_checks_terminal(self):
+        snapshot, horizon = pair()
+        horizon.h_modal = [0.002] + [0.0006] * 60
+        self.assertEqual(self.check_pair(snapshot, horizon, height_cap=0.0006), [])
+        for stage in (1, 60):
+            broken = copy.deepcopy(horizon)
+            broken.h_modal[stage] = 0.000602
+            self.assertIn('height cap violated at stage ' + str(stage),
+                          self.check_pair(snapshot, broken, height_cap=0.0006))
+        for values in ([0.0] * 60, [0.0] + [float('nan')] * 60):
+            horizon.h_modal = values
+            self.assertTrue(self.check_pair(snapshot, horizon, height_cap=0.0006))
+
+    def test_hard_bag_requires_effective_threshold_and_future_compliance(self):
+        snapshot, horizon = pair()
+        horizon.h_modal = [0.002] + [0.0005] * 60
+        def array(values):
+            msg = Float32MultiArray()
+            msg.layout.dim = [MultiArrayDimension(label=','.join(values))]
+            msg.data = list(values.values())
+            return msg
+        config = array(dict(slosh_enable=1., zero_liquid_initial_state=0.,
+                            jerk_limit_enable=1., jerk_max=1.,
+                            slosh_constraint_enable=1., slosh_height_max=0.0006))
+        effective = dict(enabled=1., h_modal_limit_mm=0.6, height_coeff=2.,
+                         eta_max=0.0003, eta_max_sq=0.0003**2,
+                         modal_only=1., solver_uses_parabola=0.)
+        with tempfile.TemporaryDirectory() as tmp:
+            for fault in ('none', 'missing', 'threshold', 'disabled', 'terminal'):
+                path = str(Path(tmp) / (fault + '.bag'))
+                current = dict(effective)
+                current['h_modal_limit_mm'] = 0.7 if fault == 'threshold' else 0.6
+                current['enabled'] = 0. if fault == 'disabled' else 1.
+                horizon.h_modal[-1] = 0.0007 if fault == 'terminal' else 0.0005
+                with rosbag.Bag(path, 'w') as bag:
+                    bag.write(validator.CONFIG_TOPIC, config, genpy.Time(90))
+                    for cycle in range(10):
+                        snapshot.cycle_id = horizon.cycle_id = cycle
+                        bag.write(validator.SNAPSHOT_TOPIC, snapshot, genpy.Time(100+cycle))
+                        bag.write(validator.HORIZON_TOPIC, horizon, genpy.Time(100+cycle))
+                        if fault != 'missing':
+                            bag.write(validator.HARD_TOPIC, array(current), genpy.Time(100+cycle))
+                report = validator.validate_bag(SimpleNamespace(
+                    bag=path, slosh_enable=True, zero_liquid_initial_state=False,
+                    jerk_limit_enable=True, jerk_max=1., slosh_constraint_enable=True,
+                    slosh_height_max=0.0006))
+                self.assertEqual(report['status'], 'PASS' if fault == 'none' else 'FAIL', report)
+
     def check_pair(self, snapshot, horizon, **overrides):
         expected = dict(liquid=True, zero=False, jerk=True, jerk_max=1.0)
         expected.update(overrides)
@@ -116,19 +164,71 @@ class AblationEntryTest(unittest.TestCase):
                    ABLATION_RECORD_RGB='true', ABLATION_JERK_MAX='0.6',
                    ABLATION_TRIAL_ID='01_full', ABLATION_PHASE='screening',
                    ABLATION_W_SLOSH='', ABLATION_V_REF='0.2',
+                   ABLATION_SLOSH_HEIGHT_MAX_MM='',
                    ABLATION_W_V='', ABLATION_W_CONTOUR='', ABLATION_W_LAG='',
                    ABLATION_SKIP_START_WAIT='false',
                    ABLATION_EVALUATION_LOCK='', ABLATION_EVALUATION_ROW='')
         env.update(overrides)
         script = '''fail() { echo "$*" >&2; exit 2; }
 source "$1"
-for key in SLOSH_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH W_V W_CONTOUR W_LAG V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE SKIP_START_WAIT; do
+for key in SLOSH_ENABLE SLOSH_CONSTRAINT_ENABLE ZERO_LIQUID_INITIAL_STATE JERK_LIMIT_ENABLE JERK_MAX W_SLOSH W_V W_CONTOUR W_LAG V_REF EXACT_CONDITION EXPECTED_ACTIVE_STATE_WIDTH SOURCE_COMPARISON COMPARISON_RECORDING SMOKE_RECORD_RGB PROTOCOL_ID RUN_LABEL_PREFIX OPERATOR_NOTE SKIP_START_WAIT; do
   printf '%s=%s\\n' "$key" "${!key}"
 done
 '''
         return subprocess.run(['bash', '-eu', '-c', script, 'profile-test',
                                str(SCRIPTS / 'lib/spmpc_ablation_profile.sh')],
                               env=env, capture_output=True, text=True)
+
+    def test_height_cap_profile_and_rejections(self):
+        defaults = dict(ABLATION_EXPERIMENT='internal-slosh', ABLATION_RECORD_RGB='false',
+                        ABLATION_SLOSH_HEIGHT_MAX_MM='0.6')
+        result = self.profile(**defaults)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        values = dict(line.split('=', 1) for line in result.stdout.splitlines())
+        self.assertEqual(values['SLOSH_CONSTRAINT_ENABLE'], 'true')
+        self.assertEqual(values['JERK_LIMIT_ENABLE'], 'true')
+        self.assertEqual(values['W_SLOSH'], '1')
+        self.assertIn('slosh_height_max_m=0.0006', values['OPERATOR_NOTE'])
+        self.assertIn('_Hcap0.6mm', values['RUN_LABEL_PREFIX'])
+        self.assertEqual(values['PROTOCOL_ID'], 'SMPCC_C03_INTERNAL_SLOSH_DEV_V3')
+        for change in ({'ABLATION_CONDITION': 'smooth'}, {'ABLATION_PHASE': 'validation'},
+                       {'ABLATION_EXPERIMENT': 'ablation-rgb'},
+                       *({'ABLATION_SLOSH_HEIGHT_MAX_MM': v}
+                         for v in ('0', '-0.6', 'nan', 'inf', '0.0006', 'bad', '101'))):
+            self.assertNotEqual(self.profile(**dict(defaults, **change)).returncode, 0, change)
+
+    def test_height_cap_cli_runner_and_launch(self):
+        import yaml
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            entry = root / 'run_spmpc_ablation_smoke.sh'
+            entry.write_text((SCRIPTS / entry.name).read_text())
+            engine = root / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps(dict(os.environ)))\nPY\n")
+            for action in ('--validate-only', '--run'):
+                result = subprocess.run(['bash', str(entry), '--experiment', 'internal-slosh',
+                    '--condition', 'full', '--slosh-height-max-mm', '0.6', action],
+                    check=True, capture_output=True, text=True)
+                self.assertEqual(json.loads(result.stdout)['ABLATION_SLOSH_HEIGHT_MAX_MM'], '0.6')
+        source = (SCRIPTS / 'run_spmpc_real_fixed_path_trial.sh').read_text()
+        command = source[source.index('planner_cmd=('):source.index('planner_command_string=')]
+        result = subprocess.run(['bash', '-c',
+            'VARIANT=B_slosh; SLOSH_CONSTRAINT_ENABLE=true; SLOSH_HEIGHT_MAX=0.0006\n'
+            + command + '\nprintf "%s\\n" "${planner_cmd[@]}"'],
+            capture_output=True, text=True, check=True)
+        self.assertIn('slosh_constraint_enable:=true', result.stdout.splitlines())
+        self.assertIn('slosh_height_max:=0.0006', result.stdout.splitlines())
+        for enabled in ('true', 'false'):
+            result = subprocess.run(['roslaunch', '--dump-params', 'spmpc_local_planner',
+                'spmpc_fixed_path.launch', 'planner_variant:=B_slosh',
+                'slosh_constraint_enable:='+enabled, 'slosh_height_max:=0.0006',
+                'w_slosh:=1', 'jerk_limit_enable:=true', 'jerk_max:=0.6'],
+                check=True, capture_output=True, text=True)
+            params = yaml.safe_load(result.stdout)
+            self.assertEqual(params['/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable'], enabled=='true')
+            self.assertEqual(params['/spmpc_local_planner/slosh/slosh_height_max'], 0.0006)
+            self.assertEqual(params['/spmpc_local_planner/ablation/jerk_limit_enable'], True)
+            self.assertEqual(params['/spmpc_local_planner/variants/B_slosh/w_slosh'], 1)
 
     def test_rgb_three_conditions_keep_common_contracts(self):
         for condition, weight, liquid, zero, nx in (

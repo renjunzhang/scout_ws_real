@@ -1,5 +1,6 @@
 <launch>
   <arg name="terminal_mpc_stop_handoff_enable" default="false" doc="MPC slowdown followed by latched terminal stop; explicit actuator only"/>
+  <arg name="slosh_constraint_enable" default="inherit" doc="inherit|true|false; predicted modal height cap"/>
   <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
   <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
   <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
@@ -75,6 +76,7 @@
     <arg name="terminal_mpc_stop_handoff_enable" value="$(arg terminal_mpc_stop_handoff_enable)"/>
     <arg name="planner_variant" value="$(arg planner_variant)"/>
     <arg name="slosh_enable" value="$(arg slosh_enable)"/>
+    <arg name="slosh_constraint_enable" value="$(arg slosh_constraint_enable)"/>
     <arg name="zero_liquid_initial_state" value="$(arg zero_liquid_initial_state)"/>
     <arg name="jerk_limit_enable" value="$(arg jerk_limit_enable)"/>
     <arg name="jerk_max" value="$(arg jerk_max)"/>

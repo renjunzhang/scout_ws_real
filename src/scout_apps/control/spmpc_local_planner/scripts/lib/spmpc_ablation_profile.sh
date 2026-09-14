@@ -17,6 +17,7 @@ print(format(value, '.12g'))
 PY
 )" || fail "invalid jerk_max"
 SLOSH_ENABLE=true
+SLOSH_CONSTRAINT_ENABLE=false
 ZERO_LIQUID_INITIAL_STATE=false
 JERK_LIMIT_ENABLE=true
 EXACT_CONDITION=Bslosh
@@ -70,6 +71,23 @@ EXPERIMENT_KIND="${ABLATION_EXPERIMENT:-legacy}"
 if [[ "${EXPERIMENT_KIND}" != internal-slosh && -n "${ABLATION_W_V:-}${ABLATION_W_CONTOUR:-}${ABLATION_W_LAG:-}" ]]; then
   fail "tracking weight overrides require internal-slosh parameter protocol"
 fi
+if [[ -n "${ABLATION_SLOSH_HEIGHT_MAX_MM:-}" ]]; then
+  [[ "${EXPERIMENT_KIND}" == internal-slosh && "${ABLATION_CONDITION}" == full && "${ABLATION_PHASE:-screening}" == screening ]] \
+    || fail "height cap requires internal-slosh/full/screening"
+  cap_numbers="$(python3 - "${ABLATION_SLOSH_HEIGHT_MAX_MM}" <<'CAP'
+import math, sys
+try:
+    mm = float(sys.argv[1])
+    if not math.isfinite(mm) or not 0.01 <= mm <= 100:
+        raise ValueError()
+except ValueError:
+    raise SystemExit('slosh-height-max-mm must be finite, between 0.01 and 100 mm')
+print(format(mm, '.12g'), format(mm / 1000, '.12g'))
+CAP
+)" || fail "invalid slosh height cap"
+  read -r SLOSH_HEIGHT_MAX_MM SLOSH_HEIGHT_MAX <<< "${cap_numbers}"
+  SLOSH_CONSTRAINT_ENABLE=true
+fi
 COMPARISON_RECORDING=false
 TRIAL_ID=
 EXPERIMENT_PHASE=
@@ -86,7 +104,7 @@ case "${EXPERIMENT_KIND}" in
       case "${ABLATION_CONDITION}" in smooth|nostate|full) ;; *) fail "ablation-rgb requires smooth, nostate or full" ;; esac
     else
       case "${ABLATION_CONDITION}" in smooth|full) ;; *) fail "internal-slosh V2 requires smooth or full; b0 disables hard jerk" ;; esac
-      if [[ -n "${ABLATION_W_V:-}${ABLATION_W_CONTOUR:-}${ABLATION_W_LAG:-}" || "${JERK_MAX}" != 0.6 ]]; then
+      if [[ -n "${ABLATION_W_V:-}${ABLATION_W_CONTOUR:-}${ABLATION_W_LAG:-}" || "${JERK_MAX}" != 0.6 || "${SLOSH_CONSTRAINT_ENABLE}" == true ]]; then
         PARAMETER_STUDY=true
         parameter_numbers="$(python3 - "${JERK_MAX}" "${ABLATION_W_V:-1}" "${ABLATION_W_CONTOUR:-1}" "${ABLATION_W_LAG:-0.2}" <<'PY'
 import math
@@ -199,6 +217,12 @@ elif [[ "${SELECTED_OBSERVER_SOURCE}" != processed_imu ]]; then
 fi
 if [[ "${EXPERIMENT_KIND}" != internal-slosh && -n "${EVALUATION_LOCK}${EVALUATION_ROW}" ]]; then
   fail "evaluation lock/row is only supported by internal-slosh V2"
+fi
+if [[ "${SLOSH_CONSTRAINT_ENABLE}" == true ]]; then
+  RUN_LABEL_PREFIX="${RUN_LABEL_PREFIX}_Hcap${SLOSH_HEIGHT_MAX_MM}mm"
+  BLOCK_SEGMENT_ID="${BLOCK_SEGMENT_ID}_Hcap${SLOSH_HEIGHT_MAX_MM}mm"
+  SMOKE_SCOPE=development_full_height_cap
+  OPERATOR_NOTE="${OPERATOR_NOTE}; slosh_constraint_enable=true; slosh_height_max_m=${SLOSH_HEIGHT_MAX}; stage0_unconstrained=true"
 fi
 if [[ "${SKIP_START_WAIT}" == true ]]; then
   RUN_LABEL_PREFIX="${RUN_LABEL_PREFIX}_StartManual"

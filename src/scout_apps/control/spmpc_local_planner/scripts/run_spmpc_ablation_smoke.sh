@@ -13,6 +13,7 @@ record_rgb=false
 skip_start_wait=false
 experiment=legacy
 w_slosh=
+slosh_height_max_mm=
 w_v=
 w_contour=
 w_lag=
@@ -30,6 +31,7 @@ usage() {
        [--skip-start-wait]
        [--experiment ablation-rgb|internal-slosh --trial-id s01_full --phase screening|validation]
        [--w-slosh NUMBER --v-ref MPS]
+       [--slosh-height-max-mm NUMBER]
        [--w-v NUMBER --w-contour NUMBER --w-lag NUMBER]
        [--evaluation-lock FILE --evaluation-row 01|02|03|04]
 
@@ -55,6 +57,8 @@ v_ref=0.20 m/s，jerk_max 单位 m/s³，默认 1.0 仍是开发候选。
 V3 默认 w_v=1、w_contour=1、w_lag=0.2；三项权重必须为有限正数且不大于 20，jerk 支持 0.6/1.0/1.2。
 主评价固定 IMU，v_ref 仍为 0.2；其余速度/进度、模型、时域及验收保持现状。
 只改变本轮要检验的因素，Full/Smooth 使用共同参数；参数写入独立 V3 包名、预注册和验收。
+--slosh-height-max-mm：仅 internal-slosh/full/screening；开启预测高度硬约束，单位 mm。
+保留 Full 液体代价与硬 jerk；初态不设上限，预测节点 1..N 含终端受限。
 smooth 只关闭液体优化，权重为 0；full 默认权重 1，可设 0<w_slosh<=20（首轮只建议 1/0.5）。
 旧 b0 关闭硬 jerk，不能作为本轮 Smooth；NoState/RGB 后置。
 必须指定 trial-id；组别、权重、实际 jerk 开关、速度、轮次/阶段写入包名和验收元数据。
@@ -69,7 +73,7 @@ EOF
 }
 while (( $# )); do
   case "$1" in
-    --condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--w-v|--w-contour|--w-lag|--v-ref|--trial-id|--phase|--evaluation-lock|--evaluation-row)
+    --slosh-height-max-mm|--condition|--jerk-max|--scene|--observer-source|--experiment|--w-slosh|--w-v|--w-contour|--w-lag|--v-ref|--trial-id|--phase|--evaluation-lock|--evaluation-row)
       (( $# >= 2 )) || { usage >&2; exit 2; }
       case "$1" in
         --condition) condition="$2" ;;
@@ -78,6 +82,7 @@ while (( $# )); do
         --observer-source) observer_source="$2"; source_comparison=true ;;
         --experiment) experiment="$2" ;;
         --w-slosh) w_slosh="$2" ;;
+        --slosh-height-max-mm) slosh_height_max_mm="$2"; [[ -n "$2" ]] || exit 2 ;;
         --w-v) w_v="$2"; [[ -n "${w_v}" ]] || exit 2 ;;
         --w-contour) w_contour="$2"; [[ -n "${w_contour}" ]] || exit 2 ;;
         --w-lag) w_lag="$2"; [[ -n "${w_lag}" ]] || exit 2 ;;
@@ -138,6 +143,7 @@ fi
 if [[ "${run_motion}" == true ]]; then
   exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
     ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+    ABLATION_SLOSH_HEIGHT_MAX_MM="${slosh_height_max_mm}" \
     ABLATION_W_V="${w_v}" ABLATION_W_CONTOUR="${w_contour}" ABLATION_W_LAG="${w_lag}" \
     ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
     ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \
@@ -151,6 +157,7 @@ if [[ "${run_motion}" == true ]]; then
 fi
 exec env SMOKE_PROFILE=ablation ABLATION_CONDITION="${condition}" \
   ABLATION_EXPERIMENT="${experiment}" ABLATION_W_SLOSH="${w_slosh}" \
+  ABLATION_SLOSH_HEIGHT_MAX_MM="${slosh_height_max_mm}" \
   ABLATION_W_V="${w_v}" ABLATION_W_CONTOUR="${w_contour}" ABLATION_W_LAG="${w_lag}" \
   ABLATION_V_REF="${v_ref}" ABLATION_TRIAL_ID="${trial_id}" ABLATION_PHASE="${phase}" \
   ABLATION_EVALUATION_LOCK="${evaluation_lock}" ABLATION_EVALUATION_ROW="${evaluation_row}" \

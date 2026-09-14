@@ -1,5 +1,6 @@
 <launch>
   <arg name="terminal_mpc_stop_handoff_enable" default="false" doc="MPC slowdown followed by latched terminal stop; explicit actuator only"/>
+  <arg name="slosh_constraint_enable" default="inherit" doc="inherit|true|false; predicted modal height cap"/>
   <arg name="slosh_enable" default="inherit" doc="inherit|true|false; override liquid prediction without changing non-liquid weights"/>
   <arg name="zero_liquid_initial_state" default="false" doc="NoState; zero only OCP liquid x0, keep I0 running"/>
   <arg name="jerk_limit_enable" default="false" doc="enable full-horizon command acceleration-rate bound"/>
@@ -86,6 +87,8 @@
     <param name="planner_variant" value="$(arg planner_variant)"/>
     <param name="variants/$(arg planner_variant)/slosh_enable" value="$(arg slosh_enable)" type="bool"
            if="$(eval arg('slosh_enable') != 'inherit')"/>
+    <param name="variants/$(arg planner_variant)/slosh_constraint_enable" value="$(arg slosh_constraint_enable)" type="bool"
+           if="$(eval arg('slosh_constraint_enable') != 'inherit')"/>
     <param name="ablation/zero_liquid_initial_state" value="$(arg zero_liquid_initial_state)" type="bool"/>
     <param name="ablation/jerk_limit_enable" value="$(arg jerk_limit_enable)" type="bool"/>
     <param name="ablation/jerk_max" value="$(arg jerk_max)" type="double"/>

@@ -79,6 +79,7 @@ W_ALPHA=0.1
 W_DU_A=0.1
 W_DU_VS=0.1
 SLOSH_HEIGHT_MAX=0.001
+SLOSH_CONSTRAINT_ENABLE=false
 ALPHA_MAX=1.2
 EXPECTED_B0_STATE_WIDTH=23
 EXPECTED_SLOSH_STATE_WIDTH=27
@@ -373,6 +374,7 @@ launch_dump="$(roslaunch --dump-params \
   w_v:="${W_V}" w_contour:="${W_CONTOUR}" w_lag:="${W_LAG}" \
   w_smooth:="${W_SMOOTH}" w_alpha:="${W_ALPHA}" \
   w_du_a:="${W_DU_A}" w_du_vs:="${W_DU_VS}" \
+  slosh_constraint_enable:="${SLOSH_CONSTRAINT_ENABLE}" \
   slosh_height_max:="${SLOSH_HEIGHT_MAX}" alpha_max:="${ALPHA_MAX}")" \
   || fail "could not dump B_slosh launch parameters"
 
@@ -385,7 +387,6 @@ expected_launch_lines=(
   "/spmpc_local_planner/terminal/mpc_stop_handoff_enable: ${TERMINAL_MPC_STOP_HANDOFF_ENABLE}"
   "/spmpc_local_planner/variants/B_slosh/w_smooth: 0.1"
   "/spmpc_local_planner/variants/B_slosh/w_du_vs: 0.1"
-  "/spmpc_local_planner/slosh/slosh_height_max: 0.001"
   "/spmpc_local_planner/odom/subscriber_queue_size: 10"
   "/spmpc_local_planner/slosh_observer/source: ${SELECTED_OBSERVER_SOURCE}"
   "/spmpc_local_planner/slosh_observer/fallback_policy: fail_closed"
@@ -407,6 +408,7 @@ expected_launch_lines=(
 for expected_line in "${expected_launch_lines[@]}"; do
   require_dump_line "${expected_line}"
 done
+require_dump_number "/spmpc_local_planner/slosh/slosh_height_max" "${SLOSH_HEIGHT_MAX}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_slosh" "${W_SLOSH}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/v_ref" "${V_REF}"
 require_dump_number "/spmpc_local_planner/variants/B_slosh/w_accel" "${W_ACCEL}"
@@ -439,7 +441,7 @@ if [[ "${EXPERIMENT_KIND}" == internal-slosh ]]; then
 fi
 if [[ "${SMOKE_PROFILE}" == ablation ]]; then
   require_dump_line "/spmpc_local_planner/slosh_risk_governor/enable: false"
-  require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: false"
+  require_dump_line "/spmpc_local_planner/variants/B_slosh/slosh_constraint_enable: ${SLOSH_CONSTRAINT_ENABLE}"
   python3 "${SCRIPT_DIR}/tests/test_spmpc_ablation_smoke.py"
 fi
 if [[ "${COMPARISON_RECORDING}" == true ]]; then
@@ -455,6 +457,7 @@ bash -n "${BASH_SOURCE[0]}"
 
 echo "================ explicit actuator runtime smoke ================"
 echo "  profile        = ${SMOKE_PROFILE}"
+echo "  height cap     = ${SLOSH_CONSTRAINT_ENABLE}; limit=${SLOSH_HEIGHT_MAX} m; predicted nodes 1..N"
 echo "  protocol       = ${PROTOCOL_ID}"
 echo "  purpose        = ${SMOKE_PURPOSE}"
 if [[ -n "${TRIAL_ID}" ]]; then
@@ -603,6 +606,8 @@ fi
   echo "condition=${PREREG_CONDITION}"
   echo "scene=${SMOKE_SCENE}"
   echo "slosh_enable=${SLOSH_ENABLE}"
+  echo "slosh_constraint_enable=${SLOSH_CONSTRAINT_ENABLE}"
+  echo "slosh_height_max=${SLOSH_HEIGHT_MAX}"
   echo "zero_liquid_initial_state=${ZERO_LIQUID_INITIAL_STATE}"
   echo "jerk_limit_enable=${JERK_LIMIT_ENABLE}"
   echo "jerk_max=${JERK_MAX}"
@@ -670,6 +675,7 @@ env \
   W_ACCEL="${W_ACCEL}" \
   W_V="${W_V}" W_CONTOUR="${W_CONTOUR}" W_LAG="${W_LAG}" \
   W_ALPHA="${W_ALPHA}" W_DU_A="${W_DU_A}" W_DU_VS="${W_DU_VS}" \
+  SLOSH_CONSTRAINT_ENABLE="${SLOSH_CONSTRAINT_ENABLE}" \
   SLOSH_HEIGHT_MAX="${SLOSH_HEIGHT_MAX}" ALPHA_MAX="${ALPHA_MAX}" \
   EXECUTION_MODEL_MODE="${EXECUTION_MODEL_MODE}" \
   EXECUTION_MODEL_LINEAR_DELAY_SEC="${ACTUATOR_LINEAR_DELAY_SEC}" \
@@ -743,6 +749,7 @@ if [[ -s "${BAG_PATH}" ]]; then
     --expected-observer-source "${SELECTED_OBSERVER_SOURCE}" \
     --condition "${EXACT_CONDITION}" --report "${EXACT_REPORT}" --protocol "${PROTOCOL_ID}" \
     --expected-w-slosh "${W_SLOSH}" \
+    --expected-slosh-constraint-enable "${SLOSH_CONSTRAINT_ENABLE}" \
     --report-schema spmpc_explicit_actuator_runtime_smoke_contract_postflight_v1 \
     --expected-variant B_slosh \
     --expected-slosh-cost-horizon-steps -1 \
@@ -777,6 +784,7 @@ if [[ -s "${BAG_PATH}" ]]; then
   if [[ "${SMOKE_PROFILE}" == ablation ]]; then
     python3 "${ABLATION_POSTFLIGHT}" "${BAG_PATH}" --report "${ABLATION_REPORT}" \
       --expect-terminal-handoff \
+      --slosh-constraint-enable "${SLOSH_CONSTRAINT_ENABLE}" --slosh-height-max "${SLOSH_HEIGHT_MAX}" \
       --slosh-enable "${SLOSH_ENABLE}" --zero-liquid-initial-state "${ZERO_LIQUID_INITIAL_STATE}" \
       --jerk-limit-enable "${JERK_LIMIT_ENABLE}" --jerk-max "${JERK_MAX}" || ablation_rc=$?
   fi

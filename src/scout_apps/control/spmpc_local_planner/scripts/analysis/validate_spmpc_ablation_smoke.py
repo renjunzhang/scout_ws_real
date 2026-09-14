@@ -11,6 +11,8 @@ SNAPSHOT_TOPIC = "/spmpc/debug/pre_solve_snapshot"
 HORIZON_TOPIC = "/spmpc/debug/predicted_horizon"
 CONFIG_TOPIC = "/spmpc/debug/effective_config"
 LIQUID_FIELDS = ("eta_x", "eta_x_dot", "eta_y", "eta_y_dot")
+HARD_TOPIC = "/spmpc/debug/slosh_hard_constraint_effective"
+HEIGHT_TOLERANCE_M = 1e-6  # 0.001 mm; audit in height units, not squared eta units.
 
 
 def close(value, expected, tolerance=1e-6):
@@ -25,7 +27,8 @@ def expected_fields(liquid, zero, jerk, jerk_max):
             "jerk_limit_enable": jerk, "jerk_max": jerk_max}
 
 
-def validate_pair(snapshot, horizon, *, liquid, zero, jerk, jerk_max):
+def validate_pair(snapshot, horizon, *, liquid, zero, jerk, jerk_max,
+                  height_cap=None):
     failures = []
     fields = expected_fields(liquid, zero, jerk, jerk_max)
     for label, message in (("snapshot", snapshot), ("horizon", horizon)):
@@ -55,6 +58,15 @@ def validate_pair(snapshot, horizon, *, liquid, zero, jerk, jerk_max):
                 failures.append("snapshot liquid x0 mismatch: " + field)
             if not predicted or not close(predicted[0], expected):
                 failures.append("horizon liquid x0 mismatch: " + field)
+    if height_cap is not None:
+        heights = list(getattr(horizon, "h_modal", []))
+        if len(heights) != 61 or any(not math.isfinite(h) or h < 0 for h in heights):
+            failures.append("invalid 61-node modal height horizon")
+        else:
+            # The measured initial node is deliberately unconstrained in the OCP.
+            for stage, height in enumerate(heights[1:], 1):
+                if height > height_cap + HEIGHT_TOLERANCE_M:
+                    failures.append("height cap violated at stage " + str(stage))
     controls = list(getattr(horizon, "a", []))
     memories = list(getattr(horizon, "a_cmd_memory", []))
     if (getattr(snapshot, "horizon_steps", 0) != 60
@@ -88,16 +100,28 @@ def validate_bag(args):
     horizons = {}
     config_count = 0
     audits = []
+    hard_rows = []
+    cap_enabled = getattr(args, "slosh_constraint_enable", False)
+    cap = getattr(args, "slosh_height_max", None) if cap_enabled else None
     expected_config = expected_fields(args.slosh_enable, args.zero_liquid_initial_state,
                                       args.jerk_limit_enable, args.jerk_max)
     expected_config["slosh_enable"] = expected_config.pop("slosh_enabled")
+    # Older direct users may omit this optional expectation; the runner always sets it.
+    if getattr(args, "slosh_constraint_enable", None) is not None:
+        expected_config["slosh_constraint_enable"] = float(cap_enabled)
+    if cap_enabled:
+        expected_config["slosh_height_max"] = cap
     expect_handoff = getattr(args, "expect_terminal_handoff", False)
     if expect_handoff:
         expected_config["terminal_mpc_stop_handoff_enable"] = 1.0
     # Pair by cycle ID and exact solver epoch, never bag receive time or fitted lag.
     with rosbag.Bag(args.bag) as bag:
         for topic, message, _ in bag.read_messages(
-                topics=[SNAPSHOT_TOPIC, HORIZON_TOPIC, CONFIG_TOPIC, "/spmpc/debug/control_cycle_audit"]):
+                topics=[SNAPSHOT_TOPIC, HORIZON_TOPIC, CONFIG_TOPIC, HARD_TOPIC,
+                        "/spmpc/debug/control_cycle_audit"]):
+            if topic == HARD_TOPIC:
+                hard_rows.append(parse_multiarray(message))
+                continue
             if topic.endswith("control_cycle_audit"):
                 audits.append(message)
                 continue
@@ -134,15 +158,38 @@ def validate_bag(args):
         pair_failures, delta = validate_pair(
             snapshots[cycle], horizon, liquid=args.slosh_enable,
             zero=args.zero_liquid_initial_state, jerk=args.jerk_limit_enable,
-            jerk_max=args.jerk_max)
+            jerk_max=args.jerk_max, height_cap=cap)
         failures.extend("cycle {}: {}".format(cycle, item) for item in pair_failures)
         checked += 1
         if delta is not None:
             maximum_delta = max(maximum_delta, delta)
+    height_summary = {"enabled": bool(cap_enabled), "limit_m": cap,
+                      "tolerance_m": HEIGHT_TOLERANCE_M, "constrained_nodes": "1..N"}
+    if cap_enabled:
+        enabled_rows = [r for r in hard_rows if close(r.get("enabled"), 1.0)]
+        if len(enabled_rows) < 10:
+            failures.append("fewer than 10 enabled hard-constraint diagnostics")
+        for row in enabled_rows:
+            coeff = row.get("height_coeff", math.nan)
+            if (not math.isfinite(coeff) or coeff <= 0
+                    or not close(row.get("h_modal_limit_mm"), cap * 1000, 1e-5)
+                    or not close(row.get("eta_max"), cap / coeff, 1e-9)
+                    or not close(row.get("eta_max_sq"), (cap / coeff) ** 2, 1e-12)
+                    or not close(row.get("modal_only"), 1.0)
+                    or not close(row.get("solver_uses_parabola"), 0.0)):
+                failures.append("hard-constraint effective threshold mismatch")
+        heights = [h for horizon in horizons.values() for h in horizon.h_modal[1:]
+                   if math.isfinite(h)]
+        height_summary.update(
+            enabled_diagnostics=len(enabled_rows), checked_future_nodes=len(heights),
+            max_future_height_m=max(heights, default=None),
+            near_limit_nodes=sum(abs(h - cap) <= HEIGHT_TOLERANCE_M for h in heights),
+            violation_nodes=sum(h > cap + HEIGHT_TOLERANCE_M for h in heights))
     return {"schema": "spmpc_ablation_smoke_postflight_v1",
             "status": "FAIL" if failures else "PASS", "bag": args.bag,
             "expected_config": expected_config, "checked_pairs": checked,
             "max_horizon_delta_a_mps2": maximum_delta,
+            "height_constraint": height_summary,
             "failure_count": len(failures), "failures": failures[:100],
             "scope": "OCP ablation contract only; no physical slosh efficacy claim"}
 
@@ -155,11 +202,19 @@ def main():
     for name in ("slosh-enable", "zero-liquid-initial-state", "jerk-limit-enable"):
         parser.add_argument("--" + name, choices=("true", "false"), required=True)
     parser.add_argument("--jerk-max", type=float, required=True)
+    parser.add_argument("--slosh-constraint-enable", choices=("true", "false"))
+    parser.add_argument("--slosh-height-max", type=float, help="metres")
     args = parser.parse_args()
     if not math.isfinite(args.jerk_max) or args.jerk_max <= 0:
         parser.error("jerk-max must be finite and positive")
     for name in ("slosh_enable", "zero_liquid_initial_state", "jerk_limit_enable"):
         setattr(args, name, getattr(args, name) == "true")
+    if args.slosh_constraint_enable is not None:
+        args.slosh_constraint_enable = args.slosh_constraint_enable == "true"
+    if args.slosh_constraint_enable and (
+            not args.slosh_enable or args.slosh_height_max is None
+            or not math.isfinite(args.slosh_height_max) or args.slosh_height_max <= 0):
+        parser.error("height cap requires liquid prediction and a finite positive limit")
     if args.zero_liquid_initial_state and not args.slosh_enable:
         parser.error("NoState requires liquid prediction")
     try:
