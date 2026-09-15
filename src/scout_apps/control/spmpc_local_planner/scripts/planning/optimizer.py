@@ -1,0 +1,158 @@
+"""Multiple-shooting full-task OCP with the production explicit-actuator model.
+
+Geometry and command timing are decisions. The given route is a weak guide;
+convex region cells define the physical space. The chosen region sequence is
+assigned from the seed progress schedule (a fixed corridor topology). No claim
+of globally optimal topology or recursive feasibility is made.
+"""
+import hashlib
+import json
+import time
+import casadi as ca
+import numpy as np
+from .task import load_task, model_parameters, halfspaces
+from spmpc_acados_model import export_spmpc_slosh_symbols, PIDX_SLOSH
+from planning_terms import geometry_terms
+from actual_motion_kernel import actual_motion_rhs
+from model_contract import MODEL_VERSION, COST_VERSION
+
+
+def dynamics(task):
+    sym = export_spmpc_slosh_symbols()
+    p = model_parameters(task)
+    return ca.Function("task_step", [sym["x"], sym["u"]],
+                       [ca.substitute(sym["disc_dyn"], sym["p"], ca.DM(p))])
+
+
+def solve_task(source, warm_plan=None):
+    task = load_task(source)
+    dt = task["dt"]
+    moving = round(task["transport_duration"]/dt)
+    count = round((task["deadline"]+task["stop_window"])/dt)
+    if moving < 15:
+        raise ValueError("transport interval is shorter than the delayed stopping tail")
+    limits, weights = task["motion_limits"], task["objective"]
+    geometry_parameters=model_parameters(task)
+    for name,key in (("w_curvature","curvature"),("w_curvature_rate","curvature_change"),
+                     ("curvature_speed_floor","speed_floor"),("curvature_ref","curvature_scale"),
+                     ("curvature_rate_ref","curvature_change_scale")):
+        geometry_parameters[PIDX_SLOSH[name]]=weights[key]
+    geometry_parameters=ca.DM(geometry_parameters)
+    route = np.asarray(task["route"], float)
+    route_s = np.r_[0., np.cumsum(np.linalg.norm(np.diff(route, axis=0), axis=1))]
+    length = route_s[-1]
+    start = np.asarray(task["start_state"], float)
+    F = dynamics(task)
+    guide_x = ca.interpolant("guide_x", "linear", [route_s], route[:, 0])
+    guide_y = ca.interpolant("guide_y", "linear", [route_s], route[:, 1])
+    ss = ca.MX.sym("s")
+    guide = ca.vertcat(guide_x(ss), guide_y(ss))
+    tangent = ca.jacobian(guide, ss)
+    guide_fn = ca.Function("guide", [ss], [guide, tangent/ca.sqrt(ca.sumsqr(tangent)+1e-12)])
+    opt = ca.Opti()
+    X, U = opt.variable(28, count+1), opt.variable(3, count)
+    progress_scale=opt.variable()
+    opt.subject_to(opt.bounded(task["progress_scale_min"],progress_scale,task["progress_scale_max"]))
+    opt.subject_to(X[:, 0] == start)
+    opt.subject_to(X[:, 1:] == F.map(count)(X[:, :-1], U))
+    opt.subject_to(opt.bounded(limits["actual_v_min"], X[3, :], limits["v_max"]))
+    opt.subject_to(opt.bounded(-limits["omega_max"], X[5, :], limits["omega_max"]))
+    opt.subject_to(opt.bounded(0, X[6, :], limits["v_max"]))
+    opt.subject_to(opt.bounded(-limits["omega_max"], X[7, :], limits["omega_max"]))
+    opt.subject_to(opt.bounded(0, X[4, :], length))
+    opt.subject_to(opt.bounded(-limits["a_max"], U[0, :], limits["a_max"]))
+    opt.subject_to(opt.bounded(-limits["alpha_max"], U[1, :], limits["alpha_max"]))
+    opt.subject_to(opt.bounded(0, U[2, :], limits["v_max"]))
+    opt.subject_to(opt.bounded(-limits["jerk_max"]*dt, U[0, :]-X[23, :-1], limits["jerk_max"]*dt))
+    opt.subject_to(X[4, moving] == length)
+    # The exported geometric coordinate must advance with actual motion.
+    # Independent virtual progress can otherwise stall while the vehicle turns,
+    # making x(s), y(s), v(s) multi-valued for the lower controller.
+    opt.subject_to(U[2,:moving] == progress_scale*(X[3,:moving]+X[3,1:moving+1])*.5)
+    # Commands, FIFO and acceleration memory are exactly clear when TAIL starts.
+    # Actual motion decays continuously through the shared actuator dynamics.
+    clear = moving-11
+    opt.subject_to(X[6:8, clear] == 0)
+    opt.subject_to(U[:2, clear:] == 0)
+    opt.subject_to(U[2, moving:] == 0)
+    goal = np.asarray(task["goal_pose"], float)
+    goal[2]=start[2]+np.arctan2(np.sin(goal[2]-start[2]),np.cos(goal[2]-start[2]))
+    dx, dy = X[0, moving:]-goal[0], X[1, moving:]-goal[1]
+    opt.subject_to(dx*dx+dy*dy <= task["goal_position_tolerance"]**2)
+    opt.subject_to(opt.bounded(-task["goal_yaw_tolerance"], X[2, moving:]-goal[2], task["goal_yaw_tolerance"]))
+    opt.subject_to(opt.bounded(-task["stop_speed_tolerance"], X[3, moving:], task["stop_speed_tolerance"]))
+    opt.subject_to(opt.bounded(-task["stop_omega_tolerance"], X[5, moving:], task["stop_omega_tolerance"]))
+    height_sq = task["height_coeff"]**2*(X[24, :]**2+X[26, :]**2)
+    if task["liquid_constraint_enable"]:
+        opt.subject_to(height_sq <= task["liquid_height_limit"]**2)
+    # Initial guess only; it does not constrain autonomous geometry or speed.
+    progress_seed = start[4]+np.minimum(np.arange(count+1)/max(1, moving-12), 1.)*(length-start[4])
+    region_ids = []
+    sweep = max(limits["v_max"], abs(limits["actual_v_min"]))*dt
+    objective = 0
+    modal_energy = (height_sq+task["height_coeff"]**2*(X[25, :]**2+X[27, :]**2)/task["liquid_parameters"][1])/weights["height_scale"]**2
+    for k in range(count+1):
+        cell = next(c for c in task["region"]["cells"] if c["s_begin"]-1e-8 <= progress_seed[k] <= c["s_end"]+1e-8)
+        normal, offset = halfspaces(task["region"], cell, sweep if k < count else 0)
+        opt.subject_to(ca.DM(normal)@X[:2, k] <= offset)
+        opt.subject_to(opt.bounded(cell["s_begin"], X[4, k], cell["s_end"]))
+        region_ids.append(cell["id"])
+        if k < moving:
+            xy, tangent = guide_fn(X[4, k])
+            delta = X[:2, k]-xy
+            lag = ca.dot(delta, tangent)
+            contour = delta[0]*tangent[1]-delta[1]*tangent[0]
+            actual = actual_motion_rhs(ca.vertcat(X[:4, k], X[5, k], X[24:28, k]),
+                                      ca.vertcat(X[8, k], X[13, k]), task["actuator_parameters"], task["liquid_parameters"])
+            curvature_cost, change_cost=geometry_terms(X[:,k],actual[3],actual[4],
+                                                       geometry_parameters,PIDX_SLOSH,1.)
+            objective += dt*(weights["contour"]*(contour/weights["contour_scale"])**2 +
+                weights["lag"]*(lag/weights["lag_scale"])**2 +
+                curvature_cost + change_cost +
+                weights["control"]*((U[0, k]/limits["a_max"])**2+(U[1, k]/limits["alpha_max"])**2) +
+                weights["jerk"]*((U[0, k]-X[23, k])/(limits["jerk_max"]*dt))**2)
+        objective += dt*weights["liquid"]*modal_energy[k]
+    objective += weights["liquid_terminal"]*modal_energy[-1]
+    opt.minimize(objective)
+    guess = np.zeros((28, count+1))
+    guess[4] = progress_seed
+    guess[0] = np.interp(progress_seed, route_s, route[:, 0])
+    guess[1] = np.interp(progress_seed, route_s, route[:, 1])
+    guess[2] = np.unwrap(np.arctan2(np.gradient(guess[1]), np.gradient(guess[0])))
+    guess[2, moving:] = goal[2]
+    guess[:, 0] = start
+    opt.set_initial(X, guess)
+    opt.set_initial(U, 0)
+    opt.set_initial(progress_scale,1.)
+    if warm_plan is not None:
+        old_x = np.asarray([r["state"] for r in warm_plan["samples"]])
+        old_u = np.asarray([r["control"] for r in warm_plan["samples"][:-1]])
+        if old_x.shape != (count+1, 28) or old_u.shape != (count, 3):
+            raise ValueError("warm plan grid/layout mismatch")
+        opt.set_initial(X, old_x.T); opt.set_initial(U, old_u.T)
+    opt.solver("ipopt", {"print_time": False}, {"print_level": 0, "max_iter": task["max_iterations"],
+        "tol": task["constraint_tolerance"], "constr_viol_tol": task["constraint_tolerance"],
+        "acceptable_tol": task["constraint_tolerance"], "bound_relax_factor": 0., "fixed_variable_treatment": "make_constraint"})
+    begun = time.monotonic()
+    solution = opt.solve()
+    states, controls = np.asarray(solution.value(X)).T, np.asarray(solution.value(U)).T
+    controls = np.vstack((controls, np.zeros(3)))
+    plan = {k: task[k] for k in ("frame_id", "region", "dt", "transport_duration", "deadline", "stop_window", "height_coeff",
+        "actuator_parameters", "liquid_parameters", "motion_limits", "goal_pose", "goal_position_tolerance",
+        "goal_yaw_tolerance", "stop_speed_tolerance", "stop_omega_tolerance", "route")}
+    task_hash = hashlib.sha256(json.dumps(task, sort_keys=True, allow_nan=False).encode()).hexdigest()
+    plan.update(schema_version=1, liquid_model_version=MODEL_VERSION, cost_model_version=COST_VERSION,
+                plan_id=task["task_id"]+"-"+task_hash[:12], region_id=task["region"]["id"], task=task,
+                optimization=dict(status=solution.stats()["return_status"], objective=float(solution.value(objective)),
+                                  solve_seconds=time.monotonic()-begun, iterations=solution.stats()["iter_count"]))
+    plan["progress_parameterization"]={"method":"scaled_actual_speed_trapezoid", "scale":float(solution.value(progress_scale))}
+    # Find final command braking segment without assuming actual a == commanded a.
+    moving_controls = controls[:moving, 0]
+    last_positive = np.flatnonzero(moving_controls > 1e-6)
+    brake = int(last_positive[-1]+1) if len(last_positive) else 0
+    plan["samples"] = [dict(t=k*dt, state=x.tolist(), control=u.tolist(),
+        phase="TAIL" if k >= moving else ("BRAKE" if k >= brake else "MOVE"), region_cell_id=region_ids[k])
+        for k, (x, u) in enumerate(zip(states, controls))]
+    from .validation import validate_plan
+    plan["validation"] = validate_plan(plan)
+    return plan
