@@ -7,7 +7,7 @@
 
 std_msgs/Header header
 uint32 schema_version
-# Schema 6: 1 identifies the shared rotating-container RK4 model.
+# Schema 8: planning identity and per-stage reference audit; 1 identifies the shared rotating-container RK4 model.
 uint32 cost_model_version
 uint32 liquid_model_version
 uint64 cycle_id
@@ -110,6 +110,8 @@ float64[] previous_solution_controls
 bool zero_liquid_initial_state
 bool jerk_limit_enable
 float64 jerk_max
+int32 rti_iterations
+float64 max_prediction_defect
 # Bounds on C*x + D*u = a_cmd - a_cmd_memory, at stages 0..N-1.
 # Disabled: +/-1e15. No terminal control row.
 float64 delta_a_max
@@ -117,3 +119,18 @@ float64 observed_eta_x
 float64 observed_eta_x_dot
 float64 observed_eta_y
 float64 observed_eta_y_dot
+
+# Schema 8: planning identity and per-stage reference audit.
+string experiment_profile_id
+string plan_id
+string region_id
+string reference_mode
+float64 task_elapsed_sec
+float64 deadline_sec
+string reference_status
+bool geometry_enabled
+string[] stage_region_ids
+float64[] nominal_times
+string[] nominal_phases
+float64 minimum_region_clearance
+float64 v_cmd_min

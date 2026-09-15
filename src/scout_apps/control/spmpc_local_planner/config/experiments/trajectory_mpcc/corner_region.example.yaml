@@ -1,0 +1,21 @@
+# Software corner room. This is not a measured real-world free-space map.
+planning:
+  region:
+    id: corner_room
+    frame_id: map
+    footprint_radius: 0.45
+    margin: 0.02
+    cells:
+    - id: room
+      s_begin: 0
+      s_end: 2.0
+      vertices:
+      - - -0.8
+        - -0.8
+      - - 1.8
+        - -0.8
+      - - 1.8
+        - 1.8
+      - - -0.8
+        - 1.8
+    enabled: true

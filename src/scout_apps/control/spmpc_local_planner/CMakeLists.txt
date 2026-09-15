@@ -130,6 +130,7 @@ add_library(${PROJECT_NAME}
   src/solvers/solver_factory.cpp
   src/solvers/continuous_mpcc_solver_acados.cpp
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
+  src/ros/planning_config_ros.cpp
   src/ros/command_history_buffer.cpp
   src/ros/control_cycle_contract.cpp
   src/ros/execution_state_predictor.cpp

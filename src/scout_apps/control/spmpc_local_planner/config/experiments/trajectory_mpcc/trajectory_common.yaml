@@ -1,0 +1,25 @@
+# Shared task/vehicle contract for every trajectory-MPCC comparison profile.
+planning:
+  task_deadline_sec: 0.0
+  evaluation_window_sec: 1.0
+execution_model:
+  actual_v_min: -0.002
+acados:
+  rti_iterations: 5
+  max_prediction_defect: 0.0001
+terminal:
+  mpc_stop_handoff_enable: true
+  require_goal_yaw: true
+  goal_yaw_tolerance: 0.10
+  complete_stop:
+    enable: false
+  enable: true
+  goal_tolerance: 0.05
+  goal_reached_max_speed: 0.01
+  goal_reached_max_omega: 0.02
+  slowdown: {enable: true, distance: 1.20, v_max: 0.18}
+  capture_stop: {enable: true, distance: 0.70, v_cap: 0.18}
+ablation:
+  zero_liquid_initial_state: false
+  jerk_limit_enable: true
+  jerk_max: 1.0

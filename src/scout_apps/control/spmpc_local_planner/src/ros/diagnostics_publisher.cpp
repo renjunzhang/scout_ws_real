@@ -74,6 +74,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     experiment_mode_pub_ = nh.advertise<std_msgs::String>("experiment_mode", 1, true);
     solver_backend_pub_ = nh.advertise<std_msgs::String>("solver_backend", 1, true);
     effective_config_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/effective_config", 1, true);
+    planning_config_pub_ = nh.advertise<std_msgs::String>("debug/planning_config", 1, true);
     trajectory_pub_ = nh.advertise<nav_msgs::Path>("local_trajectory", 1, true);
     // These large, per-solve evidence messages are consumed by rosbag rather
     // than the control loop.  A small burst buffer prevents transient recorder
@@ -129,6 +130,12 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     start_lock_active_pub_ = nh.advertise<std_msgs::Float32>("start_lock/active", 1);
     start_lock_mode_pub_ = nh.advertise<std_msgs::String>("start_lock/mode", 1);
     start_lock_debug_pub_ = nh.advertise<std_msgs::Float32MultiArray>("start_lock/debug", 1);
+}
+
+void DiagnosticsPublisher::publishPlanningConfig(const std::string& json) {
+    std_msgs::String msg;
+    msg.data = json;
+    planning_config_pub_.publish(msg);
 }
 
 void DiagnosticsPublisher::publishVariant(
@@ -905,17 +912,19 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     std_msgs::Float32MultiArray cost;
     cost.layout.dim.resize(1);
     cost.layout.dim[0].label =
-        "total,J_contour,J_lag,J_progress,J_v,J_control,J_smooth,J_terminal,J_corridor,J_obstacle,J_slosh_eta,J_slosh_eta_dot,pct_contour,pct_lag,pct_progress,pct_v,pct_control,pct_smooth,pct_terminal,pct_corridor,pct_obstacle,pct_slosh_total,J_anti_creep,J_v_actual,J_v_s,J_slack,solver_total,reconstruction_error,reconstruction_valid,J_stop";
-    cost.layout.dim[0].size = 30;
-    cost.layout.dim[0].stride = 30;
-    cost.data.assign(30, 0.0f);
+        "total,J_contour,J_lag,J_progress,J_v,J_control,J_smooth,J_terminal,J_corridor,J_obstacle,J_slosh_eta,J_slosh_eta_dot,pct_contour,pct_lag,pct_progress,pct_v,pct_control,pct_smooth,pct_terminal,pct_corridor,pct_obstacle,pct_slosh_total,J_anti_creep,J_v_actual,J_v_s,J_slack,solver_total,reconstruction_error,reconstruction_valid,J_stop,J_curvature,J_curvature_change";
+    cost.layout.dim[0].size = 32;
+    cost.layout.dim[0].stride = 32;
+    cost.data.assign(32, 0.0f);
     const double total = output.cost.total();
     // 占比分母用各项绝对值之和, 而非 |total|: 后者含负的 J_progress 奖励, total 近零时百分比会爆炸。
     const auto& c = output.cost;
     const double abs_sum =
         std::abs(c.J_contour) + std::abs(c.J_lag) + std::abs(c.J_progress) + std::abs(c.J_v) +
         std::abs(c.J_control) + std::abs(c.J_smooth) + std::abs(c.J_terminal) + std::abs(c.J_corridor) +
-        std::abs(c.J_obstacle) + std::abs(c.J_anti_creep) + std::abs(c.J_slack) + std::abs(c.J_stop) + std::abs(c.J_slosh_eta) + std::abs(c.J_slosh_eta_dot);
+        std::abs(c.J_obstacle) + std::abs(c.J_anti_creep) + std::abs(c.J_slack) + std::abs(c.J_stop) +
+        std::abs(c.J_slosh_eta) + std::abs(c.J_slosh_eta_dot) +
+        std::abs(c.J_curvature) + std::abs(c.J_curvature_change);
     const double denom = abs_sum > 1e-9 ? abs_sum : 1.0;
     cost.data[0] = static_cast<float>(total);
     cost.data[1] = static_cast<float>(output.cost.J_contour);
@@ -947,6 +956,8 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
     cost.data[27] = static_cast<float>(c.reconstruction_error);
     cost.data[28] = c.reconstruction_valid ? 1.0f : 0.0f;
     cost.data[29] = static_cast<float>(c.J_stop);
+    cost.data[30] = static_cast<float>(c.J_curvature);
+    cost.data[31] = static_cast<float>(c.J_curvature_change);
     cost_breakdown_pub_.publish(cost);
 
     const auto& sm = output.slosh_cost_monitor;
@@ -1148,8 +1159,8 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 7;
-    msg.cost_model_version = 2;
+    msg.schema_version = 8;
+    msg.cost_model_version = 3;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& horizon = output.predicted_horizon;
@@ -1161,7 +1172,22 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.zero_liquid_initial_state = horizon.zero_liquid_initial_state;
     msg.jerk_limit_enable = horizon.jerk_limit_enable;
     msg.jerk_max = horizon.jerk_max;
+    msg.rti_iterations = horizon.rti_iterations;
+    msg.dynamics_max_defect = horizon.dynamics_max_defect;
     msg.delta_a_max = horizon.delta_a_max;
+    msg.experiment_profile_id = horizon.planning.experiment_profile_id;
+    msg.plan_id = horizon.planning.plan_id;
+    msg.region_id = horizon.planning.region_id;
+    msg.reference_mode = horizon.planning.reference_mode;
+    msg.task_elapsed_sec = horizon.planning.task_elapsed_sec;
+    msg.deadline_sec = horizon.planning.deadline_sec;
+    msg.reference_status = horizon.planning.reference_status;
+    msg.geometry_enabled = horizon.planning.geometry_enabled;
+    msg.stage_region_ids = horizon.planning.stage_region_ids;
+    msg.nominal_times = horizon.planning.nominal_times;
+    msg.nominal_phases = horizon.planning.nominal_phases;
+    msg.minimum_region_clearance = horizon.planning.minimum_region_clearance;
+    msg.v_cmd_min = 0.0;
     msg.control_semantics = horizon.control_semantics;
     msg.dt = horizon.dt;
     msg.horizon_steps = static_cast<uint32_t>(horizon.controls.size());
@@ -1172,6 +1198,11 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.slosh_cost_tail_discount = horizon.slosh_cost_tail_discount;
 
     const size_t state_count = horizon.states.size();
+    msg.model_state_width = state_count ? static_cast<uint32_t>(horizon.states.front().model_state.size()) : 0;
+    if (!std::all_of(horizon.states.begin(),horizon.states.end(),[&](const HorizonStateDebug& row) {
+            return row.model_state.size()==msg.model_state_width;
+        })) msg.model_state_width=0;
+    msg.model_states.reserve(state_count*msg.model_state_width);
     msg.t.reserve(state_count);
     msg.x.reserve(state_count);
     msg.y.reserve(state_count);
@@ -1193,6 +1224,8 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.alpha_actual.reserve(state_count);
     for (size_t k = 0; k < state_count; ++k) {
         const auto& state = horizon.states[k];
+        if (msg.model_state_width)
+            msg.model_states.insert(msg.model_states.end(),state.model_state.begin(),state.model_state.end());
         msg.t.push_back(static_cast<double>(k) * horizon.dt);
         msg.x.push_back(state.x);
         msg.y.push_back(state.y);
@@ -1231,8 +1264,8 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 7;
-    msg.cost_model_version = 2;
+    msg.schema_version = 8;
+    msg.cost_model_version = 3;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
     const auto& snapshot = output.pre_solve_snapshot;
@@ -1244,7 +1277,22 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.zero_liquid_initial_state = snapshot.zero_liquid_initial_state;
     msg.jerk_limit_enable = snapshot.jerk_limit_enable;
     msg.jerk_max = snapshot.jerk_max;
+    msg.rti_iterations = snapshot.rti_iterations;
+    msg.max_prediction_defect = snapshot.max_prediction_defect;
     msg.delta_a_max = snapshot.delta_a_max;
+    msg.experiment_profile_id = snapshot.planning.experiment_profile_id;
+    msg.plan_id = snapshot.planning.plan_id;
+    msg.region_id = snapshot.planning.region_id;
+    msg.reference_mode = snapshot.planning.reference_mode;
+    msg.task_elapsed_sec = snapshot.planning.task_elapsed_sec;
+    msg.deadline_sec = snapshot.planning.deadline_sec;
+    msg.reference_status = snapshot.planning.reference_status;
+    msg.geometry_enabled = snapshot.planning.geometry_enabled;
+    msg.stage_region_ids = snapshot.planning.stage_region_ids;
+    msg.nominal_times = snapshot.planning.nominal_times;
+    msg.nominal_phases = snapshot.planning.nominal_phases;
+    msg.minimum_region_clearance = snapshot.planning.minimum_region_clearance;
+    msg.v_cmd_min = 0.0;
     msg.observed_eta_x = snapshot.observed_slosh.eta_x;
     msg.observed_eta_x_dot = snapshot.observed_slosh.eta_x_dot;
     msg.observed_eta_y = snapshot.observed_slosh.eta_y;

@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/ros/spmpc_local_planner_ros.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
+#include "spmpc_local_planner/ros/planning_config_ros.h"
 #include <algorithm>
 #include <cctype>
 #include <cmath>
@@ -247,6 +248,14 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     nh_ = nh;
     pnh_ = pnh;
 
+    PlanningConfig planning_config;
+    try {
+        planning_config = loadPlanningConfig(pnh_);
+    } catch (const std::exception& ex) {
+        ROS_FATAL("[spmpc_local_planner] %s", ex.what());
+        return false;
+    }
+
     std::string variant_name = "B0";
     pnh_.param("planner_variant", variant_name, variant_name);
     pnh_.param("experiment_mode", experiment_mode_, experiment_mode_);
@@ -485,10 +494,20 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("reference/min_segment_length", reference_preprocess_params_.min_segment_length, reference_preprocess_params_.min_segment_length);
 
     SolverParams solver_params;
+    solver_params.planning = planning_config;
+    pnh_.param("acados/rti_iterations", solver_params.rti_iterations, solver_params.rti_iterations);
+    pnh_.param("acados/max_prediction_defect", solver_params.max_prediction_defect, solver_params.max_prediction_defect);
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);
     pnh_.param("robot/a_max", solver_params.a_max, solver_params.a_max);
     pnh_.param("robot/alpha_max", solver_params.alpha_max, solver_params.alpha_max);
+    pnh_.param("execution_model/actual_v_min", solver_params.actual_v_min,
+               solver_params.actual_v_min);
+    if (!std::isfinite(solver_params.actual_v_min) || solver_params.actual_v_min > 0.0 ||
+        std::abs(solver_params.actual_v_min) > solver_params.v_max) {
+        ROS_FATAL("[spmpc_local_planner] execution_model/actual_v_min must be finite, <=0 and within v_max");
+        return false;
+    }
     const double platform_v_max = solver_params.v_max;
     SpeedSafetyParams speed_safety_params;
     pnh_.param("speed_safety/enable",
@@ -570,6 +589,8 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("terminal/enable", solver_params.terminal.enable, solver_params.terminal.enable);
     pnh_.param("terminal/mpc_stop_handoff_enable", solver_params.terminal.mpc_stop_handoff_enable, false);
     pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
+    pnh_.param("terminal/require_goal_yaw", solver_params.terminal.require_goal_yaw, solver_params.terminal.require_goal_yaw);
+    pnh_.param("terminal/goal_yaw_tolerance", solver_params.terminal.goal_yaw_tolerance, solver_params.terminal.goal_yaw_tolerance);
     pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
     pnh_.param("terminal/goal_reached_max_omega", solver_params.terminal.goal_reached_max_omega, solver_params.terminal.goal_reached_max_omega);
     pnh_.param("terminal/slowdown/enable", solver_params.terminal.slowdown_enable, solver_params.terminal.slowdown_enable);
@@ -689,6 +710,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         ROS_WARN("[spmpc_local_planner] unknown planner_variant '%s'; falling back to B0", variant_name.c_str());
     }
     loadVariantOverrides(variant_.name);
+    solver_params.planning = planning_config;
     pnh_.param("ablation/zero_liquid_initial_state",
                solver_params.zero_liquid_initial_state,
                solver_params.zero_liquid_initial_state);
@@ -932,7 +954,27 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     effective_config_.jerk_max = solver_params.jerk_max;
     effective_config_.terminal_mpc_stop_handoff_enable = solver_params.terminal.mpc_stop_handoff_enable ? 1.0 : 0.0;
 
+    if (planning_config.liquid_free_baseline &&
+        (planning_config.geometry.enabled || planning_config.geometry.curvature_weight > 0.0 ||
+         planning_config.geometry.curvature_rate_weight > 0.0 ||
+         variant_.slosh_enable || variant_.slosh_constraint_enable || variant_.w_slosh != 0.0 ||
+         solver_params.liquid_limit.recovery_enable || slosh_risk_governor_params_.enable ||
+         solver_params.task_stop.enable || solver_params.zero_liquid_initial_state)) {
+        ROS_FATAL("[spmpc_local_planner] liquid_free_baseline conflicts with liquid/recovery or new geometry objectives");
+        return false;
+    }
+    if ((planning_config.region.enabled || planning_config.geometry.enabled ||
+         planning_config.trajectory.mode != TrajectoryReferenceMode::Cruise) &&
+        (solver_params.solver_backend != kSolverBackendContinuousMpccAcados ||
+         solver_params.actuator.mode != ExecutionModelMode::ExplicitActuator)) {
+        ROS_FATAL("planning requires continuous MPCC with the explicit actuator model");
+        return false;
+    }
     problem_.configure(solver_params, variant_);
+    if (!problem_.configurationError().empty()) {
+        ROS_FATAL("invalid planning task: %s", problem_.configurationError().c_str());
+        return false;
+    }
     if (!slosh_observers_.configure(solver_params.slosh, imu_observer_dt_sec_)) {
         ROS_WARN("[spmpc_local_planner] slosh observer configure failed; slosh diagnostics stay zero");
     }
@@ -1009,6 +1051,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     diagnostics_.publishVariant(variant_, experiment_mode_);
     diagnostics_.publishSolverBackend(solver_params.solver_backend);
     diagnostics_.publishEffectiveConfig(effective_config_);
+    diagnostics_.publishPlanningConfig(planningConfigJson(planning_config));
     diagnostics_.publishStatus("INITIALIZED");
 
     const double period = 1.0 / std::max(1.0, control_frequency_);

@@ -1,0 +1,6 @@
+# Model-in-the-loop example only; use measured task limits and region for hardware.
+planning:
+  task_deadline_sec: 12.0
+  evaluation_window_sec: 1.0
+execution_model:
+  actual_v_min: -0.002

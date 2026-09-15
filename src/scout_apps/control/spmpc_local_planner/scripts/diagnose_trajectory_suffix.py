@@ -14,6 +14,8 @@ def main():
     parser.add_argument("--nominal-only",action="store_true")
     args=parser.parse_args()
     plan=json.loads(args.plan.read_text()); checkpoint=json.loads(args.checkpoint.read_text())
+    if checkpoint.get("plan_id") not in (None,"",plan["plan_id"]):
+        parser.error("checkpoint plan identity differs from the supplied task plan")
     result=compare_suffixes(plan, checkpoint["state"], checkpoint["task_elapsed_sec"], not args.nominal_only)
     args.output.parent.mkdir(parents=True,exist_ok=True)
     args.output.write_text(json.dumps(result,indent=2,allow_nan=False)+"\n")

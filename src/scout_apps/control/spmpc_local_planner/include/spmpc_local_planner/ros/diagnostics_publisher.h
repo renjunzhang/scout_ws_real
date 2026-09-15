@@ -26,6 +26,7 @@ public:
     void publishVariant(const VariantConfig& variant, const std::string& experiment_mode);
     void publishSolverBackend(const std::string& solver_backend);
     void publishEffectiveConfig(const EffectiveConfigDebug& config);
+    void publishPlanningConfig(const std::string& json);
     void publishOutput(const SolverOutput& output, const std::string& frame_id);
     void publishRawState(const RobotState& robot, const SloshState& slosh, double height_coeff);
     void publishPredictedState(const ExecutionStatePrediction& prediction, double height_coeff);
@@ -71,6 +72,7 @@ private:
     ros::Publisher experiment_mode_pub_;
     ros::Publisher solver_backend_pub_;
     ros::Publisher effective_config_pub_;
+    ros::Publisher planning_config_pub_;
     ros::Publisher trajectory_pub_;
     ros::Publisher predicted_horizon_pub_;
     ros::Publisher pre_solve_snapshot_pub_;

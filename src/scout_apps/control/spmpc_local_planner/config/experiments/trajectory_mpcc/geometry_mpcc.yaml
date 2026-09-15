@@ -1,0 +1,38 @@
+planning:
+  experiment_profile_id: geometry_mpcc
+  liquid_free_baseline: false
+  geometry:
+    enabled: true
+    curvature_weight: 0.05
+    curvature_rate_weight: 0.01
+    goal_weight: 2.0
+    reference_curvature_speed_limit: false
+  reference:
+    mode: cruise
+    plan_file: ''
+    progress_window: 0.3
+    max_speed_error: 0.02
+    route_tolerance: 1.0e-05
+    deadline_tolerance: 0.0
+  region:
+    enabled: false
+    cells: []
+variants:
+  B0:
+    slosh_enable: false
+    slosh_constraint_enable: false
+    w_slosh: 0.0
+    w_contour: 0.02
+    w_lag: 0.2
+    w_progress: 0.2
+    w_v: 1.0
+    w_vs: 0.3
+    v_ref: 0.25
+    w_control: 0.1
+    w_accel: 0.0
+    w_smooth: 0.1
+    w_alpha: 0.1
+    w_du_a: 0.1
+    w_du_vs: 0.1
+tracking_safety:
+  enable: false

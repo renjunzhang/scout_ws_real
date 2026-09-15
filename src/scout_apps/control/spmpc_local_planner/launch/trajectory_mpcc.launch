@@ -1,0 +1,24 @@
+<launch>
+  <arg name="profile" default="raw_mpcc"/>
+  <arg name="region_config" default=""/>
+  <arg name="plan_file" default=""/>
+  <arg name="planner_variant" default=""/>
+  <arg name="publish_cmd_vel" default="true"/>
+  <arg name="planner_overlay_file" default=""/>
+  <arg name="task_overlay_file" default=""/>
+  <arg name="task_config" default="$(find spmpc_local_planner)/config/experiments/trajectory_mpcc/trajectory_common.yaml"/>
+  <node pkg="spmpc_local_planner" type="spmpc_local_planner_node" name="spmpc_local_planner" output="screen">
+    <rosparam file="$(find spmpc_local_planner)/config/planner/common.yaml" command="load"/>
+    <rosparam file="$(find spmpc_local_planner)/config/planner/variants.yaml" command="load"/>
+    <rosparam file="$(find spmpc_local_planner)/config/platforms/scout_mini.yaml" command="load"/>
+    <rosparam file="$(find spmpc_local_planner)/config/containers/tube_default.yaml" command="load"/>
+    <rosparam file="$(find spmpc_local_planner)/config/experiments/trajectory_mpcc/$(arg profile).yaml" command="load"/>
+    <rosparam file="$(arg task_config)" command="load"/>
+    <rosparam file="$(arg task_overlay_file)" command="load" if="$(eval arg('task_overlay_file') != '')"/>
+    <rosparam file="$(arg region_config)" command="load" if="$(eval arg('region_config') != '')"/>
+    <rosparam file="$(arg planner_overlay_file)" command="load" if="$(eval arg('planner_overlay_file') != '')"/>
+    <param name="planner_variant" value="$(eval arg('planner_variant') if arg('planner_variant') else ('B_slosh' if arg('profile') == 'planned_slosh' else 'B0'))"/>
+    <param name="publish_cmd_vel" value="$(arg publish_cmd_vel)" type="bool"/>
+    <param name="planning/reference/plan_file" value="$(arg plan_file)" if="$(eval arg('plan_file') != '')"/>
+  </node>
+</launch>
