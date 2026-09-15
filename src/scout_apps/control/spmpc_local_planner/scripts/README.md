@@ -18,6 +18,7 @@
 | `run_spmpc_mocap_execution_chain_trial.sh` | 绑定小场地地图/SHA 与冻结 S 路径的 R01--R05 单条执行链 trial | development；必须显式 `ARM_MOTION=YES` |
 | `analysis/validate_mocap_execution_chain_bag.py` | 静止 smoke 或运动 trial 的 fail-closed postflight | development QC |
 | `analysis/analyze_mocap_execution_chain.py` | 计划覆盖、软件改命令、动捕响应及 held-out 模型分析 | development 离线分析 |
+| `analysis/analyze_actuator_excitation_consistency.py` | 原 OCP、实际命令重放与 IMU 激励三曲线对照；复现名义 IMU 处理口径 | development 离线诊断；不拟合参数 |
 | `run_spmpc_g2s_h0s_source_selection_trial.sh` | 固定 H0_G2、Bsmooth、IMU READY gate 和在线 RGB stamped scalar 的单条 G2S paired unit；bag 禁止图像流 | development G2S；不进入 40/64/88 |
 | `analyze_spmpc_g2s_source_selection.sh` | 四条 G2S PASS 后的一键只读 source analyzer，自动加载 ROS/workspace 并使用冻结目录 | development source decision |
 | `analysis/validate_g2s_paired_trial.py` | 单条 G2S bag 的 motion/在线视觉质量/零图像话题/双 observer/READY/selection postflight | development fail-closed QC |
@@ -43,6 +44,44 @@
 - `acados/generate_spmpc_acados.py` 负责模型检查和求解器代码生成；同目录的 `spmpc_acados_model.py`、`spmpc_acados_cost.py`、`spmpc_acados_constraints.py` 是其装配模块，不单独运行；
 - `analysis/estimate_cmd_odom_delay.py` 是早期 cmd/odom 互相关与绘图工具，当前优先使用顶层 `analyze_spmpc_delay_phase.py`；
 - `tests/` 保存 summary、正式 freeze validator 和动捕执行链工具的回归测试。
+
+## 执行器激励三曲线对照（离线）
+
+入口 `analysis/analyze_actuator_excitation_consistency.py` 已实现，可读取现有质量 PASS 的
+Full/processed-IMU `_internal_slosh.json`、小话题缓存和对应预测时域。支持当前
+schema 5、30 Hz/N60、显式执行器模型；无需动捕外参或 RGB。缓存缺少预测时域时，
+仅通过 rosbag 补读该话题，需要使用已加载 ROS Python 环境的终端。
+
+```bash
+python3 src/scout_apps/control/spmpc_local_planner/scripts/analysis/analyze_actuator_excitation_consistency.py \
+  --report /path/to/trial_internal_slosh.json \
+  --output /path/to/new_excitation_comparison
+```
+
+将示例路径替换为实际报告和新的输出目录；输出目录必须不存在或为空。可加
+`--cycle-id 123` 只看某个预测起点，默认分析全部可用起点；`--duration` 默认 2 秒，
+`--min-lead` 默认 0.1 秒。
+
+输出 `report.json`、`samples.csv` 和 `excitation_comparison.png`。PNG 绘制时间最早的
+有效起点，CSV 保留所有接受窗口；报告分别统计原计划/IMU、实际命令重放/IMU、
+原计划/重放的误差，保留被拒绝起点及原因，分列任务内、无未来干预、跨终点窗口。
+实际命令以审计中的发布时刻和值为准，状态、队列、时间不匹配以及 IMU 缺口/重置
+均不能静默填补。
+
+预测侧先从名义目标点换算到 IMU 点，按记录的采样间隔执行相同的一阶加速度/角速度
+滤波、角加速度差分和杆臂补偿，再与处理后的 IMU 比较。滤波初态取预测时刻之前已接收的
+有效 IMU 状态；没有因果初态或存在未接收的中间样本时，拒绝该窗口。保留各量的有效时戳
+及未套用处理链的模型数值，不拟合时间偏移。名义安装、重力/零偏校正和物理时延仍是
+待实物核验的条件，软件匹配不能证明它们准确。
+
+实际命令重放复用连续 FOPDT；OCP 对照保留记录的节点，并在单个固定队列区间内作
+FOPDT 稠密求值。二者包含离散化与发布时间差异，不能把差值全部解释成重规划影响。
+`DIAGNOSTIC_COMPLETE` 只表示有有效对照，不代表模型准确或实物降晃有效；无有效样本时
+输出 `INCONCLUSIVE` 并返回 2。该工具不启动 ROS 节点、不发布命令、不改控制参数。
+
+13 项合成测试覆盖已知命令变化、错误响应时间常数、队列边界、滤波/杆臂一致性、
+时间与初态、缺口/重置、输出干预以及缓存 CLI/CSV/PNG；尚未形成新实物 bag 分析结果。
+另有既有预测高度和车体预测诊断的 25 项回归通过，本次相关测试合计 38 项。
 
 ## Full 预测高度硬约束开发包
 
