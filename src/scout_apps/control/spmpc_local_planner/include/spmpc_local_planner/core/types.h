@@ -78,6 +78,8 @@ struct CostBreakdown {
     double J_anti_creep = 0.0;
     double J_slack = 0.0;
     double J_stop = 0.0;
+    double J_curvature = 0.0;
+    double J_curvature_change = 0.0;
     // Detail fields; J_v already contains both, so total() does not add them twice.
     double J_v_actual = 0.0;
     double J_v_s = 0.0;
@@ -88,7 +90,7 @@ struct CostBreakdown {
     double total() const {
         return J_contour + J_lag + J_progress + J_v + J_control + J_smooth +
                J_terminal + J_corridor + J_obstacle + J_slosh_eta + J_slosh_eta_dot +
-               J_anti_creep + J_slack + J_stop;
+               J_anti_creep + J_slack + J_stop + J_curvature + J_curvature_change;
     }
 };
 
@@ -277,7 +279,23 @@ struct HorizonControlDebug {
     double v_s = 0.0;
 };
 
+struct PlanningCycleDebug {
+    std::string experiment_profile_id;
+    std::string plan_id;
+    std::string region_id;
+    std::string reference_mode = "cruise";
+    std::string reference_status = "DISABLED";
+    bool geometry_enabled = false;
+    double task_elapsed_sec = 0.0;
+    double deadline_sec = 0.0;
+    double minimum_region_clearance = 0.0;
+    std::vector<std::string> stage_region_ids;
+    std::vector<double> nominal_times;
+    std::vector<std::string> nominal_phases;
+};
+
 struct PredictedHorizonDebug {
+    PlanningCycleDebug planning;
     bool valid = false;
     std::string backend;
     std::string variant;
@@ -296,6 +314,7 @@ struct PredictedHorizonDebug {
 };
 
 struct PreSolveSnapshotDebug {
+    PlanningCycleDebug planning;
     bool valid = false;
     std::string backend;
     std::string variant;
@@ -479,6 +498,10 @@ struct SolverInput {
     std::string v_ref_status = "VARIANT_FALLBACK";
     bool task_stop_active = false;
     double task_stop_goal_s = 0.0;
+    // Persistent task time, supplied by SpmpcProblem from the common state
+    // epoch (or explicitly by a replay). Never reset when rebuilding a horizon.
+    bool has_task_elapsed = false;
+    double task_elapsed_sec = 0.0;
     ControlCycleTimingDebug cycle_timing;
 };
 
