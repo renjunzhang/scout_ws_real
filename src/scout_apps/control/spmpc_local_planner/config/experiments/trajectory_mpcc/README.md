@@ -42,6 +42,8 @@ roslaunch spmpc_local_planner trajectory_mpcc.launch \
   publish_cmd_vel:=false
 ```
 
+当前`publish_cmd_vel=false`缺少外部最终命令历史接入，会停在显式执行器`NO_CMD_HISTORY`；上例仅检查节点接口，尚不能取得完整OCP回放证据，详见[REVIEW-05](../../../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器复审与避障接入梳理.md)。
+
 实际运行时 `publish_cmd_vel` 默认 true，节点可能发运动命令。换 `planned_slosh` 会自动选择 B_slosh，无需重复指定 variant。raw/geometry 不提供 `plan_file`。
 
 加载顺序与 [launch](../../../launch/trajectory_mpcc.launch) 一致：common → variants → platform → container → profile → task_config → task_overlay → region → planner_overlay → 显式 variant/publish/plan 参数。`task_config` 默认共享配置；若自行替换，应保留全部共同合同。
