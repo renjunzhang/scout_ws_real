@@ -1,5 +1,7 @@
 # spmpc_experiments scripts
 
+> 2026-09-16入口说明：本目录是既有ROS1仿真矩阵与指标工具。当前两层协同使用[四组配置](../../spmpc_local_planner/config/experiments/trajectory_mpcc/README.md)和[native模型闭环](../../../../../test/native/README.md)；最近实物脚本见[planner脚本索引](../../spmpc_local_planner/scripts/README.md)。下文固定路径矩阵保留其原有协议，不是新四组的实物入口。
+
 本目录放 SPMPC 论文/实物实验前仿真用的实验调度、录包、指标提取和辅助验证脚本。脚本只负责启动不同 planner 的实验 run、发送目标/路径、录包、写 meta 和提取指标；不实现规划/控制算法。
 
 ## 使用原则

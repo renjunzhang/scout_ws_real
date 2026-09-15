@@ -2,6 +2,22 @@
 
 `realsense_liquid_measurement` 用于承载 RealSense 液面测量链的离线脚本与后续实时节点。
 
+## 实物脚本速查（当前分支）
+
+| 目的 | 入口 | 真实输入/输出 | 会运动？ |
+|---|---|---|---|
+| 本地 RealSense ROS 构建 | `scripts/build_realsense_ros_local.sh` | 本地依赖/工作区；本地编译产物 | 否 |
+| 运行本地相机环境 | `scripts/realsense_ros_env_local.sh` | 本地 `librealsense2`、ROS 环境 | 否 |
+| v2 液面标定 | `scripts/annotate_height_ruler_v2.py` | 静止参考帧；多标尺 YAML、标注 PNG | 否 |
+| v2 bag 提取 | `scripts/extract_liquid_height_v2_from_bag.py` | 相机 bag + calibration；center/peak CSV、debug 输出 | 否 |
+| RGB 静态/红液标定 | `scripts/RGB_calibrate.py`、`scripts/red_liquid_calibrate.py` | 参考帧；标定 YAML | 否 |
+| RGB 只读分析 | `scripts/RGB_infer_from_bag.py`、`scripts/red_liquid_infer_from_bag.py` | bag + YAML；高度 CSV、曲线、debug frames | 否 |
+| 逐帧复核/人工峰值 | `scripts/debug_liquid_vs_mpc_frame_by_frame_v2.py` | bag、v2 输出；复核图、`human_peak_mm` 标签 | 否 |
+| `/slosh/height` replay | `scripts/replay_slosh_model_from_bag.py` | bag 内 slosh 状态/输入；replay CSV、报告 | 否 |
+| Q0/Q5 与模型离线比较 | `scripts/analyze_paired_q0_q5_0330.py`、`scripts/compare_realsense_vs_mpc_slosh_v2.py` | bag/CSV；summary、图、README | 否 |
+
+本包当前脚本都是相机、bag 或文件分析入口；未提供 `/cmd_vel` 运动入口。`online_liquid_height.launch` 和 `online_liquid_monitor_combined.launch` 只启动传感器/液面节点，是否启动相机驱动仍取决于现场 launch 参数。近期C03的RGB/在线液面采集与静态吞吐诊断优先从[planner脚本索引](../../control/spmpc_local_planner/scripts/README.md)进入。RGB/red-liquid与v2多标尺是不同测量口径，按对应bag的标定与实验记录选择，不能混用尺度和ROI。下面Q0/Q5、v1/v2详解保留历史数据用途；它们不等于当前两层方法的效果验收。
+
 ## 当前核心目标
 
 **最终业务目标：证明在同任务、同路径、可比激励下，`Q=5` 时液体晃动比 `Q=0` 更轻微。**
@@ -657,18 +673,18 @@ realsense_liquid_measurement/
 当前主线使用的核心文件：
 
 - v2 主配置：
-  - [liquid_measurement_v2.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement_v2.yaml)
+  - [liquid_measurement_v2.yaml](config/liquid_measurement_v2.yaml)
 - v1 兼容配置：
-  - [liquid_measurement.yaml](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/config/liquid_measurement.yaml)
+  - [liquid_measurement.yaml](config/liquid_measurement.yaml)
 - v2 主标定：
   - 由 `annotate_height_ruler_v2.py` 为每个实验场景单独生成
   - 文件名通常是 `frame_XXXXXX_multiscale_raw.yaml`
   - 当前主线不再依赖仓库内固定的单一标定文件
 - 方案文档：
-  - [新的高度分析方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/新的高度分析方案.md)
-  - [对比路径方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/对比路径方案.md)
-  - [监督学习方案.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/监督学习方案.md)
-  - [监督学习方案log.md](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/监督学习方案log.md)
+  - [新的高度分析方案.md](新的高度分析方案.md)
+  - [对比路径方案.md](对比路径方案.md)
+  - [监督学习方案.md](监督学习方案.md)
+  - [监督学习方案log.md](监督学习方案log.md)
 
 ## 当前整理步骤
 
@@ -791,8 +807,8 @@ flowchart TB
 
 脚本位置：
 
-- [build_realsense_ros_local.sh](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/build_realsense_ros_local.sh)
-- [realsense_ros_env_local.sh](/home/a/scout_ws/src/scout_apps/sensors/realsense_liquid_measurement/scripts/realsense_ros_env_local.sh)
+- [build_realsense_ros_local.sh](scripts/build_realsense_ros_local.sh)
+- [realsense_ros_env_local.sh](scripts/realsense_ros_env_local.sh)
 
 两个脚本的职责：
 

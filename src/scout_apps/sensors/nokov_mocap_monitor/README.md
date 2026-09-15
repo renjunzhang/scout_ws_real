@@ -4,6 +4,22 @@ Nokov/XINGYING 动捕监控包，用于 Scout 实物实验中的**外部轨迹�
 
 > **隔离边界：** 动捕监控节点和 launch 只做监控，不参与规划控制闭环；它们不替换 `/odom`，不作为任何 planner 的输入，也不发布 `/cmd_vel`。操作者显式执行第 9.4 节的 `ARM_MOTION=YES` 或第 9.6 节的 `--run` 时，独立测量脚本才会发布 `/cmd_vel`。
 
+## 实物脚本速查（当前分支）
+
+| 目的 | 入口 | 主要输入/输出 | 会运动？ |
+|---|---|---|---|
+| 环境与话题只读检查 | `scripts/check_nokov_env.sh` | Nokov IP、Tracker；终端诊断 | 否 |
+| 只录动捕/IMU 自转数据 | `scripts/record_mocap_imu_spin.sh` | 已运行的 VRPN、`/imu/data`；输出 `.bag` | 否 |
+| 平面 IMU/动捕标定序列 | `scripts/run_mocap_imu_calibration_sequence.sh` | `ARM_MOTION=YES`、Tracker；bag、timeline、validation | 是（仅显式解锁） |
+| NOKOV 相对 IMU 延迟 | `scripts/run_mocap_imu_relative_latency_trial.sh` | bag 中 VRPN yaw 与 IMU z gyro；JSON/CSV/图 | 否（人工/teleop 换向） |
+| 顺逆自转旋转中心 | `scripts/run_mocap_spin_center.sh` | `--run`、Tracker；bag、`*_center_fit.json` | 是（仅 `--run`） |
+| 离线延迟分析 | `scripts/analyze_mocap_imu_relative_latency.py` | bag；JSON、Markdown、对齐 CSV/图 | 否 |
+| 离线旋转中心拟合 | `scripts/analyze_mocap_spin_center.py` | bag 与 segment；center-fit JSON | 否 |
+
+实际参数和输出以各脚本 `--help` 及第 9 节为准。运动入口有明确解锁门，启动前须清空 `/cmd_vel` 冲突、确认急停和安全区；历史测量不替代当前两层控制框架的实物验收。
+
+最近9月11日的顺逆自转入口来自 `2236930`，当前分支已包含 [run_mocap_spin_center.sh](scripts/run_mocap_spin_center.sh) 与 [analyze_mocap_spin_center.py](scripts/analyze_mocap_spin_center.py)，参数、输出与步骤见第9.6节。路径/速度/执行链的采集入口统一见[planner脚本索引](../../control/spmpc_local_planner/scripts/README.md)。
+
 ---
 
 ## 1. 数据链路

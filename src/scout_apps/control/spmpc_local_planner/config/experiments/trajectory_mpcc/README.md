@@ -1,44 +1,63 @@
-# Trajectory MPCC profiles
+# 两层协同四组配置
 
-`raw_mpcc` is the original path/ordinary MPCC identity. It has no new geometry objective or trajectory plan, and has no liquid cost, liquid constraint, recovery, risk governor, complete-stop liquid handoff, or NoState ablation. It must consume the same explicit physical region YAML as the comparison method so spatial feasibility remains matched; region use does not enable the new geometry objective.
+更新：2026-09-16。这是 `feat/spmpc-liquid-control` 的软件候选，尚未实物验收；已有模型闭环未证明相对 raw 稳定降晃，最坏周期也未满足30 Hz。[方法](../../../README_METHOD.md)、[实物脚本索引](../../../scripts/README.md)、[验证记录](../../../../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)。
 
-`geometry_mpcc`, `planned_mpcc`, and `planned_slosh` are templates. Before use, provide an explicit region YAML through `region_config` and a plan file for the planned profiles. An empty region or plan is rejected by the node; no boundary is inferred from the costmap or navigation path. All profiles explicitly use the same ordinary non-liquid weights (`w_lag=0.2`, `w_progress=0.2`, `w_v=1.0`, `w_vs=0.3`, `v_ref=0.25`, `w_control=0.1`, `w_accel=0`, `w_smooth=0.1`) and `w_alpha=0.1`, `w_du_a=0.1`, `w_du_vs=0.1`. Geometry/planned use `w_contour=0.02`, `goal_weight=2.0`, `curvature_rate_weight=0.01`, and disable reference curvature speed limiting; raw keeps ordinary `w_contour=1.0`, the geometry objective disabled, and `goal_weight=0`. The goal term uses the configured position and yaw scales (defaults `0.3` m and `1.0` rad). `planned_slosh` selects `B_slosh`; its matched liquid-off comparison is `planned_mpcc` with the same progress reference, geometry, region, and non-liquid weights.
+## 选择 profile
 
-Example planner launch (the normal ROS1 sensor/execution stack must already be running):
+| Profile | 下层 variant | 参考 | 几何目标 / contour | 下层液体 |
+| --- | --- | --- | --- | --- |
+| [raw_mpcc](raw_mpcc.yaml) | B0 | 原路线、cruise | 关闭 / 1.0 | 全部决策关闭 |
+| [geometry_mpcc](geometry_mpcc.yaml) | B0 | 原路线、cruise | 开启 / 0.02 | 关闭 |
+| [planned_mpcc](planned_mpcc.yaml) | B0 | 完整计划、progress | 开启 / 0.02 | 关闭 |
+| [planned_slosh](planned_slosh.yaml) | B_slosh | 同一完整计划、progress | 相同 / 0.02 | w_slosh=5，硬约束默认关闭 |
+
+主比较为原路线直接进入普通 raw MPCC 与完整方法。所有组都必须给同一个显式物理区域；raw 使用区域不等于新增路径优化。planned 两组共用上层液体计划，仅隔离下层液体项。若要分离上层液体贡献，另生成 `objective.liquid=0`、`objective.liquid_terminal=0` 的计划。
+
+## 文件和参数归属
+
+| 文件 / 参数 | 用途 |
+| --- | --- |
+| [trajectory_common.yaml](trajectory_common.yaml) | 四组共同目标/停车容差、jerk=1、RTI=5、actual_v_min=-0.002；deadline默认0，必须覆盖 |
+| `region_config` | ROS YAML 中的 `planning.region`：id、frame、非空有序凸cells、包络半径及margin；节点不从地图/路线推断区域 |
+| `task_overlay_file` | ROS YAML：至少提供匹配的 `planning.task_deadline_sec>0`；可以覆盖评价窗等共同条件 |
+| `plan_file` | `generate_trajectory_plan.py` 产生的完整 JSON；planned组必需，raw不使用 |
+| `planner_overlay_file` | 最后加载的实验调参 YAML，如观察器来源、几何/液体权重；四组共同条件应保持一致 |
+| `planning.geometry.*` | curvature_weight=0.05、curvature_rate_weight=0.01、speed_regularization=0.05、goal_weight=2；目标归一化默认0.3 m/1 rad |
+| `variants/<variant>/*` | 非液体权重、slosh_enable、w_slosh、slosh_constraint_enable等；planned两组除液体项保持匹配 |
+
+共享配置明确 `terminal.mpc_stop_handoff_enable=true`、`terminal.complete_stop.enable=false`：默认做真实目标停车和队列释放，不启用完整液体稳定等待。开启液体等待或硬液面约束是额外实验条件，需显式记录，不能让 raw 消费液体。
+
+共同普通权重：w_lag=0.2、w_progress=0.2、w_v=1、w_vs=0.3、v_ref=0.25、w_control=0.1、w_accel=0、w_smooth=0.1、w_alpha/w_du_a/w_du_vs=0.1。新几何组关闭参考曲率限速，raw保留。当前权重是候选；曲率权重1曾妨碍终点朝向修正，不能仅凭“更缓”认定更好。
+
+[corner_task.example.yaml](corner_task.example.yaml) 是 **ROS deadline覆盖层**，不是上层优化器任务。上层完整任务样例是 [test/native/scenarios/corner.json](../../../../../../../test/native/scenarios/corner.json)。[corner_region.example.yaml](corner_region.example.yaml) 只是该软件场景区域，不能当实测空闲地图。
+
+## 启动与录制
+
+以下均在仓库根目录执行，先在 ROS1 环境 source 对应工作区。`trajectory_mpcc.launch` 仅启动 planner，传感器、定位、底盘和原路线 publisher 使用原有流程。先检查不发布速度的节点接口：
 
 ```bash
-roslaunch spmpc_local_planner trajectory_mpcc.launch profile:=planned_mpcc region_config:=/path/region.yaml plan_file:=/path/plan.json task_overlay_file:=/path/task_deadline.yaml
-roslaunch spmpc_local_planner trajectory_mpcc.launch profile:=planned_slosh region_config:=/path/region.yaml plan_file:=/path/plan.json planner_variant:=B_slosh task_overlay_file:=/path/task_deadline.yaml
+roslaunch spmpc_local_planner trajectory_mpcc.launch \
+  profile:=planned_mpcc region_config:=/path/region.yaml \
+  plan_file:=/path/plan.json task_overlay_file:=/path/task_deadline.yaml \
+  publish_cmd_vel:=false
 ```
 
-The final merged configuration must contain `planning.task_deadline_sec` greater than zero. This can come directly from `TASK_CONFIG` or from either overlay; ordinary weights overlays may omit it. The recorder only records an already running node; it does not launch ROS or move the robot. Its manifest marks `recorded_launch_args` as declared and verifies the live private namespace with `rosparam get` before opening rosbag. The supplied region file must enable a non-empty region for every profile, including raw.
+实际运行时 `publish_cmd_vel` 默认 true，节点可能发运动命令。换 `planned_slosh` 会自动选择 B_slosh，无需重复指定 variant。raw/geometry 不提供 `plan_file`。
 
-Validate recording inputs without starting ROS or motion:
+加载顺序与 [launch](../../../launch/trajectory_mpcc.launch) 一致：common → variants → platform → container → profile → task_config → task_overlay → region → planner_overlay → 显式 variant/publish/plan 参数。`task_config` 默认共享配置；若自行替换，应保留全部共同合同。
+
+只校验录制输入（不访问 ROS，生成 manifest/artifact 副本）：
 
 ```bash
-VALIDATE_ONLY=true PROFILE=planned_mpcc REGION_CONFIG=/path/region.yaml PLAN_FILE=/path/plan.json TASK_OVERLAY_FILE=/path/task_overlay.yaml ./scripts/record_trajectory_mpcc_comparison.sh
+VALIDATE_ONLY=true PROFILE=planned_mpcc PUBLISH_CMD_VEL=false \
+REGION_CONFIG=/path/region.yaml PLAN_FILE=/path/plan.json \
+TASK_OVERLAY_FILE=/path/task_deadline.yaml \
+OUT_DIR=/path/new_run NAME=planned_mpcc_r01 \
+bash src/scout_apps/control/spmpc_local_planner/scripts/record_trajectory_mpcc_comparison.sh
 ```
 
-The latched `/spmpc/debug/planning_config` JSON is the authoritative profile record. Record it together with `/spmpc/debug/effective_config`, `/spmpc/debug/pre_solve_snapshot`, `/spmpc/debug/predicted_horizon`, and `/spmpc/debug/control_cycle_audit`.
+实际录制时去掉 `VALIDATE_ONLY=true`，`PROFILE`、`TASK_CONFIG`、`TASK_OVERLAY_FILE`、`REGION_CONFIG`、`PLANNER_OVERLAY_FILE`、`PLAN_FILE`、`PLANNER_VARIANT` 和 `PUBLISH_CMD_VEL` 须与已启动节点一致。脚本只录包，不 launch、不发速度；以 Ctrl-C 结束，没有 `RECORD_SEC` 定时参数。
 
-All four profiles inherit the shared terminal goal/stop tolerances, stop window, jerk limit, evaluation window, and `acados/rti_iterations=5` from `trajectory_common.yaml`; these values are deliberately absent from individual profiles. The common deadline is `0`; recording validates that the final merged overlays provide a positive deadline. Five RTI iterations repeat SQP RTI work and must be checked against the 30 Hz cycle budget on the target machine.
+manifest冻结完整合并配置、artifact副本/hash、Git SHA/status/diff；开包前逐叶核对 `/spmpc_local_planner` live参数。`LAUNCH_ARGS` 是声明备注，不会替代配置加载。latched `/spmpc/debug/planning_config` 仅含planning字段，property_tree标量可能为字符串；**完整配置以manifest及核对后的live参数为准**。
 
-The recorder freezes a JSON manifest with the complete merged configuration, ordered artifact copies and SHA256 hashes, Git SHA/status/diff, and declared launch arguments. `recording_contract.py` contains the merge and live-parameter checks; its self-contained tests cover overlay order, a deadline supplied by only one of two overlays, and live profile mismatch rejection.
-
-The supplied `corner_task.example.yaml` and `corner_region.example.yaml` match the
-software corner scenario in `test/native/scenarios/corner.json`. They are sample
-task geometry, not a measured hardware map. The shared `actual_v_min=-0.002` permits
-bounded negative measured drift while every command remains nonnegative.
-
-The latched planning JSON contains planning fields only (Boost property_tree
-serializes scalars as strings); the recording manifest plus verified live private
-parameters supplies the complete launch configuration. Native trial reports
-freeze their own explicit configuration and do not validate a ROS launch.
-
-The default geometry weight is a software candidate. A larger value of 1.0 made
-the corner controller resist final yaw correction and fail the deadline; preserve
-that tradeoff when tuning. The same plan in `planned_mpcc` and `planned_slosh`
-is the matched lower-controller liquid ablation. To isolate upper liquid planning,
-generate a second task with `objective.liquid=0` and `objective.liquid_terminal=0`
-and run both lower modes on both plans; the four supplied profiles alone are not
-this factorial ablation.
+bag记录原路线、实际命令、预测/快照/audit、代价、停车和液体观察器。相机和NOKOV原始数据需原有采集链另录；不要假设该recorder自动包含RGB或动捕。所有计划、区域、任务期限和评价窗口须按同一物理任务核对。
