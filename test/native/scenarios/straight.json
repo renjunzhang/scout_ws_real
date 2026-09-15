@@ -1,0 +1,103 @@
+{
+  "task_id": "straight_software",
+  "frame_id": "map",
+  "route": [
+    [
+      0,
+      0
+    ],
+    [
+      0.6,
+      0
+    ]
+  ],
+  "start_state": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0
+  ],
+  "goal_pose": [
+    0.6,
+    0,
+    0
+  ],
+  "deadline": 8.0,
+  "stop_window": 1.0,
+  "actuator_parameters": [
+    0.112,
+    0.119,
+    1.018,
+    1.096
+  ],
+  "liquid_parameters": [
+    3.2358258380412885,
+    1047.0568854135608,
+    1,
+    1
+  ],
+  "height_coeff": 1.8179308248624537,
+  "motion_limits": {
+    "actual_v_min": -0.002,
+    "v_max": 0.8,
+    "omega_max": 1.2,
+    "a_max": 0.6,
+    "alpha_max": 1.2,
+    "jerk_max": 1.0
+  },
+  "region": {
+    "id": "straight_room",
+    "frame_id": "map",
+    "footprint_radius": 0.45,
+    "margin": 0.02,
+    "cells": [
+      {
+        "id": "room",
+        "s_begin": 0,
+        "s_end": 0.6,
+        "vertices": [
+          [
+            -0.8,
+            -0.8
+          ],
+          [
+            1.8,
+            -0.8
+          ],
+          [
+            1.8,
+            1.8
+          ],
+          [
+            -0.8,
+            1.8
+          ]
+        ]
+      }
+    ]
+  }
+}

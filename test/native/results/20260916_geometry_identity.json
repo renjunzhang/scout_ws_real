@@ -1,0 +1,80 @@
+{
+  "evidence": "MODEL_IN_THE_LOOP",
+  "hardware_verified": false,
+  "liquid_state_source": "plant model state (ideal feedback)",
+  "plant_mismatch": "actuator time constants scaled; no new liquid model",
+  "binary_sha256": "6680fdd98b95c02c8b326c15969b0a9b635ddef9c95987161fdf466f89e56b62",
+  "git_sha": "0ab2dde1614dec46922b0a12dc8f44104c555bf4",
+  "source_diff_sha256": "9cb931500a86bdee55e956965a0444f2d4376cc422ed1bf7e8540ae709bf5a7b",
+  "solver_library_sha256": {
+    "spmpc_b0": "7014edf60639e1ae071875033e08649b769e4ed36849c2d6f4bacc48660c77ae",
+    "spmpc_slosh": "08e2b15ef36d5c27ee6b8c51600e28f99894a28e6c134a2026ddd1fbe91d17fc"
+  },
+  "all_trials_completed": false,
+  "raw_artifacts": "/tmp/scout_geometry_verified_20260916",
+  "candidate_curvature_weight": 0.05,
+  "contour_raw": 1.0,
+  "contour_method": 0.02,
+  "goal_weight": 2.0,
+  "curvature_rate_weight": 0.01,
+  "rti_iterations": 5,
+  "passed_trials": 22,
+  "total_trials": 24,
+  "matched_common_parameter_pairs": 6,
+  "plans": [
+    {
+      "scenario": "straight",
+      "task_sha256": "5dde2fc32d35934f327626e7259b1b797b23a54d2e29effdc46dc7779bccac38",
+      "exit_code": 0,
+      "plan_id": "straight_software-3e7db703e0c6",
+      "plan_sha256": "3b5e2467e0addb8daac4661309cb1ecdc3e7a91e1e965d24ed7c9ddd351b6d9b",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 1.415869310683604e-09,
+        "minimum_region_clearance": 0.30333333322402534,
+        "dense_peak_height_m": 0.00024183143857359625,
+        "residual_height_m": 5.999094180745297e-07,
+        "curvature_arc_energy": 9.843424534445542e-06,
+        "actual_path_length": 0.5973257294915638,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    },
+    {
+      "scenario": "corner",
+      "task_sha256": "dc044c6b378d6438b120926e0c010f481bb4b05b62dfba07f8a8699cbec4de32",
+      "exit_code": 0,
+      "plan_id": "corner_software-549b9ba4dc9a",
+      "plan_sha256": "ce5cd9affea8a7000b20b81ff9d989b19a868638ca282b6d0ac27c275c7b7cfb",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 3.8931299517486195e-08,
+        "minimum_region_clearance": 0.25648809803993955,
+        "dense_peak_height_m": 0.0005425805829144619,
+        "residual_height_m": 9.013104478477661e-07,
+        "curvature_arc_energy": 1.8881218090267982,
+        "actual_path_length": 1.7153202843657651,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    },
+    {
+      "scenario": "double_corner",
+      "task_sha256": "796e1f9190298dea7ad96d10487a32dde95dfb339d42ef3eb5c0548a62a3fe27",
+      "exit_code": 0,
+      "plan_id": "double_corner_software-e3ec6f0e711b",
+      "plan_sha256": "fc3f1d4e739109a54ef5df770e6ef8ba6072f5b81ae66d8e7861dccaf401c9df",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 4.906862471898421e-09,
+        "minimum_region_clearance": 0.26565900533095954,
+        "dense_peak_height_m": 0.0006865510616444353,
+        "residual_height_m": 1.1172539940200646e-06,
+        "curvature_arc_energy": 0.7632979795052146,
+        "actual_path_length": 2.2673065922159905,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    }
+  ]
+}
