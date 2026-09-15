@@ -1,9 +1,40 @@
 #include "spmpc_local_planner/core/task_stop_manager.h"
+#include "spmpc_local_planner/core/spmpc_problem.h"
 #include <gtest/gtest.h>
 #include <cmath>
 #include <limits>
 
 namespace spmpc_local_planner {
+
+TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
+    SolverParams params;
+    params.terminal.enable=true;
+    params.terminal.mpc_stop_handoff_enable=true;
+    params.jerk_limit_enable=true;
+    params.task_stop.enable=false;
+    VariantConfig variant; variant.slosh_enable=false; variant.w_slosh=0;
+    SpmpcProblem problem; problem.configure(params, variant);
+    EXPECT_FALSE(problem.requiresLiquidState());
+    ReferencePath route;
+    route.setPoints({{0,0,0,0,0},{1,0,0,0,0}},"map");
+    problem.setReferencePath(route);
+    SolverInput input; input.robot.x=1;
+    input.actuator.valid=true; input.actuator.v_cmd=.1;
+    input.actuator.linear_delay_queue.fill(.1);
+    input.slosh.eta_x=std::numeric_limits<double>::quiet_NaN();
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input,output)) << output.status;
+    EXPECT_EQ(output.status,"TERMINAL_DRAINING");
+    EXPECT_FALSE(output.terminal_diagnostics.reached);
+    const double a=(output.cmd_v-input.actuator.v_cmd)/input.dt;
+    EXPECT_LE(std::abs(a-input.actuator.a_cmd_memory),params.jerk_max*input.dt+1e-9);
+    input.actuator.v_cmd=0;
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_NE(output.status,"GOAL_REACHED"); // Last queued command still excites the vehicle.
+    input.actuator.linear_delay_queue.fill(0);
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_EQ(output.status,"GOAL_REACHED");
+}
 
 TEST(TaskStop, BrakeAndReleaseRespectCommandJerkThroughZeroSpeed) {
     ActuatorState state;state.valid=true;state.v_cmd=.2;state.omega_cmd=-.3;state.a_cmd_memory=.15;

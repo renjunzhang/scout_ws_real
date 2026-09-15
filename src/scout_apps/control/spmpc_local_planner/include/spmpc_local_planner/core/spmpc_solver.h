@@ -9,6 +9,7 @@
 #include "spmpc_local_planner/dynamics/actuator_model.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/reference/reference_path.h"
+#include "spmpc_local_planner/planning/planning_config.h"
 #include "spmpc_local_planner/warm_start/warm_start_input.h"
 #include <string>
 
@@ -16,6 +17,9 @@ namespace spmpc_local_planner {
 
 struct SolverParams {
     double v_max = 0.8;
+    // Actual motion can include bounded sensor noise/backward drift while
+    // command velocities remain nonnegative. Default preserves old bounds.
+    double actual_v_min = 0.0;
     double omega_max = 1.2;
     double a_max = 0.6;
     double alpha_max = 1.2;  // 转向角加速度上限 |d(omega)/dt| (rad/s^2)，与 TEB/DWA acc_lim_theta 对齐
@@ -46,6 +50,9 @@ struct SolverParams {
     SloshModelParams slosh;
     LiquidLimitParams liquid_limit;
     TaskStopParams task_stop;
+    PlanningConfig planning;
+    int rti_iterations = 1;  // Repeated SQP_RTI steps on the same measured x0.
+    double max_prediction_defect = 0.0;  // 0 keeps legacy diagnostics; experiments enable the gate.
 };
 
 class SpmpcSolver {

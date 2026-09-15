@@ -14,6 +14,9 @@ struct GeometryObjectiveConfig {
     double curvature_scale = 1.0;       // 1/m
     double curvature_rate_scale = 1.0;  // 1/m^2, curvature change per travelled metre
     double speed_regularization = 0.05; // m/s; keeps turning at rest penalized
+    double goal_weight = 0.0;
+    double goal_position_scale = 0.3;
+    double goal_yaw_scale = 1.0;
     bool reference_curvature_speed_limit = true;
 };
 
@@ -29,6 +32,8 @@ struct TrajectoryReferenceConfig {
 struct PlanningConfig {
     std::string experiment_profile_id = "legacy";
     bool liquid_free_baseline = false;
+    double task_deadline_sec = 0.0;     // 0 disables the deadline for legacy tasks
+    double evaluation_window_sec = 1.0;
     GeometryObjectiveConfig geometry;
     MotionRegionConfig region;
     TrajectoryReferenceConfig trajectory;

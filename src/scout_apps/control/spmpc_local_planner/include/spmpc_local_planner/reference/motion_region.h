@@ -9,6 +9,9 @@
 namespace spmpc_local_planner {
 
 constexpr std::size_t kMaxRegionFaces = 8;
+// Numerical tolerance for progress coordinates only. Spatial halfspaces and
+// footprint inflation are unchanged by this tolerance.
+constexpr double kProgressTolerance = 1e-8;
 
 struct RegionVertex { double x = 0.0; double y = 0.0; };
 struct RegionHalfspace { double nx = 0.0; double ny = 0.0; double offset = 1e12; };
@@ -39,8 +42,8 @@ class MotionRegion {
   explicit MotionRegion(MotionRegionConfig config);
   static bool validate(const MotionRegionConfig& config, std::string* reason = nullptr);
   const MotionRegionConfig& config() const { return config_; }
-    RegionStageData stage(double route_s, double sweep_distance) const;
-    RegionStageData stageForCell(std::size_t cell_index, double sweep_distance) const;
+  RegionStageData stage(double route_s, double sweep_distance) const;
+  RegionStageData stageForCell(std::size_t cell_index, double sweep_distance) const;
   double clearance(double x, double y, double route_s) const;
 
  private:

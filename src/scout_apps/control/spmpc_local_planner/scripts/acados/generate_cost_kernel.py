@@ -3,8 +3,8 @@
 import os
 from pathlib import Path
 import casadi as ca
-from generate_spmpc_acados import load_config
-from spmpc_acados_model import export_spmpc_b0_symbols, export_spmpc_slosh_symbols
+from generate_spmpc_acados import load_config, default_parameter_values
+from spmpc_acados_model import export_spmpc_b0_symbols, export_spmpc_slosh_symbols, PARAM_NAMES, PARAM_NAMES_SLOSH
 from spmpc_acados_cost import cost_components, COST_COMPONENT_NAMES
 from model_contract import COST_VERSION, require_codegen_version
 
@@ -32,6 +32,22 @@ def generate(destination, cfg=None):
             f'#define SPMPC_COST_VERSION {COST_VERSION}\n' +
             f'#define SPMPC_COST_COMPONENTS {len(COST_COMPONENT_NAMES)}\n' +
             f'#define SPMPC_COST_N {cfg["N"]}\n')
+        # C++ consumes this generated schema instead of a hand-maintained copy.
+        default_values = default_parameter_values(cfg, True)
+        lines = ['/* Generated from Python model/defaults; do not edit. */', '#pragma once',
+                 '#include <array>', '#include <string>', '#include <vector>',
+                 'namespace spmpc_local_planner { namespace ocp_parameters {', 'enum Param {']
+        lines += [f'    {name.upper()} = {i},' for i, name in enumerate(PARAM_NAMES_SLOSH)]
+        lines += [f'    PARAM_MAX = {len(PARAM_NAMES_SLOSH)}', '};',
+                  f'constexpr int kB0ParameterCount = {len(PARAM_NAMES)};',
+                  'inline std::array<double, PARAM_MAX> defaults() { return {{' +
+                  ', '.join(format(float(v), '.17g') for v in default_values) + '}}; }',
+                  'inline std::vector<std::string> names(int width) {',
+                  '    static const std::vector<std::string> all = {' +
+                  ', '.join('"'+n+'"' for n in PARAM_NAMES_SLOSH) + '};',
+                  '    if (width != kB0ParameterCount && width != PARAM_MAX) return {};',
+                  '    return {all.begin(), all.begin()+width};', '}', '}}']
+        Path('ocp_parameter_contract.h').write_text('\n'.join(lines)+'\n')
     finally:
         os.chdir(previous)
 

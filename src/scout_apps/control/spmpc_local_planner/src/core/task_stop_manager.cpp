@@ -77,11 +77,16 @@ void TaskStopManager::reset() {
     last_raw_robot_epoch_ns_=last_raw_liquid_epoch_ns_=0;
 }
 
-bool TaskStopManager::queuesClear(const ActuatorState& state) const {
-    const auto zero=[&](double x) { return std::isfinite(x) && std::abs(x)<=params_.command_zero_tolerance; };
+bool actuatorCommandsClear(const ActuatorState& state, double zero_tolerance) {
+    if (!std::isfinite(zero_tolerance) || zero_tolerance < 0) return false;
+    const auto zero=[&](double x) { return std::isfinite(x) && std::abs(x)<=zero_tolerance; };
     return state.valid && zero(state.v_cmd) && zero(state.omega_cmd) && zero(state.a_cmd_memory) &&
         std::all_of(state.linear_delay_queue.begin(),state.linear_delay_queue.end(),zero) &&
         std::all_of(state.angular_delay_queue.begin(),state.angular_delay_queue.end(),zero);
+}
+
+bool TaskStopManager::queuesClear(const ActuatorState& state) const {
+    return actuatorCommandsClear(state, params_.command_zero_tolerance);
 }
 
 bool TaskStopManager::excitationQuiet(const RobotState& robot,const ActuatorState& state) const {

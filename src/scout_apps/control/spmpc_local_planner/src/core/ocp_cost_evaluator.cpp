@@ -40,8 +40,12 @@ bool evaluateOcpCost(const PredictedHorizonDebug& horizon,
         for (double term : terms) if (!std::isfinite(term)) return false;
         result.J_slack += terms[10];
         result.J_stop += terms[11];
+        result.J_curvature += terms[12];
+        result.J_curvature_change += terms[13];
         if (k == n) {
-            result.J_terminal = std::accumulate(std::begin(terms), std::end(terms)-2, 0.0);
+            // Components 10..13 are accounted above at every node. Their
+            // position is explicit so adding a component cannot double count.
+            result.J_terminal = std::accumulate(std::begin(terms), std::begin(terms)+10, 0.0);
         } else {
             result.J_contour += terms[0]; result.J_lag += terms[1];
             result.J_progress += terms[2]; result.J_v_actual += terms[3];

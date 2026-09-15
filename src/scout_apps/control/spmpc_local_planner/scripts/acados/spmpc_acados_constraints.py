@@ -12,7 +12,8 @@ obstacle / costmap / hard corridor 不在 B0 引入。
 import casadi as ca
 import numpy as np
 
-from spmpc_acados_model import ACCEL_MEMORY_INDEX
+from spmpc_acados_model import ACCEL_MEMORY_INDEX, PIDX
+from planning_terms import region_reference_constraints
 
 
 def set_constraints_direct_omega_legacy(ocp, cfg):
@@ -32,6 +33,16 @@ def set_constraints_direct_omega_legacy(ocp, cfg):
     ocp.constraints.x0 = np.zeros(cfg["nx"])
 
 
+def set_region_reference_constraints(ocp, pidx):
+    """Common region/footprint and interpolation-domain rows for both models."""
+    rows = region_reference_constraints(ocp.model.x, ocp.model.p, pidx)
+    for suffix in ("", "_0", "_e"):
+        setattr(ocp.model, "con_h_expr"+suffix, rows)
+        # acados masks bounds at -ACADOS_INFTY. A large finite lower bound
+        # instead creates an unnecessary, badly scaled barrier inequality.
+        setattr(ocp.constraints, "lh"+suffix, np.full(int(rows.numel()), -1e15))
+        setattr(ocp.constraints, "uh"+suffix, np.zeros(int(rows.numel())))
+
 
 def set_constraints(ocp, cfg, explicit_actuator=False):
     a_max = cfg["a_max"]
@@ -47,9 +58,15 @@ def set_constraints(ocp, cfg, explicit_actuator=False):
 
     if explicit_actuator:
         # actual 与 command 分别受限；command bounds directly protect /cmd_vel.
-        ocp.constraints.idxbx = np.array([3, 5, 6, 7])
-        ocp.constraints.lbx = np.array([0.0, -omega_max, 0.0, -omega_max])
-        ocp.constraints.ubx = np.array([v_max, omega_max, v_max, omega_max])
+        # Actual motion, commands, both FIFOs and acceleration memory are
+        # bounded at EVERY future node, including the terminal node. Runtime
+        # can impose an exactly drained vehicle state at/after the deadline.
+        ocp.constraints.idxbx = np.array([3, 5] + list(range(6, 24)))
+        ocp.constraints.lbx = np.array([0.,-omega_max,0.,-omega_max]+[0.]*5+[-omega_max]*10+[-a_max])
+        ocp.constraints.ubx = np.array([v_max,omega_max,v_max,omega_max]+[v_max]*5+[omega_max]*10+[a_max])
+        ocp.constraints.idxbx_e = ocp.constraints.idxbx.copy()
+        ocp.constraints.lbx_e = ocp.constraints.lbx.copy()
+        ocp.constraints.ubx_e = ocp.constraints.ubx.copy()
         # One linear mixed state/control row at EVERY control stage, including
         # stage 0: -delta_a_max <= a_cmd - a_cmd_memory <= delta_a_max.
         # Always generate the row so the runtime switch does not need codegen.
@@ -67,6 +84,8 @@ def set_constraints(ocp, cfg, explicit_actuator=False):
     # 初始状态由 wrapper 每周期通过 set("x0", ...) 设定；
     # 这里给出占位 x0，维度需匹配 nx。
     ocp.constraints.x0 = np.zeros(cfg["nx"])
+    if explicit_actuator:
+        set_region_reference_constraints(ocp, PIDX)
 
 
 
@@ -87,15 +106,11 @@ def set_constraints_slosh(ocp, cfg, pidx, eta_base=6,
     eta_max_sq = p[pidx["eta_max_sq"]]
     h_slosh = ca.vertcat((eta_x * eta_x + eta_y * eta_y) / eta_max_sq - 1.0)
 
-    ocp.model.con_h_expr = h_slosh
-    ocp.model.con_h_expr_e = h_slosh
-    ocp.model.con_h_expr_0 = h_slosh
-
     # q^2/cap^2 - 1 is always >= -1. A finite inactive lower bound avoids
     # injecting a 1e15 barrier range into the recovery QP.
-    ocp.constraints.lh = np.array([-2.0])
-    ocp.constraints.uh = np.array([0.0])
-    ocp.constraints.lh_e = np.array([-2.0])
-    ocp.constraints.uh_e = np.array([0.0])
-    ocp.constraints.lh_0 = np.array([-2.0])
-    ocp.constraints.uh_0 = np.array([0.0])
+    for suffix in ("", "_0", "_e"):
+        common = region_reference_constraints(x, p, pidx) if explicit_actuator else ca.SX.zeros(0)
+        rows = ca.vertcat(h_slosh, common)
+        setattr(ocp.model, "con_h_expr"+suffix, rows)
+        setattr(ocp.constraints, "lh"+suffix, np.r_[-2.0, np.full(int(common.numel()), -1e15)])
+        setattr(ocp.constraints, "uh"+suffix, np.zeros(int(rows.numel())))

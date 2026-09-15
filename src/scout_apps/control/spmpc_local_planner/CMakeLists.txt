@@ -104,12 +104,19 @@ add_library(${PROJECT_NAME}
   src/core/speed_safety_contract.cpp
   src/core/start_lock_recovery.cpp
   src/core/terminal_controller.cpp
+  src/planning/planning_config.cpp
+  src/planning/ocp_planning_adapter.cpp
+  src/reference/motion_region.cpp
+  src/reference/trajectory_plan.cpp
+  src/reference/trajectory_reference.cpp
+  src/reference/horizon_reference_builder.cpp
   src/reference/reference_path.cpp
   src/reference/reference_path_preprocessor.cpp
   src/reference/progress_projector.cpp
   src/reference/reference_spline.cpp
   src/dynamics/slosh_dynamics.cpp
   src/dynamics/actual_motion_propagator.cpp
+  src/dynamics/explicit_state_rollout.cpp
   src/dynamics/generated/slosh_kernel_generated.c
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/liquid_state_nowcaster.cpp
@@ -200,6 +207,12 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
+  foreach(_planning_test test_motion_region test_trajectory_reference)
+    catkin_add_gtest(${_planning_test} test/${_planning_test}.cpp)
+    if(TARGET ${_planning_test})
+      target_link_libraries(${_planning_test} ${PROJECT_NAME} ${catkin_LIBRARIES})
+    endif()
+  endforeach()
   catkin_add_gtest(test_processed_imu_pipeline test/test_processed_imu_pipeline.cpp)
   if(TARGET test_processed_imu_pipeline)
     target_link_libraries(test_processed_imu_pipeline

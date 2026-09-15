@@ -12,4 +12,4 @@ def require_codegen_version(version):
             f"reproducible codegen requires CasADi {CASADI_CODEGEN_VERSION}; "
             "install scripts/acados/requirements.txt")
 
-COST_VERSION = 2
+COST_VERSION = 3

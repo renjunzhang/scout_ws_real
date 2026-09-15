@@ -110,6 +110,7 @@ void TrajectoryPlan::validate() const {
     for (double x : goal_pose) require(finite(x), "nonfinite goal");
     for (double x : {goal_position_tolerance, goal_yaw_tolerance, stop_speed_tolerance, stop_omega_tolerance})
         require(finite(x) && x > 0, "invalid goal/stop tolerance");
+    require(goal_yaw_tolerance <= M_PI, "goal yaw tolerance exceeds pi");
     std::string region_error;
     require(region.enabled && region.id==region_id && region.frame_id==frame_id &&
             MotionRegion::validate(region,&region_error), "invalid region: "+region_error);
@@ -140,7 +141,7 @@ void TrajectoryPlan::validate() const {
             require(near(row.t, transport_duration, 1e-7), "TAIL start differs from transport_duration");
             seen_tail = true;
         }
-        require(x[4] >= -1e-6 && x[4] <= length+1e-6, "progress outside original route");
+        require(x[4] >= -kProgressTolerance && x[4] <= length+kProgressTolerance, "progress outside original route");
         require(x[3] >= motion_limits[0]-1e-6 && x[3] <= motion_limits[1]+1e-6 &&
                 std::abs(x[5]) <= motion_limits[2]+1e-6, "actual motion bound");
         require(x[6] >= -1e-6 && x[6] <= motion_limits[1]+1e-6 && std::abs(x[7]) <= motion_limits[2]+1e-6,
@@ -151,6 +152,10 @@ void TrajectoryPlan::validate() const {
             require(std::abs(u[0]-x[23]) <= motion_limits[5]*dt+1e-6, "command jerk bound");
             const auto& next = samples[k+1].state;
             require(next.size() == 28, "next state layout");
+            require(next[4] >= x[4]-kProgressTolerance, "progress is not monotone");
+            require(row.phase=="TAIL" || next[4]-x[4]>1e-9 ||
+                std::hypot(next[0]-x[0],next[1]-x[1])<1e-4,
+                "translation at fixed progress makes the spatial reference ambiguous");
             require(near(next[4], x[4]+dt*u[2]) && near(next[6], x[6]+dt*u[0]) &&
                     near(next[7], x[7]+dt*u[1]) && near(next[23], u[0]), "command/progress continuity");
             for (int i = 8; i < 12; ++i) require(near(next[i], x[i+1]), "linear FIFO shift");

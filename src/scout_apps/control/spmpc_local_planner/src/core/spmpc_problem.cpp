@@ -1,8 +1,10 @@
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/solvers/solver_factory.h"
+#include "spmpc_local_planner/planning/ocp_planning_adapter.h"
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <cstddef>
 
 namespace spmpc_local_planner {
@@ -44,6 +46,39 @@ SpmpcProblem::SpmpcProblem() = default;
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
+    variant_=variant;
+    task_clock_.reset();
+    task_plan_.reset();
+    task_reference_.reset();
+    motion_region_.reset();
+    configuration_error_.clear();
+    try {
+        const auto& planning=solver_params_.planning;
+        if ((planning.region.enabled || planning.geometry.enabled || planning.task_deadline_sec>0 ||
+             planning.trajectory.mode!=TrajectoryReferenceMode::Cruise) &&
+            (solver_params_.solver_backend!="continuous_mpcc_acados" ||
+             solver_params_.actuator.mode!=ExecutionModelMode::ExplicitActuator))
+            throw std::invalid_argument("planning requires explicit-actuator continuous MPCC");
+        if ((planning.task_deadline_sec>0 || planning.trajectory.mode!=TrajectoryReferenceMode::Cruise) &&
+            (!solver_params_.terminal.enable || !solver_params_.terminal.mpc_stop_handoff_enable ||
+             !solver_params_.jerk_limit_enable))
+            throw std::invalid_argument("timed tasks require terminal handoff and the common jerk bound");
+        if (solver_params_.rti_iterations < 1 || solver_params_.rti_iterations > 20)
+            throw std::invalid_argument("acados/rti_iterations must be in [1,20]");
+        if (!std::isfinite(solver_params_.terminal.goal_yaw_tolerance) ||
+            solver_params_.terminal.goal_yaw_tolerance <= 0 || solver_params_.terminal.goal_yaw_tolerance > M_PI)
+            throw std::invalid_argument("invalid terminal yaw tolerance");
+        OcpPlanningAdapter validate(solver_params_);
+        if (solver_params_.planning.region.enabled)
+            motion_region_=std::make_shared<MotionRegion>(solver_params_.planning.region);
+        if (solver_params_.planning.trajectory.mode != TrajectoryReferenceMode::Cruise) {
+            task_plan_ = std::make_shared<TrajectoryPlan>(TrajectoryPlan::load(solver_params_.planning.trajectory.plan_file));
+            task_reference_=std::make_shared<TrajectoryReference>(task_plan_);
+            if (solver_params_.planning.task_deadline_sec > 0 &&
+                std::abs(task_plan_->deadline-solver_params_.planning.task_deadline_sec)>1e-8)
+                throw std::invalid_argument("configured deadline differs from plan");
+        }
+    } catch (const std::exception& e) { configuration_error_=e.what(); }
     liquid_state_required_ = variant.slosh_enable || solver_params_.task_stop.enable;
     liquid_limit_enabled_ = variant.slosh_enable && variant.slosh_constraint_enable;
     task_stop_configured_ = !solver_params_.task_stop.enable ||
@@ -59,9 +94,26 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
 }
 
 void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
+    if (task_plan_) {
+        std::vector<RegionVertex> points;
+        for (const auto& p:reference.points()) points.push_back({p.x,p.y});
+        if (!validateRoute(points,reference.frameId(),solver_params_.planning.trajectory.route_tolerance,*task_plan_)) {
+            configuration_error_="trajectory route/frame identity mismatch";
+            return;
+        }
+    }
     const bool same_path = sameReferencePath(reference_, reference);
+    if (!reference_.empty() && !same_path && (task_plan_ || solver_params_.planning.task_deadline_sec>0)) {
+        configuration_error_="route changed during a timed task; configure a new task explicitly";
+        return;
+    }
+    const bool changed_task=!reference_.empty() && !same_path && !task_plan_;
     reference_ = reference;
     if (!same_path) {
+        if (changed_task && solver_) solver_->configure(solver_params_,variant_);
+        // Republishing/reassembling a route cannot buy more time for a plan.
+        // A different task/plan requires configure(), which resets the clock.
+        if (!task_plan_ && solver_params_.planning.task_deadline_sec<=0) task_clock_.reset();
         last_progress_s_ = 0.0;
         terminal_controller_.reset();
         task_stop_manager_.reset();
@@ -103,7 +155,31 @@ void SpmpcProblem::updateStartLockRecovery(const SolverInput& input, bool valid_
     output.start_lock_recovery = start_lock_recovery_.diagnostics();
 }
 
-bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
+bool SpmpcProblem::solve(const SolverInput& observed_input, SolverOutput& output) {
+    const bool result=solveCycle(observed_input,output);
+    output.cycle_timing=observed_input.cycle_timing;
+    output.pre_solve_snapshot.rti_iterations=solver_params_.rti_iterations;
+    output.pre_solve_snapshot.max_prediction_defect=solver_params_.max_prediction_defect;
+    output.predicted_horizon.rti_iterations=solver_params_.rti_iterations;
+    for (auto* d:{&output.pre_solve_snapshot.planning,&output.predicted_horizon.planning}) {
+        d->experiment_profile_id=solver_params_.planning.experiment_profile_id;
+        d->region_id=solver_params_.planning.region.enabled ? solver_params_.planning.region.id : "";
+        d->plan_id=task_plan_ ? task_plan_->plan_id : "";
+        d->reference_mode=trajectoryReferenceModeName(solver_params_.planning.trajectory.mode);
+        d->geometry_enabled=solver_params_.planning.geometry.enabled;
+        d->task_elapsed_sec=task_clock_.elapsed();
+        d->deadline_sec=task_plan_ ? task_plan_->deadline : solver_params_.planning.task_deadline_sec;
+    }
+    return result;
+}
+
+bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& output) {
+    SolverInput input = observed_input;
+    if (!configuration_error_.empty()) {
+        output = SolverOutput{};
+        output.status = "INVALID_PLANNING_CONFIG: " + configuration_error_;
+        return false;
+    }
     if (reference_.empty()) {
         output = SolverOutput{};
         output.status = "NO_REFERENCE_PATH";
@@ -117,8 +193,17 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         return false;
     }
 
+    const bool timed_task = task_plan_ || solver_params_.planning.task_deadline_sec > 0;
+    if (timed_task) {
+        if (!task_clock_.observe(input, input.task_elapsed_sec)) {
+            output = SolverOutput{}; output.status = "INVALID_TASK_CLOCK"; return false;
+        }
+        input.has_task_elapsed = true;
+    }
+
     ProgressProjector projector;
-    const auto proj = projector.project(reference_, input.robot.x, input.robot.y, last_progress_s_);
+    const auto proj = task_reference_ ? task_reference_->project(input.robot.x,input.robot.y,last_progress_s_) :
+        projector.project(reference_, input.robot.x, input.robot.y, last_progress_s_);
     if (!proj.valid) {
         output = SolverOutput{};
         output.status = "PROJECTION_FAILED";
@@ -127,8 +212,21 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     }
 
     const double len = reference_.length();
+    if (motion_region_) {
+        try {
+            if (reference_.frameId()!=solver_params_.planning.region.frame_id ||
+                motion_region_->clearance(input.robot.x,input.robot.y,proj.s)<-1e-6) {
+                output=SolverOutput{};output.status="CURRENT_MOTION_REGION_VIOLATION";return false;
+            }
+        } catch (const std::exception& e) {
+            output=SolverOutput{};output.status="INVALID_CURRENT_REGION: "+std::string(e.what());return false;
+        }
+    }
     const double remaining_s = std::max(0.0, len - proj.s);
-    const auto goal = reference_.sample(len);
+    auto goal = reference_.sample(len);
+    if (task_plan_) {
+        goal.x=task_plan_->goal_pose[0]; goal.y=task_plan_->goal_pose[1]; goal.yaw=task_plan_->goal_pose[2];
+    }
     const double dx = goal.x - input.robot.x;
     const double dy = goal.y - input.robot.y;
     const double distance_to_goal = std::hypot(dx, dy);
@@ -138,6 +236,20 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
     goal_info.distance_to_goal = distance_to_goal;
     goal_info.dx_robot = std::cos(input.robot.yaw) * dx + std::sin(input.robot.yaw) * dy;
     goal_info.position_reached = distance_to_goal < terminal_controller_.params().goal_tolerance;
+    const bool yaw_ready = !(task_plan_ || solver_params_.terminal.require_goal_yaw) ||
+        std::abs(angleDiff(input.robot.yaw, goal.yaw)) <=
+        (task_plan_ ? task_plan_->goal_yaw_tolerance : solver_params_.terminal.goal_yaw_tolerance);
+    const bool goal_pose_ready = yaw_ready &&
+        (!task_plan_ || distance_to_goal <= task_plan_->goal_position_tolerance);
+    goal_info.position_reached = goal_info.position_reached && goal_pose_ready;
+    const double deadline = task_plan_ ? task_plan_->deadline : solver_params_.planning.task_deadline_sec;
+    if (timed_task && input.task_elapsed_sec > deadline+solver_params_.planning.trajectory.deadline_tolerance &&
+        (!goal_info.position_reached || !goal_pose_ready ||
+         std::abs(input.robot.v) > (task_plan_ ? task_plan_->stop_speed_tolerance : solver_params_.terminal.goal_reached_max_speed) ||
+         !actuatorCommandsClear(input.actuator,solver_params_.task_stop.command_zero_tolerance) ||
+         std::abs(input.robot.omega) > (task_plan_ ? task_plan_->stop_omega_tolerance : solver_params_.terminal.goal_reached_max_omega))) {
+        output = SolverOutput{}; output.status = "TASK_DEADLINE_MISSED"; return false;
+    }
     if (solver_params_.task_stop.enable) {
         goal_info.task_end_approach = remaining_s <= solver_params_.terminal.slowdown_distance;
         goal_info.position_reached = goal_info.position_reached && remaining_s <= solver_params_.terminal.goal_tolerance;
@@ -175,15 +287,24 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         }
         if (stop_readiness.timed_out) stop_failure = "LIQUID_SETTLE_TIMEOUT";
     }
+    const bool vehicle_queues_clear = actuatorCommandsClear(
+        input.actuator, solver_params_.task_stop.command_zero_tolerance);
+    const bool require_vehicle_queues = solver_params_.jerk_limit_enable &&
+        solver_params_.terminal.mpc_stop_handoff_enable;
     const TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
         goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max),
-        !complete_stop || (stop_failure.empty() && stop_tail.valid && stop_readiness.vehicle_stopped &&
-                          stop_readiness.excitation_quiet && stop_readiness.liquid_stable));
+        goal_pose_ready && (!require_vehicle_queues || vehicle_queues_clear) &&
+        (!complete_stop || (stop_failure.empty() && stop_tail.valid && stop_readiness.vehicle_stopped &&
+                          stop_readiness.excitation_quiet && stop_readiness.liquid_stable)));
     const auto stamp_terminal = [&]() {
         output.cycle_timing = input.cycle_timing;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
         auto& d = output.terminal_diagnostics;
         d.complete_stop_enabled = complete_stop;
+        d.delay_queues_clear = vehicle_queues_clear;
+        d.vehicle_stopped = goal_info.position_reached && vehicle_queues_clear &&
+            std::abs(input.robot.v) <= solver_params_.terminal.goal_reached_max_speed &&
+            std::abs(input.robot.omega) <= solver_params_.terminal.goal_reached_max_omega;
         if (!complete_stop) return;
         d.delay_queues_clear = stop_readiness.queues_clear;
         d.vehicle_stopped = stop_readiness.vehicle_stopped;
@@ -214,7 +335,7 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
         updateStartLockRecovery(input, false, output);
         return false;
     }
-    if (!terminal_controller_.params().enable && goal_info.position_reached) {
+    if (!terminal_controller_.params().enable && goal_info.position_reached && goal_pose_ready) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";
@@ -254,6 +375,14 @@ bool SpmpcProblem::solve(const SolverInput& input, SolverOutput& output) {
             }
             if (!valid_history) output.cmd_v = output.cmd_omega = 0.0;
             output.success = valid_history;
+        } else if (valid_history && solver_params_.jerk_limit_enable) {
+            const auto stop = makeJerkLimitedStopCommand(input.actuator, input.dt,
+                solver_params_.a_max, solver_params_.alpha_max, solver_params_.jerk_max);
+            valid_history = stop.valid;
+            output.success = stop.valid;
+            output.status = stop.valid ? "TERMINAL_DRAINING" : stop.status;
+            output.cmd_v = stop.v;
+            output.cmd_omega = stop.omega;
         } else if (valid_history && !(goal_info.dx_robot < solver_params_.terminal.goal_behind_x)) {
             const auto stop = terminal_controller_.stopCommand(
                 input.actuator.v_cmd, input.actuator.omega_cmd, input.dt,

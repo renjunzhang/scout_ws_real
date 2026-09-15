@@ -296,6 +296,8 @@ struct PlanningCycleDebug {
 
 struct PredictedHorizonDebug {
     PlanningCycleDebug planning;
+    int rti_iterations = 1;
+    double dynamics_max_defect = 0.0;
     bool valid = false;
     std::string backend;
     std::string variant;
@@ -315,6 +317,8 @@ struct PredictedHorizonDebug {
 
 struct PreSolveSnapshotDebug {
     PlanningCycleDebug planning;
+    int rti_iterations = 1;
+    double max_prediction_defect = 0.0;
     bool valid = false;
     std::string backend;
     std::string variant;

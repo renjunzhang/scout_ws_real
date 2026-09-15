@@ -24,6 +24,7 @@ import casadi as ca
 from model_contract import RK4_SUBSTEPS
 from slosh_kernel import rk4_step
 from actual_motion_kernel import actual_motion_rhs
+from planning_terms import PLANNING_PARAMETER_DEFAULTS
 
 LINEAR_DELAY_STEPS = 5
 ANGULAR_DELAY_STEPS = 10
@@ -59,7 +60,7 @@ PARAM_NAMES = [
     "stop_brake_accel",
     "stop_delay_margin",
     "stop_velocity_weight",
-]
+]+list(PLANNING_PARAMETER_DEFAULTS)
 NP = len(PARAM_NAMES)
 PIDX = {name: i for i, name in enumerate(PARAM_NAMES)}
 

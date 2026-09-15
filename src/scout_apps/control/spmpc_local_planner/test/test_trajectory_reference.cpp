@@ -1,5 +1,7 @@
 #include "spmpc_local_planner/reference/horizon_reference_builder.h"
 #include "spmpc_local_planner/core/task_clock.h"
+#include "spmpc_local_planner/core/spmpc_solver.h"
+#include "spmpc_local_planner/planning/ocp_planning_adapter.h"
 #include "trajectory_fixture.h"
 #include <gtest/gtest.h>
 #include <fstream>
@@ -45,6 +47,22 @@ TEST(TrajectoryReference, ActualSpeedAndProgressSpeedRemainDistinct) {
     EXPECT_THROW(ref.sampleAtTime(-1),std::invalid_argument);
 }
 
+TEST(TrajectoryReference, ProjectionKeepsPlanProgressInsteadOfReplacingItWithArcLength) {
+    auto p=movingPlanFixture();
+    for (auto& r:p.samples) {r.state[4]*=1.1; r.control[2]*=1.1;}
+    p.route.back().x*=1.1; p.goal_position_tolerance+=.1;
+    p.region.cells.back().s_end=p.route.back().x;
+    const TrajectoryReference ref(p);
+    const auto& row=p.samples[40];
+    const auto projected=ref.project(row.state[0],row.state[1]);
+    ASSERT_TRUE(projected.valid);
+    EXPECT_NEAR(projected.s,row.state[4],1e-6);
+    EXPECT_GT(std::abs(projected.s-row.state[0]),1e-4);
+    EXPECT_NEAR(ref.project(0,0).s,p.samples.front().state[4],1e-9);
+    const double lower=p.samples[60].state[4];
+    EXPECT_GE(ref.project(row.state[0],row.state[1],lower).s,lower-1e-9);
+}
+
 TEST(TrajectoryReference, RepeatedProgressUsesPersistentTimeWithoutRewindingTail) {
     auto p=movingPlanFixture(); TrajectoryReference ref(p);
     const double end=p.samples.back().state[4];
@@ -54,6 +72,22 @@ TEST(TrajectoryReference, RepeatedProgressUsesPersistentTimeWithoutRewindingTail
     // A later query cannot mutate the meaning of an earlier one.
     EXPECT_NEAR(ref.sampleAtTime(.5).t,.5,1e-12);
     EXPECT_THROW(ref.sampleAtProgress(end+.01,1),std::out_of_range);
+}
+
+TEST(TrajectoryReference, TailProgressRoundoffKeepsProjectionAndLookupInDomain) {
+    auto p=movingPlanFixture();
+    const double end=p.samples.back().state[4];
+    p.samples[120].state[4]+=2e-11;
+    p.samples[121].state[4]-=2e-11;
+    const TrajectoryReference ref(p);
+    const auto projected=ref.project(p.goal_pose[0]+.001,0,end+2e-11);
+    ASSERT_TRUE(projected.valid);
+    EXPECT_LE(projected.s,end);
+    EXPECT_GE(projected.s,end-1e-12);
+    EXPECT_NO_THROW(MotionRegion(p.region).clearance(p.goal_pose[0],0,projected.s));
+    EXPECT_NEAR(ref.sampleAtProgress(end,4.7).t,4.7,1e-9);
+    p.samples[120].state[4]+=1e-5;
+    EXPECT_THROW(TrajectoryReference invalid(p),std::invalid_argument);
 }
 
 TEST(HorizonReferenceBuilder, FixedTimeUsesClockAndKeepsFiniteEndpointKnots) {
@@ -96,4 +130,38 @@ TEST(TaskClock, ReassemblyLatenessAndBackwardEpoch) {
     clock.reset(); input.has_task_elapsed=true; input.task_elapsed_sec=5;
     ASSERT_TRUE(clock.observe(input,elapsed)); EXPECT_DOUBLE_EQ(elapsed,5);
     input.task_elapsed_sec=2; EXPECT_FALSE(clock.observe(input,elapsed));
+}
+
+TEST(TaskClock, RejectsChangingClockSourceUntilTaskReset) {
+    TaskClock clock; SolverInput input; double elapsed = -1;
+    input.has_task_elapsed=true; input.task_elapsed_sec=3;
+    ASSERT_TRUE(clock.observe(input,elapsed));
+    input.has_task_elapsed=false; input.cycle_timing.solver_input_epoch_ns=1000000000000;
+    EXPECT_FALSE(clock.observe(input,elapsed));
+    EXPECT_DOUBLE_EQ(elapsed,3);
+    clock.reset(); ASSERT_TRUE(clock.observe(input,elapsed));
+    input.has_task_elapsed=true; input.task_elapsed_sec=100;
+    EXPECT_FALSE(clock.observe(input,elapsed));
+}
+
+TEST(OcpPlanningAdapter, ChecksTerminalQueuesAndAllMotionBounds) {
+    SolverParams params;
+    OcpPlanningAdapter adapter(params);
+    std::vector<OcpPlanningStage> stages(2);
+    PredictedHorizonDebug horizon;
+    horizon.states.resize(2); horizon.controls.resize(1);
+    for (auto& x:horizon.states) x.model_state.assign(24,0);
+    double clearance=0; std::string reason;
+    ASSERT_TRUE(adapter.check(stages,horizon,clearance,reason))<<reason;
+    horizon.states.back().model_state[22]=params.omega_max+.01;
+    EXPECT_FALSE(adapter.check(stages,horizon,clearance,reason));
+    EXPECT_EQ(reason,"MOTION_STATE_BOUND_VIOLATION");
+    horizon.states.back().model_state[22]=.001;
+    stages.back().task_goal_active=true;
+    EXPECT_FALSE(adapter.check(stages,horizon,clearance,reason));
+    horizon.states.back().model_state[22]=0;
+    ASSERT_TRUE(adapter.check(stages,horizon,clearance,reason))<<reason;
+    horizon.controls[0].a=params.a_max+.01;
+    EXPECT_FALSE(adapter.check(stages,horizon,clearance,reason));
+    EXPECT_EQ(reason,"MOTION_CONTROL_BOUND_VIOLATION");
 }

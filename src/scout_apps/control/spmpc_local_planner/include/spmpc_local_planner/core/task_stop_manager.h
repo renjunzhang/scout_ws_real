@@ -30,6 +30,9 @@ struct StopCommand {
 StopCommand makeJerkLimitedStopCommand(const ActuatorState& history, double dt,
                                        double a_max, double alpha_max, double jerk_max);
 
+// Vehicle-only readiness, shared by ordinary MPCC and liquid-aware stopping.
+bool actuatorCommandsClear(const ActuatorState& history, double zero_tolerance);
+
 struct StopTailPrediction {
     bool valid = false;
     StopCommand first_command;

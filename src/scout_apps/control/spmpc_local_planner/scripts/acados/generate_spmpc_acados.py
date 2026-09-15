@@ -47,6 +47,7 @@ from spmpc_acados_constraints import (  # noqa: E402
 )
 
 from model_contract import MODEL_VERSION, RK4_SUBSTEPS, COST_VERSION, require_codegen_version
+from planning_terms import PLANNING_PARAMETER_DEFAULTS
 
 MODELS = {
     "b0": {"export": export_spmpc_b0_symbols, "with_slosh": False},
@@ -132,6 +133,9 @@ def default_parameter_values(cfg, with_slosh, direct_omega_legacy=False):
         names = PARAM_NAMES_SLOSH if with_slosh else PARAM_NAMES
         idx = PIDX_SLOSH if with_slosh else PIDX
     p = np.zeros(len(names))
+    if not direct_omega_legacy:
+        for key, value in PLANNING_PARAMETER_DEFAULTS.items():
+            p[idx[key]] = value
     # 占位参考：x_ref(s)=s, y_ref(s)=0（直线），wrapper 每周期用 ReferenceSpline 拟合覆盖。
     p[idx["rx1"]] = 1.0
     p[idx["w_contour"]] = cfg["w_contour"]

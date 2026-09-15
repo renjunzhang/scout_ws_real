@@ -1,7 +1,9 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
+#include "spmpc_local_planner/planning/planning_config.h"
 
+#include "../src/core/generated/ocp_parameter_contract.h"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cmath>
@@ -79,6 +81,12 @@ SolverInput makeInput() {
     return input;
 }
 
+size_t parameterIndex(const std::vector<std::string>& names, const std::string& name) {
+    const auto it = std::find(names.begin(), names.end(), name);
+    EXPECT_NE(it, names.end());
+    return static_cast<size_t>(std::distance(names.begin(), it));
+}
+
 }  // namespace
 
 TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
@@ -95,8 +103,8 @@ TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
     input.actuator.v_cmd = 0.0;
     input.actuator.a_cmd_memory = -0.7781120448021244;  // bag cycle 1314
     SolverOutput output;
-    ASSERT_TRUE(problem.solve(input, output));
-    EXPECT_EQ(output.status, "TERMINAL_STOP");
+    EXPECT_FALSE(problem.solve(input, output));
+    EXPECT_EQ(output.status, "STOP_JERK_HISTORY_INFEASIBLE");
     EXPECT_FALSE(output.ocp_solve_attempted);
     EXPECT_FALSE(output.pre_solve_snapshot.valid);
     EXPECT_FALSE(output.predicted_horizon.valid);
@@ -109,9 +117,9 @@ TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
     input.robot.x = 4.7;
     input.robot.v = 0.1;
     input.actuator.a_cmd_memory = 0.6879754313324827;  // bag cycle 1316
-    ASSERT_TRUE(problem.solve(input, output));
+    EXPECT_FALSE(problem.solve(input, output));
     EXPECT_FALSE(output.ocp_solve_attempted);
-    EXPECT_EQ(output.status, "TERMINAL_STOP");
+    EXPECT_EQ(output.status, "STOP_JERK_HISTORY_INFEASIBLE");
     EXPECT_DOUBLE_EQ(output.cmd_v, 0.0);
 
     auto points = reference.points();
@@ -179,9 +187,9 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, 60);
     EXPECT_EQ(first.pre_solve_snapshot.state_width, 24);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, 34);
-    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), 34u);
-    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * 34u);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_width, ocp_parameters::kB0ParameterCount);
+    EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), static_cast<size_t>(ocp_parameters::kB0ParameterCount));
+    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * ocp_parameters::kB0ParameterCount);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), 61u);
     EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), 60u);
     EXPECT_FALSE(first.pre_solve_snapshot.have_previous_solution);
@@ -194,12 +202,16 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
             .model_state[static_cast<size_t>(kExplicitActuatorAccelMemoryIndex)],
         input.actuator.a_cmd_memory);
     for (int stage : {0, 1, 59, 60}) {
-        const size_t base = static_cast<size_t>(stage * 34);
+        const size_t base = static_cast<size_t>(stage * ocp_parameters::kB0ParameterCount);
+        const size_t w_du_a = parameterIndex(
+            first.pre_solve_snapshot.parameter_names, "w_du_a");
+        const size_t a_memory = parameterIndex(
+            first.pre_solve_snapshot.parameter_names, "a_prev");
         EXPECT_DOUBLE_EQ(
-            first.pre_solve_snapshot.stage_parameters[base + 16],
+            first.pre_solve_snapshot.stage_parameters[base + w_du_a],
             makeB0Variant().w_du_a);
         EXPECT_DOUBLE_EQ(
-            first.pre_solve_snapshot.stage_parameters[base + 18],
+            first.pre_solve_snapshot.stage_parameters[base + a_memory],
             input.actuator.a_cmd_memory);
     }
 
@@ -260,6 +272,8 @@ TEST(ReplayDiagnostics, NoStateZerosOnlyOcpLiquidInitialStateOnEverySolve) {
         SolverOutput output;
         ASSERT_TRUE(solver.solve(input, reference, output)) << output.status;
         const auto& snapshot = output.pre_solve_snapshot;
+        EXPECT_EQ(snapshot.parameter_width, ocp_parameters::PARAM_MAX);
+        EXPECT_EQ(snapshot.parameter_names.size(), static_cast<size_t>(ocp_parameters::PARAM_MAX));
         EXPECT_TRUE(snapshot.zero_liquid_initial_state);
         EXPECT_DOUBLE_EQ(snapshot.observed_slosh.eta_x, eta);
         EXPECT_DOUBLE_EQ(snapshot.observed_slosh.eta_y_dot, -0.003);
@@ -292,6 +306,32 @@ TEST(ReplayDiagnostics, NoStateZerosOnlyOcpLiquidInitialStateOnEverySolve) {
     EXPECT_NEAR(full.predicted_horizon.states.front().eta_y_dot, input.slosh.eta_y_dot, 1e-10);
 }
 #endif
+
+TEST(ReplayDiagnostics, AllowsSmallNegativeActualVelocityButKeepsCommandsNonnegative) {
+    auto params = makeParams();
+    params.actual_v_min = -0.002;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params, makeB0Variant());
+    auto input = makeInput();
+    input.robot.v = -0.001;
+    SolverOutput output;
+    ASSERT_TRUE(solver.solve(input, makeStraightReference(), output)) << output.status;
+    EXPECT_GE(output.cmd_v, 0.0);
+    EXPECT_GE(output.predicted_horizon.states.at(1).v_cmd, 0.0);
+}
+
+TEST(ReplayDiagnostics, RejectsMotionRegionProgressDomainGap) {
+    PlanningConfig config;
+    config.region.enabled = true;
+    config.region.id = "region";
+    config.region.frame_id = "map";
+    config.region.cells = {
+        MotionRegionCell{"a", 0.0, 1.0, {{0,-1},{2,-1},{2,1},{0,1}}},
+        MotionRegionCell{"b", 1.2, 2.0, {{1,-1},{3,-1},{3,1},{1,1}}}};
+    std::string reason;
+    EXPECT_FALSE(validatePlanningConfig(config, &reason));
+    EXPECT_FALSE(reason.empty());
+}
 
 TEST(ReplayDiagnostics, JerkSwitchBoundsAllStagesAndPublishedHistoryForBothModels) {
     std::vector<bool> models = {false};

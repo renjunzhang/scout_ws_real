@@ -1,5 +1,6 @@
 #pragma once
 #include "spmpc_local_planner/reference/trajectory_plan.h"
+#include "spmpc_local_planner/reference/progress_projector.h"
 #include <memory>
 
 namespace spmpc_local_planner {
@@ -14,8 +15,12 @@ public:
     TrajectoryPlanSample sampleAtTime(double time) const;
     TrajectoryPlanSample sampleAtProgress(double progress, double task_elapsed) const;
     bool atPlateau(double progress) const;
+    ProgressProjection project(double x, double y, double minimum_progress = 0) const;
 private:
     std::shared_ptr<const TrajectoryPlan> plan_;
+    // A monotone lookup index removes accepted solver roundoff at plateaus;
+    // the original full-state samples remain intact for dynamics validation.
+    std::vector<double> progress_;
 };
 
 }  // namespace spmpc_local_planner

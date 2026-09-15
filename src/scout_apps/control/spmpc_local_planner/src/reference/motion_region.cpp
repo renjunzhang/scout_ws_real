@@ -64,7 +64,7 @@ std::vector<H> polygon_halfspaces(const MotionRegionCell& c, double inflation) {
 }
 const MotionRegionCell* find_cell(const MotionRegionConfig& c, double s) {
   for (const MotionRegionCell& cell:c.cells)
-    if (s>=cell.s_begin && s<=cell.s_end) return &cell;
+    if (s>=cell.s_begin-kProgressTolerance && s<=cell.s_end+kProgressTolerance) return &cell;
   return nullptr;
 }
 }

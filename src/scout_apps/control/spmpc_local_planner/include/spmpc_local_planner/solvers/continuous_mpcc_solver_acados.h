@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
 #include "spmpc_local_planner/warm_start/warm_start_generator.h"
 #include "spmpc_local_planner/warm_start/warm_start_output.h"
+#include "spmpc_local_planner/planning/ocp_planning_adapter.h"
 #include <memory>
 
 namespace spmpc_local_planner {
@@ -33,6 +34,8 @@ private:
 
     void* capsule_ = nullptr;             // 不透明 acados capsule（仅 SPMPC_WITH_ACADOS 下有效）
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;
+    std::unique_ptr<OcpPlanningAdapter> planning_adapter_;
+    std::string configuration_error_;
     mutable WarmStartOutput previous_warm_start_solution_;
     mutable bool have_previous_solution_ = false;
     mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期 OCP 控制 [a, alpha, v_s]

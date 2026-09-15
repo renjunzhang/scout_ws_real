@@ -6,9 +6,12 @@ import subprocess
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+import sys
 
 
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS_DIR / "acados"))
+from spmpc_acados_model import NP  # noqa: E402
 WRAPPER = SCRIPTS_DIR / "run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
 SHORT_WRAPPER = SCRIPTS_DIR / "run_spmpc_weight_smoke.sh"
 ANALYZER = SCRIPTS_DIR / "analysis" / "validate_explicit_actuator_runtime_smoke.py"
@@ -113,7 +116,7 @@ class RuntimeAnalysisTest(unittest.TestCase):
         ]
         odom_rows = [
             (1.0 + index * 0.02, odom(1.0 + index * 0.02))
-            for index in range(34)
+            for index in range(NP)
         ]
         interventions = [
             (when, clean_intervention()) for when, _ in audits

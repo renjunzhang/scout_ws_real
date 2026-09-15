@@ -47,11 +47,13 @@ class ExplicitActuatorModelTest(unittest.TestCase):
     def test_dimensions_and_parameter_contract(self):
         b0 = export_spmpc_b0_symbols()
         slosh = export_spmpc_slosh_symbols()
-        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (24, 3, 34))
+        self.assertEqual((b0["nx"], b0["nu"], b0["np"]), (24, 3, 92))
         self.assertEqual(
-            (slosh["nx"], slosh["nu"], slosh["np"]), (28, 3, 46)
+            (slosh["nx"], slosh["nu"], slosh["np"]), (28, 3, 104)
         )
-        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (24, 28, 34, 46))
+        # Cost-model v3 appends planning parameters while preserving the old
+        # first 34 slots; liquid slots are retained at the tail of the 92 ABI.
+        self.assertEqual((NX, NX_SLOSH, NP, NP_SLOSH), (24, 28, 92, 104))
         self.assertEqual((ACCEL_MEMORY_INDEX, SLOSH_STATE_OFFSET), (23, 24))
 
     def test_partial_condensing_horizon_is_frozen(self):
@@ -64,6 +66,21 @@ class ExplicitActuatorModelTest(unittest.TestCase):
             self.assertEqual(payload["dims"]["nx"], expected_nx)
             self.assertEqual(payload["dims"]["N"], 60)
             self.assertEqual(payload["solver_options"]["qp_solver_cond_N"], 10)
+
+    def test_generated_terminal_bounds_cover_actual_and_fifo_states(self):
+        expected = [3, 5] + list(range(6, 24))
+        for name in ("spmpc_b0", "spmpc_slosh"):
+            payload = json.loads((GENERATED_DIR / name / f"acados_ocp_{name}.json").read_text())
+            dims = payload["dims"]
+            constraints = payload["constraints"]
+            self.assertEqual((dims["nbx"], dims["nbx_e"]), (20, 20))
+            self.assertEqual(constraints["idxbx"], expected)
+            self.assertEqual(constraints["idxbx_e"], expected)
+            # Bounds are inclusive: actual v/omega and every command memory
+            # state remain valid exactly at each configured endpoint.
+            self.assertEqual(len(constraints["lbx"]), len(constraints["ubx"]))
+            self.assertEqual(constraints["lbx"], constraints["lbx_e"])
+            self.assertEqual(constraints["ubx"], constraints["ubx_e"])
 
     def test_fifo_shifts_and_appends_next_command_state(self):
         symbols = export_spmpc_b0_symbols()

@@ -5,9 +5,11 @@
 #include "spmpc_local_planner/reference/progress_projector.h"
 #include "spmpc_local_planner/core/ocp_cost_evaluator.h"
 #include "../core/generated/ocp_cost_contract.h"
+#include "../core/generated/ocp_parameter_contract.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "spmpc_local_planner/warm_start/warm_start_factory.h"
 #include "spmpc_local_planner/warm_start/explicit_actuator_warm_start.h"
+#include "spmpc_local_planner/dynamics/explicit_state_rollout.h"
 
 #include "acados_solver_spmpc_b0.h"
 #include "spmpc_b0_model_contract.h"
@@ -21,43 +23,30 @@
 #include <Eigen/Dense>
 #include <algorithm>
 #include <cmath>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace spmpc_local_planner {
 namespace {
 
-// 参数索引：必须与 scripts/acados/spmpc_acados_model.py 的 PARAM_NAMES / PARAM_NAMES_SLOSH 一致。
-enum Param {
-    RX0 = 0, RX1, RX2, RX3,
-    RY0, RY1, RY2, RY3,
-    W_CONTOUR, W_LAG, W_PROGRESS,
-    W_A, W_OMEGA, W_V, W_VS, W_ALPHA,
-    W_DU_A, W_DU_VS,
-    A_PREV, VS_PREV,
-    E_C_REF, E_L_REF,
-    V_REF,
-    ACTUATOR_DT, ACTUATOR_TAU_V, ACTUATOR_TAU_OMEGA,
-    ACTUATOR_GAIN_V, ACTUATOR_GAIN_OMEGA, ANTICREEP_GAIN,
-    STOP_ACTIVE, STOP_GOAL_S, STOP_BRAKE_ACCEL, STOP_DELAY_MARGIN, STOP_VELOCITY_WEIGHT,
-    // 以下仅 slosh 模型（接在 explicit-actuator B0 参数之后）
-    TWO_ZETA_OMEGA_N, OMEGA_N_SQ, KAPPA_X, KAPPA_Y,
-    ETA_REF, ETA_DOT_REF, W_SLOSH_ETA, W_SLOSH_ETA_DOT,
-    ETA_TARGET_SQ, SLACK_LINEAR_WEIGHT, SLACK_QUADRATIC_WEIGHT, ETA_MAX_SQ,
-    PARAM_MAX,
-};
+using namespace ocp_parameters;
 
 // 参数布局契约：与 scripts/acados/spmpc_acados_model.py（→生成器 NP 宏）绑死，漂移即编译失败。
 static_assert(SPMPC_B0_LIQUID_MODEL_VERSION == SPMPC_LIQUID_KERNEL_VERSION &&
               SPMPC_B0_RK4_SUBSTEPS == SPMPC_LIQUID_RK4_SUBSTEPS,
               "Regenerate B0 for the shared RK4 motion model");
-static_assert(STOP_VELOCITY_WEIGHT + 1 == SPMPC_B0_NP,
+static_assert(kB0ParameterCount == SPMPC_B0_NP,
               "B0 参数布局与生成的 spmpc_b0 求解器不一致");
+static_assert(SPMPC_B0_NBX==20 && SPMPC_B0_NBXN==20 && SPMPC_B0_NH==16,
+              "Regenerate B0 vehicle/terminal/region/task bounds");
 static_assert(SPMPC_B0_NX == kExplicitActuatorB0StateSize,
               "B0 状态布局与生成的 spmpc_b0 求解器不一致");
 static_assert(SPMPC_B0_NG == 1,
               "Regenerate B0 acados artifacts for the full-horizon jerk switch");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
+static_assert(SPMPC_SLOSH_NBX==20 && SPMPC_SLOSH_NBXN==20 && SPMPC_SLOSH_NH==17,
+              "Regenerate slosh vehicle/terminal/region/task bounds");
 static_assert(SPMPC_SLOSH_LIQUID_MODEL_VERSION == SPMPC_LIQUID_KERNEL_VERSION &&
               SPMPC_SLOSH_RK4_SUBSTEPS == SPMPC_B0_RK4_SUBSTEPS,
               "Regenerate slosh for rotating-container model version 1");
@@ -69,9 +58,9 @@ static_assert(SPMPC_SLOSH_NG == 1,
               "Regenerate slosh acados artifacts for the full-horizon jerk switch");
 #endif
 
-static_assert(SPMPC_B0_COST_VERSION == SPMPC_COST_VERSION, "Regenerate B0 cost v2");
+static_assert(SPMPC_B0_COST_VERSION == SPMPC_COST_VERSION, "Regenerate B0 cost v3");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
-static_assert(SPMPC_SLOSH_COST_VERSION == SPMPC_COST_VERSION, "Regenerate slosh cost v2");
+static_assert(SPMPC_SLOSH_COST_VERSION == SPMPC_COST_VERSION, "Regenerate slosh cost v3");
 #endif
 
 constexpr double kDisabledEtaMaxSq = 1e12;
@@ -195,7 +184,7 @@ SolverBoundSummary makeRuntimeBounds(const SolverParams& params) {
     bounds.alpha_max = std::max(0.0, params.alpha_max);
     bounds.v_s_min = 0.0;
     bounds.v_s_max = std::max(0.0, params.v_max);
-    bounds.v_min = 0.0;
+    bounds.v_min = params.actual_v_min;
     bounds.v_max = std::max(0.0, params.v_max);
     bounds.omega_min = -std::max(0.0, params.omega_max);
     bounds.omega_max = std::max(0.0, params.omega_max);
@@ -218,7 +207,7 @@ SolverBoundSummary makeGeneratedBounds() {
 }
 
 void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
-                        double* x0, double delta_a_max) {
+                        double* x0, double delta_a_max, const std::vector<OcpPlanningStage>& planning_stages) {
     ocp_nlp_config* cfg = gen.config();
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_in* nlp_in = gen.in();
@@ -240,11 +229,14 @@ void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
 
     // Generated explicit-actuator models constrain actual v/omega and command
     // v/omega independently.  The latter are the values published to /cmd_vel.
-    double lbx[4] = {bounds.v_min, bounds.omega_min,
-                     bounds.v_min, bounds.omega_min};
-    double ubx[4] = {bounds.v_max, bounds.omega_max,
-                     bounds.v_max, bounds.omega_max};
     for (int stage = 1; stage <= gen.n_horizon; ++stage) {
+        double lbx[20] = {bounds.v_min,bounds.omega_min,0.,bounds.omega_min};
+        double ubx[20] = {bounds.v_max,bounds.omega_max,bounds.v_max,bounds.omega_max};
+        for (int i=4;i<9;++i) {lbx[i]=0.;ubx[i]=bounds.v_max;}
+        for (int i=9;i<19;++i) {lbx[i]=bounds.omega_min;ubx[i]=bounds.omega_max;}
+        lbx[19]=bounds.a_min;ubx[19]=bounds.a_max;
+        if (planning_stages[static_cast<size_t>(stage)].task_goal_active)
+            for (int i=2;i<20;++i) lbx[i]=ubx[i]=0.;
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbx", lbx);
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubx", ubx);
     }
@@ -404,31 +396,6 @@ void capturePrimalGuess(GenSolver& gen,
             controls.push_back(makeHorizonControl(makeWarmStartControl(u)));
         }
     }
-}
-
-std::vector<std::string> parameterNames(int width) {
-    static const char* const names[] = {
-        "rx0", "rx1", "rx2", "rx3",
-        "ry0", "ry1", "ry2", "ry3",
-        "w_contour", "w_lag", "w_progress",
-        "w_a", "w_omega", "w_v", "w_vs", "w_alpha",
-        "w_du_a", "w_du_vs", "a_prev", "vs_prev",
-        "e_c_ref", "e_l_ref", "v_ref",
-        "actuator_dt", "actuator_tau_v", "actuator_tau_omega",
-        "actuator_gain_v", "actuator_gain_omega", "anticreep_gain",
-        "stop_active", "stop_goal_s", "stop_brake_accel", "stop_delay_margin", "stop_velocity_weight",
-        "two_zeta_omega_n", "omega_n_sq", "kappa_x", "kappa_y",
-        "eta_ref", "eta_dot_ref", "w_slosh_eta", "w_slosh_eta_dot",
-        "eta_target_sq", "slack_linear_weight", "slack_quadratic_weight", "eta_max_sq",
-    };
-    const int count = static_cast<int>(sizeof(names) / sizeof(names[0]));
-    const int n = std::max(0, std::min(width, count));
-    std::vector<std::string> out;
-    out.reserve(static_cast<size_t>(n));
-    for (int i = 0; i < n; ++i) {
-        out.emplace_back(names[i]);
-    }
-    return out;
 }
 
 void fillAcadosState(const WarmStartState& state, bool slosh, double* x) {
@@ -655,6 +622,21 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         delete old;
         capsule_ = nullptr;
     }
+    configuration_error_.clear();
+    planning_adapter_.reset();
+    try {
+        if (params_.rti_iterations<1 || params_.rti_iterations>20 ||
+            !std::isfinite(params_.max_prediction_defect) || params_.max_prediction_defect<0)
+            throw std::invalid_argument("invalid RTI iteration/defect configuration");
+        if (params_.planning.liquid_free_baseline && (variant_.slosh_enable ||
+            variant_.slosh_constraint_enable || variant_.w_slosh != 0 || params_.task_stop.enable ||
+            params_.liquid_limit.recovery_enable || params_.zero_liquid_initial_state))
+            throw std::invalid_argument("raw MPCC baseline contains a liquid decision mechanism");
+        planning_adapter_ = std::make_unique<OcpPlanningAdapter>(params_);
+    } catch (const std::exception& e) {
+        configuration_error_ = e.what();
+        return;
+    }
     std::string actuator_error;
     if (params_.actuator.mode != ExecutionModelMode::ExplicitActuator ||
         !validateActuatorModelParams(params_.actuator, &actuator_error)) {
@@ -680,6 +662,9 @@ bool ContinuousMpccSolverAcados::solve(
         input.slosh = SloshState{};
     }
     output = SolverOutput{};
+    output.pre_solve_snapshot.rti_iterations = params_.rti_iterations;
+    output.pre_solve_snapshot.max_prediction_defect = params_.max_prediction_defect;
+    output.predicted_horizon.rti_iterations = params_.rti_iterations;
     output.cycle_timing = input.cycle_timing;
     if ((params_.zero_liquid_initial_state && !use_slosh_model_) ||
         !std::isfinite(params_.jerk_max) || params_.jerk_max <= 0.0 ||
@@ -690,6 +675,10 @@ bool ContinuousMpccSolverAcados::solve(
     }
     if (!std::isfinite(params_.anticreep_gain) || params_.anticreep_gain < 0.0) {
         output.status = "INVALID_COST_CONFIG";
+        return false;
+    }
+    if (!configuration_error_.empty()) {
+        output.status = "INVALID_PLANNING_CONFIG: " + configuration_error_;
         return false;
     }
     if (capsule_ == nullptr) {
@@ -710,9 +699,8 @@ bool ContinuousMpccSolverAcados::solve(
     auto* gen = static_cast<GenSolver*>(capsule_);
     const bool slosh = use_slosh_model_;
 
-    ProgressProjector projector;
-    const auto raw_proj = projector.project(reference, input.robot.x, input.robot.y);
-    const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    const auto raw_proj = planning_adapter_->project(reference, input.robot.x, input.robot.y);
+    const auto proj = planning_adapter_->project(reference, input.robot.x, input.robot.y, input.min_progress_s);
     output.projector_debug.min_progress_s = input.min_progress_s;
     if (raw_proj.valid) {
         output.projector_debug.raw_valid = true;
@@ -824,7 +812,7 @@ bool ContinuousMpccSolverAcados::solve(
         snapshot.previous_v_s = u_prev_[2];
     }
     snapshot.have_previous_solution = have_previous_solution_;
-    snapshot.parameter_names = parameterNames(gen->np);
+    snapshot.parameter_names = ocp_parameters::names(gen->np);
 
     // slosh 物理：取自同一套 slosh_dynamics 核（§4.3），κ=1（与 slosh_models 的单位输入增益一致）。
     double c_h = 1.0, eta_ref = 1.0, eta_dot_ref = 1.0;
@@ -898,8 +886,37 @@ bool ContinuousMpccSolverAcados::solve(
     output.slosh_cost_monitor.height_coeff = c_h;
     output.slosh_cost_monitor.slosh_eta_dot_ratio = params_.slosh.slosh_eta_dot_ratio;
 
-    double p[PARAM_MAX];
-    for (int i = 0; i < PARAM_MAX; ++i) p[i] = 0.0;
+    const auto nominal_horizon=planning_adapter_->nominalHorizon(s0,input.task_elapsed_sec,n);
+    std::vector<double> stage_progress(static_cast<size_t>(n+1));
+    for (int k = 0; k <= n; ++k) {
+        double guess = nominal_horizon.empty() ? s0 + k*input.dt*v_ref : nominal_horizon[static_cast<size_t>(k)].state[4];
+        if (have_previous_solution_ && previous_warm_start_solution_.states.size() == static_cast<size_t>(n+1))
+            guess = previous_warm_start_solution_.states[static_cast<size_t>(std::min(k+1,n))].s;
+        stage_progress[static_cast<size_t>(k)] = clampValue(guess, s0, len);
+    }
+    stage_progress.front() = s0;
+    std::vector<OcpPlanningStage> planning_stages;
+    try {
+        planning_stages = planning_adapter_->prepare(reference, input, stage_progress, snapshot.planning);
+    } catch (const std::exception& e) {
+        output.status = "PLANNING_INPUT_INVALID: " + std::string(e.what());
+        snapshot.solver_status = output.status;
+        return false;
+    }
+    output.predicted_horizon.planning = snapshot.planning;
+
+    if (planning_stages.front().has_geometry_reference) {
+        const auto planned=planning_stages.front().sampleGeometry(s0);
+        auto& d=output.stage0_reference_debug;
+        d.ref_x=planned.x; d.ref_y=planned.y; d.ref_yaw=planned.psi; d.ref_kappa=planned.kappa;
+        d.yaw_error=wrapAngle(input.robot.yaw-planned.psi);
+        const double dx=input.robot.x-planned.x,dy=input.robot.y-planned.y;
+        d.contour_error=std::sin(planned.psi)*dx-std::cos(planned.psi)*dy;
+        d.lag_error=-std::cos(planned.psi)*dx-std::sin(planned.psi)*dy;
+    }
+
+    auto parameter_values = ocp_parameters::defaults();
+    double* p = parameter_values.data();
     p[RX0] = cx(0); p[RX1] = cx(1); p[RX2] = cx(2); p[RX3] = cx(3);
     p[RY0] = cy(0); p[RY1] = cy(1); p[RY2] = cy(2); p[RY3] = cy(3);
     p[W_CONTOUR] = variant_.w_contour;
@@ -957,6 +974,13 @@ bool ContinuousMpccSolverAcados::solve(
             p[W_DU_VS] = 0.0;
             p[VS_PREV] = 0.0;
         }
+        try {
+            planning_adapter_->write(planning_stages[static_cast<size_t>(stage)], p, gen->np);
+        } catch (const std::exception& e) {
+            output.status = "PLANNING_ASSEMBLY_INVALID: " + std::string(e.what());
+            snapshot.solver_status = output.status;
+            return false;
+        }
         snapshot.stage_parameters.insert(
             snapshot.stage_parameters.end(), p, p + gen->np);
         gen->update_params(stage, p);
@@ -985,7 +1009,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.first_shot_debug.x0_omega = input.robot.omega;
     output.first_shot_debug.x0_s = s0;
 
-    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max);
+    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max, planning_stages);
 
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
@@ -1004,7 +1028,27 @@ bool ContinuousMpccSolverAcados::solve(
     }
     const WarmStartInput warm_input = makeWarmStartInput(
         input, reference, spline, s0, len, n, params_, have_u_prev_, u_prev_);
-    if (warm_start_requested && warm_start_generator_) {
+    if (warm_start_requested && params_.warm_start.use_previous_solution && have_previous_solution_) {
+        warm_start=makeShiftedPreviousWarmStart(previous_warm_start_solution_,input,s0,n,slosh,params_);
+        if (warm_start.valid) rolloutExplicitActuatorWarmStart(
+            warm_start,warm_input,input.actuator,params_.actuator,slosh_dyn_,slosh);
+        if (warm_start.valid) {
+            setAcadosWarmStart(*gen,warm_start,slosh); warm_start_applied=true;
+            snapshot.warm_start_source="SHIFTED_PREVIOUS_SOLUTION";
+        }
+    }
+    if (warm_start_requested && !warm_start_applied && !nominal_horizon.empty()) {
+        warm_start.valid=true;
+        for (const auto& row:nominal_horizon) warm_start.states.push_back(makeWarmStartState(row.state.data(),slosh));
+        for (int k=0;k<n;++k) warm_start.controls.push_back(makeWarmStartControl(nominal_horizon[static_cast<size_t>(k)].control.data()));
+        if (warm_start.valid) rolloutExplicitActuatorWarmStart(
+            warm_start,warm_input,input.actuator,params_.actuator,slosh_dyn_,slosh);
+        if (warm_start.valid) {
+            setAcadosWarmStart(*gen,warm_start,slosh); warm_start_applied=true;
+            snapshot.warm_start_source="TRAJECTORY_PLAN";
+        }
+    }
+    if (warm_start_requested && !warm_start_applied && warm_start_generator_) {
         WarmStartDiagnostics diagnostics;
         warm_start_generator_->generate(warm_input, warm_start, diagnostics);
         warm_start.diagnostics = diagnostics;
@@ -1066,10 +1110,15 @@ bool ContinuousMpccSolverAcados::solve(
         snapshot.initial_guess_states,
         snapshot.initial_guess_controls);
 
-    const int status = gen->solve();
-
+    int status = 0;
     double time_tot = 0.0;
-    ocp_nlp_get(gen->solver(), "time_tot", &time_tot);
+    for (int iteration=0;iteration<params_.rti_iterations;++iteration) {
+        status=gen->solve();
+        double iteration_time=0;
+        ocp_nlp_get(gen->solver(), "time_tot", &iteration_time);
+        time_tot+=iteration_time;
+        if (status!=0) break;
+    }
     output.solver_time_ms = time_tot * 1000.0;
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
@@ -1149,15 +1198,20 @@ bool ContinuousMpccSolverAcados::solve(
         head.v = state.v;
         head.omega = state.omega;
         head.s = state.s;
-        const auto head_proj = projector.project(reference, state.px, state.py);
+        const auto head_proj = planning_adapter_->project(reference, state.px, state.py);
         if (head_proj.valid) {
             head.proj_s = head_proj.s;
             head.proj_distance = head_proj.distance;
             head.proj_signed_distance = head_proj.signed_distance;
         }
-        const double xref = polyEval(cx, state.s);
-        const double yref = polyEval(cy, state.s);
-        const double phi = std::atan2(polyDeriv(cy, state.s), polyDeriv(cx, state.s));
+        auto sampled=ReferenceSample{};
+        const auto& stage=planning_stages[static_cast<size_t>(k)];
+        if (stage.has_geometry_reference) sampled=stage.sampleGeometry(state.s);
+        else {
+            sampled.x=polyEval(cx,state.s);sampled.y=polyEval(cy,state.s);
+            sampled.psi=std::atan2(polyDeriv(cy,state.s),polyDeriv(cx,state.s));
+        }
+        const double xref = sampled.x, yref = sampled.y, phi = sampled.psi;
         const double dx = state.px - xref;
         const double dy = state.py - yref;
         head.contour_error = std::sin(phi) * dx - std::cos(phi) * dy;
@@ -1175,6 +1229,36 @@ bool ContinuousMpccSolverAcados::solve(
             makeHorizonControl(solved_controls.back()));
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
     }
+
+    for (int k=0;k<n;++k) {
+        const auto& current=output.predicted_horizon.states[static_cast<size_t>(k)].model_state;
+        const auto& next=output.predicted_horizon.states[static_cast<size_t>(k+1)].model_state;
+        const auto& u=solved_controls[static_cast<size_t>(k)];
+        std::vector<double> replay;
+        if (!stepExplicitState(current,{{u.a,u.alpha,u.v_s}},params_.actuator,slosh_dyn_,input.dt,replay) || replay.size()!=next.size()) {
+            output.status=snapshot.solver_status="PREDICTION_DYNAMICS_INVALID"; return false;
+        }
+        for (size_t j=0;j<next.size();++j) {
+            const double error=std::abs(next[j]-replay[j]);
+            if (!std::isfinite(error)) {
+                output.status=snapshot.solver_status="PREDICTION_DYNAMICS_INVALID"; return false;
+            }
+            output.predicted_horizon.dynamics_max_defect=std::max(output.predicted_horizon.dynamics_max_defect,error);
+        }
+    }
+    if (params_.max_prediction_defect>0 && output.predicted_horizon.dynamics_max_defect>params_.max_prediction_defect) {
+        output.status=snapshot.solver_status=output.predicted_horizon.solver_status="PREDICTION_DYNAMICS_VIOLATION";
+        return false;
+    }
+
+    std::string planning_error;
+    if (!planning_adapter_->check(planning_stages, output.predicted_horizon,
+            output.predicted_horizon.planning.minimum_region_clearance, planning_error)) {
+        output.status = planning_error;
+        snapshot.solver_status = output.predicted_horizon.solver_status = output.status;
+        return false;
+    }
+    snapshot.planning.minimum_region_clearance = output.predicted_horizon.planning.minimum_region_clearance;
 
     if (!evaluateOcpCost(output.predicted_horizon, snapshot.stage_parameters, gen->np, output.cost)) {
         output.status = "COST_RECONSTRUCTION_FAILED";
@@ -1241,7 +1325,8 @@ bool ContinuousMpccSolverAcados::solve(
         std::abs(output.cost.J_v) + std::abs(output.cost.J_control) + std::abs(output.cost.J_smooth) +
         std::abs(output.cost.J_anti_creep) + std::abs(output.cost.J_slack) + std::abs(output.cost.J_stop) +
         std::abs(output.cost.J_terminal) + std::abs(output.cost.J_corridor) + std::abs(output.cost.J_obstacle) +
-        std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
+        std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot) +
+        std::abs(output.cost.J_curvature) + std::abs(output.cost.J_curvature_change);
     const double slosh_abs = std::abs(output.cost.J_slosh_eta) + std::abs(output.cost.J_slosh_eta_dot);
     output.slosh_cost_monitor.J_slosh_eta = output.cost.J_slosh_eta;
     output.slosh_cost_monitor.J_slosh_eta_dot = output.cost.J_slosh_eta_dot;

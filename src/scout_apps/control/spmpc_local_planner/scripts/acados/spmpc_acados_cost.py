@@ -10,6 +10,8 @@ contour / lag 用 s 的参考多项式解析计算（局部 MPCC）。
 """
 
 import casadi as ca
+from actual_motion_kernel import actual_motion_rhs
+from planning_terms import geometry_terms, speed_references, task_goal_cost
 
 from spmpc_acados_model import (
     ACCEL_MEMORY_INDEX, LINEAR_QUEUE_START, ANGULAR_QUEUE_START,
@@ -18,9 +20,16 @@ from spmpc_acados_model import (
 )
 
 
+def _reference_coordinate(x, p, pidx):
+    if "reference_mode" not in pidx:
+        return x[4]
+    q = (x[4]-p[pidx["reference_s0"]])/(p[pidx["reference_s3"]]-p[pidx["reference_s0"]])
+    return ca.if_else(p[pidx["reference_mode"]] > 0, q, x[4])
+
+
 def _reference_terms(x, p, pidx=PIDX):
     """返回 (x_ref, y_ref, phi_ref)：参考点与参考切向，均为 s 的函数。"""
-    s = x[4]
+    s = _reference_coordinate(x, p, pidx)
     rx = [p[pidx["rx0"]], p[pidx["rx1"]], p[pidx["rx2"]], p[pidx["rx3"]]]
     ry = [p[pidx["ry0"]], p[pidx["ry1"]], p[pidx["ry2"]], p[pidx["ry3"]]]
 
@@ -59,7 +68,7 @@ def _curvature_limited_vref(x, p, cfg, pidx=PIDX):
 
     只读 cost 模块已有的参数与 cfg 常量，不改参数向量契约、不碰 wrapper。
     """
-    s = x[4]
+    s = _reference_coordinate(x, p, pidx)
     rx1, rx2, rx3 = p[pidx["rx1"]], p[pidx["rx2"]], p[pidx["rx3"]]
     ry1, ry2, ry3 = p[pidx["ry1"]], p[pidx["ry2"]], p[pidx["ry3"]]
     dx = rx1 + 2.0 * rx2 * s + 3.0 * rx3 * s * s
@@ -159,7 +168,8 @@ def terminal_cost_expr_direct_omega_legacy(sym, cfg):
 # Stable component ABI for generated C diagnostics. Terminal terms are evaluated
 # separately; slack/stop have their own totals including terminal contributions.
 COST_COMPONENT_NAMES = ("contour", "lag", "progress", "v_actual", "v_s",
-                        "anti_creep", "control", "smooth", "slosh_eta", "slosh_eta_dot", "slack", "stop")
+                        "anti_creep", "control", "smooth", "slosh_eta", "slosh_eta_dot", "slack", "stop",
+                        "curvature", "curvature_change")
 
 
 def cost_components(sym, cfg, terminal=False):
@@ -170,7 +180,7 @@ def cost_components(sym, cfg, terminal=False):
     ec = ca.sin(phi) * (x[0] - rx) - ca.cos(phi) * (x[1] - ry)
     el = -ca.cos(phi) * (x[0] - rx) - ca.sin(phi) * (x[1] - ry)
     terms = [p[idx["w_contour"]] * (ec / p[idx["e_c_ref"]])**2,
-             p[idx["w_lag"]] * (el / p[idx["e_l_ref"]])**2] + [ca.SX(0)] * 10
+             p[idx["w_lag"]] * (el / p[idx["e_l_ref"]])**2] + [ca.SX(0)] * (len(COST_COMPONENT_NAMES)-2)
     if sym.get("with_slosh"):
         b = sym["eta_base"]
         terms[8] = p[idx["w_slosh_eta"]] * (x[b]**2 + x[b+2]**2) / p[idx["eta_ref"]]**2
@@ -186,15 +196,21 @@ def cost_components(sym, cfg, terminal=False):
     delay = p[idx["stop_delay_margin"]]
     # Includes a delay/actuator/jerk margin, with finite derivatives at rest.
     stop_v = ca.sqrt((brake*delay)**2 + 2*brake*remaining) - brake*delay
-    nominal_vref = _curvature_limited_vref(x, p, cfg, idx)
+    curve_limited = _curvature_limited_vref(x, p, cfg, idx)
+    cruise = ca.if_else(p[idx["reference_curvature_speed_enable"]] > 0.5,
+                        curve_limited, p[idx["v_ref"]])
+    nominal_vref, nominal_vsref = speed_references(x, p, idx, cruise)
     stopping = p[idx["stop_active"]]
     vref = (1-stopping)*nominal_vref + stopping*ca.fmin(nominal_vref, stop_v)
+    vsref = (1-stopping)*nominal_vsref + stopping*ca.fmin(nominal_vsref, stop_v)
     near_goal = stopping*ca.fmax(0, 1-remaining/ca.fmax(.1, p[idx["v_ref"]]*delay))
     # Clear command/actual motion and the delayed command tail at the true goal.
     stop_energy = (x[3]**2+x[6]**2)/cfg["v_max"]**2 + (x[5]**2+x[7]**2)/cfg["omega_max"]**2
     stop_energy += ca.sumsqr(x[LINEAR_QUEUE_START:ANGULAR_QUEUE_START])/(LINEAR_DELAY_STEPS*cfg["v_max"]**2) + ca.sumsqr(x[ANGULAR_QUEUE_START:ACCEL_MEMORY_INDEX])/(ANGULAR_DELAY_STEPS*cfg["omega_max"]**2)
     stop_energy += (x[ACCEL_MEMORY_INDEX]/cfg["a_max"])**2
     terms[11] = p[idx["stop_velocity_weight"]]*near_goal*stop_energy
+    if terminal:
+        terms[11] += task_goal_cost(x,p,idx)
     if sym.get("with_slosh"):
         b=sym["eta_base"]
         residual_energy = x[b]**2+x[b+2]**2+(x[b+1]**2+x[b+3]**2)/p[idx["omega_n_sq"]]
@@ -202,15 +218,22 @@ def cost_components(sym, cfg, terminal=False):
     if not terminal:
         terms[2] = -p[idx["w_progress"]] * u[2] / cfg["vs_max"] * ((1-stopping) + stopping*ca.fmin(1, stop_v/ca.fmax(1e-6,nominal_vref)))
         terms[3] = p[idx["w_v"]] * ((x[3] - vref) / cfg["v_max"])**2
-        terms[4] = p[idx["w_vs"]] * ((u[2] - vref) / cfg["vs_max"])**2
+        terms[4] = p[idx["w_vs"]] * ((u[2] - vsref) / cfg["vs_max"])**2
         terms[5] = p[idx["anticreep_gain"]] * p[idx["w_v"]] * (
             (ca.fmax(0, vref-x[3]) / cfg["v_max"])**2 +
-            (ca.fmax(0, vref-u[2]) / cfg["vs_max"])**2)
+            (ca.fmax(0, vsref-u[2]) / cfg["vs_max"])**2)
         terms[6] = (p[idx["w_a"]] * (u[0]/cfg["a_max"])**2 +
                     p[idx["w_omega"]] * (x[5]/cfg["omega_max"])**2 +
                     p[idx["w_alpha"]] * (u[1]/cfg["alpha_max"])**2)
         terms[7] = (p[idx["w_du_a"]] * ((u[0]-x[ACCEL_MEMORY_INDEX])/cfg["a_max"])**2 +
                     p[idx["w_du_vs"]] * ((u[2]-p[idx["vs_prev"]])/cfg["vs_max"])**2)
+        # Reuse the same actuator RHS as the state dynamics for curvature rate.
+        motion = ca.vertcat(x[0:4], x[5], ca.SX.zeros(4))
+        delayed = ca.vertcat(x[LINEAR_QUEUE_START], x[ANGULAR_QUEUE_START])
+        actuator = ca.vertcat(*(p[idx[name]] for name in
+                               ("actuator_tau_v", "actuator_tau_omega", "actuator_gain_v", "actuator_gain_omega")))
+        actual = actual_motion_rhs(motion, delayed, actuator, ca.SX.zeros(4))
+        terms[12], terms[13] = geometry_terms(x, actual[3], actual[4], p, idx, cfg["v_max"])
     # Average running cost + one terminal cost. acados scaling is explicitly 1.
     return ca.vertcat(*terms) / (1. if terminal else float(cfg["N"]))
 
