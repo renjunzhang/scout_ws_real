@@ -6,7 +6,7 @@ controller clock, or claim recursive feasibility. Reoptimization can be slow.
 from copy import deepcopy
 import numpy as np
 from .optimizer import dynamics, solve_task
-from .task import load_task, halfspaces
+from .task import load_task, PROGRESS_TOLERANCE
 from .validation import validate_plan
 
 
@@ -45,7 +45,7 @@ def _nominal_suffix(plan, task, elapsed):
     for k in range(n+1):
         index = min(begin+k, len(original)-1)
         control = np.asarray(original[index]["control"] if k < n else [0.,0.,0.])
-        cells = [c for c in task["region"]["cells"] if c["s_begin"]-1e-8 <= state[4] <= c["s_end"]+1e-8]
+        cells = [c for c in task["region"]["cells"] if c["s_begin"]-PROGRESS_TOLERANCE <= state[4] <= c["s_end"]+PROGRESS_TOLERANCE]
         if not cells: raise ValueError("nominal suffix leaves the region progress domain")
         phase = "TAIL" if k >= moving else original[index]["phase"]
         rows.append(dict(t=k*dt, state=state.tolist(), control=control.tolist(), phase=phase, region_cell_id=cells[0]["id"]))

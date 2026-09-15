@@ -1,6 +1,6 @@
 """Verify a saved plan by replaying the full production dynamics from its x0."""
 import numpy as np
-from .task import load_task, halfspaces
+from .task import load_task, halfspaces, PROGRESS_TOLERANCE
 from .optimizer import dynamics
 from actual_motion_kernel import functions as motion_functions
 from model_contract import MODEL_VERSION, COST_VERSION
@@ -27,7 +27,8 @@ def validate_plan(plan, tolerance=2e-6):
         raise ValueError("plan has nonfinite data or changed initial state")
     route = np.asarray(task["route"], float)
     route_length = float(np.linalg.norm(np.diff(route, axis=0), axis=1).sum())
-    if np.any(X[:, 4] < -1e-8) or np.any(X[:, 4] > route_length + 1e-8) or np.any(np.diff(X[:, 4]) < -1e-8):
+    if (np.any(X[:, 4] < -PROGRESS_TOLERANCE) or np.any(X[:, 4] > route_length + PROGRESS_TOLERANCE)
+            or np.any(np.diff(X[:, 4]) < -PROGRESS_TOLERANCE)):
         raise ValueError("progress exceeds original route domain")
     if abs(X[moving, 4] - route_length) > tolerance:
         raise ValueError("transport endpoint does not reach original route length")

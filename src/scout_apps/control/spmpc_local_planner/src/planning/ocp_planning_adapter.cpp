@@ -54,6 +54,11 @@ OcpPlanningAdapter::OcpPlanningAdapter(const SolverParams& params)
         trajectory_ = std::make_shared<TrajectoryReference>(TrajectoryPlan::load(config_.trajectory.plan_file));
         const auto& plan=trajectory_->plan();
         requireClose(plan.dt, dt_, "dt");
+        requireClose(plan.stop_window,config_.evaluation_window_sec,"evaluation window");
+        requireClose(plan.goal_position_tolerance,terminal_.goal_tolerance,"goal position tolerance");
+        requireClose(plan.goal_yaw_tolerance,terminal_.goal_yaw_tolerance,"goal yaw tolerance");
+        requireClose(plan.stop_speed_tolerance,terminal_.goal_reached_max_speed,"stop speed tolerance");
+        requireClose(plan.stop_omega_tolerance,terminal_.goal_reached_max_omega,"stop omega tolerance");
         const auto& expected_region=plan.region;
         if (!config_.region.enabled || config_.region.id!=expected_region.id ||
             config_.region.frame_id!=expected_region.frame_id || config_.region.cells.size()!=expected_region.cells.size())

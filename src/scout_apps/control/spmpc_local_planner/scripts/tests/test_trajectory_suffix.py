@@ -48,3 +48,16 @@ def test_compare_rejects_invalid_epoch_and_retains_failures(monkeypatch):
     assert "nominal failed" in result["candidates"][0]["failure"]
     assert "ipopt failed" in result["candidates"][1]["failure"]
     assert result["best_feasible_candidate"] is None
+
+
+def test_nominal_suffix_accepts_rollout_roundoff_without_rewriting_progress():
+    plan = make_plan()
+    state = np.asarray(plan["samples"][15]["state"]).copy()
+    state[4] += 2e-8
+    elapsed = 15*plan["task"]["dt"]
+    candidate = suffix._nominal_suffix(plan, suffix.remaining_task(plan, state, elapsed), elapsed)
+    assert candidate["samples"][0]["state"][4] == state[4]
+    assert candidate["validation"]["status"] == "SOFTWARE_VERIFIED"
+    state[4] += .01
+    result = suffix.compare_suffixes(plan, state, elapsed, reoptimize=False)
+    assert not result["candidates"][0]["feasible"]

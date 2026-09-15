@@ -20,6 +20,7 @@ DEFAULT_OBJECTIVE = dict(contour=.02, lag=.2, curvature=1., curvature_change=.01
                          height_scale=.005, contour_scale=.3, lag_scale=.1,
                          curvature_scale=1., curvature_change_scale=1., speed_floor=.05)
 LIMIT_NAMES = ("actual_v_min", "v_max", "omega_max", "a_max", "alpha_max", "jerk_max")
+PROGRESS_TOLERANCE = 1e-6  # Matches the C++ motion-region coordinate tolerance.
 
 
 def halfspaces(region, cell, sweep=0.):

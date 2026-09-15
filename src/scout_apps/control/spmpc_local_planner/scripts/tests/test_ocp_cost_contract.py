@@ -18,7 +18,7 @@ class OcpCostContract(unittest.TestCase):
     def test_generated_components_are_reproducible(self):
         with tempfile.TemporaryDirectory() as directory:
             generate(directory)
-            for name in ['ocp_cost_generated.c','ocp_cost_generated.h','ocp_cost_contract.h']:
+            for name in ['ocp_cost_generated.c','ocp_cost_generated.h','ocp_cost_contract.h','ocp_parameter_contract.h']:
                 self.assertEqual((Path(directory)/name).read_bytes(), (P/'src/core/generated'/name).read_bytes())
 
     def test_components_equal_objective_with_distinct_terminal_and_curvature(self):

@@ -11,7 +11,7 @@ namespace spmpc_local_planner {
 constexpr std::size_t kMaxRegionFaces = 8;
 // Numerical tolerance for progress coordinates only. Spatial halfspaces and
 // footprint inflation are unchanged by this tolerance.
-constexpr double kProgressTolerance = 1e-8;
+constexpr double kProgressTolerance = 1e-6;
 
 struct RegionVertex { double x = 0.0; double y = 0.0; };
 struct RegionHalfspace { double nx = 0.0; double ny = 0.0; double offset = 1e12; };

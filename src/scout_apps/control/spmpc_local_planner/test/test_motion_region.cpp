@@ -66,6 +66,6 @@ TEST(MotionRegion, ProgressRoundoffDoesNotExpandTheSpatialRegion) {
   EXPECT_NO_THROW(r.stage(2+2e-10,0));
   EXPECT_NEAR(r.clearance(1,0,2+2e-10),r.clearance(1,0,2),1e-12);
   EXPECT_LT(r.clearance(4,0,2+2e-10),0);  // Footprint still outside.
-  EXPECT_THROW(r.stage(-1e-6,0),std::out_of_range);
-  EXPECT_THROW(r.clearance(1,0,2+1e-6),std::out_of_range);
+  EXPECT_THROW(r.stage(-1e-4,0),std::out_of_range);
+  EXPECT_THROW(r.clearance(1,0,2+1e-4),std::out_of_range);
 }
