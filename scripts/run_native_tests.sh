@@ -25,4 +25,9 @@ fi
 cmake -S "${repo_root}/test/native" -B "${build_dir}" -G Ninja \
   -DCMAKE_BUILD_TYPE=RelWithDebInfo "${cmake_args[@]}"
 cmake --build "${build_dir}" --parallel "${SPMPC_NATIVE_JOBS:-2}"
-ctest --test-dir "${build_dir}" --output-on-failure
+# Ubuntu 20.04 / ROS Noetic ships CTest 3.16, before --test-dir was added.
+# Older CTest silently ignores that option and can report success with no tests.
+(
+  cd "${build_dir}"
+  ctest --output-on-failure
+)

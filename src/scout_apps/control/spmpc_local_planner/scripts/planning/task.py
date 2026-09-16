@@ -80,7 +80,7 @@ def load_task(source):
     unknown_objective = set(supplied_objective) - set(DEFAULT_OBJECTIVE)
     if unknown_objective:
         raise ValueError("unknown objective key: " + sorted(unknown_objective)[0])
-    task["objective"] = DEFAULT_OBJECTIVE | supplied_objective
+    task["objective"] = {**DEFAULT_OBJECTIVE, **supplied_objective}
     task.setdefault("max_iterations", 1000)
     task.setdefault("progress_scale_min", .1)
     task.setdefault("progress_scale_max", 10.)

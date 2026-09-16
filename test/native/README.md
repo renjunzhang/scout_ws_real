@@ -21,7 +21,8 @@ scripts/run_native_tests.sh --with-acados
 `--with-acados` validates that `ACADOS_SOURCE_DIR/lib/libacados.so` exists and
 that both generated solver shared libraries are present. The CTest target has
 an RPATH and test environment for the acados library directory, so direct
-`ctest --test-dir /tmp/spmpc_native_build_real` also resolves the libraries.
+`(cd /tmp/spmpc_native_build_real && ctest --output-on-failure)` also resolves
+the libraries and works with ROS Noetic's CTest 3.16.
 No mode installs packages or accesses the network.
 
 The Python generator must run with CasADi 3.7.2 and the acados v0.5.4 source

@@ -158,7 +158,7 @@ double polyEval(const Eigen::Vector4d& c, double s) {
 double polyDeriv(const Eigen::Vector4d& c, double s) {
     return c(1) + 2.0 * c(2) * s + 3.0 * c(3) * s * s;
 }
-void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_end,
+void fitLegacyReferencePolynomials(const ReferenceSpline& spline, double s0, double s_end,
                              Eigen::Vector4d& cx, Eigen::Vector4d& cy) {
     const int m = 12;
     Eigen::MatrixXd A(m, 4);
@@ -248,7 +248,7 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
     spline.build(reference);
     const double s_end = std::min(len, s0 + params_.v_max * Tf);
     Eigen::Vector4d cx, cy;
-    fitReferencePolynomials(spline, s0, s_end, cx, cy);
+    fitLegacyReferencePolynomials(spline, s0, s_end, cx, cy);
 
     const double e_c_ref = std::max(1e-3, 0.5 * params_.corridor_width);
     const double e_l_ref = std::max(0.1, params_.v_max * input.dt);
