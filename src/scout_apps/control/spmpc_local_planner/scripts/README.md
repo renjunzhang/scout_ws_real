@@ -198,7 +198,7 @@ topic 名按原录制参数替换。放开暂停后，先等真实历史覆盖�
 
 这用于在录制状态上重新求解，重算命令不改变录制的后续运动，不能作为闭环改善证据。当前只完成消息接线静态审查与 ROS 无关的时间/历史接纳测试；ROS1 整节点编译、TF 和 bag 联调仍待对应环境验证。
 
-当前 `publish_cmd_vel=false`会在shared limiter及“命令改写即拒绝”计算前返回，因而此回放不能验收真实发布层的短/长周期行为。后续需把发布决策与实际发送分开验证；同时注入定位跳变、IMU/odom断流和命令历史异常，避免把自动恢复有效误当成液体状态已可信。已确认缺口及条件见[合并审查第4～5节](../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)。
+当前 `publish_cmd_vel=false`执行与真实发布相同的shared limiter、改写拒绝及时效检查，仅关闭发送与新命令记录；外部录制审计同时更新限幅器的上一条命令基线。ROS1整发布接口仍须对应环境验证，模型回放不替代实车闭环。
 
 ## 实现模块与开发工具
 
@@ -207,3 +207,26 @@ topic 名按原录制参数替换。放开暂停后，先等真实历史覆盖�
 - `analysis/*_core.py`、`horizon_liquid_replay.py`、`rotating_liquid_replay.py`、`ocp_snapshot_contract.py`、`liquid_cost_window_contract.py`和`i0_failclosed_fixed_abba_profile.py`是分析/合同模块。`analysis/publish_mocap_velocity_step.py`及`publish_mocap_velocity_continuity.py`会发速度，应由对应runner管理。
 - [acados/generate_spmpc_acados.py](acados/generate_spmpc_acados.py)提供`--model b0|slosh`和`--check`；同目录model/cost/constraints/planning_terms等负责装配。`generate_slosh_kernel.py`、`generate_cost_kernel.py`同步生成共源C代码，生成物变化需重建。B0/slosh应串行生成，详见native README。
 - `tests/`与`experiments/test_recording_contract.py`供开发回归，部分依赖ROS1/rosbag，不能把无ROS的定向测试写成整包验收。
+
+## 本轮执行链验证与B0高度旁路
+
+当前主比较是 `raw_mpcc/B0` 与 `planned_slosh`；实物基线按用户确认的 `7d17f6c` 记录。最新修复、定向模型回归及未验证边界见[执行链记录](../../../../../docs/实物实验注意事项/后续改进/20260916_执行链收敛修复与定向回归.md)。原有实物runner继续按其冻结配置索引，不把trajectory新默认等同于旧bag条件。
+
+[analysis/rotating_liquid_replay.py](analysis/rotating_liquid_replay.py) 新增同核预测高度旁路：B0与Full都可使用schema8/cost3的同cycle快照和预测，输入显式可信液体初态、对应 `solver_input_epoch_ns`、冻结液体系数与高度系数；按每stage的actual状态和FIFO头传播，输出独立 `liquid_states/h_modal`。初态缺失、无效或epoch不一致会拒绝，不能以B0原始零占位代替。该CLI不向ROS发命令，不反馈B0决策。
+
+```bash
+/home/zrj/.cache/scout_spmpc_dev/venv/bin/python \
+  src/scout_apps/control/spmpc_local_planner/scripts/analysis/rotating_liquid_replay.py \
+  prediction_request.json prediction_height.json
+```
+
+JSON顶层字段为 `snapshot`、`horizon`、`liquid_initial_state`（四维）、`liquid_initial_epoch_ns`（整数）、`liquid_initial_source`（如`aligned_observer`）、`liquid_initial_valid`（true）、`liquid_parameters`（阻尼、刚度、x/y激励系数）、`height_coeff`。快照/预测中的ROS time导出为整数 `solver_input_epoch_ns`，其余字段按原schema导出。评价初态必须由同一连续观察器传播到该epoch后提供；本次只接入通用模型/JSON评价入口，尚未完成新S协议的bag自动提取、IMU对齐和配对效果统计。
+
+重放完整动力学的旧 `x0/controls/stage_parameters` JSON接口仍可用。新旁路定向测试：
+
+```bash
+PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 /home/zrj/.cache/scout_spmpc_dev/venv/bin/python -m pytest -q \
+  src/scout_apps/control/spmpc_local_planner/scripts/tests/test_prediction_liquid_evaluation.py
+```
+
+`trajectory_common.yaml`现已关闭重复shared命令限幅并启用改写拒绝。无输出回放执行同样的最终检查，但不能替代ROS真实发布接口测试。运行中液体断流后，不再等filter READY自动重接纳；确认静置后重启，再开始下一次对照。

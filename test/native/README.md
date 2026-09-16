@@ -91,3 +91,15 @@ Post-review checks passed 17 stub CTest programs and all 18 real-acados programs
 The focused Python run passed 49 checks; two roslaunch-dependent checks could not
 run on this host. See the [repair record](../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)
 for coverage and remaining ROS1/physical validation boundaries.
+
+## 2026-09-16 执行链收敛回归
+
+最新生产核心 `c7cd62a` 的 stub 18/18、真实 acados 19/19 个 CTest 程序通过；
+预测高度旁路及相关 Python 定向检查35项通过。四次单拐角回归的
+[身份和全部结果](results/20260916_execution_contract_regression.json)另存，未覆盖上述历史矩阵。
+B0/Full完成；两个geometry组仍在10 s发生 `ACADOS_SOLVE_FAILED_4`，本轮改为
+可信停车接管，最终 `TASK_DEADLINE_MISSED`。不能只看最终状态而漏记早先求解失败。
+
+native 默认不设置在线求解预算，固定次数用于名义模型回归；本轮最长核心耗时69.83 ms，
+不能据此宣称30 Hz通过。ROS路径才设置周期预算和发布时效门。
+修复边界、参数及新验证顺序见[执行链报告](../../docs/实物实验注意事项/后续改进/20260916_执行链收敛修复与定向回归.md)。
