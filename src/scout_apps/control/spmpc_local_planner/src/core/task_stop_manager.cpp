@@ -2,10 +2,60 @@
 #include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
+#include <stdexcept>
 
 namespace spmpc_local_planner {
 namespace {
 bool positive(double x) { return std::isfinite(x) && x > 0; }
+
+bool finiteRobotState(const RobotState& state) {
+    return std::isfinite(state.x) && std::isfinite(state.y) &&
+        std::isfinite(state.yaw) && std::isfinite(state.v) &&
+        std::isfinite(state.omega);
+}
+
+bool finiteActuatorState(const ActuatorState& state) {
+    if (!std::isfinite(state.v_cmd) || !std::isfinite(state.omega_cmd) ||
+        !std::isfinite(state.a_cmd_memory) || !std::isfinite(state.delayed_v_cmd) ||
+        !std::isfinite(state.delayed_omega_cmd) || !std::isfinite(state.a_actual) ||
+        !std::isfinite(state.alpha_actual)) return false;
+    return std::all_of(state.linear_delay_queue.begin(), state.linear_delay_queue.end(),
+                       [](double value) { return std::isfinite(value); }) &&
+        std::all_of(state.angular_delay_queue.begin(), state.angular_delay_queue.end(),
+                    [](double value) { return std::isfinite(value); });
+}
+
+double regionClearance(const RegionStageData& stage, double x, double y) {
+    double result = std::numeric_limits<double>::infinity();
+    if (!stage.enabled) return result;
+    for (const RegionHalfspace& face : stage.faces)
+        result = std::min(result, face.offset - face.nx * x - face.ny * y);
+    return result;
+}
+
+bool stopCandidateConsistent(const StopCommand& command,
+                             const ActuatorState& history, double dt,
+                             double a_max, double alpha_max, double jerk_max) {
+    if (!command.valid || !std::isfinite(command.v) || command.v < 0.0 ||
+        !std::isfinite(command.omega) || !std::isfinite(command.a) ||
+        !std::isfinite(history.v_cmd) || !std::isfinite(history.a_cmd_memory))
+        return false;
+    const double expected_a = (command.v - history.v_cmd) / dt;
+    return std::isfinite(expected_a) && std::abs(expected_a - command.a) <= 1e-8 &&
+        std::abs(command.a) <= a_max + 1e-9 &&
+        std::abs(command.a - history.a_cmd_memory) <= jerk_max * dt + 1e-9 &&
+        std::abs(command.omega - history.omega_cmd) <= alpha_max * dt + 1e-9;
+}
+
+bool commandsExactlyZero(const ActuatorState& state) {
+    if (state.v_cmd != 0.0 || state.omega_cmd != 0.0 || state.a_cmd_memory != 0.0)
+        return false;
+    return std::all_of(state.linear_delay_queue.begin(), state.linear_delay_queue.end(),
+                       [](double value) { return value == 0.0; }) &&
+        std::all_of(state.angular_delay_queue.begin(), state.angular_delay_queue.end(),
+                    [](double value) { return value == 0.0; });
+}
 
 // Velocity change when applying a now, then releasing negative acceleration
 // towards zero at +jerk each subsequent command interval. Includes this step.
@@ -46,6 +96,10 @@ StopCommand makeJerkLimitedStopCommand(const ActuatorState& history, double dt,
     }
     out.a=lo;
     out.v=std::max(0.0,history.v_cmd+out.a*dt);
+    // Collapse the numerical last step to the same exact zero represented by
+    // the command FIFO. Keep deriving acceleration from the emitted value so
+    // the jerk contract remains tied to what is actually sent.
+    if (out.v <= 1e-12) out.v = 0.0;
     // Derive the reported acceleration from the emitted command, including roundoff.
     out.a=(out.v-history.v_cmd)/dt;
     out.omega=std::copysign(std::max(0.,std::abs(history.omega_cmd)-alpha_max*dt),history.omega_cmd);
@@ -55,8 +109,9 @@ StopCommand makeJerkLimitedStopCommand(const ActuatorState& history, double dt,
 
 bool TaskStopManager::configure(const TaskStopParams& params, const ActuatorModelParams& actuator,
                                 const SloshModelParams& liquid, double a_max,
-                                double alpha_max, double jerk_max) {
+                                double alpha_max, double jerk_max, bool include_liquid) {
     params_=params;actuator_=actuator;a_max_=a_max;alpha_max_=alpha_max;jerk_max_=jerk_max;
+    include_liquid_=include_liquid;
     configured_=positive(params.residual_height_m) && positive(params.stable_hold_sec) &&
         positive(params.max_settle_sec) && positive(params.max_tail_prediction_sec) &&
         params.max_tail_prediction_sec<=60.0 &&
@@ -103,8 +158,9 @@ double TaskStopManager::residualHeight(const SloshState& q) const {
 StopReadiness TaskStopManager::observe(const SolverInput& input,bool position_reached,
                                       double stopped_v,double stopped_omega) {
     StopReadiness out;
-    if (!configured_ || (!positive(input.dt) || std::abs(input.dt-actuator_.dt)>1e-6) || !std::isfinite(input.robot.v) ||
-        !std::isfinite(input.robot.omega) || !finiteSloshState(input.slosh) || !input.actuator.valid) {
+    if (!configured_ || (!positive(input.dt) || std::abs(input.dt-actuator_.dt)>1e-6) ||
+        !finiteRobotState(input.robot) || !finiteActuatorState(input.actuator) ||
+        (include_liquid_ && !finiteSloshState(input.slosh)) || !input.actuator.valid) {
         stable_duration_=0;previous_sample_stable_=false;
         return out;
     }
@@ -155,7 +211,7 @@ StopReadiness TaskStopManager::observe(const SolverInput& input,bool position_re
     out.vehicle_stopped=position_reached && out.queues_clear &&
         std::abs(input.robot.v)<=stopped_v && std::abs(input.robot.omega)<=stopped_omega;
     out.excitation_quiet=excitationQuiet(input.robot,input.actuator);
-    out.residual_height_m=residualHeight(input.slosh);
+    out.residual_height_m=include_liquid_ ? residualHeight(input.slosh) : 0.0;
     if (out.vehicle_stopped && vehicle_stop_time_<0) vehicle_stop_time_=elapsed_;
     if (!out.vehicle_stopped || !out.excitation_quiet || out.residual_height_m>params_.residual_height_m) {
         stable_duration_=0;previous_sample_stable_=false;
@@ -178,18 +234,78 @@ StopReadiness TaskStopManager::observe(const SolverInput& input,bool position_re
     return out;
 }
 
-StopTailPrediction TaskStopManager::predict(const SolverInput& input) const {
+StopTailPrediction TaskStopManager::predict(const SolverInput& input,
+                                            const MotionRegion* region,
+                                            double progress) const {
+    return predictTail(input, nullptr, region, progress);
+}
+
+StopTailPrediction TaskStopManager::predictAfterCommand(
+    const SolverInput& input, const StopCommand& first_command,
+    const MotionRegion* region, double progress) const {
+    return predictTail(input, &first_command, region, progress);
+}
+
+StopTailPrediction TaskStopManager::predictTail(
+    const SolverInput& input, const StopCommand* first_command,
+    const MotionRegion* region, double progress) const {
     StopTailPrediction out;
-    if (!configured_ || (!positive(input.dt) || std::abs(input.dt-actuator_.dt)>1e-6) || !input.actuator.valid || !finiteSloshState(input.slosh)) {
+    out.region_checked = region != nullptr;
+    if (!configured_ || (!positive(input.dt) || std::abs(input.dt-actuator_.dt)>1e-6) ||
+        !input.actuator.valid || !finiteRobotState(input.robot) ||
+        !finiteActuatorState(input.actuator) ||
+        (include_liquid_ && !finiteSloshState(input.slosh)) ||
+        (region != nullptr && !std::isfinite(progress))) {
         out.status="STOP_MODEL_INVALID";return out;
     }
-    auto robot=input.robot;auto liquid=input.slosh;auto actuator=input.actuator;
-    out.peak_height_m=liquid_.height(liquid);
+    RegionStageData region_stage;
+    if (region != nullptr) {
+        try {
+            // Freeze the progress/cell for the complete tail.  The terminal
+            // command is conservative and is never allowed to cross to a
+            // later cell while braking.
+            region_stage = region->stage(progress, 0.0);
+            const double initial_clearance = regionClearance(region_stage, input.robot.x, input.robot.y);
+            out.minimum_region_clearance_m = initial_clearance;
+            if (initial_clearance < -1e-9) out.status = "STOP_REGION_UNSAFE";
+        } catch (const std::exception&) {
+            out.status = "STOP_REGION_UNSAFE";
+            return out;
+        }
+    }
+    auto robot=input.robot;
+    // A vehicle-only group has no truthful liquid state.  Its vehicle model
+    // still uses the same propagator, with a neutral internal liquid state.
+    auto liquid=include_liquid_ ? input.slosh : SloshState{};
+    auto actuator=input.actuator;
+    if (include_liquid_) out.peak_height_m=liquid_.height(liquid);
+    bool region_unsafe = out.status == "STOP_REGION_UNSAFE";
+    bool quiet_seen = false;
+    const std::size_t fifo_prefix_steps = std::min(actuator.linear_delay_queue.size(),
+                                                   actuator.angular_delay_queue.size());
     const int steps=static_cast<int>(std::ceil(params_.max_tail_prediction_sec/input.dt));
     for (int k=0;k<steps;++k) {
-        const auto command=makeJerkLimitedStopCommand(actuator,input.dt,a_max_,alpha_max_,jerk_max_);
-        if (!command.valid) {out.status=command.status;return out;}
+        const auto command = (k == 0 && first_command != nullptr)
+            ? *first_command
+            : makeJerkLimitedStopCommand(actuator,input.dt,a_max_,alpha_max_,jerk_max_);
+        if (!stopCandidateConsistent(command, actuator, input.dt, a_max_, alpha_max_, jerk_max_)) {
+            out.status = (k == 0 && first_command != nullptr)
+                ? "STOP_CANDIDATE_INVALID" : command.status;
+            return out;
+        }
         if (k==0) out.first_command=command;
+        double start_clearance = std::numeric_limits<double>::infinity();
+        const double sweep_distance = std::max(std::abs(robot.v),
+            std::abs(actuator_.linear_gain * actuator.linear_delay_queue.front())) * input.dt;
+        if (region != nullptr) {
+            start_clearance = regionClearance(region_stage, robot.x, robot.y);
+            out.minimum_region_clearance_m = std::min(out.minimum_region_clearance_m,
+                                                       start_clearance - sweep_distance);
+            // This is a reserve check from the beginning of the interval. It
+            // covers the complete interval even when the integrator endpoint
+            // happens to lie back inside the polygon.
+            if (start_clearance < sweep_distance - 1e-9) region_unsafe = true;
+        }
         const double x=robot.x,y=robot.y;
         if (!propagateActualMotion(robot,liquid,{actuator.linear_delay_queue.front(),actuator.angular_delay_queue.front()},actuator_,liquid_,input.dt)) {
             out.status="STOP_TAIL_PROPAGATION_FAILED";return out;
@@ -201,14 +317,50 @@ StopTailPrediction TaskStopManager::predict(const SolverInput& input) const {
         actuator.a_cmd_memory=command.a;
         out.distance_m+=std::hypot(robot.x-x,robot.y-y);
         out.duration_sec+=input.dt;
-        out.peak_height_m=std::max(out.peak_height_m,liquid_.height(liquid));
-        if (excitationQuiet(robot,actuator)) {
-            out.residual_height_m=residualHeight(liquid);
+        if (include_liquid_) out.peak_height_m=std::max(out.peak_height_m,liquid_.height(liquid));
+        if (region != nullptr) {
+            const double endpoint_clearance = regionClearance(region_stage, robot.x, robot.y);
+            out.minimum_region_clearance_m = std::min(out.minimum_region_clearance_m,
+                                                       endpoint_clearance);
+            if (endpoint_clearance < -1e-9) {
+                region_unsafe = true;
+                // Only a real propagated endpoint in the unavoidable command
+                // prefix establishes FIFO-region violation. A negative swept
+                // reserve alone is deliberately not labelled unavoidable.
+                if (static_cast<std::size_t>(k) < fifo_prefix_steps)
+                    out.fifo_prefix_violation = true;
+            }
+        }
+        if (excitationQuiet(robot,actuator) && commandsExactlyZero(actuator)) {
+            quiet_seen = true;
+            out.residual_height_m=include_liquid_ ? residualHeight(liquid) : 0.0;
             // Do not miss the following modal peak when the surface currently
             // crosses zero. This is an energy proxy under the quiet-tail gate.
-            out.peak_height_m=std::max(out.peak_height_m,out.residual_height_m);
-            out.valid=true;out.status="STOP_TAIL_QUIET";return out;
+            if (include_liquid_) out.peak_height_m=std::max(out.peak_height_m,out.residual_height_m);
+            if (region != nullptr) {
+                const double residual_reserve = actuator_.linear_tau_sec * std::abs(robot.v);
+                const double quiet_clearance = regionClearance(region_stage, robot.x, robot.y);
+                out.minimum_region_clearance_m = std::min(out.minimum_region_clearance_m,
+                                                           quiet_clearance - residual_reserve);
+                if (quiet_clearance < residual_reserve - 1e-9) region_unsafe = true;
+            }
+            if (!region_unsafe && !out.fifo_prefix_violation) {
+                out.valid=true;out.status="STOP_TAIL_QUIET";return out;
+            }
+            // A conservative reserve failure must not hide a later propagated
+            // FIFO endpoint violation. Continue through the prefix before
+            // returning the region result.
+            if (static_cast<std::size_t>(k) + 1 >= fifo_prefix_steps) break;
         }
+    }
+    if (out.fifo_prefix_violation) {
+        out.status="STOP_FIFO_REGION_VIOLATION";return out;
+    }
+    if (region_unsafe) {
+        out.status="STOP_REGION_UNSAFE";return out;
+    }
+    if (quiet_seen) {
+        out.valid=true;out.status="STOP_TAIL_QUIET";return out;
     }
     out.status="STOP_TAIL_TIMEOUT";return out;
 }

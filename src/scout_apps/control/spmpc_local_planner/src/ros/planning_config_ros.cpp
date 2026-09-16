@@ -96,6 +96,7 @@ PlanningConfig loadPlanningConfig(const ros::NodeHandle& node) {
   readBooleanIfPresent(node, "planning/liquid_free_baseline", config.liquid_free_baseline);
   readNumberIfPresent(node, "planning/task_deadline_sec", config.task_deadline_sec);
   readNumberIfPresent(node, "planning/evaluation_window_sec", config.evaluation_window_sec);
+  readNumberIfPresent(node, "planning/projection/lookahead", config.projection_lookahead);
 
   readBooleanIfPresent(node, "planning/geometry/enabled", config.geometry.enabled);
   readNumberIfPresent(node, "planning/geometry/curvature_weight", config.geometry.curvature_weight);

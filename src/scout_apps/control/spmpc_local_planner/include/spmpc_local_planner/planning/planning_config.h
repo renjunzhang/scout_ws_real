@@ -34,6 +34,7 @@ struct PlanningConfig {
     bool liquid_free_baseline = false;
     double task_deadline_sec = 0.0;     // 0 disables the deadline for legacy tasks
     double evaluation_window_sec = 1.0;
+    double projection_lookahead = 2.0; // route-progress window, not a tracking-error or v*dt gate
     GeometryObjectiveConfig geometry;
     MotionRegionConfig region;
     TrajectoryReferenceConfig trajectory;

@@ -228,8 +228,9 @@ bool ContinuousMpccDirectOmegaLegacySolverAcados::solve(
     auto* gen = static_cast<GenSolverDirect*>(capsule_);
     const bool slosh = use_slosh_model_;
 
-    ProgressProjector projector;
-    const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    ProgressProjector projector({params_.planning.projection_lookahead});
+    ProgressProjectionState projection_state{true,input.min_progress_s};
+    const auto proj = projector.project(reference, input.robot.x, input.robot.y, projection_state, input.min_progress_s);
     if (!proj.valid) {
         output.status = "PROJECTION_FAILED";
         return false;

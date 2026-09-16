@@ -51,7 +51,8 @@ OcpPlanningAdapter::OcpPlanningAdapter(const SolverParams& params)
         region_stages_.push_back(region_.stageForCell(i, max_speed_*dt_));
     }
     if (config_.trajectory.mode != TrajectoryReferenceMode::Cruise) {
-        trajectory_ = std::make_shared<TrajectoryReference>(TrajectoryPlan::load(config_.trajectory.plan_file));
+        trajectory_ = std::make_shared<TrajectoryReference>(TrajectoryPlan::load(config_.trajectory.plan_file),
+            ProgressProjectionConfig{config_.projection_lookahead});
         const auto& plan=trajectory_->plan();
         requireClose(plan.dt, dt_, "dt");
         requireClose(plan.stop_window,config_.evaluation_window_sec,"evaluation window");
@@ -110,7 +111,14 @@ ReferenceSample OcpPlanningStage::sampleGeometry(double progress) const {
 }
 
 ProgressProjection OcpPlanningAdapter::project(const ReferencePath& route, double x, double y, double min_progress) const {
-    return trajectory_ ? trajectory_->project(x,y,min_progress) : ProgressProjector{}.project(route,x,y,min_progress);
+    ProgressProjectionState state;
+    return project(route,x,y,state,min_progress);
+}
+
+ProgressProjection OcpPlanningAdapter::project(const ReferencePath& route, double x, double y,
+    ProgressProjectionState& state, double min_progress) const {
+    return trajectory_ ? trajectory_->project(x,y,state,min_progress) :
+        ProgressProjector({config_.projection_lookahead}).project(route,x,y,state,min_progress);
 }
 
 std::vector<TrajectoryPlanSample> OcpPlanningAdapter::nominalHorizon(double progress, double elapsed, int count) const {

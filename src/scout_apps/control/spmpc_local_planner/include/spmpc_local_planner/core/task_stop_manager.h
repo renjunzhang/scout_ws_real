@@ -2,6 +2,8 @@
 
 #include "spmpc_local_planner/core/types.h"
 #include "spmpc_local_planner/dynamics/slosh_dynamics.h"
+#include "spmpc_local_planner/reference/motion_region.h"
+#include <limits>
 
 namespace spmpc_local_planner {
 
@@ -40,6 +42,9 @@ struct StopTailPrediction {
     double duration_sec = 0.0;
     double peak_height_m = 0.0;
     double residual_height_m = 0.0;
+    bool region_checked = false;
+    double minimum_region_clearance_m = std::numeric_limits<double>::infinity();
+    bool fifo_prefix_violation = false;
     std::string status = "NOT_RUN";
 };
 
@@ -60,19 +65,30 @@ class TaskStopManager {
 public:
     bool configure(const TaskStopParams& params, const ActuatorModelParams& actuator,
                    const SloshModelParams& liquid, double a_max,
-                   double alpha_max, double jerk_max);
+                   double alpha_max, double jerk_max, bool include_liquid = true);
     void reset();
-    StopTailPrediction predict(const SolverInput& input) const;
+    StopTailPrediction predict(const SolverInput& input,
+                               const MotionRegion* region = nullptr,
+                               double progress = 0.0) const;
+    StopTailPrediction predictAfterCommand(const SolverInput& input,
+                                           const StopCommand& first_command,
+                                           const MotionRegion* region,
+                                           double progress) const;
     StopReadiness observe(const SolverInput& input, bool position_reached,
                           double stopped_v, double stopped_omega);
 private:
     bool queuesClear(const ActuatorState& state) const;
     bool excitationQuiet(const RobotState& robot, const ActuatorState& state) const;
     double residualHeight(const SloshState& liquid) const;
+    StopTailPrediction predictTail(const SolverInput& input,
+                                   const StopCommand* first_command,
+                                   const MotionRegion* region,
+                                   double progress) const;
     TaskStopParams params_;
     ActuatorModelParams actuator_;
     SloshDynamics liquid_;
     double a_max_ = 0, alpha_max_ = 0, jerk_max_ = 0;
+    bool include_liquid_ = true;
     bool configured_ = false;
     bool timed_out_ = false;
     bool previous_sample_stable_ = false;

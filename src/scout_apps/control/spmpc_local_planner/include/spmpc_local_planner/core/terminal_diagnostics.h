@@ -26,6 +26,9 @@ struct TerminalDiagnostics {
     bool liquid_stable = false;
     bool settle_timed_out = false;
     bool predicted_tail_valid = false;
+    bool stop_region_checked = false;
+    bool stop_fifo_prefix_violation = false;
+    double stop_minimum_region_clearance_m = std::numeric_limits<double>::infinity();
     double residual_height_m = 0.0;
     double predicted_stop_distance_m = 0.0;
     double predicted_tail_duration_sec = 0.0;

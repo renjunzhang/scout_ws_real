@@ -861,6 +861,11 @@ void DiagnosticsPublisher::publishOutput(const SolverOutput& output, const std::
         static_cast<float>(td.liquid_stable_time_sec), static_cast<float>(td.predicted_stop_distance_m),
         static_cast<float>(td.predicted_tail_duration_sec), static_cast<float>(td.predicted_tail_peak_height_m),
         static_cast<float>(td.predicted_tail_residual_height_m)});
+    terminal.layout.dim[0].label += ",stop_region_checked,stop_minimum_region_clearance_m,stop_fifo_prefix_violation";
+    terminal.data.insert(terminal.data.end(), {
+        static_cast<float>(td.stop_region_checked),
+        static_cast<float>(td.stop_minimum_region_clearance_m),
+        static_cast<float>(td.stop_fifo_prefix_violation)});
     terminal.layout.dim[0].size = terminal.data.size();
     terminal.layout.dim[0].stride = terminal.data.size();
     terminal_pub_.publish(terminal);

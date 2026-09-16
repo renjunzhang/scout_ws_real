@@ -111,6 +111,20 @@ SolverInput makeInput(const std::vector<double>& state, double time) {
     return input;
 }
 
+std::vector<double> taskInitialState(const std::string& file, const TrajectoryPlan& plan) {
+    boost::property_tree::ptree data;
+    boost::property_tree::read_json(file,data);
+    std::vector<double> state;
+    for (const auto& row:data.get_child("task.start_state")) state.push_back(row.second.get_value<double>());
+    if (state.size()!=28) throw std::invalid_argument("task initial state must have 28 entries");
+    for (size_t i=0;i<state.size();++i)
+        if (!std::isfinite(state[i]) || std::abs(state[i]-plan.samples.front().state[i])>2e-6)
+            throw std::invalid_argument("plan initial state differs from the declared plant initial state");
+    // The plant starts at the specified task state. An optimizer's numerical
+    // residual at x[0] is not a real previously published negative command.
+    return state;
+}
+
 double percentile(std::vector<double> values, double q) {
     if(values.empty()) return 0.0;
     std::sort(values.begin(),values.end());
@@ -154,7 +168,7 @@ int runTrial(const Options& options) {
     auto& params=config.params;
     auto& variant=config.variant;
     std::vector<TrajectoryPoint> points;
-    std::vector<double> state=plan.samples.front().state;
+    std::vector<double> state=taskInitialState(options.plan_file,plan);
     const double end_time=plan.deadline+plan.stop_window;
     for(size_t i=0;i<plan.route.size();++i) {
         const auto& xy=plan.route[i];

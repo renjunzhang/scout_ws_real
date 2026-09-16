@@ -159,8 +159,9 @@ bool RolloutSamplingSolver::solve(
         return false;
     }
 
-    ProgressProjector projector;
-    const auto proj = projector.project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    ProgressProjector projector({params_.planning.projection_lookahead});
+    ProgressProjectionState projection_state{true,input.min_progress_s};
+    const auto proj = projector.project(reference, input.robot.x, input.robot.y, projection_state, input.min_progress_s);
     if (!proj.valid) {
         output.status = "PROJECTION_FAILED";
         return false;
@@ -236,7 +237,8 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
         return output;
     }
 
-    ProgressProjector projector;
+    ProgressProjector projector({params_.planning.projection_lookahead});
+    ProgressProjectionState projection_state{true,start_s};
 
     TrajectoryPoint p;
     p.x = input.robot.x;
@@ -292,7 +294,7 @@ SolverOutput RolloutSamplingSolver::rolloutCandidate(
         p.s = std::min(reference.length(), p.s + std::max(0.0, cmd_v) * input.dt);
         output.trajectory.push_back(p);
 
-        const auto proj = projector.project(reference, p.x, p.y, input.min_progress_s);
+        const auto proj = projector.project(reference, p.x, p.y, projection_state, start_s);
         if (proj.valid) {
             const double e_contour_ref = std::max(1e-3, 0.5 * params_.corridor_width);
             const double biased_error = proj.signed_distance - lateral_bias;

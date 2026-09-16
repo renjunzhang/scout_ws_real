@@ -60,7 +60,7 @@ target_compile_definitions(spmpc_native_core PRIVATE SPMPC_NATIVE_TEST=1)
 target_link_libraries(spmpc_native_core PUBLIC Eigen3::Eigen)
 
 set(NATIVE_TESTS
-  test_variant_config test_motion_region test_trajectory_reference
+  test_variant_config test_motion_region test_trajectory_reference test_progress_projector
   test_diff_drive_flatness_warm_start test_explicit_actuator_warm_start
   test_liquid_state_nowcaster test_processed_imu_pipeline
   test_slosh_observer_bank test_slosh_observer_selector test_slosh_risk_governor

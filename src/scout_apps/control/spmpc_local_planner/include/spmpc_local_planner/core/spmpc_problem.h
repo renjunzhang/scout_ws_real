@@ -42,6 +42,7 @@ private:
     StartLockRecovery start_lock_recovery_;
     std::unique_ptr<SpmpcSolver> solver_;
     double last_progress_s_ = 0.0;
+    ProgressProjectionState projection_state_;
     double configured_v_ref_ = 0.0;
     TaskClock task_clock_;
     std::shared_ptr<const TrajectoryPlan> task_plan_;

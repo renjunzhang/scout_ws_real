@@ -3,6 +3,10 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
+planning:
+  projection:
+    lookahead: 2.0  # route-progress units; continuous branch search, permits corner cutting
+
 # Optional no-output replay. Use the recorded final command and its publication
 # stamp from ControlCycleAudit, never an unstamped /cmd_vel or a fabricated zero.
 # external_audit requires publish_cmd_vel=false; remap the bag audit to this
@@ -164,11 +168,11 @@ reference:
 
 terminal:
   complete_stop:
-    enable: false
+    enable: false  # Enables liquid settling; region stopping-tail checks remain active.
     residual_height_m: 0.001
     stable_hold_sec: 0.3
     max_settle_sec: 15.0
-    max_tail_prediction_sec: 8.0
+    max_tail_prediction_sec: 8.0  # Shared by ordinary region braking and liquid complete stop.
     quiet_v: 0.001
     quiet_omega: 0.001
     command_zero_tolerance: 0.000001

@@ -515,6 +515,9 @@ TEST(CompleteStop, OnlyTrueTaskEndActivatesStageStopReference) {
     ASSERT_LT(active,names.size());
     EXPECT_EQ(out.pre_solve_snapshot.stage_parameters[active],0.);
     EXPECT_GT(out.predicted_horizon.states.back().v,.01);
+    // This is a second independently initialized pose, not a four-metre jump
+    // of the same robot between adjacent controller observations.
+    problem.configure(params,makeB0Variant());problem.setReferencePath(makeStraightReference());
     input.robot.x=4.;
     ASSERT_TRUE(problem.solve(input,out))<<out.status;
     EXPECT_EQ(out.pre_solve_snapshot.stage_parameters[active],1.);
@@ -594,7 +597,7 @@ TEST(CompleteStop, PhysicalBoundaryCannotBeBypassedByLiquidStabilityOrGoalLatch)
     EXPECT_FALSE(out.terminal_diagnostics.reached);
     // Invalid physical configuration is rejected even when starting at the goal.
     params.liquid_limit.freeboard_m=0;params.liquid_limit.physical_margin_m=.001;
-    problem.configure(params,variant);input.slosh={};
+    problem.configure(params,variant);problem.setReferencePath(makeStraightReference());input.slosh={};
     EXPECT_FALSE(problem.solve(input,out));
     EXPECT_EQ(out.status,"LIQUID_FREEBOARD_NOT_MEASURED");
 }

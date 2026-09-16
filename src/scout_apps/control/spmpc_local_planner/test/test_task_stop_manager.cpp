@@ -6,6 +6,34 @@
 
 namespace spmpc_local_planner {
 
+namespace {
+MotionRegion stopRegion(double right_edge, double footprint = .426,
+                        double margin = .02) {
+    MotionRegionConfig config;
+    config.enabled = true;
+    config.id = "stop-test";
+    config.frame_id = "map";
+    config.footprint_radius = footprint;
+    config.margin = margin;
+    config.cells.push_back({"only", 0., 10.,
+        {{-1., -1.}, {right_edge, -1.}, {right_edge, 1.}, {-1., 1.}}});
+    return MotionRegion(config);
+}
+
+SolverInput stopInput(double x, double v, double omega = 0.) {
+    SolverInput input;
+    input.robot.x = x;
+    input.robot.v = v;
+    input.robot.omega = omega;
+    input.actuator.valid = true;
+    input.actuator.v_cmd = v;
+    input.actuator.omega_cmd = omega;
+    input.actuator.linear_delay_queue.fill(v);
+    input.actuator.angular_delay_queue.fill(omega);
+    return input;
+}
+}
+
 TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
     SolverParams params;
     params.terminal.enable=true;
@@ -215,6 +243,148 @@ TEST(TaskStop, SlowerMeasurementsCanSettleButNoiseCrossingsRestartHold) {
     input.cycle_timing.solver_input_epoch_ns+=33333333LL;
     out=manager.observe(input,true,.03,.05);
     EXPECT_FALSE(out.liquid_stable);EXPECT_DOUBLE_EQ(out.stable_duration_sec,0.);
+}
+
+TEST(TaskStop, RegionReportsUnavoidablePrefixAtTheBoundary) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    const auto region = stopRegion(1.0);
+    auto input = stopInput(.53, .2);
+    const auto tail = manager.predict(input, &region, 0.);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_TRUE(tail.region_checked);
+    EXPECT_TRUE(tail.fifo_prefix_violation);
+    EXPECT_EQ(tail.status, "STOP_FIFO_REGION_VIOLATION");
+    EXPECT_LT(tail.minimum_region_clearance_m, 0.);
+}
+
+TEST(TaskStop, ProblemRejectsTheTerminalRegionBypassForBothStopModes) {
+    for (bool complete : {false,true}) {
+        SolverParams params;
+        params.solver_backend="continuous_mpcc_acados";
+        params.terminal.mpc_stop_handoff_enable=true;
+        params.terminal.goal_tolerance=.05;
+        params.jerk_limit_enable=true;
+        params.task_stop.enable=complete;
+        params.planning.task_deadline_sec=12.;
+        params.planning.region=stopRegion(1.).config();
+        VariantConfig variant; variant.slosh_enable=false; variant.w_slosh=0;
+        SpmpcProblem problem; problem.configure(params,variant);
+        ASSERT_TRUE(problem.configurationError().empty()) << problem.configurationError();
+        ReferencePath route; route.setPoints({{0,0,0,0,0},{.55,0,0,0,0}},"map");
+        problem.setReferencePath(route);
+        auto input=stopInput(.53,.2);
+        input.has_task_elapsed=true; input.task_elapsed_sec=1.;
+        SolverOutput output;
+        EXPECT_FALSE(problem.solve(input,output));
+        EXPECT_FALSE(output.success);
+        EXPECT_FALSE(output.ocp_solve_attempted);
+        EXPECT_FALSE(output.terminal_diagnostics.reached);
+        EXPECT_TRUE(output.terminal_diagnostics.stop_region_checked);
+        EXPECT_TRUE(output.terminal_diagnostics.stop_fifo_prefix_violation);
+        EXPECT_EQ(output.status,"STOP_FIFO_REGION_VIOLATION");
+
+        params.planning.region=stopRegion(3.).config();
+        problem.configure(params,variant); problem.setReferencePath(route);
+        ASSERT_TRUE(problem.solve(input,output)) << output.status;
+        EXPECT_EQ(output.status,"TERMINAL_DRAINING");
+        EXPECT_TRUE(output.terminal_diagnostics.predicted_tail_valid);
+        EXPECT_GT(output.terminal_diagnostics.stop_minimum_region_clearance_m,0.);
+    }
+}
+
+TEST(TaskStop, RegionCannotDisableTheSharedStopContract) {
+    SolverParams params; params.solver_backend="continuous_mpcc_acados";
+    params.planning.region=stopRegion(3.).config();
+    params.terminal.mpc_stop_handoff_enable=false; params.jerk_limit_enable=false;
+    SpmpcProblem problem; problem.configure(params,VariantConfig{});
+    EXPECT_FALSE(problem.configurationError().empty());
+}
+
+TEST(TaskStop, WideRegionAllowsTheCompleteJerkTail) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    const auto region = stopRegion(3.0);
+    auto input = stopInput(.0, .2, .3);
+    const auto tail = manager.predict(input, &region, 0.);
+    ASSERT_TRUE(tail.valid) << tail.status;
+    EXPECT_TRUE(tail.region_checked);
+    EXPECT_FALSE(tail.fifo_prefix_violation);
+    EXPECT_GT(tail.minimum_region_clearance_m, 0.);
+}
+
+TEST(TaskStop, CandidateAfterCommandCanMakeAnOtherwiseSafeStopUnsafe) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    auto input = stopInput(0., 0.);
+    StopCommand candidate;
+    candidate.valid = true;
+    candidate.v = input.dt * input.dt;  // a = jerk_max * dt, at the limit.
+    candidate.a = input.dt;
+    candidate.omega = 0.;
+    candidate.status = "STOP_CANDIDATE";
+    const auto candidate_tail = manager.predictAfterCommand(input, candidate, nullptr, 0.);
+    ASSERT_TRUE(candidate_tail.valid) << candidate_tail.status;
+    ASSERT_GT(candidate_tail.distance_m, 0.);
+
+    // Put the allowed center boundary halfway between the stationary stop and
+    // the candidate tail. The current stop remains feasible while the
+    // candidate's delayed command becomes region-unsafe after the FIFO.
+    const auto region = stopRegion(.446 + .5 * candidate_tail.distance_m);
+    const auto current_tail = manager.predict(input, &region, 0.);
+    ASSERT_TRUE(current_tail.valid) << current_tail.status;
+    const auto tail = manager.predictAfterCommand(input, candidate, &region, 0.);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_FALSE(tail.fifo_prefix_violation);
+    EXPECT_EQ(tail.status, "STOP_REGION_UNSAFE");
+}
+
+TEST(TaskStop, RotationQueueUsesSweptArcMotionAndFrozenCell) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    const auto region = stopRegion(3.0);
+    auto input = stopInput(0., .2, .3);
+    const auto tail = manager.predict(input, &region, 0.);
+    ASSERT_TRUE(tail.valid) << tail.status;
+    EXPECT_GT(tail.distance_m, 0.);
+    EXPECT_GT(tail.duration_sec, kExplicitAngularDelaySteps * input.dt);
+}
+
+TEST(TaskStop, QuietTailIncludesLinearTauResidualRegionReserve) {
+    TaskStopManager manager;
+    ActuatorModelParams actuator;
+    actuator.linear_tau_sec = .5;
+    ASSERT_TRUE(manager.configure({}, actuator, {}, .6, 1.2, 1.));
+    const auto region = stopRegion(1.0);
+    auto input = stopInput(.5538, .001);
+    input.actuator.v_cmd = .0;
+    input.actuator.linear_delay_queue.fill(0.);
+    const auto tail = manager.predict(input, &region, 0.);
+    EXPECT_FALSE(tail.valid) << tail.status << " clearance=" << tail.minimum_region_clearance_m;
+    EXPECT_EQ(tail.status, "STOP_REGION_UNSAFE") << " valid=" << tail.valid
+        << " clearance=" << tail.minimum_region_clearance_m;
+    EXPECT_FALSE(tail.fifo_prefix_violation);
+}
+
+TEST(TaskStop, VehicleOnlyTailAcceptsNaNLiquidWithoutFabricatingLiquidPeak) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1., false));
+    auto input = stopInput(0., .2);
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    input.slosh = {nan, nan, nan, nan};
+    const auto tail = manager.predict(input);
+    ASSERT_TRUE(tail.valid) << tail.status;
+    EXPECT_DOUBLE_EQ(tail.peak_height_m, 0.);
+    EXPECT_DOUBLE_EQ(tail.residual_height_m, 0.);
+    input.robot.v = 0.;
+    input.actuator.v_cmd = 0.;
+    input.actuator.linear_delay_queue.fill(0.);
+    const auto readiness = manager.observe(input, true, .03, .05);
+    EXPECT_TRUE(readiness.valid);
+
+    TaskStopManager liquid_manager;
+    ASSERT_TRUE(liquid_manager.configure({}, {}, {}, .6, 1.2, 1., true));
+    EXPECT_FALSE(liquid_manager.predict(input).valid);
 }
 
 }  // namespace spmpc_local_planner

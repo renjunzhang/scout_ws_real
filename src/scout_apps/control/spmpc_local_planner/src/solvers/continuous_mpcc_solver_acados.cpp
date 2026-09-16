@@ -700,7 +700,9 @@ bool ContinuousMpccSolverAcados::solve(
     const bool slosh = use_slosh_model_;
 
     const auto raw_proj = planning_adapter_->project(reference, input.robot.x, input.robot.y);
-    const auto proj = planning_adapter_->project(reference, input.robot.x, input.robot.y, input.min_progress_s);
+    ProgressProjectionState projection_state{true,input.min_progress_s};
+    const auto proj = planning_adapter_->project(reference, input.robot.x, input.robot.y,
+        projection_state, input.min_progress_s);
     output.projector_debug.min_progress_s = input.min_progress_s;
     if (raw_proj.valid) {
         output.projector_debug.raw_valid = true;
@@ -1188,6 +1190,7 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
 
+    ProgressProjectionState head_projection_state{true,s0};
     for (int k = 0; k < 3 && k < static_cast<int>(solved_states.size()); ++k) {
         const auto& state = solved_states[k];
         auto& head = output.local_traj_head_debug.points[k];
@@ -1198,7 +1201,8 @@ bool ContinuousMpccSolverAcados::solve(
         head.v = state.v;
         head.omega = state.omega;
         head.s = state.s;
-        const auto head_proj = planning_adapter_->project(reference, state.px, state.py);
+        const auto head_proj = planning_adapter_->project(reference, state.px, state.py,
+            head_projection_state, s0);
         if (head_proj.valid) {
             head.proj_s = head_proj.s;
             head.proj_distance = head_proj.distance;

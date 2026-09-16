@@ -34,7 +34,7 @@ bool validatePlanningConfig(const PlanningConfig& c, std::string* reason) {
         if (!std::isfinite(value) || value < 0) return fail("invalid geometry weight");
     for (double value : {g.curvature_scale, g.curvature_rate_scale, g.speed_regularization, g.goal_position_scale, g.goal_yaw_scale,
                          c.trajectory.progress_window, c.trajectory.max_speed_error,
-                         c.trajectory.route_tolerance})
+                         c.trajectory.route_tolerance, c.projection_lookahead})
         if (!std::isfinite(value) || value <= 0) return fail("invalid positive planning scale");
     if (!std::isfinite(c.trajectory.deadline_tolerance) || c.trajectory.deadline_tolerance < 0)
         return fail("invalid deadline tolerance");
@@ -61,6 +61,7 @@ std::string planningConfigJson(const PlanningConfig& c) {
     root.put("liquid_free_baseline", c.liquid_free_baseline);
     root.put("task_deadline_sec", c.task_deadline_sec);
     root.put("evaluation_window_sec", c.evaluation_window_sec);
+    root.put("projection.lookahead", c.projection_lookahead);
     root.put("geometry.enabled", c.geometry.enabled);
     root.put("geometry.curvature_weight", c.geometry.curvature_weight);
     root.put("geometry.curvature_rate_weight", c.geometry.curvature_rate_weight);

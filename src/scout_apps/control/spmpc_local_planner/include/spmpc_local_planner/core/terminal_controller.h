@@ -64,6 +64,9 @@ public:
     const TerminalControllerParams& params() const { return params_; }
     void reset();
     void clearPending();
+    // A certified safety stop keeps ownership until a new task/reset. It does
+    // not claim the goal was reached and cannot restart merely from a new pose.
+    void requestStop() { stop_owned_ = true; stop_pending_ = true; }
 
     TerminalPlan updateAndPlan(
         const TerminalGoalInfo& goal,

@@ -308,6 +308,10 @@ if(CATKIN_ENABLE_TESTING)
     )
   endif()
   catkin_add_gtest(test_variant_config test/test_variant_config.cpp)
+  catkin_add_gtest(test_progress_projector test/test_progress_projector.cpp)
+  if(TARGET test_progress_projector)
+    target_link_libraries(test_progress_projector ${PROJECT_NAME} ${catkin_LIBRARIES})
+  endif()
   if(TARGET test_variant_config)
     target_link_libraries(test_variant_config
       ${PROJECT_NAME}

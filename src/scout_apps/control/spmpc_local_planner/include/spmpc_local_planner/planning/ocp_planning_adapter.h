@@ -27,6 +27,8 @@ class OcpPlanningAdapter {
 public:
     explicit OcpPlanningAdapter(const SolverParams& params);
     ProgressProjection project(const ReferencePath& route, double x, double y, double min_progress = 0) const;
+    ProgressProjection project(const ReferencePath& route, double x, double y,
+        ProgressProjectionState& state, double min_progress = 0) const;
     std::vector<TrajectoryPlanSample> nominalHorizon(double progress, double elapsed, int count) const;
     std::vector<OcpPlanningStage> prepare(const ReferencePath& route,
         const SolverInput& input, const std::vector<double>& stage_progress,
