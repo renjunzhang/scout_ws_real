@@ -1,6 +1,7 @@
 #pragma once
 
 #include "spmpc_local_planner/reference/reference_path.h"
+#include <Eigen/Core>
 
 namespace spmpc_local_planner {
 
@@ -25,7 +26,17 @@ public:
     ReferenceSample sample(double s) const;
 
 private:
+    friend void fitReferencePolynomials(const ReferenceSpline&, double, double,
+                                        Eigen::Vector4d&, Eigen::Vector4d&);
     ReferencePath path_;
 };
+
+// Fit x(s) and y(s) over the requested arc-length window. The returned
+// coefficients use the absolute arc-length coordinate expected by the cruise
+// MPCC cost. A zero-length window at either endpoint is extended into the
+// adjacent non-zero path segment. The solve uses a centered, scaled coordinate
+// to avoid conditioning problems from an absolute-s Vandermonde matrix.
+void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_end,
+                             Eigen::Vector4d& cx, Eigen::Vector4d& cy);
 
 }  // namespace spmpc_local_planner

@@ -249,22 +249,6 @@ double polyDeriv(const Eigen::Vector4d& c, double s) {
     return c(1) + 2.0 * c(2) * s + 3.0 * c(3) * s * s;
 }
 
-void fitReferencePolynomials(const ReferenceSpline& spline, double s0, double s_end,
-                             Eigen::Vector4d& cx, Eigen::Vector4d& cy) {
-    const int m = 12;
-    Eigen::MatrixXd A(m, 4);
-    Eigen::VectorXd bx(m), by(m);
-    const double span = std::max(1e-3, s_end - s0);
-    for (int i = 0; i < m; ++i) {
-        const double s = s0 + span * static_cast<double>(i) / static_cast<double>(m - 1);
-        const ReferenceSample r = spline.sample(s);
-        A(i, 0) = 1.0; A(i, 1) = s; A(i, 2) = s * s; A(i, 3) = s * s * s;
-        bx(i) = r.x; by(i) = r.y;
-    }
-    cx = A.colPivHouseholderQr().solve(bx);
-    cy = A.colPivHouseholderQr().solve(by);
-}
-
 WarmStartState makeWarmStartState(const double* x, bool slosh) {
     WarmStartState state;
     state.px = x[0]; state.py = x[1]; state.theta = x[2]; state.v = x[3]; state.s = x[4];

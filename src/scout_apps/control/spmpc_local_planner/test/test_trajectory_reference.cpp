@@ -2,6 +2,7 @@
 #include "spmpc_local_planner/core/task_clock.h"
 #include "spmpc_local_planner/core/spmpc_solver.h"
 #include "spmpc_local_planner/planning/ocp_planning_adapter.h"
+#include "spmpc_local_planner/reference/reference_spline.h"
 #include "trajectory_fixture.h"
 #include <gtest/gtest.h>
 #include <fstream>
@@ -164,4 +165,72 @@ TEST(OcpPlanningAdapter, ChecksTerminalQueuesAndAllMotionBounds) {
     horizon.controls[0].a=params.a_max+.01;
     EXPECT_FALSE(adapter.check(stages,horizon,clearance,reason));
     EXPECT_EQ(reason,"MOTION_CONTROL_BOUND_VIOLATION");
+}
+
+namespace {
+
+double polynomialDerivative(const Eigen::Vector4d& c, double s) {
+    return c(1) + 2.0*c(2)*s + 3.0*c(3)*s*s;
+}
+
+}  // namespace
+
+TEST(ReferenceSpline, VerticalLineHasGeometricEndpointTangents) {
+    ReferencePath path;
+    path.setPoints({{0, 0, 0, 0, 0}, {0, 2, 0, 0, 0}}, "map");
+    ReferenceSpline spline;
+    spline.build(path);
+
+    const auto start = spline.sample(0.0);
+    const auto end = spline.sample(path.length());
+    EXPECT_NEAR(start.psi, M_PI/2.0, 1e-12);
+    EXPECT_NEAR(end.psi, M_PI/2.0, 1e-12);
+    EXPECT_NEAR(start.kappa, 0.0, 1e-12);
+    EXPECT_NEAR(end.kappa, 0.0, 1e-12);
+}
+
+TEST(ReferenceSpline, EndpointFitUsesARealSpanWithPlateauAndShortPath) {
+    ReferencePath path;
+    path.setPoints({{0, 0, 0, 0, 0}, {0, 0, 0, 0, 0}, {0, 1e-4, 0, 0, 0}}, "map");
+    ReferenceSpline spline;
+    spline.build(path);
+    Eigen::Vector4d cx, cy;
+    fitReferencePolynomials(spline, path.length(), path.length(), cx, cy);
+
+    const auto near_end = spline.sample(path.length()-5e-10);
+    EXPECT_NEAR(near_end.psi, M_PI/2.0, 1e-12);
+    EXPECT_NEAR(near_end.kappa, 0.0, 1e-12);
+    const double s = path.length();
+    EXPECT_NEAR(cx(0)+cx(1)*s+cx(2)*s*s+cx(3)*s*s*s, 0.0, 1e-12);
+    EXPECT_NEAR(cy(0)+cy(1)*s+cy(2)*s*s+cy(3)*s*s*s, 1e-4, 1e-12);
+    EXPECT_NEAR(polynomialDerivative(cx, s), 0.0, 1e-8);
+    EXPECT_GT(polynomialDerivative(cy, s), 0.0);
+}
+
+TEST(ReferenceSpline, LPathFitKeepsTheTrueFinalTangent) {
+    ReferencePath path;
+    path.setPoints({{0, 0, 0, 0, 0}, {1, 0, 0, 0, 0}, {1, 1, 0, 0, 0}}, "map");
+    ReferenceSpline spline;
+    spline.build(path);
+    Eigen::Vector4d cx, cy;
+    fitReferencePolynomials(spline, path.length(), path.length(), cx, cy);
+
+    const double s = path.length();
+    EXPECT_NEAR(polynomialDerivative(cx, s), 0.0, 1e-8);
+    EXPECT_GT(polynomialDerivative(cy, s), 0.1);
+    EXPECT_NEAR(std::atan2(polynomialDerivative(cy, s), polynomialDerivative(cx, s)), M_PI/2.0, 1e-8);
+    fitReferencePolynomials(spline, s-1e-8, s, cx, cy);
+    EXPECT_NEAR(std::atan2(polynomialDerivative(cy, s), polynomialDerivative(cx, s)), M_PI/2.0, 1e-8);
+}
+
+TEST(ReferenceSpline, InteriorCircleKeepsCurvatureScale) {
+    ReferencePath path;
+    std::vector<TrajectoryPoint> points;
+    for (int i=0;i<=200;++i) {
+        const double a=i*.005;
+        points.push_back({2.*std::cos(a),2.*std::sin(a),0,0,0});
+    }
+    path.setPoints(points,"map");
+    ReferenceSpline spline; spline.build(path);
+    EXPECT_NEAR(spline.sample(path.length()*.5).kappa,.5,.002);
 }
