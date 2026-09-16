@@ -28,6 +28,8 @@
 
 在线入口由 `SpmpcProblem`、`OcpPlanningAdapter` 和 continuous MPCC solver 组成。每周期保留持续任务时钟；重复发布同一路线不会续期，时钟倒退、换源或计时任务更换路线会失败。adapter 核对计划与运行时的 route、frame、region、物理参数、dt、目标和期限，然后装配每个 horizon stage 的计划参考和 region halfspaces。
 
+车体 pose/twist 始终对齐同一观测 epoch；消费液体的显式执行器组还要求共同液体 epoch。进度投影首次可全局定位，之后复用上拍分支，在 `planning/projection/lookahead` 窗口中按路径顺序选择首个局部距离极小；相等距离平台统一处理。外层与 solver 共用已接受的进度，避免自交处重新选支。窗口使用路线进度单位，允许切角和横向偏离；显式新任务重置定位，重复同路线不重置。
+
 MPCC 控制为
 
 \[
@@ -46,6 +48,8 @@ u=[a_{cmd},\alpha_{cmd},v_s]^T,\qquad
 正则化，代表有限优化惩罚，不定义零速处真实曲率。
 
 显式 region cell 的凸半空间收缩车体 footprint、margin，并在预测节点额外考虑 `max_speed * dt` 的保守扫掠余量。相邻 cell 要有车体可通行的凸交集；仅 progress 重叠不构成空间连续性。终点阶段按实际位置、朝向、实际速度、角速度、命令历史和队列共同判定停车。四组共享 `mpc_stop_handoff_enable=true`、`complete_stop.enable=false`；默认不启用完整液体稳定等待。
+
+区域启用时，`TaskStopManager` 共享检查当前停车尾段和执行候选首命令后的停车尾段，覆盖真实FIFO、jerk制动、实际运动及quiet后的执行器残余位移。尾段固定当前cell，因而可能保守拒绝本可跨cell完成的制动。候选命令会失去停车余量时，停车模块接管并持续至任务重置；到达状态仍逐拍重查，位姿漂移后撤销成功也不会自动开动。`STOP_FIFO_REGION_VIOLATION` 表示模型中不可改变的FIFO前缀节点已越界，`STOP_REGION_UNSAFE` 只表示本制动策略未通过保守核验。它们都不构成模型误差、求解后延迟或故障发布路径下的实物安全保证。
 
 ## 液体模型
 
@@ -75,7 +79,7 @@ H_{modal}=c_h\sqrt{\eta_x^2+\eta_y^2}
 
 `raw_mpcc` 保留普通 contour=1，其他三组为0.02；它不做新增路径优化。旧 `Full/Smooth`、旧 direct-omega 或历史 governor 结果属于历史路线，不能与当前两层主线混为同一实现。
 
-2026-09-16 软件验证显示：15个C++测试程序和62项Python定向检查通过，24组模型闭环完成22组；当前候选尚未取得相对原始 MPCC 的稳定降晃收益，也未通过 30 Hz 实时性验收。当前结果不是实物验证，ROS1/catkin 整节点也未在本轮 ROS2 Jazzy 主机完成编译运行。`diag/lt-dwa-collision-tracking` 是历史实物分支，不由本主线结果替代。
+2026-09-16五项修复后，stub 17个、真实acados 18个C++测试程序均已通过；本轮49项Python检查通过，另2项依赖roslaunch的用例受环境阻断。24组模型闭环完成22组，两个geometry单弯仍失败，最长周期82.2 ms。当前候选尚未取得相对原始 MPCC 的稳定降晃收益，也未通过30 Hz实时性验收，见[本轮回归记录](../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。ROS1/catkin整节点未在本轮ROS2 Jazzy主机完成编译运行；`diag/lt-dwa-collision-tracking`是历史实物分支，不由模型结果替代。
 
 离线后缀诊断保留真实 progress、FIFO 和液体状态；它不清零状态、不投影回名义位姿、不改变在线命令，也不宣称递归可行性。后缀失败会保留候选失败原因；剩余段反馈尚未接入在线控制。
 

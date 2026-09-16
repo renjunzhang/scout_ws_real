@@ -54,6 +54,11 @@ time. Modal height is sampled at controller nodes and is not a dense trace.
 On any failed solve or bound violation the trial writes a failed horizon CSV
 and stops at that row, preserving the failure evidence.
 
+The simulated plant starts from the plan's declared `task.start_state`, checked
+against the first optimized sample (28 finite entries, maximum difference
+2e-6). Numerical optimizer residuals in the first sample are not previously
+published actuator commands; a nonzero declared initial history is preserved.
+
 Run the frozen three-task/four-mode/actuator-mismatch matrix from the repository root:
 
 ```bash
@@ -73,6 +78,16 @@ physical cup configuration.
 The planned modes use the same upper plan. Only the lower liquid objective differs;
 this is not a full upper/lower factorial ablation. Liquid feedback uses ideal plant
 state, and modal peaks are sampled at 30 Hz. Results are model-in-the-loop evidence.
-See `results/20260916_geometry_trials.csv`: 22/24 complete, with both geometry-only
-corner trials failing. Lower curve energy has not established lower liquid peaks
-than raw, and observed maximum cycle times exceed the 30 Hz budget.
+The original [matrix](results/20260916_geometry_trials.csv) and the post-review
+[matrix](results/20260916_review_fixes_geometry_trials.csv) both complete 22/24,
+with both geometry-only corner trials failing (`ACADOS_SOLVE_FAILED_4`). The new
+[identity record](results/20260916_review_fixes_geometry_identity.json) keeps the
+run Git/diff, solver/binary hashes and plan validation identities. Maximum cycle
+time in the new run is 82.2 ms; timings across runs are not a performance comparison.
+Lower curve energy has not established lower liquid peaks than raw.
+
+Post-review checks passed 17 stub CTest programs and all 18 real-acados programs
+(the replay diagnostics program was rerun after correcting two old test assumptions).
+The focused Python run passed 49 checks; two roslaunch-dependent checks could not
+run on this host. See the [repair record](../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)
+for coverage and remaining ROS1/physical validation boundaries.

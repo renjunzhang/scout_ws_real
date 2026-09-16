@@ -1,0 +1,111 @@
+{
+  "evidence": "MODEL_IN_THE_LOOP",
+  "hardware_verified": false,
+  "liquid_state_source": "plant model state (ideal feedback)",
+  "plant_mismatch": "actuator time constants scaled; no new liquid model",
+  "binary_sha256": "0831fe5f18019ea1cb6abc4791a675be1d34864732fa0e7bb85d555f39748efd",
+  "plans": [
+    {
+      "scenario": "straight",
+      "task_sha256": "5dde2fc32d35934f327626e7259b1b797b23a54d2e29effdc46dc7779bccac38",
+      "exit_code": 0,
+      "plan_id": "straight_software-3e7db703e0c6",
+      "plan_sha256": "c957115009328d976c68b9704ce0f4bd6c4132e494978eb4a8b39f5e95f639d0",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 1.415869310683604e-09,
+        "minimum_region_clearance": 0.30333333322402534,
+        "dense_peak_height_m": 0.00024183143857359625,
+        "residual_height_m": 5.999094180745297e-07,
+        "curvature_arc_energy": 9.843424534445542e-06,
+        "actual_path_length": 0.5973257294915638,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    },
+    {
+      "scenario": "corner",
+      "task_sha256": "dc044c6b378d6438b120926e0c010f481bb4b05b62dfba07f8a8699cbec4de32",
+      "exit_code": 0,
+      "plan_id": "corner_software-549b9ba4dc9a",
+      "plan_sha256": "bd3155c59c2b14320bfd7a764c3b3b9a2f2dbe314d2f86d848ac8fff9e281084",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 3.8931299517486195e-08,
+        "minimum_region_clearance": 0.25648809803993955,
+        "dense_peak_height_m": 0.0005425805829144619,
+        "residual_height_m": 9.013104478477661e-07,
+        "curvature_arc_energy": 1.8881218090267982,
+        "actual_path_length": 1.7153202843657651,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    },
+    {
+      "scenario": "double_corner",
+      "task_sha256": "796e1f9190298dea7ad96d10487a32dde95dfb339d42ef3eb5c0548a62a3fe27",
+      "exit_code": 0,
+      "plan_id": "double_corner_software-e3ec6f0e711b",
+      "plan_sha256": "9289e30748e5ce64fa6496df8366d0d6bceb58a2c5fe66852101860632eb1d21",
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 4.906862471898421e-09,
+        "minimum_region_clearance": 0.26565900533095954,
+        "dense_peak_height_m": 0.0006865510616444353,
+        "residual_height_m": 1.1172539940200646e-06,
+        "curvature_arc_energy": 0.7632979795052146,
+        "actual_path_length": 2.2673065922159905,
+        "hardware_verified": false
+      },
+      "suffix_exit_code": 0
+    }
+  ],
+  "git_sha": "ffd4e001a9cf9b6f54526df2df2326c6467102f5",
+  "source_diff_sha256": "35d73f03772e86bc0090b97b2f37bd8f657fc8d2f36e3e3eef77495b404e14a9",
+  "solver_library_sha256": {
+    "spmpc_b0": "7014edf60639e1ae071875033e08649b769e4ed36849c2d6f4bacc48660c77ae",
+    "spmpc_slosh": "08e2b15ef36d5c27ee6b8c51600e28f99894a28e6c134a2026ddd1fbe91d17fc"
+  },
+  "all_trials_completed": false,
+  "implementation_commit": "d17a8ea80918dcc165b5e305255cb6fd8244aee7",
+  "run_source_note": "Run used original git_sha plus source_diff_sha256. git_sha_reworded has the identical source tree after expanding the local commit messages in Chinese. All tracked implementation diff blocks match implementation_commit; subsequent changes were common.yaml comments and committing the previously untracked progress-projector test.",
+  "raw_artifacts": "/tmp/scout_review_trials_declared_start_20260916",
+  "report_sha256": "e781758d6ab1078a1b9e74aafad6892539f4e4c926a8eb10281c3cf30df05b41",
+  "csv_sha256": "5142512cf8a5af1576f25989d20339860fb09af8456455f81dc9f2f4dd10b65c",
+  "declared_initial_state": "plan.task.start_state; 28 finite entries; each within 2e-6 of optimized first sample; preserves nonzero declared histories",
+  "passed_trials": 22,
+  "total_trials": 24,
+  "failed_trials": [
+    {
+      "scenario": "corner",
+      "mode": "geometry",
+      "actuator_scale": 1.0,
+      "failure_status": "ACADOS_SOLVE_FAILED_4"
+    },
+    {
+      "scenario": "corner",
+      "mode": "geometry",
+      "actuator_scale": 1.15,
+      "failure_status": "ACADOS_SOLVE_FAILED_4"
+    }
+  ],
+  "maximum_walltime_ms": 82.212311,
+  "maximum_per_trial_walltime_p95_ms": 59.621152,
+  "minimum_sampled_region_clearance_m": 0.2827785294228051,
+  "candidate_curvature_weight": 0.05,
+  "contour_raw": 1.0,
+  "contour_method": 0.02,
+  "goal_weight": 2.0,
+  "curvature_rate_weight": 0.01,
+  "rti_iterations": 5,
+  "validation": {
+    "stub_ctest_programs_passed": 17,
+    "real_acados_ctest_programs_passed": 18,
+    "python_checks_passed": 49,
+    "roslaunch_checks_environment_blocked": 2,
+    "ros1_node_built": false,
+    "tf_and_bag_integration_verified": false,
+    "physical_experiments_run": false
+  },
+  "git_sha_reworded": "639101d0e1776ac9cae5b2915ea096199db23b59"
+}

@@ -1,8 +1,10 @@
 # 实物与离线脚本索引
 
-更新：2026-09-16，当前 `feat/spmpc-liquid-control`（实现基线 `f235e11`）。优先按9月实物记录和Git历史整理，便于复用最近的C03、Full/Smooth、动捕辨识及诊断链。**此前实物使用的是 `diag/lt-dwa-collision-tracking`**；旧冻结runner仍有旧模型/场景合同，不能直接作为当前两层主线的实物验收入口。
+更新：2026-09-16，当前 `feat/spmpc-liquid-control`（五项复审修复实现至 `d17a8ea`）。优先按9月实物记录和Git历史整理，便于复用最近的C03、Full/Smooth、动捕辨识及诊断链。**此前实物使用的是 `diag/lt-dwa-collision-tracking`**；旧冻结runner仍有旧模型/场景合同，不能直接作为当前两层主线的实物验收入口。
 
 本包为 **ROS1/catkin**。实包读取通常需要ROS1 `rosbag`和对应消息工作区；纯计划/数值工具使用Python、NumPy、CasADi/IPOPT，真实OCP重算还需acados。不要将`roslaunch/rosbag`换成ROS2命令直接运行。
+
+本轮连续投影、区域停车与回放合同的参数和回归结果见[五项修复记录](../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。无输出回放使用下方现有入口；本轮没有增加新的实物runner。
 
 ## 先按目的选入口
 

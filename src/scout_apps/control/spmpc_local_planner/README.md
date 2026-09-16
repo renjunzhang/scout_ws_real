@@ -1,10 +1,10 @@
 # spmpc_local_planner
 
-更新：2026-09-16，`feat/spmpc-liquid-control`，实现基线 `f235e11`。
+更新：2026-09-16，`feat/spmpc-liquid-control`，五项复审修复实现至 `d17a8ea`。
 
 当前主线是 **原路线引导 + 显式运动区域 + 全程几何/速度/液体规划 + 在线 MPCC 自主缓弯**。原路线提供任务方向和进度坐标；机器人可以在允许区域内偏离它，选择曲率更小的运动。路径跟踪误差用于诊断，主要评价任务完成、区域可行性、实际曲率、耗时和液体响应。
 
-这是 **ROS1/catkin** 包（`roscpp`、`roslaunch`），尚未迁移到 ROS2。9 月 16 日软件验证使用独立 CMake harness 和真实 acados；宿主 ROS2 Jazzy 上未完成 ROS1 整节点编译。24 组模型闭环完成 22 组，已观察到缓弯，但尚无相对原始 MPCC 的稳定降晃收益，最坏周期超出 30 Hz 预算；新框架尚未实物验收。[完整结果与限制](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)。
+这是 **ROS1/catkin** 包（`roscpp`、`roslaunch`），尚未迁移到 ROS2。9 月 16 日软件验证使用独立 CMake harness 和真实 acados；宿主 ROS2 Jazzy 上未完成 ROS1 整节点编译。修复后24组模型闭环仍完成22组，两个单拐角 geometry 组仍求解失败，最长周期82.2 ms。已观察到缓弯，但尚无相对原始 MPCC 的稳定降晃收益，也未通过30 Hz实时性和实物验收。[本轮修复与回归](../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)、[此前主线验证](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)。
 
 ## 从哪里开始
 
@@ -19,7 +19,7 @@
 
 `diag/lt-dwa-collision-tracking` 是此前一直使用的实物分支。旧 Full/Smooth、C03 和 RGB bag 保留当时版本身份，不能算作当前两层方法的实物验证；其近期脚本差异见脚本 README。本轮按用户要求仅本地提交，不 push。
 
-当前接入实物前还需处理[9月16日复审发现](../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器复审与避障接入梳理.md)，包括终端区域旁路、状态时间、投影和到达锁存；已有模型测试未覆盖这些反例。
+[9月16日复审](../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器复审与避障接入梳理.md)的五项代码修复已落地：共享区域停车尾段检查、所有组车体同 epoch、连续分支投影、到达条件逐拍重检，以及有原始发布审计的无输出回放。核心反例已有定向回归；ROS1的TF、回放接线和实物执行仍需验证。
 
 ## 当前运行链
 
@@ -29,7 +29,8 @@
                                                ↓
 ROS 状态/IMU/命令历史 → 时间对齐与实际状态前推 → 在线 MPCC
 原路线/区域/计划 → 持续任务时钟与 N+1 阶段参考 → 求解后约束核验
-    → 终点停车协调 → 发布契约与安全门 → 最终 cmd_vel / 审计
+    → 连续进度与候选命令停车尾段核验 → 停车协调
+    → 发布契约与安全门 → 最终 cmd_vel / 审计
 
 完整预测末端 → 离线名义后缀重放/重新优化 → 可接续性报告
 ```
@@ -77,7 +78,7 @@ B0 的 24 维为位姿、实际线/角速度、进度、命令线/角速度、5 
 
 平台和杯体分别放在 [scout_mini.yaml](config/platforms/scout_mini.yaml) 与 [tube_default.yaml](config/containers/tube_default.yaml)；普通配置在 [common.yaml](config/planner/common.yaml)，新实验覆盖在 [trajectory_mpcc/](config/experiments/trajectory_mpcc/README.md)。实际参数以完整合并配置和 live 私有参数为准，不能只看某一个 YAML 默认值。
 
-`trajectory_mpcc.launch` 启动 planner，默认允许发布速度；传感器、定位、底盘、路径 publisher 和独立液面采集需要已有运行链。区域、正 deadline、planned 组的计划均需显式提供，示例区域只是软件样例。可先用 `publish_cmd_vel:=false` 检查节点接口；它仍不替代整链与实物验收。
+`trajectory_mpcc.launch` 启动 planner，默认允许发布速度；传感器、定位、底盘、路径 publisher 和独立液面采集需要已有运行链。区域、正 deadline、planned 组的计划均需显式提供，示例区域只是软件样例。可先用 `publish_cmd_vel:=false` 检查节点接口；完整回放另需录制的最终命令审计，见[无运动回放](scripts/README.md#无运动回放)。区域尾段检查在 `complete_stop.enable=false` 时也生效，制动接管保持至任务重置。
 
 `record_trajectory_mpcc_comparison.sh` 只录制已启动节点，保存合并配置、hash、Git 状态和消息；`VALIDATE_ONLY=true` 只做输入校验并生成 manifest。相机与 NOKOV 入口分别见 [RealSense README](../../sensors/realsense_liquid_measurement/README.md) 和 [NOKOV README](../../sensors/nokov_mocap_monitor/README.md)。内部模态高度和在线视觉 proxy 均需保留来源；模型内降晃不能替代独立液面测量。
 
