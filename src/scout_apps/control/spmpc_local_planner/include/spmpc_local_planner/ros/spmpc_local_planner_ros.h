@@ -12,8 +12,10 @@
 #include "spmpc_local_planner/ros/control_cycle_contract.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
+#include "spmpc_local_planner/ros/recorded_command_contract.h"
 #include "spmpc_local_planner/ros/imu_shadow_ros_adapter.h"
 #include <geometry_msgs/Twist.h>
+#include <spmpc_local_planner/ControlCycleAudit.h>
 #include <nav_msgs/OccupancyGrid.h>
 #include <nav_msgs/Odometry.h>
 #include <nav_msgs/Path.h>
@@ -50,6 +52,7 @@ private:
     void imuCallback(const sensor_msgs::ImuConstPtr& msg);
     void pathCallback(const nav_msgs::PathConstPtr& msg);
     void costmapCallback(const nav_msgs::OccupancyGridConstPtr& msg);
+    void recordedCommandCallback(const ControlCycleAuditConstPtr& msg);
     void controlTimerCallback(const ros::TimerEvent&);
     void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug(),
                             ControlCycleAuditDebug* audit = nullptr);
@@ -81,8 +84,6 @@ private:
                                   std::string& failure_status);
     void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
-    bool robotStateFromLatest(const nav_msgs::Odometry& latest_odom,
-                              RobotState& state);
     bool robotStateAtEpoch(const ros::Time& target_stamp,
                            RobotState& state,
                            bool& interpolated,
@@ -139,6 +140,9 @@ private:
     ros::Subscriber imu_sub_;
     ros::Subscriber path_sub_;
     ros::Subscriber costmap_sub_;
+    // Same single-threaded global queue as the timer; never written by the
+    // private odom/IMU spinners. Published and external history are exclusive.
+    ros::Subscriber recorded_command_sub_;
     ros::Publisher cmd_pub_;
     ros::Timer control_timer_;
     tf2_ros::Buffer tf_buffer_;
@@ -159,6 +163,11 @@ private:
     SloshRiskGovernorParams slosh_risk_governor_params_;
     SloshRiskGovernorOutput last_slosh_governor_output_;
     CommandHistoryBuffer command_history_;
+    std::string command_history_source_ = "published";
+    std::string external_audit_topic_ = "/spmpc/replay/control_cycle_audit";
+    RecordedCommandRecord last_recorded_command_;
+    bool have_recorded_command_ = false;
+    bool recorded_command_restart_required_ = false;
     ExecutionStatePredictor execution_predictor_;
     ActuatorModelParams actuator_model_params_;
     DelayPhaseParams delay_phase_params_;

@@ -132,6 +132,7 @@ add_library(${PROJECT_NAME}
   src/solvers/continuous_mpcc_direct_omega_legacy_solver_acados.cpp
   src/ros/planning_config_ros.cpp
   src/ros/command_history_buffer.cpp
+  src/ros/recorded_command_contract.cpp
   src/ros/control_cycle_contract.cpp
   src/ros/execution_state_predictor.cpp
   src/ros/imu_shadow_ros_adapter.cpp
@@ -280,6 +281,10 @@ if(CATKIN_ENABLE_TESTING)
       ${PROJECT_NAME}
       ${catkin_LIBRARIES}
     )
+  endif()
+  catkin_add_gtest(test_recorded_command_contract test/test_recorded_command_contract.cpp)
+  if(TARGET test_recorded_command_contract)
+    target_link_libraries(test_recorded_command_contract ${PROJECT_NAME} ${catkin_LIBRARIES})
   endif()
   catkin_add_gtest(test_execution_state_predictor test/test_execution_state_predictor.cpp)
   if(TARGET test_execution_state_predictor)

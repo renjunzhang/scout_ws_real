@@ -24,6 +24,8 @@ set(SPMPC_NATIVE_SOURCES
   ${SPMPC_ROOT}/src/core/speed_safety_contract.cpp
   ${SPMPC_ROOT}/src/core/start_lock_recovery.cpp
   ${SPMPC_ROOT}/src/core/terminal_controller.cpp
+  ${SPMPC_ROOT}/src/ros/control_cycle_contract.cpp
+  ${SPMPC_ROOT}/src/ros/recorded_command_contract.cpp
   ${SPMPC_ROOT}/src/reference/reference_path.cpp
   ${SPMPC_ROOT}/src/reference/reference_path_preprocessor.cpp
   ${SPMPC_ROOT}/src/reference/progress_projector.cpp
@@ -63,7 +65,7 @@ set(NATIVE_TESTS
   test_liquid_state_nowcaster test_processed_imu_pipeline
   test_slosh_observer_bank test_slosh_observer_selector test_slosh_risk_governor
   test_speed_safety_contract test_start_lock_recovery test_task_stop_manager
-  test_terminal_controller)
+  test_terminal_controller test_control_cycle_contract test_recorded_command_contract)
 foreach(test_name IN LISTS NATIVE_TESTS)
   add_executable(${test_name} "${SPMPC_ROOT}/test/${test_name}.cpp")
   target_link_libraries(${test_name} PRIVATE spmpc_native_core GTest::gtest_main)

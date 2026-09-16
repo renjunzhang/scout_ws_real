@@ -21,7 +21,8 @@ struct RobotStateAlignmentResult {
     std::string status = "NO_HISTORY";
 };
 
-// Interpolate the odometry state at a liquid-observer epoch.  A very short
+// Align both odometry pose and twist at the chosen robot epoch (latest odom
+// for vehicle-only groups, liquid-observer epoch for liquid consumers). A very short
 // forward constant-twist extrapolation is allowed only when explicitly bounded
 // by max_extrapolation_sec.  This function is ROS-independent and unit-testable.
 RobotStateAlignmentResult alignRobotStateToEpoch(

@@ -42,7 +42,7 @@ roslaunch spmpc_local_planner trajectory_mpcc.launch \
   publish_cmd_vel:=false
 ```
 
-当前`publish_cmd_vel=false`缺少外部最终命令历史接入，会停在显式执行器`NO_CMD_HISTORY`；上例仅检查节点接口，尚不能取得完整OCP回放证据，详见[REVIEW-05](../../../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器复审与避障接入梳理.md)。
+`publish_cmd_vel=false`仅关闭本节点输出。完整执行器回放还需传入 `command_history_source:=external_audit`，并把原 bag 的 `/spmpc/debug/control_cycle_audit` remap 到 `external_audit_topic`（默认 `/spmpc/replay/control_cycle_audit`）。只接纳 schema 2 中确实发布过的最终命令及其 `command_publish_stamp`，包括安全门真正发出的零；不接纳无时间戳的 `/cmd_vel`。具体步骤见[脚本索引的无运动回放](../../../scripts/README.md#无运动回放)。
 
 实际运行时 `publish_cmd_vel` 默认 true，节点可能发运动命令。换 `planned_slosh` 会自动选择 B_slosh，无需重复指定 variant。raw/geometry 不提供 `plan_file`。
 

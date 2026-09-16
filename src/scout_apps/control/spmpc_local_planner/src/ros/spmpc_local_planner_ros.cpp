@@ -278,6 +278,20 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("frames/use_tf_pose", use_tf_pose_, use_tf_pose_);
     pnh_.param("frames/tf_timeout_sec", tf_timeout_sec_, tf_timeout_sec_);
     pnh_.param("publish_cmd_vel", publish_cmd_vel_, publish_cmd_vel_);
+    pnh_.param("command_history/source", command_history_source_, command_history_source_);
+    pnh_.param("command_history/external_audit_topic", external_audit_topic_, external_audit_topic_);
+    if ((command_history_source_ != "published" && command_history_source_ != "external_audit") ||
+        (command_history_source_ == "external_audit" && (publish_cmd_vel_ || external_audit_topic_.empty()))) {
+        ROS_FATAL("command_history/source must be published|external_audit; external_audit requires publish_cmd_vel=false and an input topic");
+        return false;
+    }
+    if (command_history_source_ == "external_audit") {
+        external_audit_topic_ = nh_.resolveName(external_audit_topic_);
+        if (external_audit_topic_ == nh_.resolveName("spmpc/debug/control_cycle_audit")) {
+            ROS_FATAL("external command audit must be remapped away from this node's output audit topic");
+            return false;
+        }
+    }
     pnh_.param("imu_shadow/enable", imu_shadow_enable_, imu_shadow_enable_);
     pnh_.param("imu_shadow/publish_diagnostics",
                imu_shadow_publish_diagnostics_,
@@ -414,6 +428,11 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             actuator_model_params_, &actuator_params_error)) {
         ROS_FATAL("[spmpc_local_planner] invalid execution_model parameters: %s",
                   actuator_params_error.c_str());
+        return false;
+    }
+    if (command_history_source_ == "external_audit" &&
+        (actuator_model_params_.cmd_timeout_sec <= 0.0 || !actuator_model_params_.require_complete_history)) {
+        ROS_FATAL("external command history requires a positive cmd_timeout_sec and require_complete_history=true");
         return false;
     }
     std::string delay_phase_mode = delayPhaseModeName(delay_phase_params_.mode);
@@ -971,6 +990,12 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         return false;
     }
     problem_.configure(solver_params, variant_);
+    if (actuator_model_params_.mode == ExecutionModelMode::ExplicitActuator &&
+        (problem_.requiresLiquidState() || slosh_risk_governor_params_.enable) &&
+        !state_timing_params_.require_common_epoch) {
+        ROS_FATAL("explicit actuator liquid prediction requires state_timing/require_common_epoch=true");
+        return false;
+    }
     if (!problem_.configurationError().empty()) {
         ROS_FATAL("invalid planning task: %s", problem_.configurationError().c_str());
         return false;
@@ -1041,6 +1066,10 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
             ros::TransportHints().tcpNoDelay());
     }
     path_sub_ = nh_.subscribe(path_topic_, 1, &SpmpcLocalPlannerROS::pathCallback, this);
+    if (command_history_source_ == "external_audit") {
+        recorded_command_sub_ = nh_.subscribe(external_audit_topic_, 200,
+            &SpmpcLocalPlannerROS::recordedCommandCallback, this);
+    }
     if (obstacle_enable_) {
         costmap_sub_ = nh_.subscribe(costmap_topic_, 1, &SpmpcLocalPlannerROS::costmapCallback, this);
     }
@@ -1053,6 +1082,8 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     diagnostics_.publishEffectiveConfig(effective_config_);
     diagnostics_.publishPlanningConfig(planningConfigJson(planning_config));
     diagnostics_.publishStatus("INITIALIZED");
+    ROS_INFO("[spmpc_local_planner] command history source=%s input=%s publish_cmd_vel=%s",
+        command_history_source_.c_str(), external_audit_topic_.c_str(), boolText(publish_cmd_vel_));
 
     const double period = 1.0 / std::max(1.0, control_frequency_);
     control_timer_ = nh_.createTimer(ros::Duration(period), &SpmpcLocalPlannerROS::controlTimerCallback, this);
@@ -1313,6 +1344,44 @@ void SpmpcLocalPlannerROS::recordPublishedCommand(
     last_cmd_stamp_ = stamp;
     have_last_published_cmd_ = true;
     command_history_.push({stamp, cmd, meta});
+}
+
+void SpmpcLocalPlannerROS::recordedCommandCallback(const ControlCycleAuditConstPtr& msg) {
+    if (command_history_source_ != "external_audit" || publish_cmd_vel_ ||
+        recorded_command_restart_required_) return;
+    RecordedCommandRecord record;
+    record.schema_version = msg->schema_version;
+    record.cycle_id = msg->cycle_id;
+    record.command_was_published = msg->command_was_published;
+    record.publish_cmd_vel = msg->publish_cmd_vel;
+    record.command_publish_stamp_ns = static_cast<std::int64_t>(msg->command_publish_stamp.toNSec());
+    record.receive_stamp_ns = static_cast<std::int64_t>(ros::Time::now().toNSec());
+    record.published_cmd_v = msg->published_cmd_v;
+    record.published_cmd_omega = msg->published_cmd_omega;
+    record.source = external_audit_topic_;
+    const auto decision = validateRecordedCommand(
+        have_recorded_command_ ? &last_recorded_command_ : nullptr,
+        record, actuator_model_params_.cmd_timeout_sec);
+    if (decision == RecordedCommandDecision::Duplicate) return;
+    if (decision != RecordedCommandDecision::Accepted || recorded_command_sub_.getNumPublishers() > 1) {
+        command_history_.clear();
+        recorded_command_restart_required_ = decision == RecordedCommandDecision::RestartRequired ||
+            recorded_command_sub_.getNumPublishers() > 1;
+        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] rejected external final command; epoch/source conflict=%s",
+                         boolText(recorded_command_restart_required_));
+        return;
+    }
+    geometry_msgs::Twist cmd;
+    cmd.linear.x = record.published_cmd_v;
+    cmd.angular.z = record.published_cmd_omega;
+    CommandPublishMeta meta;
+    meta.is_zero_cmd = cmd.linear.x == 0.0 && cmd.angular.z == 0.0;
+    meta.linear_limited = msg->linear_limited;
+    meta.angular_rate_limited = msg->angular_rate_limited;
+    meta.angular_accel_limited = msg->angular_accel_limited;
+    command_history_.push({msg->command_publish_stamp, cmd, meta});
+    last_recorded_command_ = record;
+    have_recorded_command_ = true;
 }
 
 void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
@@ -1901,6 +1970,24 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     cycle_audit.publish_cmd_vel = publish_cmd_vel_;
     cycle_audit.v_safe_max = speed_safety_contract_.params().v_safe_max;
 
+    if (command_history_source_ == "external_audit") {
+        if ((have_recorded_command_ && static_cast<std::int64_t>(cycle_start.toNSec()) <
+             last_recorded_command_.receive_stamp_ns) || recorded_command_sub_.getNumPublishers() > 1)
+            recorded_command_restart_required_ = true;
+        if (recorded_command_restart_required_ || command_history_.empty()) {
+            if (recorded_command_restart_required_) command_history_.clear();
+            cycle_audit.timing.cycle_start_stamp_ns = static_cast<std::int64_t>(cycle_start.toNSec());
+            cycle_audit.status = recorded_command_restart_required_
+                ? "EXTERNAL_COMMAND_EPOCH_OR_SOURCE_CHANGED_RESTART_REQUIRED"
+                : "WAITING_FOR_RECORDED_COMMAND_HISTORY";
+            diagnostics_.publishStatus(cycle_audit.status);
+            CommandInterventionDebug intervention;
+            intervention.zero_due_to_command_contract = true;
+            publishZeroCommand(intervention, &cycle_audit);
+            return;
+        }
+    }
+
     // A speed violation is process-lifetime fail-closed.  Do not continue
     // solving after the first violation: every subsequent cycle publishes an
     // explicit zero until the planner node is restarted.
@@ -2062,86 +2149,43 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             return;
         }
         cycle_audit.timing.raw_state_skew_sec = raw_skew_sec;
-        bool interpolated = false;
-        bool extrapolated = false;
-        std::string alignment_status;
-        const ros::Time liquid_epoch = rosTimeFromNanoseconds(
-            cycle_audit.timing.raw_liquid_state_stamp_ns);
-        if (!robotStateAtEpoch(
-                liquid_epoch,
-                input.robot,
-                interpolated,
-                extrapolated,
-                alignment_status)) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
-            cycle_audit.timing.state_alignment_status = alignment_status;
-            cycle_audit.status =
-                "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
-            diagnostics_.publishStatus(cycle_audit.status);
-            publishSloshObserverSelectionDebug(
-                observer_selection_now,
-                observer_selection,
-                solver_consumes_selected_state,
-                cycle_audit.timing);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_tf = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        cycle_audit.timing.robot_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.liquid_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.solver_input_epoch_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.aligned_state_skew_sec = 0.0;
-        cycle_audit.timing.state_time_aligned = true;
-        cycle_audit.timing.robot_state_interpolated = interpolated;
-        cycle_audit.timing.robot_state_extrapolated = extrapolated;
-        cycle_audit.timing.state_alignment_status = alignment_status;
-    } else {
-        if (!robotStateFromLatest(latest_odom, input.robot)) {
-            resetTerminalSpinFailGate();
-            resetTrackingSafetyGate();
-            diagnostics_.publishStatus("WAITING_FOR_TF_POSE");
-            publishDelayPhaseEarlyStatus(DelayPhaseStatusCode::NoTfPose);
-            cycle_audit.status = "WAITING_FOR_TF_POSE";
-            cycle_audit.timing.state_alignment_status = "LATEST_TF_UNAVAILABLE";
-            publishSloshObserverSelectionDebug(
-                observer_selection_now,
-                observer_selection,
-                solver_consumes_selected_state,
-                cycle_audit.timing);
-            CommandInterventionDebug intervention;
-            intervention.zero_due_to_waiting_for_tf = true;
-            publishZeroCommand(intervention, &cycle_audit);
-            return;
-        }
-        cycle_audit.timing.robot_state_stamp_ns =
-            cycle_audit.timing.raw_robot_state_stamp_ns;
-        cycle_audit.timing.liquid_state_stamp_ns =
-            cycle_audit.timing.raw_liquid_state_stamp_ns;
-        cycle_audit.timing.solver_input_epoch_ns =
-            cycle_audit.timing.raw_robot_state_stamp_ns;
-        cycle_audit.timing.aligned_state_skew_sec =
-            cycle_audit.timing.liquid_state_stamp_ns > 0
-                ? (cycle_audit.timing.robot_state_stamp_ns -
-                   cycle_audit.timing.liquid_state_stamp_ns) * 1e-9
-                : 0.0;
-        cycle_audit.timing.raw_state_skew_sec =
-            cycle_audit.timing.raw_liquid_state_stamp_ns > 0
-                ? (cycle_audit.timing.raw_robot_state_stamp_ns -
-                   cycle_audit.timing.raw_liquid_state_stamp_ns) * 1e-9
-                : 0.0;
-        cycle_audit.timing.state_time_aligned =
-            !solver_consumes_selected_state ||
-            std::abs(cycle_audit.timing.aligned_state_skew_sec) <= 1e-6;
-        cycle_audit.timing.state_alignment_status =
-            solver_consumes_selected_state
-                ? "COMMON_EPOCH_DISABLED"
-                : "LIQUID_NOT_CONSUMED";
     }
+    // Every group uses a stamped pose/twist pair. Liquid consumers additionally
+    // choose the liquid epoch; vehicle-only groups use the odometry epoch.
+    // Never combine latest TF (Time(0)) with a separately timestamped twist.
+    const auto robot_epoch_ns = cycle_audit.timing.state_alignment_required
+        ? cycle_audit.timing.raw_liquid_state_stamp_ns
+        : cycle_audit.timing.raw_robot_state_stamp_ns;
+    bool interpolated = false;
+    bool extrapolated = false;
+    std::string alignment_status;
+    if (!robotStateAtEpoch(rosTimeFromNanoseconds(robot_epoch_ns), input.robot,
+                           interpolated, extrapolated, alignment_status)) {
+        resetTerminalSpinFailGate();
+        resetTrackingSafetyGate();
+        cycle_audit.timing.state_alignment_status = alignment_status;
+        cycle_audit.status = "STATE_TIME_ALIGNMENT_FAILED_" + alignment_status;
+        diagnostics_.publishStatus(cycle_audit.status);
+        publishSloshObserverSelectionDebug(observer_selection_now, observer_selection,
+            solver_consumes_selected_state, cycle_audit.timing);
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_tf = true;
+        publishZeroCommand(intervention, &cycle_audit);
+        return;
+    }
+    cycle_audit.timing.robot_state_stamp_ns = robot_epoch_ns;
+    cycle_audit.timing.liquid_state_stamp_ns = cycle_audit.timing.raw_liquid_state_stamp_ns;
+    cycle_audit.timing.solver_input_epoch_ns = robot_epoch_ns;
+    cycle_audit.timing.robot_state_interpolated = interpolated;
+    cycle_audit.timing.robot_state_extrapolated = extrapolated;
+    cycle_audit.timing.aligned_state_skew_sec = cycle_audit.timing.liquid_state_stamp_ns > 0
+        ? (robot_epoch_ns-cycle_audit.timing.liquid_state_stamp_ns)*1e-9 : 0.0;
+    cycle_audit.timing.raw_state_skew_sec = cycle_audit.timing.raw_liquid_state_stamp_ns > 0
+        ? (cycle_audit.timing.raw_robot_state_stamp_ns-cycle_audit.timing.raw_liquid_state_stamp_ns)*1e-9 : 0.0;
+    cycle_audit.timing.state_time_aligned = !solver_consumes_selected_state ||
+        std::abs(cycle_audit.timing.aligned_state_skew_sec) <= 1e-6;
+    cycle_audit.timing.state_alignment_status =
+        std::string(cycle_audit.timing.state_alignment_required ? "COMMON_EPOCH_" : "ODOM_EPOCH_") + alignment_status;
     publishSloshObserverSelectionDebug(
         observer_selection_now,
         observer_selection,
@@ -2497,48 +2541,6 @@ RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& od
     return state;
 }
 
-bool SpmpcLocalPlannerROS::robotStateFromLatest(
-    const nav_msgs::Odometry& latest_odom,
-    RobotState& state) {
-    state = robotStateFromOdom(latest_odom);
-    if (!use_tf_pose_) {
-        return true;
-    }
-
-    const std::string reference_frame = problem_.referenceFrameId();
-    if (reference_frame.empty()) {
-        return true;
-    }
-
-    try {
-        const auto tf = tf_buffer_.lookupTransform(
-            reference_frame,
-            robot_base_frame_,
-            ros::Time(0),
-            ros::Duration(std::max(0.0, tf_timeout_sec_)));
-        state.x = tf.transform.translation.x;
-        state.y = tf.transform.translation.y;
-        state.yaw = tf2::getYaw(tf.transform.rotation);
-        return true;
-    } catch (const tf2::TransformException& ex) {
-        if (reference_frame != latest_odom.header.frame_id) {
-            ROS_WARN_THROTTLE(1.0,
-                              "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; odom frame is %s, refuse mixed-frame fallback",
-                              reference_frame.c_str(),
-                              robot_base_frame_.c_str(),
-                              ex.what(),
-                              latest_odom.header.frame_id.c_str());
-            return false;
-        }
-        ROS_WARN_THROTTLE(1.0,
-                          "[spmpc_local_planner] TF pose unavailable %s <- %s: %s; odom frame matches reference, using odom fallback",
-                          reference_frame.c_str(),
-                          robot_base_frame_.c_str(),
-                          ex.what());
-        return true;
-    }
-}
-
 void SpmpcLocalPlannerROS::appendOdomStateHistory(
     const nav_msgs::Odometry& odom) {
     if (odom.header.stamp.isZero()) {
@@ -2595,9 +2597,14 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
     extrapolated = aligned.extrapolated;
 
     const std::string reference_frame = problem_.referenceFrameId();
-    if (!use_tf_pose_ || reference_frame.empty() ||
-        reference_frame == latest_odom_frame) {
-        return true;
+    if (reference_frame.empty() || latest_odom_frame.empty()) {
+        status = "MISSING_STATE_FRAME";
+        return false;
+    }
+    if (reference_frame == latest_odom_frame) return true;
+    if (!use_tf_pose_) {
+        status = "TF_DISABLED_FRAME_MISMATCH";
+        return false;
     }
     try {
         const auto tf = tf_buffer_.lookupTransform(
@@ -2605,9 +2612,23 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
             robot_base_frame_,
             target_stamp,
             ros::Duration(std::max(0.0, tf_timeout_sec_)));
+        // TF resolves a requested dynamic transform at target_stamp. A zero
+        // stamp denotes an all-static chain, which is valid at every epoch.
+        if (!tf.header.stamp.isZero() && tf.header.stamp != target_stamp) {
+            status = "TF_EPOCH_MISMATCH";
+            return false;
+        }
+        const auto& q = tf.transform.rotation;
+        const double norm = q.x*q.x + q.y*q.y + q.z*q.z + q.w*q.w;
         state.x = tf.transform.translation.x;
         state.y = tf.transform.translation.y;
-        state.yaw = tf2::getYaw(tf.transform.rotation);
+        state.yaw = tf2::getYaw(q);
+        if (!std::isfinite(state.x) || !std::isfinite(state.y) ||
+            !std::isfinite(state.yaw) || !std::isfinite(norm) || norm <= 1e-12) {
+            status = "INVALID_TF_POSE";
+            return false;
+        }
+        status += "_TF_AT_EPOCH";
         return true;
     } catch (const tf2::TransformException& ex) {
         status = "TF_AT_COMMON_EPOCH_UNAVAILABLE";
@@ -2629,6 +2650,12 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         std::lock_guard<std::mutex> lock(odom_mutex_);
         last_odom_timing_ = timing;
     };
+    if (odom.header.frame_id.empty() ||
+        (!odom.child_frame_id.empty() && odom.child_frame_id != robot_base_frame_) ||
+        (have_prev_odom_ && odom.header.frame_id != prev_odom_.header.frame_id)) {
+        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] odom frame missing/changed or twist is not in robot_base; restart for a new frame");
+        return false;
+    }
     OdomTimingDebug timing;
     if (!receive_stamp.isZero() && !odom.header.stamp.isZero()) {
         timing.recv_age_ms = 1000.0 * (receive_stamp - odom.header.stamp).toSec();

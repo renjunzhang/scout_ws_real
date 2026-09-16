@@ -35,6 +35,23 @@ TEST(ControlCycleContract, InterpolatesRobotAtLiquidEpoch) {
     EXPECT_NEAR(result.state.yaw, 0.001, 1e-12);
 }
 
+TEST(ControlCycleContract, VehicleEpochDoesNotBorrowANewerPoseOrTwist) {
+    // New odometry may arrive while the control callback resolves TF. The
+    // copied cycle stamp still identifies the same pair in the live history.
+    std::deque<StampedRobotState> history{
+        sample(1000000000LL, 1.0, .1, .2, .1),
+        sample(1100000000LL, 1.025, .12, .3, .2),
+    };
+    const auto result=alignRobotStateToEpoch(history,1000000000LL,.05,.01);
+    ASSERT_TRUE(result.valid);
+    EXPECT_EQ(result.status,"EXACT");
+    EXPECT_DOUBLE_EQ(result.state.x,1.0);
+    EXPECT_DOUBLE_EQ(result.state.v,.2);
+    EXPECT_DOUBLE_EQ(result.state.omega,.1);
+    EXPECT_FALSE(result.interpolated);
+    EXPECT_FALSE(result.extrapolated);
+}
+
 TEST(ControlCycleContract, RejectsGapAndExtrapolationBeyondLimits) {
     std::deque<StampedRobotState> history{
         sample(1000000000LL, 0.0, 0.0, 0.2, 0.0),

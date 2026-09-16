@@ -3,6 +3,14 @@ dt: 0.0333333333
 horizon_steps: 60
 publish_cmd_vel: true
 
+# Optional no-output replay. Use the recorded final command and its publication
+# stamp from ControlCycleAudit, never an unstamped /cmd_vel or a fabricated zero.
+# external_audit requires publish_cmd_vel=false; remap the bag audit to this
+# dedicated input to keep this node's diagnostic output out of its own history.
+command_history:
+  source: published             # published | external_audit
+  external_audit_topic: /spmpc/replay/control_cycle_audit
+
 # Runtime anti-creep A/B control. Keep 8 until measured benefit supports changing it.
 anticreep_gain: 8.0
 

@@ -165,6 +165,27 @@ python3 "$SPMPC_SCRIPTS/extract_trajectory_checkpoint.py" \
 
 仿真批量矩阵/指标脚本在[spmpc_experiments/scripts README](../../spmpc_experiments/scripts/README.md)，不承担实物主入口。固定路径publisher、模板/profile生成器在[scout_local_planner/scripts README](../../scout_local_planner/scripts/README.md)。
 
+## 无运动回放
+
+新主线已提供外部最终命令历史入口。使用离线独立 ROS1 master，设置 `/use_sim_time=true`，按原 bag 对应的 profile、region、task/plan 启动 `trajectory_mpcc.launch`，额外传入：
+
+```bash
+publish_cmd_vel:=false command_history_source:=external_audit \
+external_audit_topic:=/spmpc/replay/control_cycle_audit
+```
+
+播放时只选择状态、路径、TF 和原始审计消息；本节点审计输出与输入分开：
+
+```bash
+rosbag play --clock --pause recorded.bag \
+  --topics /odom /imu/data /tf /tf_static /scout/global_path_fixed /spmpc/debug/control_cycle_audit \
+  /spmpc/debug/control_cycle_audit:=/spmpc/replay/control_cycle_audit
+```
+
+topic 名按原录制参数替换。放开暂停后，先等真实历史覆盖线/角速度延迟和加速度记忆，再观察 solve/audit；空历史、断流、过去的 watchdog 大间隙继续失败关闭。外部源只允许一个 publisher；时钟回跳、cycle 倒序或来源冲突要求重启节点及任务，不支持同一节点循环播 bag。`execution_model/require_complete_history` 必须为 true。只有 `/cmd_vel`、没有 schema 2 audit 的旧 bag 不能使用此入口。
+
+这用于在录制状态上重新求解，重算命令不改变录制的后续运动，不能作为闭环改善证据。当前只完成消息接线静态审查与 ROS 无关的时间/历史接纳测试；ROS1 整节点编译、TF 和 bag 联调仍待对应环境验证。
+
 ## 实现模块与开发工具
 
 - `planning/`是上层任务、优化、验证和后缀实现；`experiments/recording_contract.py`由新recorder调用，不再新增平行录制框架。
