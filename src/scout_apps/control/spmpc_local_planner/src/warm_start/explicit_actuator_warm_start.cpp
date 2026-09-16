@@ -10,10 +10,6 @@ double clampValue(double value, double lo, double hi) {
     return std::max(lo, std::min(hi, value));
 }
 
-double wrapAngle(double angle) {
-    return std::atan2(std::sin(angle), std::cos(angle));
-}
-
 bool fail(WarmStartOutput& output, const char* reason) {
     output.valid = output.diagnostics.warm_start_valid = false;
     output.fallback_reason = output.diagnostics.failure_reason = reason;
@@ -112,21 +108,33 @@ bool rolloutExplicitActuatorWarmStart(
     state.px = input.robot.x;
     state.py = input.robot.y;
     state.theta = input.robot.yaw;
-    state.v = clampValue(input.robot.v, 0.0, input.bounds.v_max);
+    // The initial state is a measurement, including any small reverse motion.
+    // Bounds constrain future decisions; they must not rewrite x0.
+    state.v = input.robot.v;
     state.s = warm_start.states.front().s;
-    state.omega = clampValue(
-        input.robot.omega, -input.bounds.omega_max, input.bounds.omega_max);
+    state.omega = input.robot.omega;
     state.eta_x = input.slosh.eta_x;
     state.eta_x_dot = input.slosh.eta_x_dot;
     state.eta_y = input.slosh.eta_y;
     state.eta_y_dot = input.slosh.eta_y_dot;
     copyActuatorState(actuator_state, state);
     std::vector<WarmStartState> states(warm_start.states.size());
+    auto controls = warm_start.controls;
     states.front() = state;
 
     const double dt = input.dt;
-    for (size_t k = 0; k < warm_start.controls.size(); ++k) {
-        const WarmStartControl& control = warm_start.controls[k];
+    for (size_t k = 0; k < controls.size(); ++k) {
+        auto& control = controls[k];
+        // Saturate the decision, not its integrated state. Otherwise x/u and
+        // the FIFO tail describe different commands, creating a seed defect
+        // before RTI even starts. Commit both arrays only after a full rollout.
+        control.a = clampValue(control.a,
+            std::max(-input.bounds.a_max, -state.v_cmd / dt),
+            std::min(input.bounds.a_max, (input.bounds.v_max - state.v_cmd) / dt));
+        control.alpha = clampValue(control.alpha,
+            std::max(-input.bounds.omega_rate_max, (-input.bounds.omega_max - state.omega_cmd) / dt),
+            std::min(input.bounds.omega_rate_max, (input.bounds.omega_max - state.omega_cmd) / dt));
+        control.v_s = clampValue(control.v_s, 0.0, input.bounds.v_max);
         WarmStartState next = state;
         RobotState robot;
         robot.x = state.px; robot.y = state.py; robot.yaw = state.theta;
@@ -140,16 +148,13 @@ bool rolloutExplicitActuatorWarmStart(
                 actuator_params, liquid_model, dt)) {
             return fail(warm_start, "COUPLED_ACTUATOR_WARM_START_FAILED");
         }
-        next.px = robot.x; next.py = robot.y; next.theta = wrapAngle(robot.yaw);
+        // OCP yaw is continuous; wrapping at pi would introduce a 2*pi defect.
+        next.px = robot.x; next.py = robot.y; next.theta = robot.yaw;
         next.v = robot.v; next.omega = robot.omega;
-        next.s = state.s +
-            clampValue(control.v_s, 0.0, input.bounds.v_max) * dt;
+        next.s = state.s + control.v_s * dt;
 
-        next.v_cmd = clampValue(
-            state.v_cmd + control.a * dt, 0.0, input.bounds.v_max);
-        next.omega_cmd = clampValue(
-            state.omega_cmd + control.alpha * dt,
-            -input.bounds.omega_max, input.bounds.omega_max);
+        next.v_cmd = state.v_cmd + control.a * dt;
+        next.omega_cmd = state.omega_cmd + control.alpha * dt;
         next.a_cmd_memory = control.a;
         for (int i = 0; i + 1 < kExplicitLinearDelaySteps; ++i) {
             next.linear_delay_queue[static_cast<size_t>(i)] =
@@ -173,6 +178,7 @@ bool rolloutExplicitActuatorWarmStart(
     // Validate the complete final sequence before replacing the candidate.
     WarmStartOutput result = warm_start;
     result.states = std::move(states);
+    result.controls = std::move(controls);
     if (!isWarmStartFinite(result)) {
         return fail(warm_start, "EXPLICIT_ACTUATOR_WARM_START_NONFINITE");
     }

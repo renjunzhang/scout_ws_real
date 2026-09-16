@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/warm_start/explicit_actuator_warm_start.h"
 #include "spmpc_local_planner/warm_start/diff_drive_flatness_warm_start.h"
 #include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
+#include "spmpc_local_planner/dynamics/explicit_state_rollout.h"
 #include <gtest/gtest.h>
 #include <algorithm>
 #include <cmath>
@@ -42,6 +43,26 @@ protected:
         return output;
     }
 
+    std::vector<double> modelState(const WarmStartState& s) {
+        std::vector<double> x{s.px,s.py,s.theta,s.v,s.s,s.omega,s.v_cmd,s.omega_cmd};
+        x.insert(x.end(),s.linear_delay_queue.begin(),s.linear_delay_queue.end());
+        x.insert(x.end(),s.angular_delay_queue.begin(),s.angular_delay_queue.end());
+        x.insert(x.end(),{s.a_cmd_memory,s.eta_x,s.eta_x_dot,s.eta_y,s.eta_y_dot});
+        return x;
+    }
+
+    void expectConsistent(const WarmStartOutput& output) {
+        for (size_t k=0;k<output.controls.size();++k) {
+            const auto& u=output.controls[k];
+            std::vector<double> replay;
+            ASSERT_TRUE(stepExplicitState(modelState(output.states[k]),{{u.a,u.alpha,u.v_s}},
+                params,liquid,input.dt,replay));
+            const auto next=modelState(output.states[k+1]);
+            for (size_t j=0;j<next.size();++j)
+                EXPECT_NEAR(next[j],replay[j],1e-12) << "stage="<<k<<" component="<<j;
+        }
+    }
+
     ReferencePath reference;
     ReferenceSpline spline;
     WarmStartInput input;
@@ -69,7 +90,6 @@ TEST_F(ExplicitActuatorWarmStart, GeometryControlsDoNotDependOnProvisionalLiquid
 
 TEST_F(ExplicitActuatorWarmStart, FinalMetricsReplaceCandidateMetricsWithoutRejectingFit) {
     auto output = candidate();
-    const auto controls = output.controls;
     output.diagnostics.max_v = output.diagnostics.max_omega = 999;
     output.diagnostics.max_a = output.diagnostics.max_lateral_acc = 999;
     output.diagnostics.max_slosh_height_pred = output.diagnostics.reference_fit_error = 999;
@@ -89,11 +109,8 @@ TEST_F(ExplicitActuatorWarmStart, FinalMetricsReplaceCandidateMetricsWithoutReje
         violations += state.v < -1e-9 || state.v > input.bounds.v_max + 1e-9 ||
                       std::abs(state.omega) > input.bounds.omega_max + 1e-9;
     }
-    for (size_t k = 0; k < controls.size(); ++k) {
-        EXPECT_DOUBLE_EQ(output.controls[k].a, controls[k].a);
-        EXPECT_DOUBLE_EQ(output.controls[k].alpha, controls[k].alpha);
-        EXPECT_DOUBLE_EQ(output.controls[k].v_s, controls[k].v_s);
-        a = std::max(a, std::abs(controls[k].a));
+    for (const auto& control : output.controls) {
+        a = std::max(a, std::abs(control.a));
     }
     EXPECT_DOUBLE_EQ(output.diagnostics.max_v, v);
     EXPECT_DOUBLE_EQ(output.diagnostics.max_omega, omega);
@@ -116,6 +133,7 @@ TEST_F(ExplicitActuatorWarmStart, PreservesCommandClampsFifoAndActualActuatorRes
         control.v_s = .2;
     }
     ASSERT_TRUE(rolloutExplicitActuatorWarmStart(output, input, actuator, params, liquid, true));
+    expectConsistent(output);
     const double dt = input.dt;
     const double expected_v = params.linear_gain * actuator.linear_delay_queue.front() +
         (input.robot.v - params.linear_gain * actuator.linear_delay_queue.front()) *
@@ -137,9 +155,36 @@ TEST_F(ExplicitActuatorWarmStart, PreservesCommandClampsFifoAndActualActuatorRes
     }
 }
 
+TEST_F(ExplicitActuatorWarmStart, LowerCommandBoundsAlsoPreserveFullDynamics) {
+    auto output=candidate();
+    actuator.v_cmd=.001;
+    actuator.omega_cmd=-input.bounds.omega_max+.001;
+    for (auto& u:output.controls) { u.a=-input.bounds.a_max; u.alpha=-input.bounds.omega_rate_max; u.v_s=-.2; }
+    ASSERT_TRUE(rolloutExplicitActuatorWarmStart(output,input,actuator,params,liquid,true));
+    expectConsistent(output);
+    EXPECT_NEAR(output.states[1].v_cmd,0.,1e-15);
+    EXPECT_NEAR(output.states[1].omega_cmd,-input.bounds.omega_max,1e-15);
+    EXPECT_DOUBLE_EQ(output.controls[1].a,0.);
+    EXPECT_DOUBLE_EQ(output.controls[1].alpha,0.);
+    EXPECT_DOUBLE_EQ(output.controls[1].v_s,0.);
+}
+
+TEST_F(ExplicitActuatorWarmStart, KeepsMeasuredVelocityAndContinuousYawAcrossPi) {
+    auto output=candidate();
+    input.robot.v=-.001;
+    input.robot.yaw=std::acos(-1.)-.001;
+    input.robot.omega=input.bounds.omega_max+.01;
+    ASSERT_TRUE(rolloutExplicitActuatorWarmStart(output,input,actuator,params,liquid,true));
+    EXPECT_DOUBLE_EQ(output.states[0].v,input.robot.v);
+    EXPECT_DOUBLE_EQ(output.states[0].omega,input.robot.omega);
+    EXPECT_GT(output.states[1].theta,std::acos(-1.));
+    expectConsistent(output);
+}
+
 TEST_F(ExplicitActuatorWarmStart, FailedLateStageLeavesCandidateStatesIntactAndInvalid) {
     auto output = candidate();
     const auto before = output.states;
+    const auto controls = output.controls;
     actuator.linear_delay_queue[3] = std::numeric_limits<double>::quiet_NaN();
     EXPECT_FALSE(rolloutExplicitActuatorWarmStart(output, input, actuator, params, liquid, true));
     EXPECT_FALSE(output.valid);
@@ -150,6 +195,11 @@ TEST_F(ExplicitActuatorWarmStart, FailedLateStageLeavesCandidateStatesIntactAndI
         EXPECT_DOUBLE_EQ(output.states[k].v, before[k].v);
         EXPECT_DOUBLE_EQ(output.states[k].eta_x, before[k].eta_x);
         EXPECT_EQ(output.states[k].linear_delay_queue, before[k].linear_delay_queue);
+    }
+    for (size_t k=0;k<controls.size();++k) {
+        EXPECT_DOUBLE_EQ(output.controls[k].a,controls[k].a);
+        EXPECT_DOUBLE_EQ(output.controls[k].alpha,controls[k].alpha);
+        EXPECT_DOUBLE_EQ(output.controls[k].v_s,controls[k].v_s);
     }
 }
 
