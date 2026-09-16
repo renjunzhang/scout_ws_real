@@ -35,7 +35,7 @@
 
 共同普通权重：w_lag=0.2、w_progress=0.2、w_v=1、w_vs=0.3、v_ref=0.25、w_control=0.1、w_accel=0、w_smooth=0.1、w_alpha/w_du_a/w_du_vs=0.1。新几何组关闭参考曲率限速，raw保留。当前权重是候选；曲率权重1曾妨碍终点朝向修正，不能仅凭“更缓”认定更好。
 
-最后实物81e191d已使用显式执行器，但Full的processed-IMU、v_ref=0.2、jerk=0.6、w_slosh=1，与新planned_slosh默认odom、0.25、1、5不同。新四组还存在发布时效、定位/observer恢复及失败停车缺口；硬液面约束启用前需处理周期内峰值漏检。配置差异和修复依赖见[合并审查](../../../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)，不能直接用新默认值与旧bag比较方法收益，也不应整份套用含其他液体条件的历史overlay。
+用户确认当前实物运行7d17f6c，已包含显式执行器、四子步RK4和液面硬约束入口，实际启用条件以运行配置为准。81e191d仅是已归档两包的版本：该Full的processed-IMU、v_ref=0.2、jerk=0.6、w_slosh=1，与新planned_slosh默认odom、0.25、1、5不同，不能将历史条件自动当作当前实物配置。新四组还存在发布时效、定位/observer恢复及失败停车缺口；硬液面约束启用前需处理周期内峰值漏检。配置差异和修复依赖见[合并审查](../../../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)，不能直接用新默认值与旧bag比较方法收益，也不应整份套用含其他液体条件的历史overlay。
 
 [corner_task.example.yaml](corner_task.example.yaml) 是 **ROS deadline覆盖层**，不是上层优化器任务。上层完整任务样例是 [test/native/scenarios/corner.json](../../../../../../../test/native/scenarios/corner.json)。[corner_region.example.yaml](corner_region.example.yaml) 只是该软件场景区域，不能当实测空闲地图。
 
