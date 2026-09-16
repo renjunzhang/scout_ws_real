@@ -239,7 +239,7 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     const bool yaw_ready = !(task_plan_ || solver_params_.terminal.require_goal_yaw) ||
         std::abs(angleDiff(input.robot.yaw, goal.yaw)) <=
         (task_plan_ ? task_plan_->goal_yaw_tolerance : solver_params_.terminal.goal_yaw_tolerance);
-    const bool goal_pose_ready = yaw_ready &&
+    const bool goal_pose_ready = goal_info.position_reached && yaw_ready &&
         (!task_plan_ || distance_to_goal <= task_plan_->goal_position_tolerance);
     goal_info.position_reached = goal_info.position_reached && goal_pose_ready;
     const double deadline = task_plan_ ? task_plan_->deadline : solver_params_.planning.task_deadline_sec;
@@ -335,7 +335,10 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         updateStartLockRecovery(input, false, output);
         return false;
     }
-    if (!terminal_controller_.params().enable && goal_info.position_reached && goal_pose_ready) {
+    if (!terminal_controller_.params().enable && goal_pose_ready &&
+        std::abs(input.robot.v) <= solver_params_.terminal.goal_reached_max_speed &&
+        std::abs(input.robot.omega) <= solver_params_.terminal.goal_reached_max_omega &&
+        (!require_vehicle_queues || vehicle_queues_clear)) {
         output = SolverOutput{};
         output.success = true;
         output.status = "GOAL_REACHED";

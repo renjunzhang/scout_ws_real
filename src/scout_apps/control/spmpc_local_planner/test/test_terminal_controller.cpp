@@ -80,16 +80,67 @@ TEST(TerminalController, ReachedRequiresLowSpeedAndLowOmega) {
     EXPECT_TRUE(controller.reached());
 }
 
-TEST(TerminalController, ReachedStaysLatchedAfterVelocityNoise) {
+TEST(TerminalController, ReachedRevokesAfterVelocityNoise) {
     TerminalController controller;
     controller.setParams(makeParams());
     EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
     EXPECT_TRUE(controller.reached());
 
     const auto noisy = controller.updateAndPlan(makeGoal(0.05), 0.10, 0.20, 0.6);
-    EXPECT_EQ(noisy.mode, "REACHED");
+    EXPECT_NE(noisy.mode, "REACHED");
     EXPECT_TRUE(noisy.terminal_phase);
-    EXPECT_TRUE(controller.reached());
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, ReachedRevokesAfterGoalDisplacement) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+
+    const auto displaced = controller.updateAndPlan(makeGoal(0.20), 0.0, 0.0, 0.6);
+    EXPECT_NE(displaced.mode, "REACHED");
+    EXPECT_TRUE(displaced.owns_command);
+    EXPECT_EQ(displaced.mode, "TERMINAL_STOP");
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, ReachedRevokesWhenCompletionIsNotReady) {
+    TerminalController controller;
+    controller.setParams(makeParams());
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+    const auto incomplete = controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6, false);
+    EXPECT_NE(incomplete.mode, "REACHED");
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, InvalidGoalKeepsExistingStopOwnership) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+
+    auto invalid = makeGoal(0.05);
+    invalid.valid = false;
+    const auto plan = controller.updateAndPlan(invalid, 0.0, 0.0, 0.6);
+    EXPECT_EQ(plan.mode, "TERMINAL_STOP");
+    EXPECT_TRUE(plan.owns_command);
+    EXPECT_FALSE(controller.reached());
+}
+
+TEST(TerminalController, NonFiniteVelocityKeepsExistingStopOwnership) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    EXPECT_EQ(controller.updateAndPlan(makeGoal(0.05), 0.0, 0.0, 0.6).mode, "REACHED");
+
+    const auto plan = controller.updateAndPlan(makeGoal(0.05), NAN, 0.0, 0.6);
+    EXPECT_EQ(plan.mode, "TERMINAL_STOP");
+    EXPECT_TRUE(plan.owns_command);
+    EXPECT_FALSE(controller.reached());
 }
 
 TEST(TerminalController, ResetClearsReachedLatch) {

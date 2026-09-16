@@ -43,21 +43,35 @@ TerminalPlan TerminalController::updateAndPlan(
     diagnostics_.remaining_s = goal.remaining_s;
     diagnostics_.dx_robot = goal.dx_robot;
     diagnostics_.position_reached = goal.position_reached;
-    diagnostics_.speed_gate_reached = std::abs(current_v) <= params_.goal_reached_max_speed;
-    diagnostics_.omega_gate_reached = std::abs(current_omega) <= params_.goal_reached_max_omega;
+    diagnostics_.speed_gate_reached = finite(current_v) &&
+        std::abs(current_v) <= params_.goal_reached_max_speed;
+    diagnostics_.omega_gate_reached = finite(current_omega) &&
+        std::abs(current_omega) <= params_.goal_reached_max_omega;
 
     TerminalPlan plan;
-    if (!params_.enable || !goal.valid) {
-        plan.mode = params_.enable ? "NO_GOAL" : "DISABLED";
+    const bool completion_reached = goal.valid && goal.position_reached &&
+        diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached &&
+        completion_ready;
+    // Recheck every completion gate against the current observation.  A pose
+    // correction or disturbance must revoke the status immediately.
+    if (reached_latched_ && !completion_reached) reached_latched_ = false;
+
+    if (!params_.enable) {
+        plan.mode = "DISABLED";
         diagnostics_.mode = plan.mode;
         return plan;
     }
 
-    // Legacy callers keep completion_ready=true. Complete-stop callers must
-    // reacquire their live quiet/stability gates after an external disturbance.
-    if (reached_latched_ && !completion_ready) reached_latched_ = false;
+    // An invalid goal may continue through the owned-stop path, but cannot
+    // reacquire completion or release an existing actuator handoff.
+    if (!goal.valid && !stop_owned_) {
+        plan.mode = "NO_GOAL";
+        diagnostics_.mode = plan.mode;
+        return plan;
+    }
+
     if (reached_latched_) {
-        plan.owns_command = params_.mpc_stop_handoff_enable;
+        plan.owns_command = stop_owned_;
         diagnostics_.command_owned = plan.owns_command;
         stop_pending_ = true;
         plan.stop_pending = true;
@@ -112,7 +126,7 @@ TerminalPlan TerminalController::updateAndPlan(
     plan.terminal_phase = terminal_phase;
     plan.pre_terminal_phase = !terminal_phase;
     plan.v_envelope = envelope;
-    if (goal.position_reached && diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached && completion_ready) {
+    if (completion_reached) {
         reached_latched_ = true;
         plan.mode = "REACHED";
         diagnostics_.reached = true;

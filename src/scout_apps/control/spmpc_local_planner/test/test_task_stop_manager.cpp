@@ -36,6 +36,39 @@ TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
     EXPECT_EQ(output.status,"GOAL_REACHED");
 }
 
+TEST(TaskStop, OrdinaryReachedRechecksPoseMotionAndQueuesWithoutRestarting) {
+    SolverParams params;
+    params.terminal.mpc_stop_handoff_enable=true;
+    params.terminal.goal_tolerance=.05;
+    params.terminal.require_goal_yaw=true;
+    params.jerk_limit_enable=true;
+    VariantConfig variant; variant.slosh_enable=false; variant.w_slosh=0;
+    SpmpcProblem problem; problem.configure(params,variant);
+    ReferencePath route; route.setPoints({{0,0,0,0,0},{.55,0,0,0,0}},"map");
+    problem.setReferencePath(route);
+    SolverInput input; input.robot.x=.55; input.actuator.valid=true;
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input,output));
+    ASSERT_EQ(output.status,"GOAL_REACHED");
+    const auto expect_stopping=[&]() {
+        ASSERT_TRUE(problem.solve(input,output)) << output.status;
+        EXPECT_FALSE(output.terminal_diagnostics.reached);
+        EXPECT_TRUE(output.terminal_diagnostics.command_owned);
+        EXPECT_NE(output.status,"GOAL_REACHED");
+        EXPECT_FALSE(output.ocp_solve_attempted);
+        EXPECT_DOUBLE_EQ(output.cmd_v,0.);
+        EXPECT_DOUBLE_EQ(output.cmd_omega,0.);
+    };
+    input.robot.x=.35; expect_stopping(); // Original 200 mm displacement counterexample.
+    input.robot.x=.55; input.robot.yaw=.2; expect_stopping();
+    input.robot.yaw=0; input.robot.v=.1; expect_stopping();
+    input.robot.v=0; input.robot.omega=.2; expect_stopping();
+    input.robot.omega=0; input.actuator.linear_delay_queue.front()=.1; expect_stopping();
+    input.actuator.linear_delay_queue.fill(0);
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_EQ(output.status,"GOAL_REACHED");
+}
+
 TEST(TaskStop, BrakeAndReleaseRespectCommandJerkThroughZeroSpeed) {
     ActuatorState state;state.valid=true;state.v_cmd=.2;state.omega_cmd=-.3;state.a_cmd_memory=.15;
     const double dt=1./30,jerk=1;
