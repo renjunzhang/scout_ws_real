@@ -209,7 +209,7 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
-  foreach(_planning_test test_motion_region test_trajectory_reference)
+  foreach(_planning_test test_motion_region test_trajectory_reference test_solver_failure_stop)
     catkin_add_gtest(${_planning_test} test/${_planning_test}.cpp)
     if(TARGET ${_planning_test})
       target_link_libraries(${_planning_test} ${PROJECT_NAME} ${catkin_LIBRARIES})

@@ -57,8 +57,9 @@ private:
     void publishZeroCommand(const CommandInterventionDebug& intervention = CommandInterventionDebug(),
                             ControlCycleAuditDebug* audit = nullptr);
     void publishCommand(const geometry_msgs::Twist& desired,
-                        const CommandInterventionDebug& intervention = CommandInterventionDebug(),
-                        ControlCycleAuditDebug* audit = nullptr);
+                        const CommandInterventionDebug& intervention,
+                        ControlCycleAuditDebug* audit,
+                        const SolveBudget& publication_budget);
     void recordPublishedCommand(const geometry_msgs::Twist& cmd, const ros::Time& stamp, const CommandPublishMeta& meta);
     bool delayPhaseActive() const;
     bool delayPhasePredictionEnabled() const;
@@ -172,6 +173,8 @@ private:
     ActuatorModelParams actuator_model_params_;
     DelayPhaseParams delay_phase_params_;
     StateTimingParams state_timing_params_;
+    PoseContinuityParams pose_continuity_params_;
+    PoseContinuityGuard pose_continuity_guard_;
     CommandExecutionContractParams command_contract_params_;
     SpeedSafetyContract speed_safety_contract_;
     EffectiveConfigDebug effective_config_;

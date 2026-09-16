@@ -110,6 +110,7 @@ float64[] previous_solution_controls
 bool zero_liquid_initial_state
 bool jerk_limit_enable
 float64 jerk_max
+# Actual iterations executed; 0 means the computation budget ran out first.
 int32 rti_iterations
 float64 max_prediction_defect
 # Bounds on C*x + D*u = a_cmd - a_cmd_memory, at stages 0..N-1.

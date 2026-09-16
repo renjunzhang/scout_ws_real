@@ -42,7 +42,8 @@ bool sameReferencePath(const ReferencePath& a, const ReferencePath& b) {
 
 }  // namespace
 
-SpmpcProblem::SpmpcProblem() = default;
+SpmpcProblem::SpmpcProblem(std::unique_ptr<SpmpcSolver> solver)
+    : solver_(std::move(solver)), injected_solver_(solver_ != nullptr) {}
 
 void SpmpcProblem::configure(const SolverParams& solver_params, const VariantConfig& variant) {
     solver_params_ = solver_params;
@@ -91,14 +92,16 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
          solver_params_.jerk_limit_enable &&
          (!solver_params_.task_stop.enable || !solver_params_.zero_liquid_initial_state) &&
          task_stop_manager_.configure(solver_params_.task_stop, solver_params_.actuator,
-             solver_params_.slosh, solver_params_.a_max, solver_params_.alpha_max,
+             solver_params_.slosh,
+             {solver_params_.actual_v_min, solver_params_.v_max, solver_params_.omega_max},
+             solver_params_.a_max, solver_params_.alpha_max,
              solver_params_.jerk_max, liquid_state_required_));
     if (!task_stop_configured_ && configuration_error_.empty())
         configuration_error_="region/complete stopping requires terminal handoff, jerk and valid tail parameters";
     configured_v_ref_ = variant.v_ref;
     terminal_controller_.setParams(solver_params_.terminal);
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
-    solver_ = makeSolver(solver_params_.solver_backend);
+    if (!injected_solver_) solver_ = makeSolver(solver_params_.solver_backend);
     solver_->configure(solver_params_, variant);
 }
 
@@ -168,9 +171,7 @@ void SpmpcProblem::updateStartLockRecovery(const SolverInput& input, bool valid_
 bool SpmpcProblem::solve(const SolverInput& observed_input, SolverOutput& output) {
     const bool result=solveCycle(observed_input,output);
     output.cycle_timing=observed_input.cycle_timing;
-    output.pre_solve_snapshot.rti_iterations=solver_params_.rti_iterations;
     output.pre_solve_snapshot.max_prediction_defect=solver_params_.max_prediction_defect;
-    output.predicted_horizon.rti_iterations=solver_params_.rti_iterations;
     for (auto* d:{&output.pre_solve_snapshot.planning,&output.predicted_horizon.planning}) {
         d->experiment_profile_id=solver_params_.planning.experiment_profile_id;
         d->region_id=solver_params_.planning.region.enabled ? solver_params_.planning.region.id : "";
@@ -288,19 +289,13 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
                 output = SolverOutput{}; output.status = "INVALID_COMPLETE_STOP_STATE"; return false;
             }
         }
-        // The region gate applies during tracking too: once the delayed prefix
-        // is already outside, even a newly emitted zero cannot make it safe.
-        if (motion_region_ || goal_info.task_end_approach ||
-            terminal_controller_.diagnostics().command_owned || terminal_controller_.reached()) {
-            stop_tail = task_stop_manager_.predict(input, motion_region_.get(), proj.s);
-            if (!stop_tail.valid) stop_failure = stop_tail.status;
-            else if (stop_limit.enabled && (stop_tail.peak_height_m > stop_limit.cap_m + 1e-7 ||
-                     (stop_limit.physical_boundary_known && stop_tail.peak_height_m >= stop_limit.physical_boundary_m)))
-                stop_failure = "STOP_LIQUID_RECOVERY_CAP";
-            else if (stop_tail.first_command.v > solver_params_.v_max + 1e-9 ||
-                     std::abs(stop_tail.first_command.omega) > solver_params_.omega_max + 1e-9)
-                stop_failure = "STOP_COMMAND_BOUND_VIOLATION";
-        }
+        // Keep a current verified tail during tracking as well, so numerical
+        // failures can hand over without accepting an unchecked stop command.
+        stop_tail = task_stop_manager_.predict(input, motion_region_.get(), proj.s);
+        if (!stop_tail.valid) stop_failure = stop_tail.status;
+        else if (stop_limit.enabled && (stop_tail.peak_height_m > stop_limit.cap_m + 1e-7 ||
+                 (stop_limit.physical_boundary_known && stop_tail.peak_height_m >= stop_limit.physical_boundary_m)))
+            stop_failure = "STOP_LIQUID_RECOVERY_CAP";
         if (complete_stop && stop_readiness.timed_out) stop_failure = "LIQUID_SETTLE_TIMEOUT";
     }
     const bool vehicle_queues_clear = actuatorCommandsClear(
@@ -389,9 +384,10 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         output.success = valid_history;
         output.status = valid_history ? "TERMINAL_STOP" : "TERMINAL_STOP_HISTORY_FAILED";
         if (check_stop_tail) {
-            valid_history = stop_tail.valid;
-            output.status = stop_tail.valid ? (stop_readiness.vehicle_stopped ? "TERMINAL_SETTLING" : "TERMINAL_DRAINING") : stop_tail.status;
-            if (stop_tail.valid) {
+            valid_history = stop_tail.valid && stop_failure.empty();
+            output.status = !stop_failure.empty() ? stop_failure :
+                (stop_tail.valid ? (stop_readiness.vehicle_stopped ? "TERMINAL_SETTLING" : "TERMINAL_DRAINING") : stop_tail.status);
+            if (valid_history) {
                 output.cmd_v = stop_tail.first_command.v;
                 output.cmd_omega = stop_tail.first_command.omega;
             }
@@ -445,6 +441,19 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     }
     const bool ok = solver_->solve(guarded_input, reference_, output);
     output.ocp_solve_attempted = true;
+    if ((!ok || !output.success) && output.recoverable_solver_failure &&
+        check_stop_tail && stop_tail.valid && stop_failure.empty()) {
+        const std::string cause = output.status;
+        terminal_controller_.requestStop();
+        terminal_plan = terminal_controller_.updateAndPlan(
+            goal_info, input.robot.v, input.robot.omega, solver_params_.a_max, false);
+        emit_stop_command(true);
+        output.predicted_horizon.valid = false;
+        output.trajectory.clear();
+        output.status = "SOLVER_FAILURE_STOPPING: " + cause;
+        output.terminal_diagnostics.mode = output.status;
+        return output.success;
+    }
     if (ok && output.success) {
         if (!solver_params_.terminal.mpc_stop_handoff_enable) {
             const TerminalClampOutput clamp = terminal_controller_.clampCommand(
@@ -453,7 +462,7 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
             output.cmd_v = clamp.cmd_v_post;
             output.cmd_omega = clamp.cmd_omega_post;
         }
-        if (motion_region_) {
+        if (check_stop_tail) {
             StopCommand candidate;
             candidate.valid=true; candidate.v=output.cmd_v; candidate.omega=output.cmd_omega;
             candidate.a=(candidate.v-input.actuator.v_cmd)/input.dt;
@@ -472,6 +481,7 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
                 emit_stop_command(true);
                 output.predicted_horizon.valid=false;
                 output.trajectory.clear();
+                if (!output.success) return false;
                 output.status="REGION_STOPPING_TO_PRESERVE_MARGIN: " +
                     (next_tail.valid ? std::string("STOP_LIQUID_RECOVERY_CAP") : next_tail.status);
                 output.terminal_diagnostics.mode=output.status;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "spmpc_local_planner/core/solve_budget.h"
+
 #include "spmpc_local_planner/core/costmap_grid.h"
 #include "spmpc_local_planner/core/terminal_diagnostics.h"
 #include "spmpc_local_planner/dynamics/actuator_model.h"
@@ -296,7 +298,7 @@ struct PlanningCycleDebug {
 
 struct PredictedHorizonDebug {
     PlanningCycleDebug planning;
-    int rti_iterations = 1;
+    int rti_iterations = 0;
     double dynamics_max_defect = 0.0;
     bool valid = false;
     std::string backend;
@@ -317,7 +319,7 @@ struct PredictedHorizonDebug {
 
 struct PreSolveSnapshotDebug {
     PlanningCycleDebug planning;
-    int rti_iterations = 1;
+    int rti_iterations = 0;
     double max_prediction_defect = 0.0;
     bool valid = false;
     std::string backend;
@@ -490,6 +492,7 @@ struct StartLockRecoveryDiagnostics {
 };
 
 struct SolverInput {
+    SolveBudget solve_budget;
     RobotState robot;
     SloshState slosh;
     ActuatorState actuator;
@@ -520,6 +523,9 @@ struct VRefDebugSummary {
 struct SolverOutput {
     // Set by SpmpcProblem only when the optimization backend was invoked.
     bool ocp_solve_attempted = false;
+    // Only numerical solve failures / exhausted compute budget may hand over
+    // to a currently verified stop. Invalid state/configuration is excluded.
+    bool recoverable_solver_failure = false;
     bool success = false;
     std::string status = "NOT_RUN";
     double cmd_v = 0.0;

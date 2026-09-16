@@ -30,10 +30,25 @@ public:
 
     void resetOdom();
     void resetImu();
+    // Mark an odom epoch unusable while retaining its last numerical state for
+    // diagnostics.  Recovery requires initializeOdom(); resetOdom() remains an
+    // explicit clean-start operation.
+    void invalidateOdom();
 
     bool stepOdom(const MotionExcitation& excitation);
     bool stepImu(const MotionExcitation& excitation);
+    // Establish a liquid state at the supplied excitation epoch without
+    // integrating an interval.  The caller must only use this after an
+    // explicit, trusted initialization decision (for example a stationary
+    // zero-state initialization).  These methods are intentionally separate
+    // from reset/invalidation so filter readiness cannot authorize a new
+    // liquid state by itself.
+    bool initializeOdom(const SloshState& state, const MotionExcitation& excitation);
+    bool initializeImu(const SloshState& state, const MotionExcitation& excitation);
     void invalidateImu(std::uint32_t reset_epoch);
+
+    bool odomNeedsInitialization() const { return odom_needs_initialization_; }
+    bool imuNeedsInitialization() const { return imu_needs_initialization_; }
 
     const SloshObserverSnapshot& odom() const { return odom_snapshot_; }
     const SloshObserverSnapshot& imu() const { return imu_snapshot_; }
@@ -48,7 +63,10 @@ public:
     double solverHeight(const SloshState& state, double omega_z) const;
 
 private:
+    static bool finiteState(const SloshState& state);
     static bool finiteExcitation(const MotionExcitation& excitation);
+    static bool discontinuousInterval(const SloshObserverSnapshot& snapshot,
+                                      const MotionExcitation& excitation);
     static std::int64_t observerStamp(const MotionExcitation& excitation);
     static double modalHeight(const SloshDynamics& dynamics, const SloshState& state);
     static void refreshSnapshotHeight(const SloshDynamics& dynamics,
@@ -59,6 +77,8 @@ private:
     SloshModelParams base_params_;
     bool have_imu_epoch_ = false;
     std::uint32_t imu_epoch_ = 0;
+    bool odom_needs_initialization_ = false;
+    bool imu_needs_initialization_ = false;
     SloshObserverSnapshot odom_snapshot_;
     SloshObserverSnapshot imu_snapshot_;
 };

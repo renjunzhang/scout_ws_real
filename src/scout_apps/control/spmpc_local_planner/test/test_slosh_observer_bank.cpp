@@ -23,6 +23,34 @@ SloshModelParams makeParams(bool use_parabola_term = true) {
     return params;
 }
 
+MotionExcitation makeExcitationAt(
+    MotionExcitationSource source,
+    bool valid,
+    double sample_dt_sec,
+    double ax,
+    double ay,
+    double omega_z,
+    double alpha_z,
+    std::int64_t measurement_stamp_ns,
+    std::uint32_t reset_epoch = 0u) {
+    MotionExcitation excitation;
+    excitation.source = source;
+    excitation.valid = valid;
+    excitation.ax = ax;
+    excitation.ay = ay;
+    excitation.omega_z = omega_z;
+    excitation.alpha_z = alpha_z;
+    excitation.sample_dt_sec = sample_dt_sec;
+    excitation.measurement_stamp_ns = measurement_stamp_ns;
+    excitation.source_stamp_ns = excitation.measurement_stamp_ns + 15000LL;
+    excitation.accel_effective_stamp_ns = excitation.measurement_stamp_ns - 6834LL;
+    excitation.gyro_effective_stamp_ns = excitation.measurement_stamp_ns - 5020LL;
+    excitation.alpha_effective_stamp_ns = excitation.measurement_stamp_ns - 15001LL;
+    excitation.receive_stamp_ns = excitation.source_stamp_ns + 200000LL;
+    excitation.reset_epoch = reset_epoch;
+    return excitation;
+}
+
 MotionExcitation makeExcitation(
     MotionExcitationSource source,
     bool valid,
@@ -33,22 +61,9 @@ MotionExcitation makeExcitation(
     double alpha_z,
     std::int64_t sequence,
     std::uint32_t reset_epoch = 0u) {
-    MotionExcitation excitation;
-    excitation.source = source;
-    excitation.valid = valid;
-    excitation.ax = ax;
-    excitation.ay = ay;
-    excitation.omega_z = omega_z;
-    excitation.alpha_z = alpha_z;
-    excitation.sample_dt_sec = sample_dt_sec;
-    excitation.source_stamp_ns = 1000000000LL + sequence * 1000000LL;
-    excitation.measurement_stamp_ns = excitation.source_stamp_ns - 15000LL;
-    excitation.accel_effective_stamp_ns = excitation.measurement_stamp_ns - 6834LL;
-    excitation.gyro_effective_stamp_ns = excitation.measurement_stamp_ns - 5020LL;
-    excitation.alpha_effective_stamp_ns = excitation.measurement_stamp_ns - 15001LL;
-    excitation.receive_stamp_ns = excitation.source_stamp_ns + 200000LL;
-    excitation.reset_epoch = reset_epoch;
-    return excitation;
+    return makeExcitationAt(source, valid, sample_dt_sec, ax, ay, omega_z,
+                            alpha_z, 1000000000LL + sequence * 1000000LL,
+                            reset_epoch);
 }
 
 void expectStateExactlyEqual(const SloshState& actual, const SloshState& expected) {
@@ -140,17 +155,17 @@ TEST(SloshObserverBank, OdomVariableDtUsesEveryActualSampleInterval) {
     SloshState legacy_state;
 
     const std::vector<MotionExcitation> sequence = {
-        makeExcitation(MotionExcitationSource::Odom, true, 0.031, 0.31, -0.17,
-                       0.40, 0.0, 1),
-        makeExcitation(MotionExcitationSource::Odom, true, 0.020, -0.28, 0.23,
-                       -0.35, 1.2, 2),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.031, 0.31, -0.17,
+                         0.40, 0.0, 1000000000LL),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.020, -0.28, 0.23,
+                         -0.35, 1.2, 1020000000LL),
         // Inside the old 1e-4 tolerance: v1 must still use this exact interval.
-        makeExcitation(MotionExcitationSource::Odom, true, 0.02005, 0.11, 0.07,
-                       0.20, -0.8, 3),
-        makeExcitation(MotionExcitationSource::Odom, true, 0.047, -0.42, -0.19,
-                       0.73, 2.1, 4),
-        makeExcitation(MotionExcitationSource::Odom, true, 0.031, 0.05, 0.38,
-                       -0.61, -1.4, 5),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.02005, 0.11, 0.07,
+                         0.20, -0.8, 1040050000LL),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.047, -0.42, -0.19,
+                         0.73, 2.1, 1087050000LL),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.031, 0.05, 0.38,
+                         -0.61, -1.4, 1118050000LL),
     };
 
     for (std::size_t i = 0; i < sequence.size(); ++i) {
@@ -193,53 +208,53 @@ TEST(SloshObserverBank, OdomRejectsUnsafeInputWithoutAdvancingSolverState) {
     std::vector<MotionExcitation> rejected_inputs;
     MotionExcitation invalid_flag = makeExcitation(
         MotionExcitationSource::Odom, false, 0.031, 0.1, 0.2,
-        0.3, 0.4, 101);
+        0.3, 0.4, 100);
     rejected_inputs.push_back(invalid_flag);
 
     MotionExcitation wrong_source = makeExcitation(
         MotionExcitationSource::ProcessedImu, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 102);
+        0.3, 0.4, 100);
     rejected_inputs.push_back(wrong_source);
 
     MotionExcitation nonfinite = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 103);
+        0.3, 0.4, 100);
     nonfinite.ax = std::numeric_limits<double>::quiet_NaN();
     rejected_inputs.push_back(nonfinite);
 
     nonfinite = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 104);
+        0.3, 0.4, 100);
     nonfinite.ay = std::numeric_limits<double>::infinity();
     rejected_inputs.push_back(nonfinite);
 
     nonfinite = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 105);
+        0.3, 0.4, 100);
     nonfinite.omega_z = std::numeric_limits<double>::quiet_NaN();
     rejected_inputs.push_back(nonfinite);
 
     nonfinite = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 106);
+        0.3, 0.4, 100);
     nonfinite.alpha_z = std::numeric_limits<double>::infinity();
     rejected_inputs.push_back(nonfinite);
 
     nonfinite = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 107);
+        0.3, 0.4, 100);
     nonfinite.sample_dt_sec = std::numeric_limits<double>::quiet_NaN();
     rejected_inputs.push_back(nonfinite);
 
     MotionExcitation too_small_dt = makeExcitation(
         MotionExcitationSource::Odom, true, 1e-4, 0.1, 0.2,
-        0.3, 0.4, 108);
+        0.3, 0.4, 100);
     too_small_dt.sample_dt_sec = 1e-4;
     rejected_inputs.push_back(too_small_dt);
 
     MotionExcitation zero_stamp = makeExcitation(
         MotionExcitationSource::Odom, true, 0.031, 0.1, 0.2,
-        0.3, 0.4, 109);
+        0.3, 0.4, 100);
     zero_stamp.source_stamp_ns = 0;
     zero_stamp.measurement_stamp_ns = 0;
     rejected_inputs.push_back(zero_stamp);
@@ -268,7 +283,7 @@ TEST(SloshObserverBank, OdomRejectsUnsafeInputWithoutAdvancingSolverState) {
 
     const MotionExcitation recovered = makeExcitation(
         MotionExcitationSource::Odom, true, 0.043, -0.27, 0.34,
-        -0.52, -1.5, 120);
+        -0.52, -1.5, 143);
     ASSERT_TRUE(bank.stepOdom(recovered));
     ASSERT_TRUE(clean_reference.stepOdom(recovered));
     expectSnapshotExactlyEqual(bank.odom(), clean_reference.odom());
@@ -301,6 +316,46 @@ TEST(SloshObserverBank, OdomRejectsUnsafeInputWithoutAdvancingSolverState) {
     EXPECT_EQ(bank.odom().state_stamp_ns, first_new_epoch.measurement_stamp_ns);
 }
 
+TEST(SloshObserverBank, OdomIntegrationFailureBlocksShortSampleRecoveryUntilExplicitInit) {
+    const SloshModelParams params = makeParams();
+    SloshObserverBank bank;
+    ASSERT_TRUE(bank.configure(params, 0.02));
+
+    for (std::int64_t sequence = 1; sequence <= 30; ++sequence) {
+        ASSERT_TRUE(bank.stepOdom(makeExcitationAt(
+            MotionExcitationSource::Odom, true, 0.02, 0.0, 0.0, 0.0, 0.0,
+            1000000000LL + (sequence - 1) * 20000000LL)));
+    }
+    const SloshObserverSnapshot before_gap = bank.odom();
+    const MotionExcitation gap = makeExcitationAt(
+        MotionExcitationSource::Odom, true, 1.2, 0.0, 0.0, 0.0, 0.0,
+        2780000000LL);
+    EXPECT_FALSE(bank.stepOdom(gap));
+    EXPECT_FALSE(bank.odom().valid);
+    EXPECT_TRUE(bank.odomNeedsInitialization());
+    expectStateExactlyEqual(bank.odom().state, before_gap.state);
+
+    // This models the next ROS packet after its derivative baseline was
+    // advanced across the rejected gap.  Its reported dt is short, but the
+    // liquid state is still discontinuous and must remain invalid.
+    const MotionExcitation short_resume = makeExcitationAt(
+        MotionExcitationSource::Odom, true, 0.02, 0.0, 0.0, 0.0, 0.0,
+        2780000000LL);
+    EXPECT_FALSE(bank.stepOdom(short_resume));
+    EXPECT_FALSE(bank.odom().valid);
+    EXPECT_TRUE(bank.odomNeedsInitialization());
+
+    SloshState trusted_zero;
+    ASSERT_TRUE(bank.initializeOdom(trusted_zero, short_resume));
+    EXPECT_TRUE(bank.odom().valid);
+    EXPECT_FALSE(bank.odomNeedsInitialization());
+    const MotionExcitation next = makeExcitationAt(
+        MotionExcitationSource::Odom, true, 0.02, 0.1, -0.2, 0.0, 0.0,
+        2800000000LL);
+    EXPECT_TRUE(bank.stepOdom(next));
+    EXPECT_TRUE(bank.odom().valid);
+}
+
 TEST(SloshObserverBank, ImuShadowTrafficCannotMutateOdomSnapshotOrSolverState) {
     const SloshModelParams params = makeParams();
     SloshObserverBank bank;
@@ -315,30 +370,28 @@ TEST(SloshObserverBank, ImuShadowTrafficCannotMutateOdomSnapshotOrSolverState) {
     const SloshObserverSnapshot odom_before_shadow = bank.odom();
     const SloshState solver_before_shadow = bank.solverState();
 
-    MotionExcitation valid_imu = makeExcitation(
+    MotionExcitation valid_imu = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, true, 0.017, -0.81, 0.43,
-        -0.72, 3.0, 11, 7u);
+        -0.72, 3.0, 1027000000LL, 7u);
     ASSERT_TRUE(bank.stepImu(valid_imu));
     expectSnapshotExactlyEqual(bank.odom(), odom_before_shadow);
     expectStateExactlyEqual(bank.solverState(), solver_before_shadow);
 
-    MotionExcitation invalid_imu = makeExcitation(
+    MotionExcitation invalid_imu = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, false, 0.023, 4.0, -5.0,
-        2.0, -9.0, 12, 7u);
+        2.0, -9.0, 1027000000LL, 7u);
     EXPECT_FALSE(bank.stepImu(invalid_imu));
     expectSnapshotExactlyEqual(bank.odom(), odom_before_shadow);
     expectStateExactlyEqual(bank.solverState(), solver_before_shadow);
 
     MotionExcitation wrong_source = valid_imu;
     wrong_source.source = MotionExcitationSource::Odom;
-    wrong_source.source_stamp_ns += 1000000LL;
     EXPECT_FALSE(bank.stepImu(wrong_source));
     expectSnapshotExactlyEqual(bank.odom(), odom_before_shadow);
     expectStateExactlyEqual(bank.solverState(), solver_before_shadow);
 
     MotionExcitation nonfinite_imu = valid_imu;
     nonfinite_imu.ax = std::numeric_limits<double>::quiet_NaN();
-    nonfinite_imu.source_stamp_ns += 2000000LL;
     EXPECT_FALSE(bank.stepImu(nonfinite_imu));
     expectSnapshotExactlyEqual(bank.odom(), odom_before_shadow);
     expectStateExactlyEqual(bank.solverState(), solver_before_shadow);
@@ -349,15 +402,15 @@ TEST(SloshObserverBank, ImuShadowTrafficCannotMutateOdomSnapshotOrSolverState) {
 
     valid_imu.reset_epoch = 8u;
     valid_imu.source_stamp_ns += 3000000LL;
-    ASSERT_TRUE(bank.stepImu(valid_imu));
+    ASSERT_TRUE(bank.initializeImu(SloshState{}, valid_imu));
     expectSnapshotExactlyEqual(bank.odom(), odom_before_shadow);
     expectStateExactlyEqual(bank.solverState(), solver_before_shadow);
 
     const std::vector<MotionExcitation> remaining_odom = {
-        makeExcitation(MotionExcitationSource::Odom, true, 0.043, -0.27, 0.34,
-                       -0.52, -1.5, 13),
-        makeExcitation(MotionExcitationSource::Odom, true, 0.018, 0.19, 0.12,
-                       0.67, 2.4, 14),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.043, -0.27, 0.34,
+                         -0.52, -1.5, 1053000000LL),
+        makeExcitationAt(MotionExcitationSource::Odom, true, 0.018, 0.19, 0.12,
+                         0.67, 2.4, 1071000000LL),
     };
     for (std::size_t i = 0; i < remaining_odom.size(); ++i) {
         SCOPED_TRACE(i);
@@ -400,7 +453,7 @@ TEST(SloshObserverBank, ImuUsesExactReportedDtAndMatchesIndependentDiscretizatio
         EXPECT_TRUE(bank.imu().configured);
         EXPECT_TRUE(bank.imu().valid);
         EXPECT_EQ(bank.imu().update_count, static_cast<std::uint64_t>(i + 1u));
-        EXPECT_EQ(bank.imu().state_stamp_ns, sequence[i].measurement_stamp_ns);
+        EXPECT_EQ(bank.imu().state_stamp_ns, sequence[i].accel_effective_stamp_ns);
         EXPECT_NEAR(bank.imu().modal_height_m,
                     bank.heightCoeff() * std::hypot(reference_state.eta_x,
                                                      reference_state.eta_y),
@@ -423,12 +476,12 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
     ASSERT_TRUE(reference_dynamics.configure(reference_params));
     SloshState reference_state;
 
-    const MotionExcitation first = makeExcitation(
+    const MotionExcitation first = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, true, 0.02, 0.47, -0.29,
-        0.55, 1.2, 30, 3u);
-    const MotionExcitation second = makeExcitation(
+        0.55, 1.2, 1030000000LL, 3u);
+    const MotionExcitation second = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, true, 0.02, -0.21, 0.38,
-        -0.44, -0.9, 31, 3u);
+        -0.44, -0.9, 1050000000LL, 3u);
     ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, first.atContainer(), observer_dt_sec, reference_state));
     ASSERT_TRUE(bank.stepImu(first));
     ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, second.atContainer(), observer_dt_sec, reference_state));
@@ -438,9 +491,9 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
 
     const SloshState state_before_invalid = bank.imu().state;
     const std::int64_t stamp_before_invalid = bank.imu().state_stamp_ns;
-    MotionExcitation invalid = makeExcitation(
+    MotionExcitation invalid = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, false, 0.02, 99.0, -88.0,
-        7.0, 6.0, 32, 3u);
+        7.0, 6.0, 1050000000LL, 3u);
     EXPECT_FALSE(bank.stepImu(invalid));
     EXPECT_FALSE(bank.imu().valid);
     EXPECT_EQ(bank.imu().update_count, 2u);
@@ -457,9 +510,9 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
 
     // A later valid sample advances exactly once from the pre-invalid state.
     // If either invalid callback performed a hold-last step, this equality fails.
-    const MotionExcitation after_invalid = makeExcitation(
+    const MotionExcitation after_invalid = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, true, 0.02, 0.16, 0.24,
-        0.31, -0.5, 33, 3u);
+        0.31, -0.5, 1070000000LL, 3u);
     ASSERT_TRUE(reference_dynamics.stepWithDt(reference_state, after_invalid.atContainer(), observer_dt_sec, reference_state));
     ASSERT_TRUE(bank.stepImu(after_invalid));
     EXPECT_EQ(bank.imu().update_count, 3u);
@@ -476,21 +529,31 @@ TEST(SloshObserverBank, InvalidImuNeverStepsAndNewEpochClearsAllImuState) {
     EXPECT_EQ(bank.imu().total_height_m, 0.0);
     expectZeroState(bank.imu().state);
 
-    const MotionExcitation first_after_gap = makeExcitation(
+    const MotionExcitation first_after_gap = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, true, 0.3, -0.33, 0.27,
-        -0.62, 1.4, 34, 4u);
+        -0.62, 1.4, 1080000000LL, 4u);
     SloshState zero_state;
-    const SloshState expected_first_after_gap = independentlyDiscretizedStep(
-        params, zero_state, first_after_gap);
-    ASSERT_TRUE(bank.stepImu(first_after_gap));
+    // A new input epoch only rewarms the signal path.  It cannot authorize a
+    // zero liquid state or make a short post-gap sample valid by itself.
+    EXPECT_TRUE(bank.imuNeedsInitialization());
+    EXPECT_FALSE(bank.stepImu(first_after_gap));
+    EXPECT_FALSE(bank.imu().valid);
+    ASSERT_TRUE(bank.initializeImu(zero_state, first_after_gap));
     EXPECT_EQ(bank.imu().update_count, 1u);
-    expectStateNear(bank.imu().state, expected_first_after_gap);
+    expectStateExactlyEqual(bank.imu().state, zero_state);
+    EXPECT_TRUE(bank.imu().valid);
+
+    const MotionExcitation after_initialization = makeExcitationAt(
+        MotionExcitationSource::ProcessedImu, true, 0.02, 0.16, 0.24,
+        0.31, -0.5, 1100000000LL, 4u);
+    ASSERT_TRUE(bank.stepImu(after_initialization));
+    EXPECT_EQ(bank.imu().update_count, 2u);
 
     // The epoch check happens before input validation, so an invalid first
     // sample in a new epoch must still clear the previous epoch's state.
-    MotionExcitation invalid_new_epoch = makeExcitation(
+    MotionExcitation invalid_new_epoch = makeExcitationAt(
         MotionExcitationSource::ProcessedImu, false, 0.02, 5.0, 6.0,
-        0.8, 0.9, 35, 5u);
+        0.8, 0.9, 1100000000LL, 5u);
     EXPECT_FALSE(bank.stepImu(invalid_new_epoch));
     EXPECT_TRUE(bank.imu().configured);
     EXPECT_FALSE(bank.imu().valid);

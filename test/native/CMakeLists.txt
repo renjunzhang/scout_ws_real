@@ -65,7 +65,8 @@ set(NATIVE_TESTS
   test_liquid_state_nowcaster test_processed_imu_pipeline
   test_slosh_observer_bank test_slosh_observer_selector test_slosh_risk_governor
   test_speed_safety_contract test_start_lock_recovery test_task_stop_manager
-  test_terminal_controller test_control_cycle_contract test_recorded_command_contract)
+  test_terminal_controller test_control_cycle_contract test_recorded_command_contract
+  test_solver_failure_stop)
 foreach(test_name IN LISTS NATIVE_TESTS)
   add_executable(${test_name} "${SPMPC_ROOT}/test/${test_name}.cpp")
   target_link_libraries(${test_name} PRIVATE spmpc_native_core GTest::gtest_main)

@@ -109,4 +109,44 @@ bool stateSkewWithinContract(std::int64_t robot_stamp_ns,
            std::abs(signed_skew_sec) <= max_abs_skew_sec;
 }
 
+bool commandResultFresh(const ControlCycleTimingDebug& timing,
+                        std::int64_t now_ns, double max_age_sec) {
+    if (!std::isfinite(max_age_sec) || max_age_sec <= 0.0 ||
+        timing.solver_input_epoch_ns <= 0 || timing.cycle_start_stamp_ns <= 0 ||
+        now_ns < timing.solver_input_epoch_ns || now_ns < timing.cycle_start_stamp_ns)
+        return false;
+    return (now_ns - timing.solver_input_epoch_ns) * kNsToSec <= max_age_sec &&
+           (now_ns - timing.cycle_start_stamp_ns) * kNsToSec <= max_age_sec;
+}
+
+bool PoseContinuityGuard::observe(const StampedRobotState& sample,
+                                  const PoseContinuityParams& params) {
+    const auto& state = sample.state;
+    if (sample.stamp_ns <= 0 || !std::isfinite(state.x) || !std::isfinite(state.y) ||
+        !std::isfinite(state.yaw) || !std::isfinite(state.v) || !std::isfinite(state.omega))
+        return false;
+    if (!initialized_) {
+        anchor_ = sample;
+        initialized_ = true;
+        return true;
+    }
+    if (sample.stamp_ns < anchor_.stamp_ns) return false;
+    const double dt = (sample.stamp_ns - anchor_.stamp_ns) * kNsToSec;
+    const double yaw_step = 0.5 * (anchor_.state.omega + state.omega) * dt;
+    const double v = 0.5 * (anchor_.state.v + state.v);
+    const double distance = std::abs(yaw_step) < 1e-8 ? v * dt :
+        v * dt * std::sin(0.5 * yaw_step) / (0.5 * yaw_step);
+    anchor_.state.x += distance * std::cos(anchor_.state.yaw + 0.5 * yaw_step);
+    anchor_.state.y += distance * std::sin(anchor_.state.yaw + 0.5 * yaw_step);
+    anchor_.state.yaw = wrapAngle(anchor_.state.yaw + yaw_step);
+    anchor_.stamp_ns = sample.stamp_ns;
+    anchor_.state.v = state.v;
+    anchor_.state.omega = state.omega;
+    const bool accepted = std::hypot(state.x-anchor_.state.x, state.y-anchor_.state.y) <=
+        params.max_position_innovation_m &&
+        std::abs(wrapAngle(state.yaw-anchor_.state.yaw)) <= params.max_yaw_innovation_rad;
+    if (accepted) anchor_ = sample;
+    return accepted;
+}
+
 }  // namespace spmpc_local_planner

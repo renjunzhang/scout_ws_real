@@ -595,6 +595,7 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         params_.warm_start.enable = true;
     }
     have_u_prev_ = false;
+    previous_iteration_wall_sec_ = 0.0;
     have_previous_solution_ = false;
     previous_warm_start_solution_ = WarmStartOutput{};
     slosh_dyn_.configure(params.slosh);
@@ -646,9 +647,7 @@ bool ContinuousMpccSolverAcados::solve(
         input.slosh = SloshState{};
     }
     output = SolverOutput{};
-    output.pre_solve_snapshot.rti_iterations = params_.rti_iterations;
     output.pre_solve_snapshot.max_prediction_defect = params_.max_prediction_defect;
-    output.predicted_horizon.rti_iterations = params_.rti_iterations;
     output.cycle_timing = input.cycle_timing;
     if ((params_.zero_liquid_initial_state && !use_slosh_model_) ||
         !std::isfinite(params_.jerk_max) || params_.jerk_max <= 0.0 ||
@@ -1098,16 +1097,33 @@ bool ContinuousMpccSolverAcados::solve(
 
     int status = 0;
     double time_tot = 0.0;
+    int iterations_executed = 0;
+    double iteration_estimate = previous_iteration_wall_sec_;
     for (int iteration=0;iteration<params_.rti_iterations;++iteration) {
+        if (!input.solve_budget.permits(iteration_estimate)) break;
+        const auto iteration_start = SolveBudget::Clock::now();
         status=gen->solve();
+        previous_iteration_wall_sec_ = std::chrono::duration<double>(
+            SolveBudget::Clock::now() - iteration_start).count();
+        iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
+        ++iterations_executed;
         double iteration_time=0;
         ocp_nlp_get(gen->solver(), "time_tot", &iteration_time);
         time_tot+=iteration_time;
         if (status!=0) break;
     }
     output.solver_time_ms = time_tot * 1000.0;
+    // The replay needs the number actually executed, not the configured cap.
+    snapshot.rti_iterations = iterations_executed;
+    output.predicted_horizon.rti_iterations = iterations_executed;
+    if (iterations_executed == 0) {
+        output.recoverable_solver_failure = true;
+        output.status = snapshot.solver_status = "SOLVE_BUDGET_EXHAUSTED";
+        return false;
+    }
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
+        output.recoverable_solver_failure = true;
         snapshot.solver_status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
         output.success = false;
         output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);

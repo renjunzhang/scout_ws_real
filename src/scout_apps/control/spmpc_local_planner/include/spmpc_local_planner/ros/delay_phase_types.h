@@ -93,9 +93,11 @@ struct StateTimingParams {
 };
 
 struct CommandExecutionContractParams {
-    bool fail_closed_on_post_limit_change = false;
+    bool fail_closed_on_post_limit_change = true;
     double max_post_limit_delta_v = 1e-4;
     double max_post_limit_delta_omega = 1e-4;
+    double max_result_age_sec = 0.0;  // 0 uses one control period.
+    double publish_reserve_sec = 0.006;
 };
 
 struct ExcitationAuditDebug {

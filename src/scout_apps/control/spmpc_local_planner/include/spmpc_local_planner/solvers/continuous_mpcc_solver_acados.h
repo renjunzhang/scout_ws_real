@@ -40,6 +40,7 @@ private:
     mutable bool have_previous_solution_ = false;
     mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期 OCP 控制 [a, alpha, v_s]
     mutable bool have_u_prev_ = false;
+    mutable double previous_iteration_wall_sec_ = 0.0;
 };
 
 }  // namespace spmpc_local_planner

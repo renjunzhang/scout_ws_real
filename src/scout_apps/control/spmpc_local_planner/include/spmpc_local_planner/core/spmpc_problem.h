@@ -12,7 +12,7 @@ namespace spmpc_local_planner {
 
 class SpmpcProblem {
 public:
-    SpmpcProblem();
+    explicit SpmpcProblem(std::unique_ptr<SpmpcSolver> solver = nullptr);
 
     void configure(const SolverParams& solver_params, const VariantConfig& variant);
     void setReferencePath(const ReferencePath& reference);
@@ -41,6 +41,7 @@ private:
     bool liquid_state_required_ = false;
     StartLockRecovery start_lock_recovery_;
     std::unique_ptr<SpmpcSolver> solver_;
+    bool injected_solver_ = false;
     double last_progress_s_ = 0.0;
     ProgressProjectionState projection_state_;
     double configured_v_ref_ = 0.0;

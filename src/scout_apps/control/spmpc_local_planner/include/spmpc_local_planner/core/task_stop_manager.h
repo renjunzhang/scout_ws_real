@@ -27,6 +27,15 @@ struct StopCommand {
     std::string status = "STOP_HISTORY_INVALID";
 };
 
+// Bounds used by the complete stopping-tail contract.  Commands are
+// non-negative in the generated OCP; measured/propagated actual velocity may
+// use the configured small negative drift allowance.
+struct StopMotionLimits {
+    double actual_v_min = 0.0;
+    double v_max = 0.0;
+    double omega_max = 0.0;
+};
+
 // Uses the truthful command acceleration memory and preserves the discrete jerk
 // bound, including release of braking acceleration as the command reaches zero.
 StopCommand makeJerkLimitedStopCommand(const ActuatorState& history, double dt,
@@ -64,8 +73,9 @@ struct StopReadiness {
 class TaskStopManager {
 public:
     bool configure(const TaskStopParams& params, const ActuatorModelParams& actuator,
-                   const SloshModelParams& liquid, double a_max,
-                   double alpha_max, double jerk_max, bool include_liquid = true);
+                   const SloshModelParams& liquid, const StopMotionLimits& limits,
+                   double a_max, double alpha_max, double jerk_max,
+                   bool include_liquid = true);
     void reset();
     StopTailPrediction predict(const SolverInput& input,
                                const MotionRegion* region = nullptr,
@@ -87,6 +97,7 @@ private:
     TaskStopParams params_;
     ActuatorModelParams actuator_;
     SloshDynamics liquid_;
+    StopMotionLimits limits_;
     double a_max_ = 0, alpha_max_ = 0, jerk_max_ = 0;
     bool include_liquid_ = true;
     bool configured_ = false;

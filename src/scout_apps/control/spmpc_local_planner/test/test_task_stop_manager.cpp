@@ -1,5 +1,6 @@
 #include "spmpc_local_planner/core/task_stop_manager.h"
 #include "spmpc_local_planner/core/spmpc_problem.h"
+#include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 #include <gtest/gtest.h>
 #include <cmath>
 #include <limits>
@@ -7,6 +8,8 @@
 namespace spmpc_local_planner {
 
 namespace {
+const StopMotionLimits kStopLimits{-0.002, 0.8, 1.2};
+
 MotionRegion stopRegion(double right_edge, double footprint = .426,
                         double margin = .02) {
     MotionRegionConfig config;
@@ -128,7 +131,7 @@ TEST(TaskStop, InconsistentHistoryFailsWithoutInventingMotion) {
 
 TEST(TaskStop, TailIncludesDelayedCommandsActualMotionAndLiquid) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6,1.2,1.));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6,1.2,1.));
     SolverInput input;input.robot.v=.2;input.robot.omega=.3;input.actuator.valid=true;
     input.actuator.v_cmd=.2;input.actuator.omega_cmd=.3;
     input.actuator.linear_delay_queue.fill(.2);input.actuator.angular_delay_queue.fill(.3);
@@ -142,10 +145,70 @@ TEST(TaskStop, TailIncludesDelayedCommandsActualMotionAndLiquid) {
     EXPECT_DOUBLE_EQ(input.robot.v,.2);
 }
 
+TEST(TaskStop, TailReportsAllMotionAndCommandBoundsForNormalStop) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
+    const auto tail = manager.predict(stopInput(0., .2, .3));
+    ASSERT_TRUE(tail.valid) << tail.status;
+}
+
+TEST(TaskStop, TailRejectsCommandAndActualMotionBoundaryViolations) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
+
+    auto command_input = stopInput(0., .2);
+    command_input.actuator.linear_delay_queue.front() = .81;
+    auto tail = manager.predict(command_input);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_EQ(tail.status, "STOP_COMMAND_FIFO_BOUND_VIOLATION");
+
+    auto actual_input = stopInput(0., .2);
+    actual_input.robot.v = .81;
+    tail = manager.predict(actual_input);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_EQ(tail.status, "STOP_ACTUAL_MOTION_BOUND_VIOLATION");
+}
+
+TEST(TaskStop, InitiallyLegalHistoryCannotHideLaterVelocityOvershoot) {
+    TaskStopManager manager;
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
+    auto input=stopInput(0., .8);
+    input.robot.v=.79;
+    input.actuator.delayed_v_cmd=.8;
+    auto tail=manager.predict(input);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_EQ(tail.status,"STOP_ACTUAL_MOTION_BOUND_VIOLATION");
+    input.actuator.v_cmd=.76;
+    input.actuator.a_cmd_memory=.4;
+    input.actuator.linear_delay_queue={{.7066666666667,.72,.7333333333333,.7466666666667,.76}};
+    input.actuator.delayed_v_cmd=input.actuator.linear_delay_queue.front();
+    tail=manager.predict(input);
+    EXPECT_FALSE(tail.valid);
+    EXPECT_NE(tail.status.find("BOUND_VIOLATION"),std::string::npos);
+}
+
+TEST(TaskStop, ActualMotionDiagnosticsIncludeEveryGeneratedSubstep) {
+    SloshModelParams liquid;
+    SloshDynamics model;
+    ASSERT_TRUE(model.configure(liquid));
+    auto input = stopInput(0., .2);
+    input.slosh.eta_x = .00099 / model.heightCoeff();
+    input.slosh.eta_x_dot = .0002 * model.omegaN() / model.heightCoeff();
+    RobotState robot = input.robot;
+    SloshState state = input.slosh;
+    ActualMotionDiagnostics diagnostics;
+    ASSERT_TRUE(propagateActualMotion(
+        robot, state, {input.actuator.linear_delay_queue.front(), 0.},
+        {}, model, input.dt, &diagnostics));
+    EXPECT_TRUE(diagnostics.valid);
+    EXPECT_EQ(diagnostics.substeps, 4);
+    EXPECT_GE(diagnostics.peak_height_m, model.height(state));
+}
+
 TEST(TaskStop, QueueDrainAndModalVelocityGateCompletionSeparately) {
     TaskStopManager manager;TaskStopParams params;
     params.stable_hold_sec=.1;
-    ASSERT_TRUE(manager.configure(params, {}, {}, .6,1.2,1.));
+    ASSERT_TRUE(manager.configure(params, {}, {}, kStopLimits, .6,1.2,1.));
     SolverInput input;input.actuator.valid=true;
     input.actuator.angular_delay_queue.back()=.1;
     auto state=manager.observe(input,true,.03,.05);
@@ -167,7 +230,7 @@ TEST(TaskStop, QueueDrainAndModalVelocityGateCompletionSeparately) {
 
 TEST(TaskStop, SettleTimeoutDoesNotClaimSuccess) {
     TaskStopManager manager;TaskStopParams params;params.max_settle_sec=.1;
-    ASSERT_TRUE(manager.configure(params, {}, {}, .6,1.2,1.));
+    ASSERT_TRUE(manager.configure(params, {}, {}, kStopLimits, .6,1.2,1.));
     SolverInput input;input.actuator.valid=true;input.slosh.eta_x_dot=.1;
     StopReadiness state;
     for(int k=0;k<6;++k)state=manager.observe(input,true,.03,.05);
@@ -184,7 +247,7 @@ TEST(TaskStop, SettleTimeoutDoesNotClaimSuccess) {
 
 TEST(TaskStop, CommonEpochGapsDoNotCountAsContinuousLiquidStability) {
     TaskStopManager manager;TaskStopParams params;params.stable_hold_sec=.1;
-    ASSERT_TRUE(manager.configure(params, {}, {}, .6,1.2,1.));
+    ASSERT_TRUE(manager.configure(params, {}, {}, kStopLimits, .6,1.2,1.));
     SolverInput input;input.actuator.valid=true;
     input.cycle_timing.solver_input_epoch_ns=1000000000;
     EXPECT_FALSE(manager.observe(input,true,.03,.05).liquid_stable);
@@ -201,7 +264,7 @@ TEST(TaskStop, CommonEpochGapsDoNotCountAsContinuousLiquidStability) {
 
 TEST(TaskStop, ReusedMeasurementsCannotAccumulateStableTimeByAdvancingPredictionEpoch) {
     TaskStopManager manager;TaskStopParams p;p.stable_hold_sec=.1;
-    ASSERT_TRUE(manager.configure(p, {}, {},.6,1.2,1.));
+    ASSERT_TRUE(manager.configure(p, {}, {}, kStopLimits,.6,1.2,1.));
     SolverInput input;input.actuator.valid=true;
     input.cycle_timing.raw_robot_state_stamp_ns=1000000000;
     input.cycle_timing.raw_liquid_state_stamp_ns=1000000000;
@@ -216,7 +279,7 @@ TEST(TaskStop, ReusedMeasurementsCannotAccumulateStableTimeByAdvancingPrediction
 
 TEST(TaskStop, InvalidObservationBreaksContinuousStableHold) {
     TaskStopManager manager;TaskStopParams p;p.stable_hold_sec=.1;
-    ASSERT_TRUE(manager.configure(p, {}, {},.6,1.2,1.));
+    ASSERT_TRUE(manager.configure(p, {}, {}, kStopLimits,.6,1.2,1.));
     SolverInput input;input.actuator.valid=true;
     for (int k=0;k<2;++k) EXPECT_FALSE(manager.observe(input,true,.03,.05).liquid_stable);
     input.slosh.eta_x=std::numeric_limits<double>::quiet_NaN();
@@ -228,7 +291,7 @@ TEST(TaskStop, InvalidObservationBreaksContinuousStableHold) {
 
 TEST(TaskStop, SlowerMeasurementsCanSettleButNoiseCrossingsRestartHold) {
     TaskStopManager manager;TaskStopParams p;p.stable_hold_sec=.15;
-    ASSERT_TRUE(manager.configure(p, {}, {},.6,1.2,1.));
+    ASSERT_TRUE(manager.configure(p, {}, {}, kStopLimits,.6,1.2,1.));
     SolverInput input;input.actuator.valid=true;
     StopReadiness out;
     for (int k=0;k<10;++k) {
@@ -247,7 +310,7 @@ TEST(TaskStop, SlowerMeasurementsCanSettleButNoiseCrossingsRestartHold) {
 
 TEST(TaskStop, RegionReportsUnavoidablePrefixAtTheBoundary) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
     const auto region = stopRegion(1.0);
     auto input = stopInput(.53, .2);
     const auto tail = manager.predict(input, &region, 0.);
@@ -303,7 +366,7 @@ TEST(TaskStop, RegionCannotDisableTheSharedStopContract) {
 
 TEST(TaskStop, WideRegionAllowsTheCompleteJerkTail) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
     const auto region = stopRegion(3.0);
     auto input = stopInput(.0, .2, .3);
     const auto tail = manager.predict(input, &region, 0.);
@@ -315,7 +378,7 @@ TEST(TaskStop, WideRegionAllowsTheCompleteJerkTail) {
 
 TEST(TaskStop, CandidateAfterCommandCanMakeAnOtherwiseSafeStopUnsafe) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
     auto input = stopInput(0., 0.);
     StopCommand candidate;
     candidate.valid = true;
@@ -341,7 +404,7 @@ TEST(TaskStop, CandidateAfterCommandCanMakeAnOtherwiseSafeStopUnsafe) {
 
 TEST(TaskStop, RotationQueueUsesSweptArcMotionAndFrozenCell) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1.));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1.));
     const auto region = stopRegion(3.0);
     auto input = stopInput(0., .2, .3);
     const auto tail = manager.predict(input, &region, 0.);
@@ -354,7 +417,7 @@ TEST(TaskStop, QuietTailIncludesLinearTauResidualRegionReserve) {
     TaskStopManager manager;
     ActuatorModelParams actuator;
     actuator.linear_tau_sec = .5;
-    ASSERT_TRUE(manager.configure({}, actuator, {}, .6, 1.2, 1.));
+    ASSERT_TRUE(manager.configure({}, actuator, {}, kStopLimits, .6, 1.2, 1.));
     const auto region = stopRegion(1.0);
     auto input = stopInput(.5538, .001);
     input.actuator.v_cmd = .0;
@@ -368,7 +431,7 @@ TEST(TaskStop, QuietTailIncludesLinearTauResidualRegionReserve) {
 
 TEST(TaskStop, VehicleOnlyTailAcceptsNaNLiquidWithoutFabricatingLiquidPeak) {
     TaskStopManager manager;
-    ASSERT_TRUE(manager.configure({}, {}, {}, .6, 1.2, 1., false));
+    ASSERT_TRUE(manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1., false));
     auto input = stopInput(0., .2);
     const double nan = std::numeric_limits<double>::quiet_NaN();
     input.slosh = {nan, nan, nan, nan};
@@ -383,7 +446,7 @@ TEST(TaskStop, VehicleOnlyTailAcceptsNaNLiquidWithoutFabricatingLiquidPeak) {
     EXPECT_TRUE(readiness.valid);
 
     TaskStopManager liquid_manager;
-    ASSERT_TRUE(liquid_manager.configure({}, {}, {}, .6, 1.2, 1., true));
+    ASSERT_TRUE(liquid_manager.configure({}, {}, {}, kStopLimits, .6, 1.2, 1., true));
     EXPECT_FALSE(liquid_manager.predict(input).valid);
 }
 

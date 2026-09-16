@@ -1,8 +1,10 @@
 #include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/reference/progress_projector.h"
 
 #include <gtest/gtest.h>
 
 #include <deque>
+#include <cmath>
 
 namespace spmpc_local_planner {
 namespace {
@@ -70,6 +72,60 @@ TEST(ControlCycleContract, AllowsOnlyBoundedRawSkew) {
     EXPECT_NEAR(skew, 0.057, 1e-12);
     EXPECT_FALSE(stateSkewWithinContract(
         1090000000LL, 1000000000LL, 0.080, skew));
+}
+
+TEST(ControlCycleContract, RefusesResultThatExpiredDuringSolveOrPostProcessing) {
+    ControlCycleTimingDebug timing;
+    timing.cycle_start_stamp_ns = 1000000000LL;
+    timing.solver_input_epoch_ns = 1002000000LL;
+    EXPECT_TRUE(commandResultFresh(timing, 1030000000LL, 1.0/30.0));
+    EXPECT_FALSE(commandResultFresh(timing, 1082000000LL, 1.0/30.0));
+    EXPECT_FALSE(commandResultFresh(timing, 1001000000LL, 1.0/30.0));
+    timing.solver_input_epoch_ns = 990000000LL;
+    EXPECT_FALSE(commandResultFresh(timing, 1030000000LL, 1.0/30.0));
+}
+
+TEST(ControlCycleContract, RemainingBudgetStopsFurtherIterations) {
+    const auto start = SolveBudget::Clock::now();
+    SolveBudget budget;
+    EXPECT_TRUE(budget.permits(1.0, start));  // offline, no real-time deadline
+    budget.deadline = start + std::chrono::milliseconds(27);
+    EXPECT_TRUE(budget.permits(.006, start + std::chrono::milliseconds(20)));
+    EXPECT_FALSE(budget.permits(.008, start + std::chrono::milliseconds(20)));
+    EXPECT_FALSE(budget.permits(0.0, start + std::chrono::milliseconds(28)));
+}
+
+TEST(ControlCycleContract, LocalizationOutlierDoesNotAdvancePersistentProgress) {
+    PoseContinuityGuard guard;
+    PoseContinuityParams params;
+    ReferencePath path;
+    path.setPoints({{0,0,0,0,0},{3,0,0,0,0}}, "map");
+    ProgressProjector projector;
+    ProgressProjectionState progress;
+    const auto observe = [&](std::int64_t time, double x) {
+        const auto current = sample(time,x,0.,.25,0.);
+        if (guard.observe(current,params)) projector.project(path,x,0.,progress);
+    };
+    observe(1000000000LL,1.0);
+    observe(1000000000LL,1.4);  // TF can be revised at the same odometry epoch.
+    EXPECT_DOUBLE_EQ(progress.progress,1.0);
+    observe(1020000000LL,1.4);
+    EXPECT_DOUBLE_EQ(progress.progress,1.0);
+    observe(1040000000LL,1.01);
+    EXPECT_NEAR(progress.progress,1.01,1e-12);
+}
+
+TEST(ControlCycleContract, PoseGuardAcceptsPhysicalTurnsAwayFromRoute) {
+    PoseContinuityGuard guard;
+    PoseContinuityParams params;
+    auto first = sample(1000000000LL,0.,0.,.5,1.);
+    ASSERT_TRUE(guard.observe(first,params));
+    for (int k=1;k<=20;++k) {
+        const double t=.02*k;
+        auto current=sample(1000000000LL+20000000LL*k,.5*std::sin(t),t,.5,1.);
+        current.state.y=.5*(1-std::cos(t));
+        EXPECT_TRUE(guard.observe(current,params));
+    }
 }
 
 }  // namespace

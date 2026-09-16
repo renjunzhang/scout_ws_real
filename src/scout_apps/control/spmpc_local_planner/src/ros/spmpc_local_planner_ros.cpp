@@ -489,6 +489,18 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("execution_contract/max_post_limit_delta_omega",
                command_contract_params_.max_post_limit_delta_omega,
                command_contract_params_.max_post_limit_delta_omega);
+    pnh_.param("execution_contract/max_result_age_sec",
+               command_contract_params_.max_result_age_sec,
+               command_contract_params_.max_result_age_sec);
+    pnh_.param("execution_contract/publish_reserve_sec",
+               command_contract_params_.publish_reserve_sec,
+               command_contract_params_.publish_reserve_sec);
+    pnh_.param("state_timing/max_position_innovation_m",
+               pose_continuity_params_.max_position_innovation_m,
+               pose_continuity_params_.max_position_innovation_m);
+    pnh_.param("state_timing/max_yaw_innovation_rad",
+               pose_continuity_params_.max_yaw_innovation_rad,
+               pose_continuity_params_.max_yaw_innovation_rad);
     const bool valid_state_timing =
         std::isfinite(state_timing_params_.max_raw_skew_sec) &&
         state_timing_params_.max_raw_skew_sec >= 0.0 &&
@@ -497,12 +509,23 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         std::isfinite(state_timing_params_.max_interpolation_gap_sec) &&
         state_timing_params_.max_interpolation_gap_sec > 0.0 &&
         std::isfinite(state_timing_params_.max_robot_extrapolation_sec) &&
-        state_timing_params_.max_robot_extrapolation_sec >= 0.0;
+        state_timing_params_.max_robot_extrapolation_sec >= 0.0 &&
+        std::isfinite(pose_continuity_params_.max_position_innovation_m) &&
+        pose_continuity_params_.max_position_innovation_m > 0.0 &&
+        std::isfinite(pose_continuity_params_.max_yaw_innovation_rad) &&
+        pose_continuity_params_.max_yaw_innovation_rad > 0.0;
     const bool valid_command_contract =
         std::isfinite(command_contract_params_.max_post_limit_delta_v) &&
         command_contract_params_.max_post_limit_delta_v >= 0.0 &&
         std::isfinite(command_contract_params_.max_post_limit_delta_omega) &&
-        command_contract_params_.max_post_limit_delta_omega >= 0.0;
+        command_contract_params_.max_post_limit_delta_omega >= 0.0 &&
+        std::isfinite(command_contract_params_.max_result_age_sec) &&
+        command_contract_params_.max_result_age_sec >= 0.0 &&
+        std::isfinite(command_contract_params_.publish_reserve_sec) &&
+        command_contract_params_.publish_reserve_sec >= 0.0 &&
+        command_contract_params_.publish_reserve_sec < dt_ &&
+        (command_contract_params_.max_result_age_sec == 0.0 ||
+         command_contract_params_.max_result_age_sec > command_contract_params_.publish_reserve_sec);
     if (!valid_state_timing || !valid_command_contract) {
         ROS_FATAL("[spmpc_local_planner] invalid state_timing/execution_contract parameters");
         return false;
@@ -1379,7 +1402,9 @@ void SpmpcLocalPlannerROS::recordedCommandCallback(const ControlCycleAuditConstP
     meta.linear_limited = msg->linear_limited;
     meta.angular_rate_limited = msg->angular_rate_limited;
     meta.angular_accel_limited = msg->angular_accel_limited;
-    command_history_.push({msg->command_publish_stamp, cmd, meta});
+    // This is the same final-command baseline used by real publication.
+    // Otherwise the dry-run limiter would compare every candidate with zero.
+    recordPublishedCommand(cmd, msg->command_publish_stamp, meta);
     last_recorded_command_ = record;
     have_recorded_command_ = true;
 }
@@ -1613,39 +1638,10 @@ geometry_msgs::Twist SpmpcLocalPlannerROS::applySharedCommandLimits(
 void SpmpcLocalPlannerROS::publishCommand(
     const geometry_msgs::Twist& desired,
     const CommandInterventionDebug& intervention,
-    ControlCycleAuditDebug* audit) {
-    if (!publish_cmd_vel_) {
-        const auto speed_decision = speed_safety_contract_.inspect(
-            intervention.solver_cmd_v, desired.linear.x, desired.linear.x);
-        const bool speed_fail_closed =
-            speed_decision.enabled && speed_decision.latched;
-        CommandInterventionDebug debug = intervention;
-        if (speed_fail_closed) debug.output_success = false;
-        debug.zero_due_to_speed_safety = speed_fail_closed;
-        debug.speed_safety_violation = speed_decision.violation;
-        debug.speed_safety_latched = speed_decision.latched;
-        debug.v_safe_max = speed_decision.v_safe_max;
-        debug.publish_cmd_vel = false;
-        diagnostics_.publishCommandIntervention(debug);
-        if (audit) {
-            audit->publish_cmd_vel = false;
-            audit->command_was_published = false;
-            audit->zero_due_to_speed_safety = speed_fail_closed;
-            audit->speed_safety_violation = speed_decision.violation;
-            audit->speed_safety_latched = speed_decision.latched;
-            audit->v_safe_max = speed_decision.v_safe_max;
-            if (speed_fail_closed) {
-                audit->command_accepted = false;
-                audit->safety_gate_intervened = true;
-                audit->status = speed_decision.violation
-                    ? "SPEED_SAFETY_CONTRACT_VIOLATION"
-                    : "SPEED_SAFETY_CONTRACT_LATCHED";
-            }
-            diagnostics_.publishControlCycleAudit(
-                *audit, problem_.referenceFrameId());
-        }
-        return;
-    }
+    ControlCycleAuditDebug* audit,
+    const SolveBudget& publication_budget) {
+    // Dry runs exercise the same limiter and acceptance path. Only transport
+    // and publication history differ; external replay keeps its recorded history.
     const auto stamp = ros::Time::now();
     geometry_msgs::Twist previous;
     double dt = 0.0;
@@ -1693,29 +1689,40 @@ void SpmpcLocalPlannerROS::publishCommand(
     meta.angular_rate_limited = angular_rate_limited;
     meta.angular_accel_limited = angular_accel_limited;
     const auto publish_stamp = ros::Time::now();
-    cmd_pub_.publish(cmd);
-    recordPublishedCommand(cmd, publish_stamp, meta);
+    const double max_age = command_contract_params_.max_result_age_sec > 0.0
+        ? command_contract_params_.max_result_age_sec : dt_;
+    const bool stale = !audit || !publication_budget.permits(0.0) ||
+        !commandResultFresh(audit->timing,
+                            static_cast<std::int64_t>(publish_stamp.toNSec()), max_age);
+    if (stale) {
+        cmd = geometry_msgs::Twist();
+        meta.is_zero_cmd = true;
+    }
+    if (publish_cmd_vel_) {
+        cmd_pub_.publish(cmd);
+        recordPublishedCommand(cmd, publish_stamp, meta);
+    }
     diagnostics_.publishCommandOutput(
         desired, cmd, previous, dt, linear_limited, angular_rate_limited, angular_accel_limited);
     CommandInterventionDebug debug = intervention;
-    debug.published_cmd_v = cmd.linear.x;
-    debug.published_cmd_omega = cmd.angular.z;
+    debug.published_cmd_v = publish_cmd_vel_ ? cmd.linear.x : 0.0;
+    debug.published_cmd_omega = publish_cmd_vel_ ? cmd.angular.z : 0.0;
     debug.linear_limited = linear_limited;
     debug.angular_rate_limited = angular_rate_limited;
     debug.angular_accel_limited = angular_accel_limited;
-    debug.zero_due_to_command_contract = contract_fail_closed;
-    if (contract_fail_closed || speed_fail_closed) debug.output_success = false;
+    debug.zero_due_to_command_contract = contract_fail_closed || stale;
+    if (contract_fail_closed || speed_fail_closed || stale) debug.output_success = false;
     debug.zero_due_to_speed_safety = speed_fail_closed;
     debug.speed_safety_violation = speed_decision.violation;
     debug.speed_safety_latched = speed_decision.latched;
     debug.v_safe_max = speed_decision.v_safe_max;
-    debug.publish_cmd_vel = true;
+    debug.publish_cmd_vel = publish_cmd_vel_;
     diagnostics_.publishCommandIntervention(debug);
     if (audit) {
         audit->timing.command_publish_stamp_ns =
-            static_cast<std::int64_t>(publish_stamp.toNSec());
-        audit->publish_cmd_vel = true;
-        audit->command_was_published = true;
+            publish_cmd_vel_ ? static_cast<std::int64_t>(publish_stamp.toNSec()) : 0;
+        audit->publish_cmd_vel = publish_cmd_vel_;
+        audit->command_was_published = publish_cmd_vel_;
         audit->command_contract_violation = command_contract_violation;
         audit->zero_due_to_speed_safety = speed_fail_closed;
         audit->speed_safety_violation = speed_decision.violation;
@@ -1724,8 +1731,8 @@ void SpmpcLocalPlannerROS::publishCommand(
         audit->linear_limited = linear_limited;
         audit->angular_rate_limited = angular_rate_limited;
         audit->angular_accel_limited = angular_accel_limited;
-        audit->published_cmd_v = cmd.linear.x;
-        audit->published_cmd_omega = cmd.angular.z;
+        audit->published_cmd_v = debug.published_cmd_v;
+        audit->published_cmd_omega = debug.published_cmd_omega;
         if (contract_fail_closed) {
             audit->command_accepted = false;
             audit->safety_gate_intervened = true;
@@ -1737,6 +1744,11 @@ void SpmpcLocalPlannerROS::publishCommand(
             audit->status = speed_decision.violation
                 ? "SPEED_SAFETY_CONTRACT_VIOLATION"
                 : "SPEED_SAFETY_CONTRACT_LATCHED";
+        }
+        if (stale) {
+            audit->command_accepted = false;
+            audit->safety_gate_intervened = true;
+            audit->status = "COMMAND_RESULT_EXPIRED";
         }
         diagnostics_.publishControlCycleAudit(
             *audit, problem_.referenceFrameId());
@@ -1870,6 +1882,7 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
 void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
     const ProcessedImuOutput output = imu_shadow_adapter_.process(*msg, ros::Time::now());
     bool observer_step_ok = false;
+    bool needs_initialization = false;
     {
         std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
         if (output.excitation.valid) {
@@ -1884,10 +1897,13 @@ void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
                            output.bias_ready && output.filter_ready &&
                            slosh_observers_.imu().valid;
         imu_input_reset_epoch_ = output.reset_epoch;
+        needs_initialization = slosh_observers_.imuNeedsInitialization();
     }
     if (output.excitation.valid && !observer_step_ok) {
         ROS_WARN_THROTTLE(1.0,
-                          "[spmpc_local_planner] processed-IMU valid but observer step failed");
+            "[spmpc_local_planner] processed-IMU observer unavailable: %s",
+            needs_initialization ? "trusted initialization required; settle liquid before restart"
+                                 : "excitation rejected");
     }
 
     if (output.status == ImuPipelineStatusCode::FrameMismatch) {
@@ -1934,6 +1950,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
             return;
         }
         if (updateReferenceSignature(transformed_path)) {
+            pose_continuity_guard_.reset();
             resetTerminalSpinFailGate();
             resetTrackingSafetyGate();
             resetMapVRefProgress();
@@ -1945,6 +1962,7 @@ void SpmpcLocalPlannerROS::pathCallback(const nav_msgs::PathConstPtr& msg) {
 
     const auto reference = referencePathFromMsg(*msg);
     if (updateReferenceSignature(*msg)) {
+        pose_continuity_guard_.reset();
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         resetMapVRefProgress();
@@ -1962,6 +1980,13 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     // publishEffectiveConfig 等 applyRuntimeVRef() 计算完本周期 v_ref 后再发，避免动态 v_ref 滞后一拍。
 
     const ros::Time cycle_start = ros::Time::now();
+    const auto cycle_wall_start = SolveBudget::Clock::now();
+    const double max_result_age = command_contract_params_.max_result_age_sec > 0.0
+        ? command_contract_params_.max_result_age_sec : dt_;
+    SolveBudget publication_budget;
+    publication_budget.deadline = cycle_wall_start +
+        std::chrono::duration_cast<SolveBudget::Clock::duration>(
+            std::chrono::duration<double>(max_result_age));
     ControlCycleAuditDebug cycle_audit;
     cycle_audit.timing.cycle_id = ++next_cycle_id_;
     cycle_audit.timing.cycle_start_stamp_ns =
@@ -2168,6 +2193,14 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         diagnostics_.publishStatus(cycle_audit.status);
         publishSloshObserverSelectionDebug(observer_selection_now, observer_selection,
             solver_consumes_selected_state, cycle_audit.timing);
+        CommandInterventionDebug intervention;
+        intervention.zero_due_to_waiting_for_tf = true;
+        publishZeroCommand(intervention, &cycle_audit);
+        return;
+    }
+    if (!pose_continuity_guard_.observe({robot_epoch_ns, input.robot}, pose_continuity_params_)) {
+        cycle_audit.status = "LOCALIZATION_DISCONTINUITY";
+        diagnostics_.publishStatus(cycle_audit.status);
         CommandInterventionDebug intervention;
         intervention.zero_due_to_waiting_for_tf = true;
         publishZeroCommand(intervention, &cycle_audit);
@@ -2393,6 +2426,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
             cycle_audit.timing);
     }
     SolverOutput output;
+    solve_input.solve_budget.deadline = cycle_wall_start +
+        std::chrono::duration_cast<SolveBudget::Clock::duration>(
+            std::chrono::duration<double>(std::min(dt_, max_result_age) -
+                                         command_contract_params_.publish_reserve_sec));
     problem_.solve(solve_input, output);
     cycle_audit.solve_attempted = output.ocp_solve_attempted;
     cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
@@ -2425,10 +2462,10 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     if (!event.last_real.isZero() && !event.current_real.isZero()) {
         spin_gate_dt = (event.current_real - event.last_real).toSec();
     }
-    const double raw_solver_cmd_v = !output.ocp_solve_attempted ? 0.0 : output.first_shot_debug.success
+    const double raw_solver_cmd_v = !output.ocp_solve_attempted || output.recoverable_solver_failure ? 0.0 : output.first_shot_debug.success
         ? output.first_shot_debug.cmd_v_post_clamp
         : output.cmd_v;
-    const double raw_solver_cmd_omega = !output.ocp_solve_attempted ? 0.0 : output.first_shot_debug.success
+    const double raw_solver_cmd_omega = !output.ocp_solve_attempted || output.recoverable_solver_failure ? 0.0 : output.first_shot_debug.success
         ? output.first_shot_debug.cmd_omega_post_clamp
         : output.cmd_omega;
     const double terminal_cmd_v = output.cmd_v;
@@ -2436,7 +2473,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     CommandInterventionDebug intervention;
     intervention.solver_cmd_v = raw_solver_cmd_v;
     intervention.solver_cmd_omega = raw_solver_cmd_omega;
-    const bool solver_success = output.success;
+    const bool solver_success = output.success && !output.recoverable_solver_failure;
     const bool terminal_spin_blocked = updateTerminalSpinFailGate(solve_input, output, spin_gate_dt);
     if (terminal_spin_blocked) {
         output.success = false;
@@ -2455,7 +2492,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     intervention.post_gate_cmd_v = output.cmd_v;
     intervention.post_gate_cmd_omega = output.cmd_omega;
     intervention.output_success = output.success;
-    intervention.zero_due_to_solver_failure = output.ocp_solve_attempted && !solver_success;
+    intervention.zero_due_to_solver_failure = output.ocp_solve_attempted && !solver_success && !output.success;
     intervention.zero_due_to_command_contract = output.status == "TERMINAL_STOP_HISTORY_FAILED";
     intervention.zero_due_to_terminal_spin_fail = terminal_spin_blocked;
     intervention.zero_due_to_tracking_safety = tracking_safety_blocked;
@@ -2484,7 +2521,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         geometry_msgs::Twist cmd;
         cmd.linear.x = output.cmd_v;
         cmd.angular.z = output.cmd_omega;
-        publishCommand(cmd, intervention, &cycle_audit);
+        publishCommand(cmd, intervention, &cycle_audit, publication_budget);
     }
     output.cycle_timing = cycle_audit.timing;
     if (!cycle_audit.command_accepted) {
@@ -2517,7 +2554,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         robot_delay_compensation_applied || liquid_delay_compensation_applied);
     diagnostics_.publishOutput(output, problem_.referenceFrameId());
 
-    if (output.predicted_horizon.valid &&
+    if (cycle_audit.command_accepted && output.predicted_horizon.valid &&
         output.predicted_horizon.controls.size() > 1) {
         previous_plan_cycle_id_ = cycle_audit.timing.cycle_id;
         previous_shifted_plan_a_ =
@@ -2730,12 +2767,11 @@ bool SpmpcLocalPlannerROS::processOdomInput(
             status = "ODOM_DT_TOO_SMALL";
         }
         if (clock_reset) {
-            // A large source-clock regression starts a clean liquid epoch.  A
-            // small out-of-order packet is only dropped and cannot move the
-            // derivative baseline backwards.
+            // A source-clock regression invalidates physical liquid memory.
+            // It must not silently initialize a moving liquid at zero.
             {
                 std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
-                slosh_observers_.resetOdom();
+                slosh_observers_.invalidateOdom();
             }
             prev_odom_ = odom;
         }
@@ -2790,13 +2826,17 @@ bool SpmpcLocalPlannerROS::processOdomInput(
     excitation.alpha_effective_stamp_ns = interval_midpoint_ns;
     bool observer_updated = false;
     bool odom_observer_configured = false;
+    bool observer_needs_initialization = false;
     {
         std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
         observer_updated = slosh_observers_.stepOdom(excitation);
         odom_observer_configured = slosh_observers_.odomConfigured();
+        observer_needs_initialization = slosh_observers_.odomNeedsInitialization();
     }
     if (!observer_updated && odom_observer_configured) {
-        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] odom slosh observer step rejected");
+        ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] odom slosh observer unavailable: %s",
+            observer_needs_initialization ? "trusted initialization required; settle liquid before restart"
+                                          : "excitation rejected");
     } else if (!odom_observer_configured) {
         ROS_WARN_THROTTLE(1.0, "[spmpc_local_planner] slosh observer reconfigure failed");
     }
@@ -2804,7 +2844,8 @@ bool SpmpcLocalPlannerROS::processOdomInput(
         publishOdomSloshObserverDebug(
             odom,
             excitation,
-            observer_updated ? "ODOM_READY" : "ODOM_OBSERVER_INVALID");
+            observer_updated ? "ODOM_READY" : (observer_needs_initialization
+                ? "ODOM_NEEDS_TRUSTED_INITIALIZATION" : "ODOM_OBSERVER_INVALID"));
     }
     prev_odom_ = odom;
     return true;

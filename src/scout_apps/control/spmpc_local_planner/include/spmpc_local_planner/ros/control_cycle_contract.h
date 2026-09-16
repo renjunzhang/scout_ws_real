@@ -36,4 +36,25 @@ bool stateSkewWithinContract(std::int64_t robot_stamp_ns,
                              double max_abs_skew_sec,
                              double& signed_skew_sec);
 
+// Check just before dispatch, including time spent solving/post-processing.
+bool commandResultFresh(const ControlCycleTimingDebug& timing,
+                        std::int64_t now_ns, double max_age_sec);
+
+struct PoseContinuityParams {
+    double max_position_innovation_m = 0.20;
+    double max_yaw_innovation_rad = 0.35;
+};
+
+// Compare localization to measured motion, independent of path error/progress.
+// Rejected poses never become the anchor. A transient jump may recover when
+// localization returns; a persistent frame change requires an explicit reset.
+class PoseContinuityGuard {
+public:
+    bool observe(const StampedRobotState& sample, const PoseContinuityParams& params);
+    void reset() { initialized_ = false; }
+private:
+    bool initialized_ = false;
+    StampedRobotState anchor_;
+};
+
 }  // namespace spmpc_local_planner

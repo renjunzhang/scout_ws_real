@@ -63,6 +63,7 @@ float64[] v_s
 bool zero_liquid_initial_state
 bool jerk_limit_enable
 float64 jerk_max
+# Actual iterations executed; configuration gives only the upper bound.
 int32 rti_iterations
 float64 dynamics_max_defect
 float64 delta_a_max

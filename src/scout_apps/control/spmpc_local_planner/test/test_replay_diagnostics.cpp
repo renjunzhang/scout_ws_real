@@ -89,6 +89,20 @@ size_t parameterIndex(const std::vector<std::string>& names, const std::string& 
 
 }  // namespace
 
+TEST(ReplayDiagnostics, ExpiredComputeBudgetDoesNotStartRti) {
+    auto params=makeParams(); params.rti_iterations=5;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params,makeB0Variant());
+    auto input=makeInput();
+    input.solve_budget.deadline=SolveBudget::Clock::now()-std::chrono::milliseconds(1);
+    SolverOutput output;
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
+    EXPECT_EQ(output.status,"SOLVE_BUDGET_EXHAUSTED");
+    EXPECT_TRUE(output.recoverable_solver_failure);
+    EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,0);
+    EXPECT_FALSE(output.predicted_horizon.valid);
+}
+
 TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
     auto params = makeParams();
     params.jerk_limit_enable = true;

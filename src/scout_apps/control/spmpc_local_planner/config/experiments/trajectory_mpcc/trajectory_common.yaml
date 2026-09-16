@@ -4,6 +4,13 @@ planning:
   evaluation_window_sec: 1.0
 execution_model:
   actual_v_min: -0.002
+platform:
+  shared_constraints:
+    # Acceleration/jerk are enforced inside the common explicit-actuator OCP.
+    linear_accel_limit_enable: false
+    angular_limit_enable: false
+execution_contract:
+  fail_closed_on_post_limit_change: true
 acados:
   rti_iterations: 5
   max_prediction_defect: 0.0001
