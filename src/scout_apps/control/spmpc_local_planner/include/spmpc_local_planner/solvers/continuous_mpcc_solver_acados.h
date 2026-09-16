@@ -38,6 +38,9 @@ private:
     std::string configuration_error_;
     mutable WarmStartOutput previous_warm_start_solution_;
     mutable bool have_previous_solution_ = false;
+    // Finite but rejected RTI iterate: numerical seed only, never a solution
+    // or published command history. Re-roll from measured x0 before reuse.
+    mutable WarmStartOutput retry_warm_start_;
     mutable double u_prev_[3] = {0.0, 0.0, 0.0};  // 上周期 OCP 控制 [a, alpha, v_s]
     mutable bool have_u_prev_ = false;
     mutable double previous_iteration_wall_sec_ = 0.0;

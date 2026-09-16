@@ -103,6 +103,66 @@ TEST(ReplayDiagnostics, ExpiredComputeBudgetDoesNotStartRti) {
     EXPECT_FALSE(output.predicted_horizon.valid);
 }
 
+TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFixed) {
+    auto params=makeParams(); params.rti_iterations=5;
+    params.max_prediction_defect=1e-4;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params,makeB0Variant());
+    auto input=makeInput();
+    input.solve_budget.deadline=SolveBudget::Clock::now()+std::chrono::seconds(10);
+    SolverOutput output;
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),output))<<output.status;
+    EXPECT_LT(output.pre_solve_snapshot.rti_iterations,params.rti_iterations);
+    EXPECT_GT(output.pre_solve_snapshot.rti_iterations,0);
+    EXPECT_LE(output.predicted_horizon.dynamics_max_defect,params.max_prediction_defect);
+    EXPECT_TRUE(output.cost.reconstruction_valid);
+    solver.configure(params,makeB0Variant());
+    input.solve_budget={};
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),output))<<output.status;
+    EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,params.rti_iterations);
+}
+
+TEST(ReplayDiagnostics, RejectedIterateCanSeedRetryWithoutBecomingCommandHistory) {
+    auto params=makeParams(); params.rti_iterations=1;
+    params.max_prediction_defect=1e-4;
+    params.warm_start.use_previous_solution=true;
+    auto variant=makeB0Variant(); variant.v_ref=.25;
+    std::vector<TrajectoryPoint> points;
+    for(int i=0;i<=100;++i) {
+        TrajectoryPoint p;
+        p.x=.05*i;
+        p.y=.6*(1.-std::cos(2.*std::acos(-1.)*i/100.));
+        points.push_back(p);
+    }
+    ReferencePath reference;reference.setPoints(points,"map");
+    auto input=makeInput();input.actuator.a_cmd_memory=0.;
+    ContinuousMpccSolverAcados solver;solver.configure(params,variant);
+    SolverOutput output;
+    ASSERT_FALSE(solver.solve(input,reference,output));
+    ASSERT_EQ(output.status,"PREDICTION_DYNAMICS_VIOLATION");
+    int rejected=1;
+    for(int i=0;i<12;++i) {
+        const bool ok=solver.solve(input,reference,output);
+        EXPECT_EQ(output.pre_solve_snapshot.warm_start_source,"RETRY_NUMERICAL_ITERATE");
+        EXPECT_FALSE(output.pre_solve_snapshot.have_previous_solution);
+        EXPECT_FALSE(output.pre_solve_snapshot.have_previous_control);
+        EXPECT_DOUBLE_EQ(output.pre_solve_snapshot.actuator.v_cmd,0.);
+        EXPECT_DOUBLE_EQ(output.pre_solve_snapshot.actuator.a_cmd_memory,0.);
+        if(ok) break;
+        ++rejected;
+        ASSERT_EQ(output.status,"PREDICTION_DYNAMICS_VIOLATION");
+        EXPECT_FALSE(output.success);
+        EXPECT_FALSE(output.predicted_horizon.valid);
+        EXPECT_DOUBLE_EQ(output.cmd_v,0.);
+        EXPECT_DOUBLE_EQ(output.cmd_omega,0.);
+    }
+    ASSERT_TRUE(output.success)<<output.status<<" after "<<rejected<<" rejections";
+    EXPECT_LE(output.predicted_horizon.dynamics_max_defect,params.max_prediction_defect);
+    solver.configure(params,variant);
+    EXPECT_FALSE(solver.solve(input,reference,output));
+    EXPECT_NE(output.pre_solve_snapshot.warm_start_source,"RETRY_NUMERICAL_ITERATE");
+}
+
 TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
     auto params = makeParams();
     params.jerk_limit_enable = true;

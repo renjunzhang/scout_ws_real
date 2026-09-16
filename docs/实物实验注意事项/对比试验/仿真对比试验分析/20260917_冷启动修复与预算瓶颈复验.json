@@ -1,0 +1,208 @@
+{
+  "evidence": "CURRENT_MAINLINE_STARTUP_REPAIR_DIAGNOSTIC",
+  "formal": false,
+  "push_performed": false,
+  "workspace": "/home/a/scout_ws",
+  "branch": "feat/spmpc-liquid-control",
+  "parent_git_sha": "fbffb9080b0b486b5fcf8c501ee5aea5c0441e67",
+  "native_test_programs_passed": 19,
+  "ros_test_programs_passed": 21,
+  "ros_unique_testcases_passed": 240,
+  "actuator_plant_matches_controller": false,
+  "result_dir": "/data/a/scout_sim_replacement/results/20260917_startup_repair",
+  "cases": {
+    "raw_r01": {
+      "profile": "raw_mpcc",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "first_audit_cycle": 6,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B0_ACADOS_OK": 99,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "rti_counts": {
+        "2": 2,
+        "1": 99
+      },
+      "warm_start_sources": {
+        "FLATNESS_GENERATOR": 1,
+        "RETRY_NUMERICAL_ITERATE": 2,
+        "SHIFTED_PREVIOUS_SOLUTION": 98
+      },
+      "nonzero_command_count": 127,
+      "accepted_ocp_commands": 99,
+      "valid_horizon_defect": {
+        "count": 99,
+        "min": 2.9007618973508897e-08,
+        "p50": 3.215022092994957e-07,
+        "p95": 3.689552421143314e-06,
+        "max": 6.113364246111046e-05
+      },
+      "attempted_cycle_ros_ms": {
+        "count": 102,
+        "min": 6.0,
+        "p50": 13.0,
+        "p95": 25.799999999999955,
+        "max": 33.0
+      },
+      "successful_solve_ros_ms": {
+        "count": 99,
+        "min": 4.0,
+        "p50": 9.0,
+        "p95": 13.0,
+        "max": 15.0
+      },
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "initial_pose": [
+        0.020268121297657215,
+        -0.008730177324257944,
+        0.0015433777140196115
+      ],
+      "final_pose": [
+        0.7836166478106097,
+        0.3376439490206472,
+        0.7004311164586687
+      ],
+      "git_sha": "2f6272436a5659f21abff9f30f1f4bb503f71c75",
+      "runner_sha256": "185845cc132b9e42917eb78ace9366294afa1d4d576c336a7f22cfc6b02eb65a",
+      "binary_sha256": "56b819808a2c4a426bf4589e2c8fb54399f22df6b280d56e2b25ecbcdf8c62ac",
+      "bag_sha256": "67db3ac6e3f52a838fe933746bc72de5a3a15236ebb1eee74a0cc82576988166",
+      "source_diff_sha256": "7e1489a58d7f7e5fb7d58edc5861fb30d20afe8ab1dea3d769e7dc09585621d3",
+      "analysis_sha256": "361097595434390d5306b223e660d29867e96bb89f59833886ae5b09e0772f78"
+    },
+    "full_r01": {
+      "profile": "planned_slosh",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "first_audit_cycle": 9,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B_slosh_ACADOS_OK": 2,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "rti_counts": {
+        "1": 4
+      },
+      "warm_start_sources": {
+        "TRAJECTORY_PLAN": 1,
+        "RETRY_NUMERICAL_ITERATE": 2,
+        "SHIFTED_PREVIOUS_SOLUTION": 1
+      },
+      "nonzero_command_count": 6,
+      "accepted_ocp_commands": 2,
+      "valid_horizon_defect": {
+        "count": 2,
+        "min": 3.4286918928483345e-06,
+        "p50": 6.140161760093132e-06,
+        "p95": 8.58048464061345e-06,
+        "max": 8.85163162733793e-06
+      },
+      "attempted_cycle_ros_ms": {
+        "count": 5,
+        "min": 4.0,
+        "p50": 21.0,
+        "p95": 28.599999999999998,
+        "max": 30.0
+      },
+      "successful_solve_ros_ms": {
+        "count": 2,
+        "min": 15.0,
+        "p50": 21.5,
+        "p95": 27.349999999999998,
+        "max": 28.0
+      },
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "plan_sha256": "9eccb9870bc6759200003dd6fad990efd456e9d14bf0065423a5dcfdcbe4472b",
+      "initial_pose": [
+        0.014756243891814236,
+        -0.0034287660647571157,
+        0.0005520185425089344
+      ],
+      "final_pose": [
+        0.015004766387452061,
+        -0.006909044029118707,
+        0.001206436073098335
+      ],
+      "git_sha": "fbffb9080b0b486b5fcf8c501ee5aea5c0441e67",
+      "runner_sha256": "185845cc132b9e42917eb78ace9366294afa1d4d576c336a7f22cfc6b02eb65a",
+      "binary_sha256": "56b819808a2c4a426bf4589e2c8fb54399f22df6b280d56e2b25ecbcdf8c62ac",
+      "bag_sha256": "72d4b9784c71aedf8b2148e258aafdea0f78cd87e97c61c0358dd0e0824ed65a",
+      "source_diff_sha256": "05e66cf6a2578757e6680bffe8484b0595df84b4161ed8e0dc84cd56d628e236",
+      "analysis_sha256": "183200aa4397766c317e5fac5dd058933a3d70edd91cbd64cc6d462935c463d5"
+    }
+  },
+  "runtime": {
+    "libspmpc_local_planner.so": {
+      "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/libspmpc_local_planner.so",
+      "sha256": "b7293e925c05903de458de0676354a1293b84c495f40d7c2e0e49983df4a91e6"
+    },
+    "spmpc_local_planner_node": {
+      "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "sha256": "56b819808a2c4a426bf4589e2c8fb54399f22df6b280d56e2b25ecbcdf8c62ac"
+    },
+    "libacados_ocp_solver_spmpc_b0.so": {
+      "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+      "sha256": "16ce6ed812680f01362bad22e3e072809f32a8f36e178e624e41ebf09364972d"
+    },
+    "acados_ocp_spmpc_b0.json": {
+      "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/acados_ocp_spmpc_b0.json",
+      "sha256": "5d43069e8ae94caa477744423b965ff6dca2df1ebdfb44edec8d3c969e62ce44"
+    },
+    "libacados_ocp_solver_spmpc_slosh.so": {
+      "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+      "sha256": "594d21ab87b6ac8b1e93c05661ce9501ed89c680b7eefab932b2cd1246382894"
+    },
+    "acados_ocp_spmpc_slosh.json": {
+      "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/acados_ocp_spmpc_slosh.json",
+      "sha256": "ce7bec62c10179e1660b585ae0c4b0d31952f49aa997792021d290c2914b3381"
+    }
+  },
+  "offline_reproduction": {
+    "raw": {
+      "recorded_state_linf": [
+        0.0
+      ],
+      "script_sha256": "c55c8c824b01aeadb7a06f964c4d2844ab039a8433fd18801f4ff85d993491e7",
+      "report_sha256": "437b8f6e756bab52849944cfe7ff00a099f798e391502fc83b43e299bd464289"
+    },
+    "full": {
+      "recorded_state_linf": [
+        0.0
+      ],
+      "script_sha256": "c55c8c824b01aeadb7a06f964c4d2844ab039a8433fd18801f4ff85d993491e7",
+      "report_sha256": "80c7798f470ed5fc5a0e19ea911029f009cffb01ebb5c9fb6ba302eafe739561"
+    }
+  },
+  "upper_reoptimization": {
+    "cold": "interrupted after over five minutes",
+    "warm": "timeout at 360 s; exit 143",
+    "case_plan": "feasible_seed_plan.json",
+    "case_plan_status": "REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED"
+  },
+  "final_source_diff_sha256": "5d4bc92b28a83d4a8696d7f00ce0f128845f62a1c7c3de9d3eb42f3c33c81268",
+  "final_ports": {
+    "11892": false,
+    "11926": false
+  }
+}

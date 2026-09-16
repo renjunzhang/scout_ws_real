@@ -598,6 +598,7 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
     previous_iteration_wall_sec_ = 0.0;
     have_previous_solution_ = false;
     previous_warm_start_solution_ = WarmStartOutput{};
+    retry_warm_start_ = WarmStartOutput{};
     slosh_dyn_.configure(params.slosh);
     warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
@@ -1013,7 +1014,22 @@ bool ContinuousMpccSolverAcados::solve(
     }
     const WarmStartInput warm_input = makeWarmStartInput(
         input, reference, spline, s0, len, n, params_, have_u_prev_, u_prev_);
-    if (warm_start_requested && params_.warm_start.use_previous_solution && have_previous_solution_) {
+    if (warm_start_requested && params_.warm_start.use_previous_solution && retry_warm_start_.valid) {
+        warm_start = retry_warm_start_;
+        // The rejected controls were not executed. Do not shift them or treat
+        // them as command history; the rollout anchors every state to feedback.
+        warm_start.states.front().s = s0;
+        if (rolloutExplicitActuatorWarmStart(
+                warm_start,warm_input,input.actuator,params_.actuator,slosh_dyn_,slosh)) {
+            setAcadosWarmStart(*gen,warm_start,slosh);
+            warm_start_applied = true;
+            snapshot.warm_start_source = "RETRY_NUMERICAL_ITERATE";
+        }
+    }
+    // Rejected seeds are single-use; only a newly diagnosed dynamics defect
+    // can populate another one. Other failures retain their existing policy.
+    retry_warm_start_ = WarmStartOutput{};
+    if (warm_start_requested && !warm_start_applied && params_.warm_start.use_previous_solution && have_previous_solution_) {
         warm_start=makeShiftedPreviousWarmStart(previous_warm_start_solution_,input,s0,n,slosh,params_);
         if (warm_start.valid) rolloutExplicitActuatorWarmStart(
             warm_start,warm_input,input.actuator,params_.actuator,slosh_dyn_,slosh);
@@ -1103,14 +1119,28 @@ bool ContinuousMpccSolverAcados::solve(
         if (!input.solve_budget.permits(iteration_estimate)) break;
         const auto iteration_start = SolveBudget::Clock::now();
         status=gen->solve();
-        previous_iteration_wall_sec_ = std::chrono::duration<double>(
-            SolveBudget::Clock::now() - iteration_start).count();
-        iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
         ++iterations_executed;
         double iteration_time=0;
         ocp_nlp_get(gen->solver(), "time_tot", &iteration_time);
         time_tot+=iteration_time;
-        if (status!=0) break;
+        bool feasible_iterate = false;
+        if (status == 0 && input.solve_budget.deadline != SolveBudget::Clock::time_point{} &&
+            params_.max_prediction_defect > 0.) {
+            // With a live deadline, stop spending RTI calls once nonlinear
+            // dynamics AND all generated inequalities are feasible. The common
+            // extraction/replay, planning, liquid, jerk and publication checks
+            // below still decide acceptance. Offline fixed-count runs stay fixed.
+            ocp_nlp_eval_residuals(gen->solver(), nlp_in, nlp_out);
+            double equality = 0., inequality = 0.;
+            ocp_nlp_get(gen->solver(), "res_eq", &equality);
+            ocp_nlp_get(gen->solver(), "res_ineq", &inequality);
+            feasible_iterate = std::isfinite(equality) && std::isfinite(inequality) &&
+                equality <= params_.max_prediction_defect && inequality <= 1e-6;
+        }
+        previous_iteration_wall_sec_ = std::chrono::duration<double>(
+            SolveBudget::Clock::now() - iteration_start).count();
+        iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
+        if (status!=0 || feasible_iterate) break;
     }
     output.solver_time_ms = time_tot * 1000.0;
     // The replay needs the number actually executed, not the configured cap.
@@ -1251,6 +1281,11 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
     if (params_.max_prediction_defect>0 && output.predicted_horizon.dynamics_max_defect>params_.max_prediction_defect) {
+        WarmStartOutput retry;
+        retry.states = solved_states;
+        retry.controls = solved_controls;
+        retry.valid = isWarmStartFinite(retry);
+        if (retry.valid) retry_warm_start_ = std::move(retry);
         output.status=snapshot.solver_status=output.predicted_horizon.solver_status="PREDICTION_DYNAMICS_VIOLATION";
         return false;
     }

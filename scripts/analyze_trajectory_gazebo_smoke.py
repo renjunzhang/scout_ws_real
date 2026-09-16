@@ -28,7 +28,7 @@ def analyze(directory):
         raise ValueError('analysis requires a closed bag')
     audits, failures, horizons, snapshots = [], [], [], {}
     states, commands = Counter(), []
-    solved_states, rti_counts = Counter(), Counter()
+    solved_states, rti_counts, warm_start_sources = Counter(), Counter(), Counter()
     odom_speed, odom_omega, callbacks, ages, solve_times = [], [], [], [], []
     with rosbag.Bag(str(bag_path)) as bag:
         report['topic_counts'] = {k:v.message_count for k,v in bag.get_type_and_topic_info().topics.items()}
@@ -48,9 +48,14 @@ def analyze(directory):
                     failures.append(dict(cycle_id=msg.cycle_id, solver_status=msg.solver_status,
                                          status=msg.status, solve_success=msg.solve_success,
                                          command_accepted=msg.command_accepted,
-                                         published_v=msg.published_cmd_v, published_omega=msg.published_cmd_omega))
+                                         published_v=msg.published_cmd_v, published_omega=msg.published_cmd_omega,
+                                         pre_solve_ros_ms=(msg.solve_start_stamp-msg.cycle_start_stamp).to_sec()*1000.,
+                                         solve_ros_ms=(msg.solve_end_stamp-msg.solve_start_stamp).to_sec()*1000.,
+                                         callback_ros_ms=(msg.command_publish_stamp-msg.cycle_start_stamp).to_sec()*1000.
+                                         if msg.command_was_published else None))
             elif topic.endswith('pre_solve_snapshot') and msg.rti_iterations > 0:
                 snapshots[msg.cycle_id] = dict(limit=msg.max_prediction_defect, source=msg.warm_start_source)
+                warm_start_sources[msg.warm_start_source] += 1
             elif topic.endswith('predicted_horizon') and msg.rti_iterations > 0:
                 rti_counts[str(msg.rti_iterations)] += 1
                 horizons.append(dict(cycle_id=msg.cycle_id, status=msg.solver_status,
@@ -67,6 +72,15 @@ def analyze(directory):
                   first_audit_cycle=min(audits) if audits else None,
                   callback_ms=distribution(callbacks), input_age_ms=distribution(ages),
                   solve_ms=distribution(solve_times), rti_counts=dict(rti_counts),
+                  warm_start_sources=dict(warm_start_sources),
+                  # These timestamps use ROS/simulation time. They cannot
+                  # certify the steady-clock budget or include stopped cycles
+                  # in an active-control percentile.
+                  attempted_cycle_ros_ms=distribution([r['callback_ros_ms'] for r in failures
+                                                       if r['callback_ros_ms'] is not None]),
+                  successful_solve_ros_ms=distribution([r['solve_ros_ms'] for r in failures if r['solve_success']]),
+                  accepted_ocp_commands=sum(r['solve_success'] and r['command_accepted'] for r in failures),
+                  valid_horizon_defect=distribution([r['dynamics_max_defect'] for r in horizons if r['valid']]),
                   dynamics_defect=distribution([r['dynamics_max_defect'] for r in horizons]),
                   nonzero_command_count=sum(abs(v)>1e-8 or abs(w)>1e-8 for v,w in commands),
                   odom_abs_v=distribution(odom_speed), odom_abs_omega=distribution(odom_omega),
