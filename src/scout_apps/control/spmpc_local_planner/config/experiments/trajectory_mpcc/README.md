@@ -26,6 +26,7 @@
 | `planning.projection.lookahead` | 默认2.0个路线进度单位，连续分支搜索窗口；不按横向误差或v×dt限制切角 |
 | `terminal.complete_stop.max_tail_prediction_sec`、`quiet_v/quiet_omega` | 默认8 s、0.001 m/s与0.001 rad/s；区域普通制动与完整停车共享，预算不足会明确失败 |
 | `command_history.source`、`external_audit_topic` | 默认published；无输出回放可用external_audit和独立输入topic，launch参数为command_history_source/external_audit_topic |
+| `platform.shared_constraints.linear_accel_limit_enable`、`execution_contract.fail_closed_on_post_limit_change` | 当前合并默认true/false；存在求解后命令改写缺口，尚未继承旧explicit-actuator runner的false/true合同 |
 | `variants/<variant>/*` | 非液体权重、slosh_enable、w_slosh、slosh_constraint_enable等；planned两组除液体项保持匹配 |
 
 共享配置明确 `terminal.mpc_stop_handoff_enable=true`、`terminal.complete_stop.enable=false`：默认做真实目标停车和队列释放，不启用完整液体稳定等待。开启液体等待或硬液面约束是额外实验条件，需显式记录，不能让 raw 消费液体。
@@ -33,6 +34,8 @@
 区域启用时普通停车仍检查完整尾段，不能关闭terminal handoff或jerk来绕过。制动固定当前cell，候选首命令会耗尽停车余量时改用已核验区域尾段的制动命令，接管保持至任务重置；重新发布同一路线不会让车重新开动。停车诊断追加区域核验、余量和FIFO前缀越界字段。当前仍缺全尾段速度边界核验，普通参考末端也存在切向/曲率退化，见[再次复盘](../../../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)；原五项状态见[修复记录](../../../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。
 
 共同普通权重：w_lag=0.2、w_progress=0.2、w_v=1、w_vs=0.3、v_ref=0.25、w_control=0.1、w_accel=0、w_smooth=0.1、w_alpha/w_du_a/w_du_vs=0.1。新几何组关闭参考曲率限速，raw保留。当前权重是候选；曲率权重1曾妨碍终点朝向修正，不能仅凭“更缓”认定更好。
+
+最后实物81e191d已使用显式执行器，但Full的processed-IMU、v_ref=0.2、jerk=0.6、w_slosh=1，与新planned_slosh默认odom、0.25、1、5不同。新四组还存在发布时效、定位/observer恢复及失败停车缺口；硬液面约束启用前需处理周期内峰值漏检。配置差异和修复依赖见[合并审查](../../../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)，不能直接用新默认值与旧bag比较方法收益，也不应整份套用含其他液体条件的历史overlay。
 
 [corner_task.example.yaml](corner_task.example.yaml) 是 **ROS deadline覆盖层**，不是上层优化器任务。上层完整任务样例是 [test/native/scenarios/corner.json](../../../../../../../test/native/scenarios/corner.json)。[corner_region.example.yaml](corner_region.example.yaml) 只是该软件场景区域，不能当实测空闲地图。
 
