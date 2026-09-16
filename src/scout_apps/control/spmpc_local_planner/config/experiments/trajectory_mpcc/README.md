@@ -30,7 +30,7 @@
 
 共享配置明确 `terminal.mpc_stop_handoff_enable=true`、`terminal.complete_stop.enable=false`：默认做真实目标停车和队列释放，不启用完整液体稳定等待。开启液体等待或硬液面约束是额外实验条件，需显式记录，不能让 raw 消费液体。
 
-区域启用时普通停车仍检查完整尾段，不能关闭terminal handoff或jerk来绕过。制动固定当前cell，候选首命令会耗尽停车余量时改用已核验的制动命令，接管保持至任务重置；重新发布同一路线不会让车重新开动。停车诊断追加区域核验、余量和FIFO前缀越界字段。具体状态与验证边界见[五项修复记录](../../../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。
+区域启用时普通停车仍检查完整尾段，不能关闭terminal handoff或jerk来绕过。制动固定当前cell，候选首命令会耗尽停车余量时改用已核验区域尾段的制动命令，接管保持至任务重置；重新发布同一路线不会让车重新开动。停车诊断追加区域核验、余量和FIFO前缀越界字段。当前仍缺全尾段速度边界核验，普通参考末端也存在切向/曲率退化，见[再次复盘](../../../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)；原五项状态见[修复记录](../../../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。
 
 共同普通权重：w_lag=0.2、w_progress=0.2、w_v=1、w_vs=0.3、v_ref=0.25、w_control=0.1、w_accel=0、w_smooth=0.1、w_alpha/w_du_a/w_du_vs=0.1。新几何组关闭参考曲率限速，raw保留。当前权重是候选；曲率权重1曾妨碍终点朝向修正，不能仅凭“更缓”认定更好。
 
@@ -51,7 +51,7 @@ roslaunch spmpc_local_planner trajectory_mpcc.launch \
 
 实际运行时 `publish_cmd_vel` 默认 true，节点可能发运动命令。换 `planned_slosh` 会自动选择 B_slosh，无需重复指定 variant。raw/geometry 不提供 `plan_file`。
 
-加载顺序与 [launch](../../../launch/trajectory_mpcc.launch) 一致：common → variants → platform → container → profile → task_config → task_overlay → region → planner_overlay → 显式 variant/publish/plan 参数。`task_config` 默认共享配置；若自行替换，应保留全部共同合同。
+实际[launch](../../../launch/trajectory_mpcc.launch)加载顺序为：common → variants → platform → container → profile → task_config → task_overlay → region → planner_overlay → 显式 variant/publish/history source/history topic/plan 参数。`task_config`默认共享配置；若自行替换，应保留全部共同合同。recorder尚未模拟最后两个history覆盖参数，外部audit回放需要显式launch参数与planner overlay同时写相同值，操作见[无运动回放](../../../scripts/README.md#无运动回放)。
 
 只校验录制输入（不访问 ROS，生成 manifest/artifact 副本）：
 

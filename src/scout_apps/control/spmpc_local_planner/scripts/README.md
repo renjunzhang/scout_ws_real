@@ -176,6 +176,16 @@ publish_cmd_vel:=false command_history_source:=external_audit \
 external_audit_topic:=/spmpc/replay/control_cycle_audit
 ```
 
+若同时用 `record_trajectory_mpcc_comparison.sh`录制回放重算结果，当前还须在同一planner overlay中声明：
+
+```yaml
+command_history:
+  source: external_audit
+  external_audit_topic: /spmpc/replay/control_cycle_audit
+```
+
+launch加载该文件（`planner_overlay_file:=/path/replay_overlay.yaml`）并保留上面的显式source/topic参数；recorder传 `PLANNER_OVERLAY_FILE=/path/replay_overlay.yaml PUBLISH_CMD_VEL=false`。已有overlay应合入这两个字段，其他profile、region、task/plan参数仍须匹配。**目前需要两边同时传同值**：launch最后会覆盖YAML的history字段，recorder尚无对应环境变量；只改launch会被live核对拒绝，只改YAML会被launch默认published覆盖。`LAUNCH_ARGS`只记备注，不能代替参数合并。纯文件核对已验证不匹配时拒绝、上述匹配配置通过；ROS1实际回放待联调，见[主线复盘](../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)。
+
 播放时只选择状态、路径、TF 和原始审计消息；本节点审计输出与输入分开：
 
 ```bash
