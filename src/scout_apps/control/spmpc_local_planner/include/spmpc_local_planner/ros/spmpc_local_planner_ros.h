@@ -253,7 +253,7 @@ private:
     double tf_timeout_sec_ = 0.05;
     double control_frequency_ = 30.0;
     double dt_ = 1.0 / 30.0;
-    int horizon_steps_ = 60;
+    int horizon_steps_ = SolverInput{}.horizon_steps;
     std::uint64_t next_cycle_id_ = 0;
     bool have_previous_shifted_plan_ = false;
     std::uint64_t previous_plan_cycle_id_ = 0;

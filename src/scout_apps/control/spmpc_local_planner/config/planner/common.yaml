@@ -1,6 +1,7 @@
 control_frequency: 30.0
 dt: 0.0333333333
-horizon_steps: 60
+# 1.33 s at 30 Hz; the 60-step Full exceeded the online solve budget.
+horizon_steps: 40
 publish_cmd_vel: true
 
 planning:

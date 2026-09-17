@@ -21,6 +21,7 @@ import time
 import xmlrpc.client
 
 import rospy
+import roslib.packages
 import tf2_ros
 import yaml
 from geometry_msgs.msg import PoseStamped, Twist
@@ -78,11 +79,19 @@ def main():
         parser.error('planned_slosh requires a validated --plan and matching --task')
     if args.ros_port == args.gazebo_port:
         parser.error('ROS and Gazebo need different ports')
-    out = args.output.resolve()
-    out.mkdir(parents=True, exist_ok=False)
     binary = args.setup.resolve().parent/'lib/spmpc_local_planner/spmpc_local_planner_node'
     if not binary.is_file():
         parser.error('the requested overlay has no compiled current planner')
+    resolved_nodes = roslib.packages.find_node('spmpc_local_planner', 'spmpc_local_planner_node') or []
+    if len(resolved_nodes) != 1 or Path(resolved_nodes[0]).resolve() != binary.resolve():
+        parser.error('source the requested --setup before running; roslaunch would select a different planner')
+    linked = subprocess.check_output(['ldd', str(binary)], text=True)
+    expected_library = args.setup.resolve().parent/'lib/libspmpc_local_planner.so'
+    if not any(line.split()[:3] == ['libspmpc_local_planner.so', '=>', str(expected_library)]
+               for line in linked.splitlines()):
+        parser.error('LD_LIBRARY_PATH does not select the requested planner library; source --setup first')
+    out = args.output.resolve()
+    out.mkdir(parents=True, exist_ok=False)
     summary = dict(formal=False, evidence='CURRENT_MAINLINE_GAZEBO_INTEGRATION',
                    profile=args.profile, actuator_plant_matches_controller=False,
                    plant='Existing direct planar drive + acceleration guard; no FOPDT delay',

@@ -13,7 +13,9 @@ string state_alignment_status
 # -1 means that a cycle stage was not reached. dispatch_wall_ms ends immediately
 # before command transport (or its dry-run equivalent), excluding diagnostics.
 float64 state_alignment_wall_ms
-# Zero: exact TF / odom pose. Positive: bounded odom propagation from an older TF.
+# Zero: exact TF / odom pose. Positive on success: bounded odom propagation.
+# On rejection: signed target-minus-TF time if an anchor was obtained; may exceed
+# the age limit or be negative after a failed exact retry. Otherwise remains zero.
 float64 pose_propagation_sec
 float64 pre_solve_wall_ms
 float64 problem_solve_wall_ms

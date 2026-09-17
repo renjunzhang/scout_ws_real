@@ -1,6 +1,6 @@
 # 两层协同四组配置
 
-更新：2026-09-16。这是 `feat/spmpc-liquid-control` 的软件候选，尚未实物验收；已有模型闭环未证明相对 raw 稳定降晃，最坏周期也未满足30 Hz。[方法](../../../README_METHOD.md)、[实物脚本索引](../../../scripts/README.md)、[验证记录](../../../../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)。
+更新：2026-09-18。Full 已有开发级 Gazebo 到点结果，当前默认 N40 / 30 Hz；[最新定位修复](../../../../../../../docs/实物实验注意事项/对比试验/仿真对比试验分析/20260918_Full首弯停滞与预算停车定位修复.md)记录完整正负例。这是 `feat/spmpc-liquid-control` 的软件候选，尚未实物验收；尚未证明相对 raw 稳定降晃或全部场景满足30 Hz。[方法](../../../README_METHOD.md)、[实物脚本索引](../../../scripts/README.md)、[验证记录](../../../../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)。
 
 ## 选择 profile
 
@@ -9,9 +9,9 @@
 | [raw_mpcc](raw_mpcc.yaml) | B0 | 原路线、cruise | 关闭 / 1.0 | 全部决策关闭 |
 | [geometry_mpcc](geometry_mpcc.yaml) | B0 | 原路线、cruise | 开启 / 0.02 | 关闭 |
 | [planned_mpcc](planned_mpcc.yaml) | B0 | 完整计划、progress | 开启 / 0.02 | 关闭 |
-| [planned_slosh](planned_slosh.yaml) | B_slosh | 同一完整计划、progress | 相同 / 0.02 | w_slosh=5，硬约束默认关闭 |
+| [planned_slosh](planned_slosh.yaml) | B_slosh | 完整计划、progress | 开启 / 1.0；曲率变化权重0.0001，全程goal=0 | w_slosh=5，硬约束默认关闭 |
 
-主比较为原路线直接进入普通 raw MPCC 与完整方法。所有组都必须给同一个显式物理区域；raw 使用区域不等于新增路径优化。planned 两组共用上层液体计划，仅隔离下层液体项。若要分离上层液体贡献，另生成 `objective.liquid=0`、`objective.liquid_terminal=0` 的计划。
+主比较为原路线直接进入普通 raw MPCC 与完整方法。所有组都必须给同一个显式物理区域；raw 使用区域不等于新增路径优化。当前 Full 的贴线、曲率变化与全程终点吸引权重已修正，`planned_mpcc` 尚未同步；即使两组共用上层液体计划，也不能直接当作仅差下层液体项的消融。需先对齐非液体条件。若要分离上层液体贡献，另生成 `objective.liquid=0`、`objective.liquid_terminal=0` 的计划。
 
 ## 文件和参数归属
 
@@ -22,19 +22,19 @@
 | `task_overlay_file` | ROS YAML：至少提供匹配的 `planning.task_deadline_sec>0`；可以覆盖评价窗等共同条件 |
 | `plan_file` | `generate_trajectory_plan.py` 产生的完整 JSON；planned组必需，raw不使用 |
 | `planner_overlay_file` | 最后加载的实验调参 YAML，如观察器来源、几何/液体权重；四组共同条件应保持一致 |
-| `planning.geometry.*` | curvature_weight=0.05、curvature_rate_weight=0.01、speed_regularization=0.05、goal_weight=2；目标归一化默认0.3 m/1 rad |
+| `planning.geometry.*` | Full：curvature_weight=0.05、curvature_rate_weight=0.0001、speed_regularization=0.05、goal_weight=0；另两几何组仍为rate=0.01、goal=2；目标归一化默认0.3 m/1 rad |
 | `planning.projection.lookahead` | 默认2.0个路线进度单位，连续分支搜索窗口；不按横向误差或v×dt限制切角 |
 | `terminal.goal_pose_weight` | 四组共同为2；预测进度进入既有1.2 m末端区后引导终点位置/朝向，与几何目标权重取较大值，不重复叠加；raw沿途几何目标仍关闭 |
 | `terminal.complete_stop.max_tail_prediction_sec`、`quiet_v/quiet_omega` | 默认8 s、0.001 m/s与0.001 rad/s；区域普通制动与完整停车共享，预算不足会明确失败 |
 | `command_history.source`、`external_audit_topic` | 默认published；无输出回放可用external_audit和独立输入topic，launch参数为command_history_source/external_audit_topic |
 | `platform.shared_constraints.linear_accel_limit_enable`、`execution_contract.fail_closed_on_post_limit_change` | trajectory共同覆盖为false/true；最终命令应与已核验候选一致 |
-| `variants/<variant>/*` | 非液体权重、slosh_enable、w_slosh、slosh_constraint_enable等；planned两组除液体项保持匹配 |
+| `variants/<variant>/*` | 非液体权重、slosh_enable、w_slosh、slosh_constraint_enable等；正式消融前须核对并对齐两组非液体项 |
 
 发布参数在 `execution_contract`：`max_result_age_sec=0` 表示一个控制/模型周期，`publish_reserve_sec=0.006` 留给求解后处理；改变周期或时限须两组共同冻结。单次RTI不可抢占，超期结果拒绝，不能由预算开关推断已满足30 Hz。`state_timing.max_position_innovation_m=0.20`、`max_yaw_innovation_rad=0.35` 只检查定位相对运动的一致性。液体断流后无自动零状态恢复，须静置后重启；B0不因评价观察器失效而引入液体控制门。
 
 2026-09-17：控制状态的 TF 查询改为非阻塞。目标时刻暂缺 TF 时，只允许在原有
 `max_robot_extrapolation_sec=0.010` 内，用带时间戳的 TF 位姿和对应里程计相对运动传播；
-缺少历史或超限仍拒绝。`debug/control_cycle_wall_timing` 按 cycle_id 记录墙钟分段耗时和
+缺少历史或超限仍拒绝。2026-09-18 补充：若两次查询之间 TF 已更新至目标时刻之后，再做一次非阻塞精确查询，避免把新位姿当作旧锚点；拒绝时也记录锚点与目标的时间差。`debug/control_cycle_wall_timing` 按 cycle_id 记录墙钟分段耗时和
 位姿传播时长，原 `ControlCycleAudit` schema 2 消息定义保持不变，兼容既有命令历史回放。
 本次末端姿态目标是新的共同实验条件，不能把修复前后的 raw 结果直接混入同一组统计。
 

@@ -121,6 +121,38 @@ TEST(HorizonReferenceBuilder, SpatialProfileApproximatesEveryStoredBreakpoint) {
     EXPECT_NEAR(end.vs_knots[0],0,1e-12);
 }
 
+TEST(HorizonReferenceBuilder, LongRepeatedTailKeepsClockSelectedSpeed) {
+    auto p=movingPlanFixture();
+    ActuatorModelParams actuator;
+    SloshDynamics liquid;
+    ASSERT_TRUE(liquid.configure(SloshModelParams{}));
+    p.stop_window+=10.;
+    for(int k=0;k<300;++k) {
+        std::vector<double> next;
+        ASSERT_TRUE(stepExplicitState(p.samples.back().state,{{0.,0.,0.}},
+                                      actuator,liquid,p.dt,next));
+        p.samples.push_back({p.samples.size()*p.dt,next,{{0.,0.,0.}},"TAIL"});
+    }
+    const TrajectoryReference ref(p);
+    const double end=p.samples.back().state[4];
+    TrajectoryReferenceConfig cfg;
+    cfg.mode=TrajectoryReferenceMode::Progress;
+    cfg.progress_window=.05;
+    cfg.max_speed_error=.002;
+    double first_speed=0.;
+    for(double elapsed : {4.1,7.}) {
+        const auto out=HorizonReferenceBuilder::build(ref,cfg,{end-1e-5,end},elapsed,p.dt);
+        ASSERT_EQ(out[0].mode,1);
+        ASSERT_DOUBLE_EQ(out[0].s_knots.back(),end);
+        EXPECT_DOUBLE_EQ(out[0].v_knots.back(),ref.sampleAtTime(elapsed).state[3]);
+        ASSERT_EQ(out[1].mode,2);
+        EXPECT_NEAR(out[1].nominal_time,elapsed+p.dt,1e-12);
+        EXPECT_DOUBLE_EQ(out[1].v_knots.back(),ref.sampleAtTime(elapsed+p.dt).state[3]);
+        if(elapsed==4.1) first_speed=out[0].v_knots.back();
+        else EXPECT_LT(out[0].v_knots.back(),first_speed);
+    }
+}
+
 TEST(TaskClock, ReassemblyLatenessAndBackwardEpoch) {
     TaskClock clock; SolverInput input; double elapsed;
     input.cycle_timing.solver_input_epoch_ns=1000000000;

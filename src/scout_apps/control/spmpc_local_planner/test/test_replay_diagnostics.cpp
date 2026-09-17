@@ -71,7 +71,6 @@ SolverInput makeInput() {
     input.robot.v = 0.0;
     input.robot.omega = 0.0;
     input.dt = 1.0 / 30.0;
-    input.horizon_steps = 60;
     input.min_progress_s = 0.0;
     input.has_v_ref_current = true;
     input.v_ref_current = 0.20;
@@ -309,8 +308,9 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ASSERT_TRUE(solver.solve(input, reference, first)) << first.status;
     ASSERT_TRUE(first.success);
     ASSERT_TRUE(first.predicted_horizon.valid);
-    EXPECT_EQ(first.predicted_horizon.states.size(), 61u);
-    EXPECT_EQ(first.predicted_horizon.controls.size(), 60u);
+    const size_t n = static_cast<size_t>(input.horizon_steps);
+    EXPECT_EQ(first.predicted_horizon.states.size(), n + 1);
+    EXPECT_EQ(first.predicted_horizon.controls.size(), n);
     EXPECT_EQ(first.predicted_horizon.control_semantics, "a_cmd_alpha_cmd");
     ASSERT_GT(first.predicted_horizon.states.size(), 1u);
     EXPECT_NEAR(
@@ -326,14 +326,14 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
 
     ASSERT_TRUE(first.pre_solve_snapshot.valid);
     EXPECT_TRUE(first.pre_solve_snapshot.primal_guess_only);
-    EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, 60);
+    EXPECT_EQ(first.pre_solve_snapshot.horizon_steps, input.horizon_steps);
     EXPECT_EQ(first.pre_solve_snapshot.state_width, 24);
     EXPECT_EQ(first.pre_solve_snapshot.control_width, 3);
     EXPECT_EQ(first.pre_solve_snapshot.parameter_width, ocp_parameters::kB0ParameterCount);
     EXPECT_EQ(first.pre_solve_snapshot.parameter_names.size(), static_cast<size_t>(ocp_parameters::kB0ParameterCount));
-    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), 61u * ocp_parameters::kB0ParameterCount);
-    EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), 61u);
-    EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), 60u);
+    EXPECT_EQ(first.pre_solve_snapshot.stage_parameters.size(), (n + 1) * ocp_parameters::kB0ParameterCount);
+    EXPECT_EQ(first.pre_solve_snapshot.initial_guess_states.size(), n + 1);
+    EXPECT_EQ(first.pre_solve_snapshot.initial_guess_controls.size(), n);
     EXPECT_FALSE(first.pre_solve_snapshot.have_previous_solution);
     EXPECT_EQ(first.pre_solve_snapshot.v_ref_status, "TEST_OVERRIDE");
     ASSERT_EQ(
@@ -343,7 +343,7 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
         first.pre_solve_snapshot.initial_guess_states.front()
             .model_state[static_cast<size_t>(kExplicitActuatorAccelMemoryIndex)],
         input.actuator.a_cmd_memory);
-    for (int stage : {0, 1, 59, 60}) {
+    for (int stage : {0, 1, input.horizon_steps - 1, input.horizon_steps}) {
         const size_t base = static_cast<size_t>(stage * ocp_parameters::kB0ParameterCount);
         const size_t w_du_a = parameterIndex(
             first.pre_solve_snapshot.parameter_names, "w_du_a");
@@ -385,8 +385,8 @@ TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
     ASSERT_TRUE(second.pre_solve_snapshot.valid);
     EXPECT_TRUE(second.pre_solve_snapshot.have_previous_control);
     EXPECT_TRUE(second.pre_solve_snapshot.have_previous_solution);
-    EXPECT_EQ(second.pre_solve_snapshot.previous_solution_states.size(), 61u);
-    EXPECT_EQ(second.pre_solve_snapshot.previous_solution_controls.size(), 60u);
+    EXPECT_EQ(second.pre_solve_snapshot.previous_solution_states.size(), n + 1);
+    EXPECT_EQ(second.pre_solve_snapshot.previous_solution_controls.size(), n);
 }
 
 #ifdef SPMPC_TEST_WITH_SLOSH
@@ -431,7 +431,7 @@ TEST(ReplayDiagnostics, NoStateZerosOnlyOcpLiquidInitialStateOnEverySolve) {
         EXPECT_DOUBLE_EQ(snapshot.slosh.eta_y, 0.0);
         EXPECT_DOUBLE_EQ(snapshot.slosh.eta_y_dot, 0.0);
         const auto& states = output.predicted_horizon.states;
-        ASSERT_EQ(states.size(), 61u);
+        ASSERT_EQ(states.size(), static_cast<size_t>(input.horizon_steps + 1));
         EXPECT_NEAR(states.front().eta_x, 0.0, 1e-10);
         EXPECT_NEAR(states.front().eta_y, 0.0, 1e-10);
         // NoState does not zero the future horizon or disable liquid costs.
@@ -498,7 +498,7 @@ TEST(ReplayDiagnostics, JerkSwitchBoundsAllStagesAndPublishedHistoryForBothModel
         EXPECT_TRUE(limited.pre_solve_snapshot.jerk_limit_enable);
         EXPECT_DOUBLE_EQ(limited.pre_solve_snapshot.delta_a_max, bound);
         double previous_a = input.actuator.a_cmd_memory;
-        ASSERT_EQ(limited.predicted_horizon.controls.size(), 60u);
+        ASSERT_EQ(limited.predicted_horizon.controls.size(), static_cast<size_t>(input.horizon_steps));
         for (size_t k = 0; k < limited.predicted_horizon.controls.size(); ++k) {
             const double a = limited.predicted_horizon.controls[k].a;
             EXPECT_LE(std::abs(a - previous_a), bound + 1e-6) << "stage " << k;

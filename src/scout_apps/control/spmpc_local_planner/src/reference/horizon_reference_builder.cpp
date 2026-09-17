@@ -1,6 +1,7 @@
 #include "spmpc_local_planner/reference/horizon_reference_builder.h"
 #include <algorithm>
 #include <cmath>
+#include <limits>
 #include <stdexcept>
 
 namespace spmpc_local_planner {
@@ -55,9 +56,16 @@ std::vector<StageTrajectoryReference> HorizonReferenceBuilder::build(const Traje
             accepted = true;
             if (!time_mode) {
                 // Difference of two piecewise linear profiles is linear on
-                // their common subdivision. Check every original breakpoint;
+                // their common subdivision. Check every distinct breakpoint;
                 // approximation knots/endpoints are exact by construction.
+                // A stop plateau repeats the same progress hundreds of times.
+                // sampleAtProgress(s,time) is pure, so those queries would all
+                // return the same clock-selected value, including during tail
+                // settling. Avoid repeating the full plateau lookup per row.
+                double previous_progress = std::numeric_limits<double>::quiet_NaN();
                 for (const auto& row : samples) if (row.state[4] >= left && row.state[4] <= right) {
+                    if (row.state[4] == previous_progress) continue;
+                    previous_progress = row.state[4];
                     const auto exact = ref.sampleAtProgress(row.state[4], time);
                     if (std::abs(linear(out, out.v_knots, row.state[4])-exact.state[3]) > cfg.max_speed_error ||
                         std::abs(linear(out, out.vs_knots, row.state[4])-exact.control[2]) > cfg.max_speed_error) {

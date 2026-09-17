@@ -500,7 +500,7 @@ struct SolverInput {
     ActuatorState actuator;
     const CostmapGrid* costmap = nullptr;
     double dt = 1.0 / 30.0;
-    int horizon_steps = 60;
+    int horizon_steps = 40;
     double min_progress_s = 0.0;
     bool has_v_ref_current = false;
     double v_ref_current = 0.0;

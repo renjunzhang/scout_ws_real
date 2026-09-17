@@ -2671,7 +2671,16 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
             tf = tf_buffer_.lookupTransform(reference_frame, robot_base_frame_, target_stamp);
         } catch (const tf2::TransformException&) {
             tf = tf_buffer_.lookupTransform(reference_frame, robot_base_frame_, ros::Time(0));
-            propagate_pose = true;
+            // The TF listener can advance between the failed exact lookup and
+            // this latest lookup. Resolve the requested epoch again instead of
+            // trying to propagate a newer anchor backwards (or using its pose).
+            if (tf.header.stamp > target_stamp) {
+                pose_propagation_sec = (target_stamp - tf.header.stamp).toSec();
+                tf = tf_buffer_.lookupTransform(reference_frame, robot_base_frame_, target_stamp);
+                pose_propagation_sec = 0.0;
+            } else {
+                propagate_pose = !tf.header.stamp.isZero() && tf.header.stamp < target_stamp;
+            }
         }
         // TF resolves a requested dynamic transform at target_stamp. A zero
         // stamp denotes an all-static chain, which is valid at every epoch.
@@ -2693,6 +2702,8 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
             // The TF pose is an explicitly timestamped anchor, not a latest
             // pose mislabeled as target_stamp. Relative odom motion reconstructs
             // the requested state within the existing extrapolation limit.
+            // Keep the anchor age in diagnostics even when propagation fails.
+            pose_propagation_sec = (target_stamp - tf.header.stamp).toSec();
             const auto propagated = propagateReferencePoseToEpoch(
                 {static_cast<std::int64_t>(tf.header.stamp.toNSec()), state},
                 odom_history, static_cast<std::int64_t>(target_stamp.toNSec()),
@@ -2703,7 +2714,6 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
             state = propagated.state;
             interpolated = propagated.interpolated;
             extrapolated = propagated.extrapolated;
-            pose_propagation_sec = (target_stamp - tf.header.stamp).toSec();
             return true;
         }
         status += "_TF_AT_EPOCH";
