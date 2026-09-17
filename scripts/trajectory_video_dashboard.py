@@ -10,6 +10,7 @@ import xmlrpc.client
 
 from PyQt5 import QtCore, QtGui, QtWidgets
 import rospy
+import tf2_ros
 from rviz import bindings as rviz
 from geometry_msgs.msg import PoseStamped, Twist
 from nav_msgs.msg import Odometry, Path as RosPath
@@ -21,7 +22,9 @@ TRANSLATIONS = {
     'WAITING_FOR_REFERENCE_PATH': '控制器已启动，等待任务',
     'PREDICTION_DYNAMICS_VIOLATION': '预测一致性检查未通过',
     'B_slosh_ACADOS_OK': 'Full 正在跟踪',
-    'B0_ACADOS_OK': '控制器正在跟踪',
+    'B0_ACADOS_OK': 'B0 正在跟踪',
+    'SOLVE_BUDGET_STOPPING': '预算不足，停车后等待重试',
+    'COMMAND_RESULT_EXPIRED': '命令结果过期，拒绝发布运动指令',
     'TERMINAL_DRAINING': '停车保持 / 执行队列清空',
     'TASK_DEADLINE_MISSED': '任务超时，未到点',
     'GOAL_REACHED': '已到点',
@@ -40,6 +43,7 @@ class Dashboard(QtWidgets.QWidget):
     def __init__(self, args):
         super().__init__()
         self.args = args
+        self.label = 'B0' if args.profile == 'raw_mpcc' else 'Full'
         self.task = json.loads(args.task.read_text())
         self.started = time.monotonic()
         self.lock = threading.Lock()
@@ -51,14 +55,14 @@ class Dashboard(QtWidgets.QWidget):
         self.trace = RosPath()
         self.rviz_frame = None
         self.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-        self.setWindowTitle('Full 仿真全过程')
+        self.setWindowTitle(self.label+' 仿真全过程')
         self.setFixedSize(1600, 900)
         self.move(0, 0)
         self.setStyleSheet('QWidget {background:#111b2b; color:#e7eef9; font-family:"Noto Sans CJK SC";}'
                            'QLabel {background:transparent;}')
         root = QtWidgets.QVBoxLayout(self)
         root.setContentsMargins(22, 14, 22, 14)
-        self.title = QtWidgets.QLabel('FULL  /  Gazebo 实时仿真')
+        self.title = QtWidgets.QLabel(self.label.upper()+'  /  Gazebo 实时仿真')
         self.title.setStyleSheet('font-size:28px; font-weight:600;')
         root.addWidget(self.title)
         self.clock = QtWidgets.QLabel('正在准备画面')
@@ -68,7 +72,8 @@ class Dashboard(QtWidgets.QWidget):
         root.addLayout(body, 1)
         self.scene = QtWidgets.QVBoxLayout()
         body.addLayout(self.scene, 1)
-        legend = QtWidgets.QLabel('实时 RViz 视图    绿色：参考路线    蓝色：Full 计划    橙色：里程计轨迹')
+        legend = QtWidgets.QLabel('实时 RViz 视图    绿色：参考路线    '+
+                                 ('蓝色：Full 计划    ' if args.plan else '')+'橙色：定位轨迹')
         legend.setStyleSheet('font-size:16px; padding:6px;')
         self.scene.addWidget(legend)
         self.placeholder = QtWidgets.QLabel('正在启动独立 Gazebo 场景…\n画面就绪后自动显示机器人和地图')
@@ -135,6 +140,8 @@ class Dashboard(QtWidgets.QWidget):
                         pass
             time.sleep(.2)
         rospy.init_node('full_video_dashboard', disable_signals=True)
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
         self.trace_pub = rospy.Publisher('/full_video/actual_path', RosPath, queue_size=1)
         self.preview_pub = rospy.Publisher('/full_video/reference_path', RosPath, queue_size=1, latch=True)
         self.plan_pub = rospy.Publisher('/full_video/plan', RosPath, queue_size=1, latch=True)
@@ -148,7 +155,7 @@ class Dashboard(QtWidgets.QWidget):
         ]
         with self.lock:
             self.data['ros_ready'] = True
-            self.data['status'] = '定位静置 / 等待 Full 任务'
+            self.data['status'] = '定位静置 / 等待 '+self.label+' 任务'
 
     def on_odom(self, msg):
         with self.lock:
@@ -226,7 +233,7 @@ class Dashboard(QtWidgets.QWidget):
         for topic, name, color, width in [
                 ('/full_video/reference_path', 'Reference', QtGui.QColor('#36c96f'), .055),
                 ('/full_video/plan', 'Full plan', QtGui.QColor('#36a8ff'), .03),
-                ('/full_video/actual_path', 'Actual odometry', QtGui.QColor('#ff8f40'), .06),
+                ('/full_video/actual_path', 'Localized robot path', QtGui.QColor('#ff8f40'), .06),
                 ('/spmpc/local_trajectory', 'MPC horizon', QtGui.QColor('#ed5cce'), .035)]:
             display = manager.createDisplay('rviz/Path', name, True)
             display.subProp('Topic').setValue(topic)
@@ -244,8 +251,9 @@ class Dashboard(QtWidgets.QWidget):
         self.scene.replaceWidget(self.placeholder, self.rviz_frame)
         self.placeholder.hide()
         self.preview_pub.publish(self.make_path(route, self.task['frame_id']))
-        plan = json.loads(self.args.plan.read_text())
-        self.plan_pub.publish(self.make_path([(s['state'][0], s['state'][1]) for s in plan['samples']], self.task['frame_id']))
+        if self.args.plan:
+            plan = json.loads(self.args.plan.read_text())
+            self.plan_pub.publish(self.make_path([(s['state'][0], s['state'][1]) for s in plan['samples']], self.task['frame_id']))
         self.args.view_ready.write_text('rviz ready\n')
 
     def refresh(self):
@@ -274,11 +282,22 @@ class Dashboard(QtWidgets.QWidget):
             v, w, '--' if odom is None else '%.4f m/s' % odom.twist.twist.linear.x,
             data['attempted'], data['accepted']))
         if odom is not None and self.rviz_frame is not None and not rospy.is_shutdown():
-            self.trace.header = odom.header
-            if not self.trace.poses or odom.header.stamp != self.trace.poses[-1].header.stamp:
+            # The proxy odometry pose retains its world spawn offset while
+            # localization supplies the map pose used by the controller and
+            # displayed robot. Trace that same TF pose, not raw odom positions.
+            try:
+                located = self.tf_buffer.lookup_transform(
+                    self.task['frame_id'], 'base_footprint', rospy.Time(0))
+            except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
+                located = None
+            if located is not None and (not self.trace.poses or located.header.stamp != self.trace.poses[-1].header.stamp):
                 pose = PoseStamped()
-                pose.header, pose.pose = odom.header, odom.pose.pose
+                pose.header = located.header
+                pose.pose.position.x = located.transform.translation.x
+                pose.pose.position.y = located.transform.translation.y
+                pose.pose.orientation = located.transform.rotation
                 pose.pose.position.z = .05
+                self.trace.header = located.header
                 self.trace.poses.append(pose)
                 self.trace_pub.publish(self.trace)
         if self.table.rowCount() != len(data['rows']):
@@ -300,8 +319,10 @@ class Dashboard(QtWidgets.QWidget):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    for name in ['task', 'plan', 'ready', 'view-ready', 'finished', 'events']:
+    for name in ['task', 'ready', 'view-ready', 'finished', 'events']:
         p.add_argument('--'+name, type=Path, required=True)
+    p.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh'], default='planned_slosh')
+    p.add_argument('--plan', type=Path)
     p.add_argument('--ros-port', type=int, default=11892)
     args = p.parse_args()
     app = QtWidgets.QApplication([])

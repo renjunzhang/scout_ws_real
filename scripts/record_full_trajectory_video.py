@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record one fresh Full Gazebo run on an owned, authenticated nested display."""
+"""Record one fresh B0/Full Gazebo run on an owned, authenticated nested display."""
 import argparse
 import hashlib
 import json
@@ -23,16 +23,25 @@ def reachable(port):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    for field in ['output', 'setup', 'task', 'plan']:
+    for field in ['output', 'setup', 'task']:
         parser.add_argument('--'+field, type=Path, required=True)
+    parser.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh'], default='planned_slosh')
+    parser.add_argument('--plan', type=Path)
+    parser.add_argument('--identified-actuator', action='store_true')
     parser.add_argument('--ros-port', type=int, default=11892)
     parser.add_argument('--gazebo-port', type=int, default=11926)
     parser.add_argument('--sim-packages', type=Path,
                         default=Path('/data/a/scout_sim_replacement/classic_ws/src'))
     args = parser.parse_args()
-    for field in ['setup', 'task', 'plan']:
+    for field in ['setup', 'task']:
         if not getattr(args, field).is_file():
             parser.error('missing '+field+' file')
+    if args.profile == 'planned_slosh' and not args.plan:
+        parser.error('planned_slosh requires --plan')
+    if args.plan and not args.plan.is_file():
+        parser.error('missing plan file')
+    label = 'B0' if args.profile == 'raw_mpcc' else 'Full'
+    video_name = label.lower()+'_process.mp4'
     if args.ros_port == args.gazebo_port:
         parser.error('ROS and Gazebo need different ports')
     if not (args.sim_packages/'scout_mini_proxy_description/package.xml').is_file():
@@ -58,10 +67,11 @@ def main():
     viewer_env = dict(env, ROS_PACKAGE_PATH=str(args.sim_packages.resolve())+':'+
                       env.get('ROS_PACKAGE_PATH', ''))
     children = []
-    manifest = dict(evidence='LIVE_FULL_GAZEBO_RVIZ_SCREEN_RECORDING', formal=False,
-                    video='full_process.mp4', fps=15, width=1600, height=900,
+    manifest = dict(evidence='LIVE_'+label.upper()+'_GAZEBO_RVIZ_SCREEN_RECORDING', formal=False,
+                    profile=args.profile, identified_actuator=args.identified_actuator,
+                    video=video_name, fps=15, width=1600, height=900,
                     controller_changes=False, replay=False,
-                    plan_identity='REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED', children=[],
+                    plan_identity='REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED' if args.profile == 'planned_slosh' else 'NO_PLAN_CRUISE', children=[],
                     git_sha=subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip())
 
     def start(name, command, child_env=env):
@@ -91,7 +101,7 @@ def main():
     try:
         xserver = start('display', ['Xephyr', ':%d' % display, '-auth', str(auth),
             '-screen', '1600x900', '-nolisten', 'tcp', '-noreset', '-s', '0',
-            '-title', 'Full 仿真实时录屏'], os.environ.copy())
+            '-title', label+' 仿真实时录屏'], os.environ.copy())
         limit = time.monotonic()+20
         while subprocess.run(['xwininfo', '-root'], env=env, stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL, timeout=3).returncode:
@@ -101,10 +111,11 @@ def main():
         dashboard_script = ROOT/'scripts/trajectory_video_dashboard.py'
         shutil.copy2(dashboard_script, out/dashboard_script.name)
         shutil.copy2(Path(__file__), out/Path(__file__).name)
+        plan_args = ['--plan', str(args.plan.resolve())] if args.plan else []
         viewer = start('viewer', ['python3', str(dashboard_script), '--task', str(args.task.resolve()),
-            '--plan', str(args.plan.resolve()), '--ros-port', str(args.ros_port),
+            '--profile', args.profile, '--ros-port', str(args.ros_port),
             '--ready', str(out/'viewer.ready'), '--view-ready', str(out/'rviz.ready'),
-            '--finished', str(out/'finished'), '--events', str(out/'video_events.json')], viewer_env)
+            '--finished', str(out/'finished'), '--events', str(out/'video_events.json')] + plan_args, viewer_env)
         limit = time.monotonic()+30
         while not (out/'viewer.ready').exists():
             if viewer.poll() is not None or time.monotonic()>limit:
@@ -114,16 +125,16 @@ def main():
         recorder = start('screen_recorder', ['ffmpeg', '-hide_banner', '-nostdin',
             '-f', 'x11grab', '-draw_mouse', '0', '-framerate', '15', '-video_size', '1600x900',
             '-i', env['DISPLAY'], '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '20',
-            '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(out/'full_process.mp4')])
+            '-threads', '2', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', str(out/video_name)])
         manifest['capture_start_monotonic'] = time.monotonic()
         time.sleep(1)
         if recorder.poll() is not None:
             raise RuntimeError('screen recorder failed')
         runner = start('run', ['python3', str(ROOT/'scripts/run_trajectory_gazebo_smoke.py'),
             '--output', str(out/'case'), '--setup', str(args.setup.resolve()),
-            '--profile', 'planned_slosh', '--task', str(args.task.resolve()),
-            '--plan', str(args.plan.resolve()), '--ros-port', str(args.ros_port),
-            '--gazebo-port', str(args.gazebo_port)])
+            '--profile', args.profile, '--task', str(args.task.resolve()),
+            '--ros-port', str(args.ros_port), '--gazebo-port', str(args.gazebo_port)] + plan_args +
+            (['--identified-actuator'] if args.identified_actuator else []))
         limit = time.monotonic()+600
         master_seen = False
         capture_finished = False
@@ -141,7 +152,7 @@ def main():
                 capture_finished = True
                 manifest['capture_end_monotonic'] = time.monotonic()
             if time.monotonic()>limit:
-                raise RuntimeError('Full recording timeout')
+                raise RuntimeError(label+' recording timeout')
             time.sleep(.3)
         manifest['run_exit_code'] = runner.returncode
         if not (out/'rviz.ready').exists():
@@ -153,9 +164,9 @@ def main():
             manifest['capture_end_monotonic'] = time.monotonic()
         manifest['case_summary'] = json.loads((out/'case/summary.json').read_text())
         probe = subprocess.check_output(['ffprobe', '-v', 'error', '-show_format', '-show_streams',
-                                        '-of', 'json', str(out/'full_process.mp4')], text=True)
+                                        '-of', 'json', str(out/video_name)], text=True)
         manifest['video_probe'] = json.loads(probe)
-        manifest['video_sha256'] = hashlib.sha256((out/'full_process.mp4').read_bytes()).hexdigest()
+        manifest['video_sha256'] = hashlib.sha256((out/video_name).read_bytes()).hexdigest()
         manifest['recording_complete'] = True
     except Exception as error:
         manifest['error'] = str(error)
