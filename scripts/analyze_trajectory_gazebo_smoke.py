@@ -10,6 +10,13 @@ import numpy as np
 import rosbag
 
 
+WALL_FIELDS = (
+    'state_alignment_wall_ms', 'pre_solve_wall_ms', 'problem_solve_wall_ms',
+    'dispatch_wall_ms', 'solver_setup_wall_ms', 'rti_wall_ms', 'residual_wall_ms',
+    'iteration_estimate_wall_ms', 'remaining_budget_wall_ms',
+)
+
+
 def distribution(values):
     values = np.asarray(values, dtype=float)
     values = values[np.isfinite(values)]
@@ -20,13 +27,24 @@ def distribution(values):
                 max=float(values.max()))
 
 
+def wall_record(msg):
+    return dict(cycle_id=msg.cycle_id, status=msg.status,
+                solve_attempted=msg.solve_attempted, solve_success=msg.solve_success,
+                command_accepted=msg.command_accepted,
+                solver_wall_timing_valid=msg.solver_wall_timing_valid,
+                rti_iterations=msg.rti_iterations,
+                state_alignment_status=msg.state_alignment_status,
+                pose_propagation_sec=getattr(msg, 'pose_propagation_sec', None),
+                **{key: getattr(msg, key) for key in WALL_FIELDS})
+
+
 def analyze(directory):
     directory = Path(directory)
     report = json.loads((directory/'summary.json').read_text())
     bag_path = directory/'run.bag'
     if not report['closed_bag'] or not bag_path.is_file():
         raise ValueError('analysis requires a closed bag')
-    audits, failures, horizons, snapshots = [], [], [], {}
+    audits, failures, horizons, snapshots, wall_cycles = [], [], [], {}, []
     states, commands = Counter(), []
     solved_states, rti_counts, warm_start_sources = Counter(), Counter(), Counter()
     odom_speed, odom_omega, callbacks, ages, solve_times = [], [], [], [], []
@@ -34,10 +52,15 @@ def analyze(directory):
         report['topic_counts'] = {k:v.message_count for k,v in bag.get_type_and_topic_info().topics.items()}
         for topic, msg, stamp in bag.read_messages(topics=[
                 '/spmpc/debug/control_cycle_audit', '/spmpc/debug/predicted_horizon',
+                '/spmpc/debug/control_cycle_wall_timing',
                 '/spmpc/debug/pre_solve_snapshot', '/cmd_vel', '/odom']):
             if topic.endswith('control_cycle_audit'):
                 audits.append(msg.cycle_id)
                 states[msg.status] += 1
+                if getattr(msg, 'schema_version', 0) >= 3:
+                    # Read the temporary schema-3 timing probes as historical
+                    # development evidence; production keeps audit schema 2.
+                    wall_cycles.append(wall_record(msg))
                 if msg.command_was_published:
                     callbacks.append((msg.command_publish_stamp-msg.cycle_start_stamp).to_sec()*1000.)
                     if msg.solver_input_epoch.to_nsec() > 0:
@@ -53,6 +76,8 @@ def analyze(directory):
                                          solve_ros_ms=(msg.solve_end_stamp-msg.solve_start_stamp).to_sec()*1000.,
                                          callback_ros_ms=(msg.command_publish_stamp-msg.cycle_start_stamp).to_sec()*1000.
                                          if msg.command_was_published else None))
+            elif topic.endswith('control_cycle_wall_timing'):
+                wall_cycles.append(wall_record(msg))
             elif topic.endswith('pre_solve_snapshot') and msg.rti_iterations > 0:
                 snapshots[msg.cycle_id] = dict(limit=msg.max_prediction_defect, source=msg.warm_start_source)
                 warm_start_sources[msg.warm_start_source] += 1
@@ -68,6 +93,7 @@ def analyze(directory):
                 odom_omega.append(abs(msg.twist.twist.angular.z))
     for row in horizons:
         row.update(snapshots.get(row['cycle_id'], {}))
+    attempted_wall = [row for row in wall_cycles if row['solve_attempted']]
     report.update(audit_status_counts=dict(states), solve_attempt_status_counts=dict(solved_states),
                   first_audit_cycle=min(audits) if audits else None,
                   callback_ms=distribution(callbacks), input_age_ms=distribution(ages),
@@ -85,6 +111,12 @@ def analyze(directory):
                   nonzero_command_count=sum(abs(v)>1e-8 or abs(w)>1e-8 for v,w in commands),
                   odom_abs_v=distribution(odom_speed), odom_abs_omega=distribution(odom_omega),
                   solve_attempts=failures, solved_horizons=horizons,
+                  attempted_wall_ms={key: distribution([
+                      row[key] for row in attempted_wall
+                      if (row[key] >= 0.0 or key == 'remaining_budget_wall_ms') and
+                      (key in WALL_FIELDS[:4] or row['solver_wall_timing_valid'])
+                  ]) for key in WALL_FIELDS},
+                  wall_timing_cycles=wall_cycles,
                   analyzer_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
     (directory/'analysis.json').write_text(json.dumps(report, indent=2, allow_nan=False)+'\n')
     return {key: report[key] for key in ['profile', 'goal_reached', 'valid_fresh_lifecycle',

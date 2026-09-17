@@ -37,6 +37,8 @@ OcpPlanningAdapter::OcpPlanningAdapter(const SolverParams& params)
     motion_limits_={{params.actual_v_min,params.v_max,params.omega_max,params.a_max,params.alpha_max,params.jerk_max}};
     std::string reason;
     if (!validatePlanningConfig(config_, &reason)) throw std::invalid_argument(reason);
+    if (!std::isfinite(terminal_.goal_pose_weight) || terminal_.goal_pose_weight < 0.0)
+        throw std::invalid_argument("invalid terminal goal pose weight");
     if (!std::isfinite(params.actual_v_min) || params.actual_v_min > 0 ||
         !std::isfinite(params.v_max) || params.v_max <= 0 ||
         std::abs(params.actual_v_min)>params.v_max || !std::isfinite(dt_) || dt_ <= 0)
@@ -168,6 +170,11 @@ std::vector<OcpPlanningStage> OcpPlanningAdapter::prepare(const ReferencePath& r
         stage.goal_pose=trajectory_ ? trajectory_->plan().goal_pose : std::array<double,3>{{endpoint.x,endpoint.y,endpoint.yaw}};
         const double deadline=trajectory_ ? trajectory_->plan().deadline : config_.task_deadline_sec;
         stage.task_goal_active=deadline>0 && input.task_elapsed_sec+k*dt_>=deadline-1e-9;
+        // Start resolving the requested end pose during the existing terminal
+        // approach, even for a raw MPCC with geometry objectives disabled.
+        stage.terminal_goal_tracking = terminal_.enable && terminal_.mpc_stop_handoff_enable &&
+            (terminal_.require_goal_yaw || trajectory_) &&
+            route.length()-progress[k] <= terminal_.slowdown_distance;
         if (config_.region.enabled) {
             bool found = false;
             for (const auto& cell : region_stages_) {
@@ -206,7 +213,8 @@ void OcpPlanningAdapter::write(const OcpPlanningStage& stage, double* p, int wid
     p[TASK_GOAL_YAW_TOLERANCE]=trajectory_ ? trajectory_->plan().goal_yaw_tolerance : terminal_.goal_yaw_tolerance;
     p[TASK_GOAL_SPEED_TOLERANCE]=trajectory_ ? trajectory_->plan().stop_speed_tolerance : terminal_.goal_reached_max_speed;
     p[TASK_GOAL_OMEGA_TOLERANCE]=trajectory_ ? trajectory_->plan().stop_omega_tolerance : terminal_.goal_reached_max_omega;
-    p[W_TASK_GOAL]=g.enabled ? g.goal_weight : 0.;
+    p[W_TASK_GOAL]=std::max(g.enabled ? g.goal_weight : 0.,
+        stage.terminal_goal_tracking ? terminal_.goal_pose_weight : 0.);
     p[TASK_GOAL_POSITION_SCALE]=g.goal_position_scale;
     p[TASK_GOAL_YAW_SCALE]=g.goal_yaw_scale;
     p[REFERENCE_CURVATURE_SPEED_ENABLE] = g.reference_curvature_speed_limit ? 1 : 0;

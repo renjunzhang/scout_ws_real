@@ -17,6 +17,7 @@ struct OcpPlanningStage {
     bool has_geometry_reference = false;
     std::array<double, 4> x_coeffs{}, y_coeffs{};
     bool task_goal_active = false;
+    bool terminal_goal_tracking = false;
     std::array<double,3> goal_pose{};
     ReferenceSample sampleGeometry(double progress) const;
 };

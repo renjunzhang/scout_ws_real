@@ -89,7 +89,8 @@ private:
                            RobotState& state,
                            bool& interpolated,
                            bool& extrapolated,
-                           std::string& status);
+                           std::string& status,
+                           double& pose_propagation_sec);
     void appendOdomStateHistory(const nav_msgs::Odometry& odom);
     bool processOdomInput(const nav_msgs::Odometry& odom,
                           const ros::Time& receive_stamp);

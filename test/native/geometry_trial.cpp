@@ -63,6 +63,7 @@ TrialConfig makeConfig(const Options& options, const TrajectoryPlan& plan) {
     params.planning.experiment_profile_id=mode;
     params.planning.liquid_free_baseline=mode=="raw";
     params.terminal.require_goal_yaw=true;
+    params.terminal.goal_pose_weight=2.;
     params.planning.geometry.enabled=mode!="raw";
     params.planning.geometry.curvature_weight=mode=="raw"?0.:options.curvature_weight;
     params.planning.geometry.curvature_rate_weight=mode=="raw"?0.:.01;
@@ -149,6 +150,7 @@ boost::property_tree::ptree parameterManifest(const SolverParams& p, const Varia
     result.put("terminal_stop_omega",p.terminal.goal_reached_max_omega);
     result.put("liquid_constraint_enable",v.slosh_constraint_enable);
     result.put("liquid_complete_stop",p.task_stop.enable);
+    result.put("terminal_goal_pose_weight",p.terminal.goal_pose_weight);
     result.put("use_previous_solution",p.warm_start.use_previous_solution);
     result.put("height_coeff",plan.height_coeff);
     const char* names[]={"actual_v_min","v_max","omega_max","a_max","alpha_max","jerk_max"};

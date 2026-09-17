@@ -117,6 +117,7 @@ void DiagnosticsPublisher::initialize(ros::NodeHandle& nh) {
     solver_input_state_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/solver_input_state", 1);
     command_intervention_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/command_intervention", 1);
     control_cycle_audit_pub_ = nh.advertise<ControlCycleAudit>("debug/control_cycle_audit", 10);
+    control_cycle_wall_timing_pub_ = nh.advertise<ControlCycleWallTiming>("debug/control_cycle_wall_timing", 10);
     cmd_output_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/cmd_vel_output", 1);
     cmd_output_status_pub_ = nh.advertise<std_msgs::String>("debug/cmd_vel_output_status", 1);
     delay_phase_pub_ = nh.advertise<std_msgs::Float32MultiArray>("debug/delay_phase", 1);
@@ -439,6 +440,28 @@ void DiagnosticsPublisher::publishControlCycleAudit(
     msg.speed_safety_latched = audit.speed_safety_latched;
     msg.v_safe_max = audit.v_safe_max;
     control_cycle_audit_pub_.publish(msg);
+    ControlCycleWallTiming wall;
+    wall.header = msg.header;
+    wall.schema_version = 1;
+    wall.cycle_id = msg.cycle_id;
+    wall.status = audit.status;
+    wall.solve_attempted = audit.solve_attempted;
+    wall.solve_success = audit.solve_success;
+    wall.command_accepted = audit.command_accepted;
+    wall.state_alignment_status = audit.timing.state_alignment_status;
+    wall.state_alignment_wall_ms = audit.state_alignment_wall_ms;
+    wall.pose_propagation_sec = audit.pose_propagation_sec;
+    wall.pre_solve_wall_ms = audit.pre_solve_wall_ms;
+    wall.problem_solve_wall_ms = audit.problem_solve_wall_ms;
+    wall.dispatch_wall_ms = audit.dispatch_wall_ms;
+    wall.solver_wall_timing_valid = audit.solver_wall_timing.valid;
+    wall.solver_setup_wall_ms = audit.solver_wall_timing.setup_ms;
+    wall.rti_wall_ms = audit.solver_wall_timing.rti_ms;
+    wall.residual_wall_ms = audit.solver_wall_timing.residual_ms;
+    wall.iteration_estimate_wall_ms = audit.solver_wall_timing.iteration_estimate_ms;
+    wall.remaining_budget_wall_ms = audit.solver_wall_timing.remaining_budget_ms;
+    wall.rti_iterations = audit.solver_wall_timing.iterations;
+    control_cycle_wall_timing_pub_.publish(wall);
 }
 
 void DiagnosticsPublisher::publishCommandOutput(const geometry_msgs::Twist& desired,

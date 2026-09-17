@@ -5,6 +5,7 @@
 #include "spmpc_local_planner/core/variant_config.h"
 #include "spmpc_local_planner/ros/delay_phase_types.h"
 #include "spmpc_local_planner/ControlCycleAudit.h"
+#include "spmpc_local_planner/ControlCycleWallTiming.h"
 #include "spmpc_local_planner/PreSolveSnapshot.h"
 #include "spmpc_local_planner/PredictedHorizon.h"
 #include "spmpc_local_planner/SloshEstimatorComparison.h"
@@ -110,6 +111,7 @@ private:
     ros::Publisher solver_input_state_pub_;
     ros::Publisher command_intervention_pub_;
     ros::Publisher control_cycle_audit_pub_;
+    ros::Publisher control_cycle_wall_timing_pub_;
     ros::Publisher cmd_output_pub_;
     ros::Publisher cmd_output_status_pub_;
     ros::Publisher delay_phase_pub_;

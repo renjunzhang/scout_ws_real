@@ -24,12 +24,19 @@
 | `planner_overlay_file` | 最后加载的实验调参 YAML，如观察器来源、几何/液体权重；四组共同条件应保持一致 |
 | `planning.geometry.*` | curvature_weight=0.05、curvature_rate_weight=0.01、speed_regularization=0.05、goal_weight=2；目标归一化默认0.3 m/1 rad |
 | `planning.projection.lookahead` | 默认2.0个路线进度单位，连续分支搜索窗口；不按横向误差或v×dt限制切角 |
+| `terminal.goal_pose_weight` | 四组共同为2；预测进度进入既有1.2 m末端区后引导终点位置/朝向，与几何目标权重取较大值，不重复叠加；raw沿途几何目标仍关闭 |
 | `terminal.complete_stop.max_tail_prediction_sec`、`quiet_v/quiet_omega` | 默认8 s、0.001 m/s与0.001 rad/s；区域普通制动与完整停车共享，预算不足会明确失败 |
 | `command_history.source`、`external_audit_topic` | 默认published；无输出回放可用external_audit和独立输入topic，launch参数为command_history_source/external_audit_topic |
 | `platform.shared_constraints.linear_accel_limit_enable`、`execution_contract.fail_closed_on_post_limit_change` | trajectory共同覆盖为false/true；最终命令应与已核验候选一致 |
 | `variants/<variant>/*` | 非液体权重、slosh_enable、w_slosh、slosh_constraint_enable等；planned两组除液体项保持匹配 |
 
 发布参数在 `execution_contract`：`max_result_age_sec=0` 表示一个控制/模型周期，`publish_reserve_sec=0.006` 留给求解后处理；改变周期或时限须两组共同冻结。单次RTI不可抢占，超期结果拒绝，不能由预算开关推断已满足30 Hz。`state_timing.max_position_innovation_m=0.20`、`max_yaw_innovation_rad=0.35` 只检查定位相对运动的一致性。液体断流后无自动零状态恢复，须静置后重启；B0不因评价观察器失效而引入液体控制门。
+
+2026-09-17：控制状态的 TF 查询改为非阻塞。目标时刻暂缺 TF 时，只允许在原有
+`max_robot_extrapolation_sec=0.010` 内，用带时间戳的 TF 位姿和对应里程计相对运动传播；
+缺少历史或超限仍拒绝。`debug/control_cycle_wall_timing` 按 cycle_id 记录墙钟分段耗时和
+位姿传播时长，原 `ControlCycleAudit` schema 2 消息定义保持不变，兼容既有命令历史回放。
+本次末端姿态目标是新的共同实验条件，不能把修复前后的 raw 结果直接混入同一组统计。
 
 共享配置明确 `terminal.mpc_stop_handoff_enable=true`、`terminal.complete_stop.enable=false`：默认做真实目标停车和队列释放，不启用完整液体稳定等待。开启液体等待或硬液面约束是额外实验条件，需显式记录，不能让 raw 消费液体。
 

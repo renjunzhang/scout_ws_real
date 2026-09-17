@@ -14,6 +14,9 @@ struct TerminalControllerParams {
     double goal_tolerance = 0.15;
     bool require_goal_yaw = false;
     double goal_yaw_tolerance = 0.10;
+    // Common terminal pose objective, independent of route-geometry costs.
+    // Zero retains the legacy objective; trajectory profiles opt in together.
+    double goal_pose_weight = 0.0;
     bool slowdown_enable = true;
     double slowdown_distance = 1.20;
     double slowdown_v_max = 0.18;

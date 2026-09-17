@@ -35,7 +35,7 @@ if [[ "$VALIDATE_ONLY" == true || "$VALIDATE_ONLY" == 1 ]]; then echo "validate-
 python3 "$CONTRACT" verify-live --manifest "$MANIFEST"
 command -v rosbag >/dev/null || { echo "rosbag not found" >&2; exit 2; }
 rosbag record -O "$OUT_DIR/${NAME}.bag" \
-  /spmpc/debug/effective_config /spmpc/debug/planning_config /spmpc/debug/pre_solve_snapshot /spmpc/debug/predicted_horizon /spmpc/debug/control_cycle_audit \
+  /spmpc/debug/effective_config /spmpc/debug/planning_config /spmpc/debug/pre_solve_snapshot /spmpc/debug/predicted_horizon /spmpc/debug/control_cycle_audit /spmpc/debug/control_cycle_wall_timing \
   /spmpc/status /spmpc/controller_variant /spmpc/experiment_mode /spmpc/solver_backend /spmpc/local_trajectory /scout/global_path /scout/global_path_fixed /odom /imu/data /cmd_vel /tf /tf_static \
   /spmpc/cost_breakdown /spmpc/solver_time_ms /spmpc/terminal/debug /spmpc/terminal/mode \
   /spmpc/debug/slosh_state /spmpc/slosh_height /spmpc/slosh_horizon_summary /spmpc/debug/slosh_cost_monitor \

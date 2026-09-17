@@ -520,6 +520,16 @@ struct VRefDebugSummary {
     std::string status = "VARIANT_FALLBACK";
 };
 
+struct SolverWallTimingDebug {
+    bool valid = false;
+    double setup_ms = 0.0;
+    double rti_ms = 0.0;
+    double residual_ms = 0.0;
+    double iteration_estimate_ms = 0.0;
+    double remaining_budget_ms = 0.0;
+    int iterations = 0;
+};
+
 struct SolverOutput {
     // Set by SpmpcProblem only when the optimization backend was invoked.
     bool ocp_solve_attempted = false;
@@ -533,6 +543,7 @@ struct SolverOutput {
     double progress_s = 0.0;
     double progress_abs_s = 0.0;
     double solver_time_ms = 0.0;
+    SolverWallTimingDebug wall_timing;
     std::vector<TrajectoryPoint> trajectory;
     PredictedHorizonDebug predicted_horizon;
     PreSolveSnapshotDebug pre_solve_snapshot;

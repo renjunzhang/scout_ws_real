@@ -31,6 +31,16 @@ RobotStateAlignmentResult alignRobotStateToEpoch(
     double max_interpolation_gap_sec,
     double max_extrapolation_sec);
 
+// Propagate a timestamped localization pose with the measured relative odom
+// motion to the requested epoch. Localization age is bounded by the same robot
+// extrapolation contract; the output twist also belongs to the target epoch.
+RobotStateAlignmentResult propagateReferencePoseToEpoch(
+    const StampedRobotState& reference_pose,
+    const std::deque<StampedRobotState>& odom_history,
+    std::int64_t target_stamp_ns,
+    double max_interpolation_gap_sec,
+    double max_extrapolation_sec);
+
 bool stateSkewWithinContract(std::int64_t robot_stamp_ns,
                              std::int64_t liquid_stamp_ns,
                              double max_abs_skew_sec,

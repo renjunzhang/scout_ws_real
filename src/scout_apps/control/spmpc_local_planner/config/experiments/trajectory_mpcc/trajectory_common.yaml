@@ -18,6 +18,7 @@ terminal:
   mpc_stop_handoff_enable: true
   require_goal_yaw: true
   goal_yaw_tolerance: 0.10
+  goal_pose_weight: 2.0  # Common terminal approach; independent of geometry ablation.
   complete_stop:
     enable: false
   enable: true

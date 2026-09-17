@@ -13,6 +13,7 @@ import math
 import os
 from pathlib import Path
 import signal
+import shutil
 import socket
 import subprocess
 import time
@@ -40,6 +41,7 @@ TOPICS = [
     '/spmpc/debug/effective_config', '/spmpc/debug/planning_config',
     '/spmpc/debug/pre_solve_snapshot', '/spmpc/debug/predicted_horizon',
     '/spmpc/debug/control_cycle_audit', '/spmpc/debug/command_intervention',
+    '/spmpc/debug/control_cycle_wall_timing',
     '/spmpc/debug/raw_state', '/spmpc/debug/predicted_state',
     '/spmpc/debug/solver_input_state', '/spmpc/debug/slosh_state',
     '/spmpc/debug/slosh_observer_selection', '/spmpc/debug/slosh_observer_odom',
@@ -89,6 +91,17 @@ def main():
                    goal_reached=False, children=[])
     (out/'source.diff').write_bytes(subprocess.check_output(['git', '-C', str(REPO), 'diff', 'HEAD']))
     (out/'runner.py').write_bytes(Path(__file__).read_bytes())
+    # The ROS node is a thin executable; its hash alone does not identify the
+    # controller implementation or generated model loaded for this case.
+    runtime_dir = out/'runtime'
+    runtime_dir.mkdir()
+    summary['runtime'] = {}
+    for source in [binary, args.setup.resolve().parent/'lib/libspmpc_local_planner.so'] + [
+            PKG/'generated/acados'/model/('libacados_ocp_solver_'+model+'.so')
+            for model in ('spmpc_b0', 'spmpc_slosh')]:
+        shutil.copy2(source, runtime_dir/source.name)
+        summary['runtime'][source.name] = dict(
+            source_path=str(source), sha256=hashlib.sha256(source.read_bytes()).hexdigest())
     children = []
     records = []
     status_counts = Counter()

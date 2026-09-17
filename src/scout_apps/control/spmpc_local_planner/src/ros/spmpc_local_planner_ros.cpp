@@ -633,6 +633,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("terminal/goal_tolerance", solver_params.terminal.goal_tolerance, solver_params.terminal.goal_tolerance);
     pnh_.param("terminal/require_goal_yaw", solver_params.terminal.require_goal_yaw, solver_params.terminal.require_goal_yaw);
     pnh_.param("terminal/goal_yaw_tolerance", solver_params.terminal.goal_yaw_tolerance, solver_params.terminal.goal_yaw_tolerance);
+    pnh_.param("terminal/goal_pose_weight", solver_params.terminal.goal_pose_weight, solver_params.terminal.goal_pose_weight);
     pnh_.param("terminal/goal_reached_max_speed", solver_params.terminal.goal_reached_max_speed, solver_params.terminal.goal_reached_max_speed);
     pnh_.param("terminal/goal_reached_max_omega", solver_params.terminal.goal_reached_max_omega, solver_params.terminal.goal_reached_max_omega);
     pnh_.param("terminal/slowdown/enable", solver_params.terminal.slowdown_enable, solver_params.terminal.slowdown_enable);
@@ -1547,6 +1548,9 @@ void SpmpcLocalPlannerROS::publishZeroCommand(
     debug.published_cmd_v = 0.0;
     debug.published_cmd_omega = 0.0;
     if (audit) {
+        if (audit->cycle_wall_start != SolveBudget::Clock::time_point{})
+            audit->dispatch_wall_ms = std::chrono::duration<double, std::milli>(
+                SolveBudget::Clock::now() - audit->cycle_wall_start).count();
         audit->v_safe_max = speed_safety_contract_.params().v_safe_max;
         audit->speed_safety_latched =
             audit->speed_safety_latched || speed_safety_contract_.latched();
@@ -1698,6 +1702,9 @@ void SpmpcLocalPlannerROS::publishCommand(
         cmd = geometry_msgs::Twist();
         meta.is_zero_cmd = true;
     }
+    if (audit && audit->cycle_wall_start != SolveBudget::Clock::time_point{})
+        audit->dispatch_wall_ms = std::chrono::duration<double, std::milli>(
+            SolveBudget::Clock::now() - audit->cycle_wall_start).count();
     if (publish_cmd_vel_) {
         cmd_pub_.publish(cmd);
         recordPublishedCommand(cmd, publish_stamp, meta);
@@ -1988,6 +1995,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         std::chrono::duration_cast<SolveBudget::Clock::duration>(
             std::chrono::duration<double>(max_result_age));
     ControlCycleAuditDebug cycle_audit;
+    cycle_audit.cycle_wall_start = cycle_wall_start;
     cycle_audit.timing.cycle_id = ++next_cycle_id_;
     cycle_audit.timing.cycle_start_stamp_ns =
         static_cast<std::int64_t>(cycle_start.toNSec());
@@ -2184,8 +2192,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     bool interpolated = false;
     bool extrapolated = false;
     std::string alignment_status;
-    if (!robotStateAtEpoch(rosTimeFromNanoseconds(robot_epoch_ns), input.robot,
-                           interpolated, extrapolated, alignment_status)) {
+    const auto alignment_wall_start = SolveBudget::Clock::now();
+    const bool robot_aligned = robotStateAtEpoch(rosTimeFromNanoseconds(robot_epoch_ns), input.robot,
+        interpolated, extrapolated, alignment_status, cycle_audit.pose_propagation_sec);
+    cycle_audit.state_alignment_wall_ms = std::chrono::duration<double, std::milli>(
+        SolveBudget::Clock::now() - alignment_wall_start).count();
+    if (!robot_aligned) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         cycle_audit.timing.state_alignment_status = alignment_status;
@@ -2430,7 +2442,13 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         std::chrono::duration_cast<SolveBudget::Clock::duration>(
             std::chrono::duration<double>(std::min(dt_, max_result_age) -
                                          command_contract_params_.publish_reserve_sec));
+    const auto problem_wall_start = SolveBudget::Clock::now();
+    cycle_audit.pre_solve_wall_ms = std::chrono::duration<double, std::milli>(
+        problem_wall_start - cycle_wall_start).count();
     problem_.solve(solve_input, output);
+    cycle_audit.problem_solve_wall_ms = std::chrono::duration<double, std::milli>(
+        SolveBudget::Clock::now() - problem_wall_start).count();
+    cycle_audit.solver_wall_timing = output.wall_timing;
     cycle_audit.solve_attempted = output.ocp_solve_attempted;
     cycle_audit.timing.solve_end_stamp_ns = static_cast<std::int64_t>(
         ros::Time::now().toNSec());
@@ -2606,9 +2624,11 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
     RobotState& state,
     bool& interpolated,
     bool& extrapolated,
-    std::string& status) {
+    std::string& status,
+    double& pose_propagation_sec) {
     interpolated = false;
     extrapolated = false;
+    pose_propagation_sec = 0.0;
     status = "INVALID_TARGET";
     if (target_stamp.isZero()) {
         return false;
@@ -2644,14 +2664,18 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
         return false;
     }
     try {
-        const auto tf = tf_buffer_.lookupTransform(
-            reference_frame,
-            robot_base_frame_,
-            target_stamp,
-            ros::Duration(std::max(0.0, tf_timeout_sec_)));
+        geometry_msgs::TransformStamped tf;
+        bool propagate_pose = false;
+        try {
+            // Never block the control cycle waiting for a future TF sample.
+            tf = tf_buffer_.lookupTransform(reference_frame, robot_base_frame_, target_stamp);
+        } catch (const tf2::TransformException&) {
+            tf = tf_buffer_.lookupTransform(reference_frame, robot_base_frame_, ros::Time(0));
+            propagate_pose = true;
+        }
         // TF resolves a requested dynamic transform at target_stamp. A zero
         // stamp denotes an all-static chain, which is valid at every epoch.
-        if (!tf.header.stamp.isZero() && tf.header.stamp != target_stamp) {
+        if (!propagate_pose && !tf.header.stamp.isZero() && tf.header.stamp != target_stamp) {
             status = "TF_EPOCH_MISMATCH";
             return false;
         }
@@ -2664,6 +2688,23 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
             !std::isfinite(state.yaw) || !std::isfinite(norm) || norm <= 1e-12) {
             status = "INVALID_TF_POSE";
             return false;
+        }
+        if (propagate_pose) {
+            // The TF pose is an explicitly timestamped anchor, not a latest
+            // pose mislabeled as target_stamp. Relative odom motion reconstructs
+            // the requested state within the existing extrapolation limit.
+            const auto propagated = propagateReferencePoseToEpoch(
+                {static_cast<std::int64_t>(tf.header.stamp.toNSec()), state},
+                odom_history, static_cast<std::int64_t>(target_stamp.toNSec()),
+                state_timing_params_.max_interpolation_gap_sec,
+                state_timing_params_.max_robot_extrapolation_sec);
+            status = propagated.status;
+            if (!propagated.valid) return false;
+            state = propagated.state;
+            interpolated = propagated.interpolated;
+            extrapolated = propagated.extrapolated;
+            pose_propagation_sec = (target_stamp - tf.header.stamp).toSec();
+            return true;
         }
         status += "_TF_AT_EPOCH";
         return true;

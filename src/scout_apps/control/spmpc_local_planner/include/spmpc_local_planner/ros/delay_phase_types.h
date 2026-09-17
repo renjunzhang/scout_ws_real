@@ -128,6 +128,13 @@ inline ExcitationAuditDebug makeExcitationAudit(const MotionExcitation& excitati
 
 struct ControlCycleAuditDebug {
     ControlCycleTimingDebug timing;
+    SolveBudget::Clock::time_point cycle_wall_start{};
+    double state_alignment_wall_ms = -1.0;
+    double pose_propagation_sec = -1.0;
+    double pre_solve_wall_ms = -1.0;
+    double problem_solve_wall_ms = -1.0;
+    double dispatch_wall_ms = -1.0;
+    SolverWallTimingDebug solver_wall_timing;
     std::string variant;
     std::string status = "NOT_RUN";
     std::string solver_status = "NOT_RUN";

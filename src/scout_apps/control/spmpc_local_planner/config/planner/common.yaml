@@ -76,7 +76,7 @@ odom:
 frames:
   robot_base: base_link
   use_tf_pose: true
-  tf_timeout_sec: 0.05
+  tf_timeout_sec: 0.05  # Reference-path transforms only; control-state TF never waits.
 
 # The default release remains odom. processed_imu can only enter the liquid
 # state through an explicit source setting plus READY/freshness admission.
@@ -278,7 +278,7 @@ state_timing:
   max_raw_skew_sec: 0.080
   odom_history_sec: 1.0
   max_interpolation_gap_sec: 0.050
-  max_robot_extrapolation_sec: 0.010
+  max_robot_extrapolation_sec: 0.010  # Also bounds stamped TF pose propagation using odom motion.
   max_position_innovation_m: 0.20
   max_yaw_innovation_rad: 0.35
 

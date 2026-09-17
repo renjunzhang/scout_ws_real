@@ -4,6 +4,7 @@
 #include "spmpc_local_planner/planning/ocp_planning_adapter.h"
 #include "spmpc_local_planner/reference/reference_spline.h"
 #include "trajectory_fixture.h"
+#include "../src/core/generated/ocp_parameter_contract.h"
 #include <gtest/gtest.h>
 #include <fstream>
 #include <limits>
@@ -165,6 +166,37 @@ TEST(OcpPlanningAdapter, ChecksTerminalQueuesAndAllMotionBounds) {
     horizon.controls[0].a=params.a_max+.01;
     EXPECT_FALSE(adapter.check(stages,horizon,clearance,reason));
     EXPECT_EQ(reason,"MOTION_CONTROL_BOUND_VIOLATION");
+}
+
+TEST(OcpPlanningAdapter, RawTrackingStillGuidesTheRequiredTerminalPose) {
+    using namespace ocp_parameters;
+    SolverParams params;
+    params.terminal.require_goal_yaw = true;
+    params.terminal.mpc_stop_handoff_enable = true;
+    params.terminal.goal_pose_weight = 2.;
+    params.planning.geometry.enabled = false;
+    params.planning.task_deadline_sec = 45.;
+    OcpPlanningAdapter adapter(params);
+    ReferencePath route;
+    route.setPoints({{0.,0.,0.,0.,0.}, {5.,0.,.3,0.,0.}}, "map");
+    SolverInput input;
+    input.dt = params.actuator.dt;
+    input.has_task_elapsed = true;
+    input.task_elapsed_sec = 20.;
+    PlanningCycleDebug debug;
+    const auto stages = adapter.prepare(route, input, {0., 4., 5.}, debug);
+    double p[kB0ParameterCount]{};
+    adapter.write(stages.front(), p, kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[W_TASK_GOAL], 0.);
+    adapter.write(stages[1], p, kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[W_TASK_GOAL], 2.);
+    EXPECT_DOUBLE_EQ(p[W_CURVATURE], 0.);
+    EXPECT_DOUBLE_EQ(p[W_CURVATURE_RATE], 0.);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_YAW], .3);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_REQUIRE_YAW], 1.);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_ACTIVE], 0.);  // Deadline constraint is unchanged.
+    params.terminal.goal_pose_weight = -1.;
+    EXPECT_THROW(OcpPlanningAdapter invalid(params), std::invalid_argument);
 }
 
 namespace {

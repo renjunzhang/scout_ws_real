@@ -74,6 +74,52 @@ TEST(ControlCycleContract, AllowsOnlyBoundedRawSkew) {
         1090000000LL, 1000000000LL, 0.080, skew));
 }
 
+TEST(ControlCycleContract, PropagatesDelayedLocalizationUsingStampedOdomMotion) {
+    // Odom drives along +x while the localization frame is rotated +90 deg.
+    // Include a newer sample to catch accidentally borrowing the latest twist.
+    std::deque<StampedRobotState> history{
+        sample(1000000000LL, 1.0, 0.0, 0.2, 0.1),
+        sample(1010000000LL, 1.003, 0.002, 0.4, 0.2),
+        sample(1020000000LL, 1.009, 0.007, 0.8, 0.5),
+    };
+    auto pose = sample(1000000000LL, 10., M_PI/2., 0., 0.);
+    pose.state.y = 20.;
+    const auto result = propagateReferencePoseToEpoch(pose, history, 1010000000LL, .05, .01);
+    ASSERT_TRUE(result.valid);
+    EXPECT_TRUE(result.extrapolated);
+    EXPECT_NEAR(result.state.x, 10., 1e-12);
+    EXPECT_NEAR(result.state.y, 20.003, 1e-12);
+    EXPECT_NEAR(result.state.yaw, M_PI/2.+.002, 1e-12);
+    EXPECT_DOUBLE_EQ(result.state.v, .4);
+    EXPECT_DOUBLE_EQ(result.state.omega, .2);
+}
+
+TEST(ControlCycleContract, LocalizationPropagationRejectsOldFutureAndMissingAnchors) {
+    std::deque<StampedRobotState> history{
+        sample(1000000000LL, 0., 0., .2, 0.),
+        sample(1020000000LL, .004, 0., .2, 0.),
+    };
+    const auto pose = sample(1000000000LL, 10., .1, 0., 0.);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1010000001LL, .05, .01).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 999000000LL, .05, .01).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1001000000LL, .05, 0.).valid);
+    history.pop_front();
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1005000000LL, .05, .01).valid);
+}
+
+TEST(ControlCycleContract, LocalizationPropagationInterpolatesAndWrapsYaw) {
+    std::deque<StampedRobotState> history{
+        sample(1000000000LL, 0., M_PI-.01, .2, .5),
+        sample(1010000000LL, .002, -M_PI+.01, .4, .5),
+    };
+    const auto pose = sample(1002000000LL, 5., M_PI-.005, 0., 0.);
+    const auto result = propagateReferencePoseToEpoch(pose, history, 1008000000LL, .05, .01);
+    ASSERT_TRUE(result.valid);
+    EXPECT_TRUE(result.interpolated);
+    EXPECT_NEAR(result.state.yaw, -M_PI+.007, 1e-12);
+    EXPECT_NEAR(result.state.v, .36, 1e-12);
+}
+
 TEST(ControlCycleContract, RefusesResultThatExpiredDuringSolveOrPostProcessing) {
     ControlCycleTimingDebug timing;
     timing.cycle_start_stamp_ns = 1000000000LL;

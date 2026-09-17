@@ -95,6 +95,47 @@ RobotStateAlignmentResult alignRobotStateToEpoch(
     return out;
 }
 
+RobotStateAlignmentResult propagateReferencePoseToEpoch(
+    const StampedRobotState& reference_pose,
+    const std::deque<StampedRobotState>& odom_history,
+    std::int64_t target_stamp_ns,
+    double max_interpolation_gap_sec,
+    double max_extrapolation_sec) {
+    RobotStateAlignmentResult out;
+    out.status = "TF_POSE_PROPAGATION_LIMIT";
+    const double age_sec = (target_stamp_ns - reference_pose.stamp_ns) * kNsToSec;
+    if (reference_pose.stamp_ns <= 0 || target_stamp_ns <= 0 ||
+        !std::isfinite(max_extrapolation_sec) || max_extrapolation_sec < 0.0 ||
+        age_sec < 0.0 || age_sec > max_extrapolation_sec) return out;
+    const auto anchor = alignRobotStateToEpoch(odom_history, reference_pose.stamp_ns,
+        max_interpolation_gap_sec, max_extrapolation_sec);
+    const auto target = alignRobotStateToEpoch(odom_history, target_stamp_ns,
+        max_interpolation_gap_sec, max_extrapolation_sec);
+    if (!anchor.valid || !target.valid) {
+        out.status = "TF_POSE_ODOM_" + (!anchor.valid ? anchor.status : target.status);
+        return out;
+    }
+    const double rotation = wrapAngle(reference_pose.state.yaw - anchor.state.yaw);
+    const double dx = target.state.x - anchor.state.x;
+    const double dy = target.state.y - anchor.state.y;
+    out.state = target.state;
+    out.state.x = reference_pose.state.x + std::cos(rotation)*dx - std::sin(rotation)*dy;
+    out.state.y = reference_pose.state.y + std::sin(rotation)*dx + std::cos(rotation)*dy;
+    out.state.yaw = wrapAngle(reference_pose.state.yaw +
+        wrapAngle(target.state.yaw - anchor.state.yaw));
+    if (!std::isfinite(out.state.x) || !std::isfinite(out.state.y) ||
+        !std::isfinite(out.state.yaw) || !std::isfinite(out.state.v) ||
+        !std::isfinite(out.state.omega)) {
+        out.status = "INVALID_TF_PROPAGATED_STATE";
+        return out;
+    }
+    out.valid = true;
+    out.interpolated = anchor.interpolated || target.interpolated;
+    out.extrapolated = age_sec > 0.0 || anchor.extrapolated || target.extrapolated;
+    out.status = "TF_ODOM_PROPAGATED_AT_EPOCH";
+    return out;
+}
+
 bool stateSkewWithinContract(std::int64_t robot_stamp_ns,
                              std::int64_t liquid_stamp_ns,
                              double max_abs_skew_sec,

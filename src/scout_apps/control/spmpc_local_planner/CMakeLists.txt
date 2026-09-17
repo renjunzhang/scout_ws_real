@@ -22,6 +22,7 @@ find_package(Eigen3 REQUIRED)
 add_message_files(
   FILES
   ControlCycleAudit.msg
+  ControlCycleWallTiming.msg
   PredictedHorizon.msg
   PreSolveSnapshot.msg
   SloshEstimateDebug.msg

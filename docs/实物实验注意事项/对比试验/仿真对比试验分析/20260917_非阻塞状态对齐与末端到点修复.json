@@ -1,0 +1,789 @@
+{
+  "evidence": "CURRENT_MAINLINE_TIMING_AND_TERMINAL_REPAIR",
+  "formal": false,
+  "push_performed": false,
+  "branch": "feat/spmpc-liquid-control",
+  "parent_git_sha": "0634f9efbbd2ff911cd0cdfb532b0f13d978f098",
+  "source_diff_sha256": "8b41c5df5a9d02ccb014800d5b8c4f4249c87cabcbcc5f5bd7cbe8f407417bdd",
+  "result_dir": "/data/a/scout_sim_replacement/results/20260917_timing_repair",
+  "actuator_plant_matches_controller": false,
+  "full_plan_status": "REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED",
+  "cases": {
+    "raw_timing_baseline": {
+      "profile": "raw_mpcc",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.0191893765536882,
+        -0.004244661666736254,
+        0.0007500746021792862
+      ],
+      "final_pose": [
+        0.2900929431841365,
+        0.014733160819110358,
+        0.06700223945832293
+      ],
+      "accepted_ocp_commands": 27,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B0_ACADOS_OK": 27,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "audit_status_counts": {
+        "WAITING_FOR_REFERENCE_PATH": 23,
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B0_ACADOS_OK": 27,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1,
+        "TERMINAL_DRAINING": 1321,
+        "TASK_DEADLINE_MISSED": 457
+      },
+      "valid_horizon_defect": {
+        "count": 27,
+        "min": 3.4011877247941413e-07,
+        "p50": 1.1018777363869248e-06,
+        "p95": 2.0310563172643008e-05,
+        "max": 6.370974161989907e-05
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 30,
+          "min": 0.011873,
+          "p50": 0.032477,
+          "p95": 13.49767344999998,
+          "max": 18.76915
+        },
+        "pre_solve_wall_ms": {
+          "count": 30,
+          "min": 1.24175,
+          "p50": 3.210957,
+          "p95": 14.77413879999998,
+          "max": 19.936377
+        },
+        "problem_solve_wall_ms": {
+          "count": 30,
+          "min": 0.225175,
+          "p50": 9.9414035,
+          "p95": 16.28662084999999,
+          "max": 17.76864
+        },
+        "dispatch_wall_ms": {
+          "count": 30,
+          "min": 9.434199,
+          "p50": 14.311974,
+          "p95": 20.912029999999998,
+          "max": 27.240274
+        },
+        "solver_setup_wall_ms": {
+          "count": 30,
+          "min": 0.160849,
+          "p50": 0.448326,
+          "p95": 0.5755640499999999,
+          "max": 0.926755
+        },
+        "rti_wall_ms": {
+          "count": 30,
+          "min": 0.002375,
+          "p50": 9.129122,
+          "p95": 15.361754599999994,
+          "max": 17.120631
+        },
+        "residual_wall_ms": {
+          "count": 30,
+          "min": 0.0,
+          "p50": 0.404744,
+          "p95": 0.8536470999999995,
+          "max": 1.225826
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 30,
+          "min": 0.0,
+          "p50": 8.5164535,
+          "p95": 13.2757386,
+          "max": 14.000785
+        },
+        "remaining_budget_wall_ms": {
+          "count": 30,
+          "min": 7.178486,
+          "p50": 23.386504000000002,
+          "p95": 25.75527535,
+          "max": 25.824781
+        }
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "hashes": {
+        "run.bag": "88be9214d899c1b94b7405d27de6fcddc7a8f8c056ff0bde4ce8094c0077cff4",
+        "runner.py": "185845cc132b9e42917eb78ace9366294afa1d4d576c336a7f22cfc6b02eb65a",
+        "source.diff": "5d434403f15e36fde86f1b8c0fe1b5e9d06af0b60e9fae9e521fa122e3ec2133",
+        "live_params.yaml": "4830abf6946ccfd417835bb36557c85ff9fbcfacab39290c0cbb0f5ac84e267a",
+        "analysis.json": "4805bb0bad66a0d6e1d2bc5a9a421c169ee87526a9351163b09a0b92f2293442"
+      },
+      "terminal_goal_pose_weight": 0.0,
+      "budget_failure_cycles": [
+        {
+          "cycle_id": 58,
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED",
+          "solve_attempted": true,
+          "command_accepted": true,
+          "solver_wall_timing_valid": true,
+          "rti_iterations": 0,
+          "state_alignment_wall_ms": 18.76915,
+          "pre_solve_wall_ms": 19.936377,
+          "problem_solve_wall_ms": 0.225175,
+          "dispatch_wall_ms": 20.165394,
+          "solver_setup_wall_ms": 0.160849,
+          "rti_wall_ms": 0.002375,
+          "residual_wall_ms": 0.0,
+          "iteration_estimate_wall_ms": 7.287554,
+          "remaining_budget_wall_ms": 7.178486
+        }
+      ]
+    },
+    "raw_nonblocking_r01": {
+      "profile": "raw_mpcc",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.019914652352455393,
+        -0.004666603690320314,
+        0.0005843579112093797
+      ],
+      "final_pose": [
+        4.999079496047273,
+        0.002376042464496221,
+        0.6327231156752932
+      ],
+      "accepted_ocp_commands": 1289,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B0_ACADOS_OK": 1289,
+        "TASK_GOAL_CONSTRAINT_VIOLATION": 15,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "audit_status_counts": {
+        "WAITING_FOR_REFERENCE_PATH": 23,
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B0_ACADOS_OK": 1289,
+        "TASK_GOAL_CONSTRAINT_VIOLATION": 15,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1,
+        "TERMINAL_DRAINING": 44,
+        "TASK_DEADLINE_MISSED": 451
+      },
+      "valid_horizon_defect": {
+        "count": 1289,
+        "min": 8.02929771281935e-14,
+        "p50": 1.2994550584871645e-08,
+        "p95": 3.994836104560682e-07,
+        "max": 3.486817257497554e-05
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 1307,
+          "min": 0.006216,
+          "p50": 0.021372,
+          "p95": 0.08460830000000001,
+          "max": 0.128162
+        },
+        "pre_solve_wall_ms": {
+          "count": 1307,
+          "min": 0.993033,
+          "p50": 3.089731,
+          "p95": 3.4856032999999997,
+          "max": 4.001257
+        },
+        "problem_solve_wall_ms": {
+          "count": 1307,
+          "min": 0.162421,
+          "p50": 10.009937,
+          "p95": 15.423263300000002,
+          "max": 58.801033
+        },
+        "dispatch_wall_ms": {
+          "count": 1307,
+          "min": 1.40662,
+          "p50": 12.990686,
+          "p95": 18.4123187,
+          "max": 61.954126
+        },
+        "solver_setup_wall_ms": {
+          "count": 1307,
+          "min": 0.144754,
+          "p50": 0.446019,
+          "p95": 0.5451905000000001,
+          "max": 0.915717
+        },
+        "rti_wall_ms": {
+          "count": 1307,
+          "min": 0.002374,
+          "p50": 9.313963,
+          "p95": 14.792250200000002,
+          "max": 58.221947
+        },
+        "residual_wall_ms": {
+          "count": 1307,
+          "min": 0.0,
+          "p50": 0.35676,
+          "p95": 0.9443941000000001,
+          "max": 1.610937
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 1307,
+          "min": 0.0,
+          "p50": 9.307817,
+          "p95": 14.787647900000001,
+          "max": 58.214894
+        },
+        "remaining_budget_wall_ms": {
+          "count": 1307,
+          "min": 22.601794,
+          "p50": 23.674694,
+          "p95": 25.8412585,
+          "max": 26.12021
+        }
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "56b819808a2c4a426bf4589e2c8fb54399f22df6b280d56e2b25ecbcdf8c62ac"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/libspmpc_local_planner.so",
+          "sha256": "b41e31d6650a6df6598579b7510cd2e8e25854db8a4047806ba53e49788f2e96"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "16ce6ed812680f01362bad22e3e072809f32a8f36e178e624e41ebf09364972d"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "594d21ab87b6ac8b1e93c05661ce9501ed89c680b7eefab932b2cd1246382894"
+        }
+      },
+      "hashes": {
+        "run.bag": "03e7f9cab7049e41e8f2dd3c2182a8b1617d3ca20d34c22d05eb7d9f656cbe24",
+        "runner.py": "c1db9ef2ac2f3a90e86e71bdab4f960b2db751c965c2944c20a68aed7e48d4a6",
+        "source.diff": "73c9ced09802b529fc2d8c732914a185fdf596bc78976471fddb8ccbc726b6f8",
+        "live_params.yaml": "4830abf6946ccfd417835bb36557c85ff9fbcfacab39290c0cbb0f5ac84e267a",
+        "analysis.json": "ef86c7b4e3d9096a595f0e5757e88f2e6c8212f22a124bdb1995a2ca1c8f8486"
+      },
+      "terminal_goal_pose_weight": 0.0,
+      "budget_failure_cycles": [
+        {
+          "cycle_id": 1337,
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED",
+          "solve_attempted": true,
+          "solve_success": false,
+          "command_accepted": true,
+          "solver_wall_timing_valid": true,
+          "rti_iterations": 0,
+          "state_alignment_status": "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+          "pose_propagation_sec": 0.002,
+          "state_alignment_wall_ms": 0.035263,
+          "pre_solve_wall_ms": 1.240289,
+          "problem_solve_wall_ms": 0.162421,
+          "dispatch_wall_ms": 1.40662,
+          "solver_setup_wall_ms": 0.144754,
+          "rti_wall_ms": 0.002374,
+          "residual_wall_ms": 0.0,
+          "iteration_estimate_wall_ms": 58.214894,
+          "remaining_budget_wall_ms": 25.936768
+        }
+      ]
+    },
+    "full_nonblocking_r01": {
+      "profile": "planned_slosh",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.0191893765536882,
+        -0.004244661666736254,
+        0.0007500746021792862
+      ],
+      "final_pose": [
+        0.019341882797594842,
+        -0.006202412681620505,
+        0.001456516286245883
+      ],
+      "accepted_ocp_commands": 1,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B_slosh_ACADOS_OK": 1,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "audit_status_counts": {
+        "WAITING_FOR_REFERENCE_PATH": 17,
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "B_slosh_ACADOS_OK": 1,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1,
+        "TERMINAL_DRAINING": 1346,
+        "STATE_TIME_ALIGNMENT_FAILED_TF_POSE_PROPAGATION_LIMIT": 1,
+        "TASK_DEADLINE_MISSED": 456
+      },
+      "valid_horizon_defect": {
+        "count": 1,
+        "min": 3.0060619592431337e-06,
+        "p50": 3.0060619592431337e-06,
+        "p95": 3.0060619592431337e-06,
+        "max": 3.0060619592431337e-06
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 4,
+          "min": 0.013408,
+          "p50": 0.0474865,
+          "p95": 0.20345344999999995,
+          "max": 0.226331
+        },
+        "pre_solve_wall_ms": {
+          "count": 4,
+          "min": 1.725036,
+          "p50": 2.2004985,
+          "p95": 3.1287929,
+          "max": 3.209912
+        },
+        "problem_solve_wall_ms": {
+          "count": 4,
+          "min": 0.930536,
+          "p50": 20.949068,
+          "p95": 28.348084,
+          "max": 28.641931
+        },
+        "dispatch_wall_ms": {
+          "count": 4,
+          "min": 2.666745,
+          "p50": 23.892843,
+          "p95": 30.30454985,
+          "max": 30.376535
+        },
+        "solver_setup_wall_ms": {
+          "count": 4,
+          "min": 0.775435,
+          "p50": 0.9556410000000001,
+          "p95": 2.4135028999999992,
+          "max": 2.654105
+        },
+        "rti_wall_ms": {
+          "count": 4,
+          "min": 0.002933,
+          "p50": 18.705901,
+          "p95": 26.950978,
+          "max": 27.531643
+        },
+        "residual_wall_ms": {
+          "count": 4,
+          "min": 0.0,
+          "p50": 0.5019305000000001,
+          "p95": 0.5322730999999999,
+          "max": 0.536882
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 4,
+          "min": 0.0,
+          "p50": 18.699686,
+          "p95": 26.945507250000002,
+          "max": 27.526476000000002
+        },
+        "remaining_budget_wall_ms": {
+          "count": 4,
+          "min": 21.281254,
+          "p50": 24.029844,
+          "p95": 24.7628366,
+          "max": 24.777554
+        }
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "plan_sha256": "9eccb9870bc6759200003dd6fad990efd456e9d14bf0065423a5dcfdcbe4472b",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "06c6d80e4b8b7d0f1fea714144f597d1450623b48270e6b6820a1d0319f6aa22"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/libspmpc_local_planner.so",
+          "sha256": "1fd1659159215056cdbe056e64be18c35c7f8121a46af1cafda55d8ce92a6cff"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "16ce6ed812680f01362bad22e3e072809f32a8f36e178e624e41ebf09364972d"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "594d21ab87b6ac8b1e93c05661ce9501ed89c680b7eefab932b2cd1246382894"
+        }
+      },
+      "hashes": {
+        "run.bag": "6fc3dfee646018f9af5a384263d4fa105430db194b61352d0425af9591377f3d",
+        "runner.py": "afe380ba3519aa2736c01457bb645101d5542e8e17fd2ed4922c7175967570dc",
+        "source.diff": "34181d85005e62b5fd242f0763c9049303ad1f48ad937a0c8331a2a38be4327e",
+        "live_params.yaml": "649b96fdacd9129387dada848c1b5a97504d4c2a4825a914a68568c869781158",
+        "analysis.json": "5196be2dcf1321da08a90f5b077da565dc9b3df97328e2dd33ca7ac2cc4a1499"
+      },
+      "terminal_goal_pose_weight": 0.0,
+      "budget_failure_cycles": [
+        {
+          "cycle_id": 29,
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED",
+          "solve_attempted": true,
+          "solve_success": false,
+          "command_accepted": true,
+          "solver_wall_timing_valid": true,
+          "rti_iterations": 0,
+          "state_alignment_status": "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+          "pose_propagation_sec": 0.0,
+          "state_alignment_wall_ms": 0.013408,
+          "pre_solve_wall_ms": 1.731879,
+          "problem_solve_wall_ms": 0.930536,
+          "dispatch_wall_ms": 2.666745,
+          "solver_setup_wall_ms": 0.861191,
+          "rti_wall_ms": 0.002933,
+          "residual_wall_ms": 0.0,
+          "iteration_estimate_wall_ms": 27.526476000000002,
+          "remaining_budget_wall_ms": 24.679438
+        }
+      ]
+    },
+    "raw_terminal_r01": {
+      "profile": "raw_mpcc",
+      "goal_reached": true,
+      "goal_time_sec": 24.156999999999996,
+      "passed": true,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.01460469098418813,
+        -0.0029360100373600553,
+        0.0004959234042478739
+      ],
+      "final_pose": [
+        4.99608516464566,
+        -0.007383608350545752,
+        0.09834374081673333
+      ],
+      "accepted_ocp_commands": 705,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 4,
+        "B0_ACADOS_OK": 705
+      },
+      "audit_status_counts": {
+        "WAITING_FOR_REFERENCE_PATH": 23,
+        "PREDICTION_DYNAMICS_VIOLATION": 4,
+        "B0_ACADOS_OK": 705,
+        "STOP_JERK_HISTORY_INFEASIBLE": 1,
+        "TERMINAL_DRAINING": 11,
+        "GOAL_REACHED": 155
+      },
+      "valid_horizon_defect": {
+        "count": 705,
+        "min": 6.568165369230661e-11,
+        "p50": 9.869186001765229e-08,
+        "p95": 1.0424219580324523e-05,
+        "max": 7.966134047995648e-05
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 709,
+          "min": 0.006774,
+          "p50": 0.018158,
+          "p95": 0.044976,
+          "max": 0.104687
+        },
+        "pre_solve_wall_ms": {
+          "count": 709,
+          "min": 0.960558,
+          "p50": 1.273296,
+          "p95": 1.6179332000000002,
+          "max": 3.54249
+        },
+        "problem_solve_wall_ms": {
+          "count": 709,
+          "min": 3.791391,
+          "p50": 5.684506,
+          "p95": 10.130161800000002,
+          "max": 29.113571
+        },
+        "dispatch_wall_ms": {
+          "count": 709,
+          "min": 5.081307,
+          "p50": 7.05159,
+          "p95": 11.604506,
+          "max": 30.32031
+        },
+        "solver_setup_wall_ms": {
+          "count": 709,
+          "min": 0.163841,
+          "p50": 0.204208,
+          "p95": 0.2703584,
+          "max": 0.519809
+        },
+        "rti_wall_ms": {
+          "count": 709,
+          "min": 3.422644,
+          "p50": 5.204499,
+          "p95": 9.657783600000002,
+          "max": 28.814383
+        },
+        "residual_wall_ms": {
+          "count": 709,
+          "min": 0.283893,
+          "p50": 0.395076,
+          "p95": 0.5745884,
+          "max": 1.054073
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 709,
+          "min": 0.0,
+          "p50": 5.187668,
+          "p95": 9.5324816,
+          "max": 23.63984
+        },
+        "remaining_budget_wall_ms": {
+          "count": 709,
+          "min": 23.204409,
+          "p50": 25.780265,
+          "p95": 25.885735999999998,
+          "max": 26.073797
+        }
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "23f3b0b7ea06270b5445317ad859e990d789002d7b206e2d03bf647fc182adcf"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/libspmpc_local_planner.so",
+          "sha256": "9da6f603edc30ff8605642856b730369ce64cc8f29c4b1783732aa26be4d24be"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "16ce6ed812680f01362bad22e3e072809f32a8f36e178e624e41ebf09364972d"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "594d21ab87b6ac8b1e93c05661ce9501ed89c680b7eefab932b2cd1246382894"
+        }
+      },
+      "hashes": {
+        "run.bag": "cb6d4aec0688054c4ad25ce6460b5d08b48bfd7320d6fecd902fbf0068b6d3a7",
+        "runner.py": "afe380ba3519aa2736c01457bb645101d5542e8e17fd2ed4922c7175967570dc",
+        "source.diff": "18c2fd08521c07813df3450f0f101761f6a8ed9e9f4392245b16d09b24246d7e",
+        "live_params.yaml": "e80a94a671e5da05d3c38bddd52ee63b2dd9085faca379b6689af13f954cf7e9",
+        "analysis.json": "9924a737ed05038837d810f4dcf1e727ec633e1af6bc57d4cffcfeae67ea7a45"
+      },
+      "terminal_goal_pose_weight": 2.0,
+      "budget_failure_cycles": []
+    },
+    "full_terminal_r01": {
+      "profile": "planned_slosh",
+      "goal_reached": false,
+      "passed": false,
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.020268121297657215,
+        -0.008730177324257944,
+        0.0015433777140196115
+      ],
+      "final_pose": [
+        0.0177349831398868,
+        -0.012024079526810897,
+        0.0019058644190473822
+      ],
+      "accepted_ocp_commands": 0,
+      "solve_attempt_status_counts": {
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1
+      },
+      "audit_status_counts": {
+        "WAITING_FOR_REFERENCE_PATH": 17,
+        "PREDICTION_DYNAMICS_VIOLATION": 2,
+        "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1,
+        "TERMINAL_DRAINING": 1345,
+        "STATE_TIME_ALIGNMENT_FAILED_TF_POSE_PROPAGATION_LIMIT": 3,
+        "TASK_DEADLINE_MISSED": 457
+      },
+      "valid_horizon_defect": null,
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 3,
+          "min": 0.009428,
+          "p50": 0.010895,
+          "p95": 0.0354713,
+          "max": 0.038202
+        },
+        "pre_solve_wall_ms": {
+          "count": 3,
+          "min": 1.281833,
+          "p50": 1.501966,
+          "p95": 1.7381773,
+          "max": 1.764423
+        },
+        "problem_solve_wall_ms": {
+          "count": 3,
+          "min": 0.857907,
+          "p50": 16.189889,
+          "p95": 27.7036259,
+          "max": 28.98293
+        },
+        "dispatch_wall_ms": {
+          "count": 3,
+          "min": 2.37,
+          "p50": 17.95955,
+          "p95": 29.037321499999997,
+          "max": 30.268185
+        },
+        "solver_setup_wall_ms": {
+          "count": 3,
+          "min": 0.792677,
+          "p50": 0.982989,
+          "p95": 1.3467339,
+          "max": 1.38715
+        },
+        "rti_wall_ms": {
+          "count": 3,
+          "min": 0.002305,
+          "p50": 14.783185,
+          "p95": 26.036637399999996,
+          "max": 27.287021
+        },
+        "residual_wall_ms": {
+          "count": 3,
+          "min": 0.0,
+          "p50": 0.522678,
+          "p95": 0.6798171000000001,
+          "max": 0.697277
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 3,
+          "min": 0.0,
+          "p50": 14.777876000000001,
+          "p95": 26.0309522,
+          "max": 27.281294000000003
+        },
+        "remaining_budget_wall_ms": {
+          "count": 3,
+          "min": 24.348956,
+          "p50": 24.535776,
+          "p95": 24.9373596,
+          "max": 24.98198
+        }
+      },
+      "task_sha256": "d2051a42f6d73b0bc8dfccfc4b4f60de707961668a9704cbe5cd484dbf67f2f8",
+      "plan_sha256": "9eccb9870bc6759200003dd6fad990efd456e9d14bf0065423a5dcfdcbe4472b",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "23f3b0b7ea06270b5445317ad859e990d789002d7b206e2d03bf647fc182adcf"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_handoff_20260916_6XlFYy/ros_devel/lib/libspmpc_local_planner.so",
+          "sha256": "9da6f603edc30ff8605642856b730369ce64cc8f29c4b1783732aa26be4d24be"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "16ce6ed812680f01362bad22e3e072809f32a8f36e178e624e41ebf09364972d"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "594d21ab87b6ac8b1e93c05661ce9501ed89c680b7eefab932b2cd1246382894"
+        }
+      },
+      "hashes": {
+        "run.bag": "36e4fb6d60be6bfa00c34be71435e787a1f68d5b86eca8ff1aba1938a450f1bf",
+        "runner.py": "afe380ba3519aa2736c01457bb645101d5542e8e17fd2ed4922c7175967570dc",
+        "source.diff": "18c2fd08521c07813df3450f0f101761f6a8ed9e9f4392245b16d09b24246d7e",
+        "live_params.yaml": "11c8d9e2b577fdcd8abb32b08dcc52af2268621e7a676ec5ed5cb562805b04ab",
+        "analysis.json": "15e8e28ba411d4dd34cb567820f3f63d02cc245188fd387e76ed420ce5804ede"
+      },
+      "terminal_goal_pose_weight": 2.0,
+      "budget_failure_cycles": [
+        {
+          "cycle_id": 27,
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED",
+          "solve_attempted": true,
+          "solve_success": false,
+          "command_accepted": true,
+          "solver_wall_timing_valid": true,
+          "rti_iterations": 0,
+          "state_alignment_status": "EXPLICIT_ACTUATOR_PREFIX_ROLLOUT",
+          "pose_propagation_sec": 0.0,
+          "state_alignment_wall_ms": 0.009428,
+          "pre_solve_wall_ms": 1.501966,
+          "problem_solve_wall_ms": 0.857907,
+          "dispatch_wall_ms": 2.37,
+          "solver_setup_wall_ms": 0.792677,
+          "rti_wall_ms": 0.002305,
+          "residual_wall_ms": 0.0,
+          "iteration_estimate_wall_ms": 27.281294000000003,
+          "remaining_budget_wall_ms": 24.98198
+        }
+      ]
+    }
+  },
+  "validation": {
+    "native_programs_passed": 19,
+    "ros_programs_passed": 21,
+    "ros_testcases_passed": 244,
+    "python_tests_passed": 18
+  },
+  "native_raw": {
+    "complete": "true",
+    "completion_time": "21.333333333333332",
+    "final_goal_position_error": "0.0032897321326559935",
+    "final_goal_yaw_error": "0.063175595358333558",
+    "walltime_p95_ms": "27.664473000000001",
+    "walltime_max_ms": "51.327016999999998",
+    "failure_status": ""
+  },
+  "native_raw_binary_sha256": "3823302466b21cb1561a900f9a73640872d1c938ffd3e294c3613659c9873717",
+  "final_ports": {
+    "11892": false,
+    "11926": false
+  }
+}

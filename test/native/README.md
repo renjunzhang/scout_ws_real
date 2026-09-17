@@ -76,6 +76,14 @@ is not loaded from ROS YAML. The supplied tasks match the default calibrated cup
 other liquid coefficients are rejected until the harness is given their matching
 physical cup configuration.
 
+Since 2026-09-17, all four modes also use the common terminal pose weight 2
+within the existing terminal approach. It takes the maximum with the geometry
+goal weight, preserving raw's zero geometry objective outside the terminal
+approach. `terminal_goal_pose_weight` is recorded in the effective manifest.
+The Gazebo S-route diagnostic plan now completes in raw model-in-the-loop at
+21.33 s (position error 3.29 mm, yaw error 0.0632 rad). This run still uses five
+RTI iterations without an online deadline; it does not establish 30 Hz timing.
+
 The planned modes use the same upper plan. Only the lower liquid objective differs;
 this is not a full upper/lower factorial ablation. Liquid feedback uses ideal plant
 state, and modal peaks are sampled at 30 Hz. Results are model-in-the-loop evidence.

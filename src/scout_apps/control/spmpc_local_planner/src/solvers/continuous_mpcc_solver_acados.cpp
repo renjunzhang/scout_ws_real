@@ -641,6 +641,7 @@ bool ContinuousMpccSolverAcados::solve(
     const SolverInput& observed_input,
     const ReferencePath& reference,
     SolverOutput& output) const {
+    const auto setup_start = SolveBudget::Clock::now();
     // Copy after common-epoch alignment and execution prediction. Observers,
     // command history and the caller's state remain untouched in every mode.
     SolverInput input = observed_input;
@@ -1115,6 +1116,13 @@ bool ContinuousMpccSolverAcados::solve(
     double time_tot = 0.0;
     int iterations_executed = 0;
     double iteration_estimate = previous_iteration_wall_sec_;
+    const auto rti_start = SolveBudget::Clock::now();
+    output.wall_timing.valid = true;
+    output.wall_timing.setup_ms = std::chrono::duration<double, std::milli>(rti_start - setup_start).count();
+    output.wall_timing.iteration_estimate_ms = iteration_estimate * 1000.;
+    if (input.solve_budget.deadline != SolveBudget::Clock::time_point{})
+        output.wall_timing.remaining_budget_ms = std::chrono::duration<double, std::milli>(
+            input.solve_budget.deadline - rti_start).count();
     for (int iteration=0;iteration<params_.rti_iterations;++iteration) {
         if (!input.solve_budget.permits(iteration_estimate)) break;
         const auto iteration_start = SolveBudget::Clock::now();
@@ -1130,18 +1138,24 @@ bool ContinuousMpccSolverAcados::solve(
             // dynamics AND all generated inequalities are feasible. The common
             // extraction/replay, planning, liquid, jerk and publication checks
             // below still decide acceptance. Offline fixed-count runs stay fixed.
+            const auto residual_start = SolveBudget::Clock::now();
             ocp_nlp_eval_residuals(gen->solver(), nlp_in, nlp_out);
             double equality = 0., inequality = 0.;
             ocp_nlp_get(gen->solver(), "res_eq", &equality);
             ocp_nlp_get(gen->solver(), "res_ineq", &inequality);
             feasible_iterate = std::isfinite(equality) && std::isfinite(inequality) &&
                 equality <= params_.max_prediction_defect && inequality <= 1e-6;
+            output.wall_timing.residual_ms += std::chrono::duration<double, std::milli>(
+                SolveBudget::Clock::now() - residual_start).count();
         }
         previous_iteration_wall_sec_ = std::chrono::duration<double>(
             SolveBudget::Clock::now() - iteration_start).count();
         iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
         if (status!=0 || feasible_iterate) break;
     }
+    output.wall_timing.rti_ms = std::chrono::duration<double, std::milli>(
+        SolveBudget::Clock::now() - rti_start).count();
+    output.wall_timing.iterations = iterations_executed;
     output.solver_time_ms = time_tot * 1000.0;
     // The replay needs the number actually executed, not the configured cap.
     snapshot.rti_iterations = iterations_executed;
