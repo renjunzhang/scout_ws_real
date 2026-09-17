@@ -175,6 +175,12 @@ std::vector<OcpPlanningStage> OcpPlanningAdapter::prepare(const ReferencePath& r
         stage.terminal_goal_tracking = terminal_.enable && terminal_.mpc_stop_handoff_enable &&
             (terminal_.require_goal_yaw || trajectory_) &&
             route.length()-progress[k] <= terminal_.slowdown_distance;
+        stage.goal_tracking_yaw = stage.goal_pose[2];
+        const double goal_dx=stage.goal_pose[0]-input.robot.x;
+        const double goal_dy=stage.goal_pose[1]-input.robot.y;
+        if (stage.terminal_goal_tracking &&
+            std::hypot(goal_dx,goal_dy) > .75*terminal_.goal_tolerance)
+            stage.goal_tracking_yaw=std::atan2(goal_dy,goal_dx);
         if (config_.region.enabled) {
             bool found = false;
             for (const auto& cell : region_stages_) {
@@ -207,7 +213,11 @@ void OcpPlanningAdapter::write(const OcpPlanningStage& stage, double* p, int wid
     p[CURVATURE_REF] = g.curvature_scale;
     p[CURVATURE_RATE_REF] = g.curvature_rate_scale;
     p[TASK_GOAL_ACTIVE]=stage.task_goal_active ? 1 : 0;
-    p[TASK_GOAL_X]=stage.goal_pose[0]; p[TASK_GOAL_Y]=stage.goal_pose[1]; p[TASK_GOAL_YAW]=stage.goal_pose[2];
+    p[TASK_GOAL_X]=stage.goal_pose[0]; p[TASK_GOAL_Y]=stage.goal_pose[1];
+    // Before the deadline these parameters carry the terminal pose objective;
+    // when the hard goal rows activate, restore the requested final yaw.
+    p[TASK_GOAL_YAW]=(stage.task_goal_active || !stage.terminal_goal_tracking) ?
+        stage.goal_pose[2] : stage.goal_tracking_yaw;
     p[TASK_GOAL_REQUIRE_YAW]=(trajectory_ || terminal_.require_goal_yaw) ? 1 : 0;
     p[TASK_GOAL_POSITION_TOLERANCE]=trajectory_ ? trajectory_->plan().goal_position_tolerance : terminal_.goal_tolerance;
     p[TASK_GOAL_YAW_TOLERANCE]=trajectory_ ? trajectory_->plan().goal_yaw_tolerance : terminal_.goal_yaw_tolerance;

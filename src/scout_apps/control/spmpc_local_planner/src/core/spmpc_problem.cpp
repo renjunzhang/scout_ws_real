@@ -86,7 +86,8 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
     } catch (const std::exception& e) { configuration_error_=e.what(); }
     liquid_state_required_ = variant.slosh_enable || solver_params_.task_stop.enable;
     liquid_limit_enabled_ = variant.slosh_enable && variant.slosh_constraint_enable;
-    const bool needs_stop_model = solver_params_.task_stop.enable || motion_region_;
+    const bool needs_stop_model = solver_params_.task_stop.enable || motion_region_ ||
+        (solver_params_.terminal.mpc_stop_handoff_enable && solver_params_.jerk_limit_enable);
     task_stop_configured_ = !needs_stop_model ||
         (solver_params_.terminal.enable && solver_params_.terminal.mpc_stop_handoff_enable &&
          solver_params_.jerk_limit_enable &&
@@ -100,7 +101,7 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
         configuration_error_="region/complete stopping requires terminal handoff, jerk and valid tail parameters";
     configured_v_ref_ = variant.v_ref;
     terminal_controller_.setParams(solver_params_.terminal);
-    budget_stop_pending_ = false;
+    retry_stop_cause_.clear();
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
     if (!injected_solver_) solver_ = makeSolver(solver_params_.solver_backend);
     solver_->configure(solver_params_, variant);
@@ -130,7 +131,7 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
         last_progress_s_ = 0.0;
         projection_state_.reset();
         terminal_controller_.reset();
-        budget_stop_pending_ = false;
+        retry_stop_cause_.clear();
         task_stop_manager_.reset();
         start_lock_recovery_.reset();
     }
@@ -273,7 +274,8 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     StopTailPrediction stop_tail;
     std::string stop_failure;
     const bool complete_stop = solver_params_.task_stop.enable;
-    const bool check_stop_tail = complete_stop || motion_region_;
+    const bool check_stop_tail = complete_stop || motion_region_ ||
+        (solver_params_.terminal.mpc_stop_handoff_enable && solver_params_.jerk_limit_enable);
     LiquidLimitPolicy stop_limit;
     if (check_stop_tail) {
         if (!task_stop_configured_) {
@@ -304,11 +306,24 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         input.actuator, solver_params_.task_stop.command_zero_tolerance);
     const bool require_vehicle_queues = solver_params_.jerk_limit_enable &&
         solver_params_.terminal.mpc_stop_handoff_enable;
+    // Small nonzero optimizer commands need not converge to numerical zero.
+    // Handoff may drain them only when the verified tail still ends inside the
+    // requested pose tolerance. Actual motion gates are checked by the terminal
+    // controller; GOAL_REACHED continues to require fully cleared queues.
+    const bool tail_finishes_at_goal = stop_tail.valid && stop_failure.empty() &&
+        std::hypot(stop_tail.final_robot.x-goal.x,stop_tail.final_robot.y-goal.y) +
+            solver_params_.actuator.linear_tau_sec*std::abs(stop_tail.final_robot.v) <
+            (task_plan_ ? task_plan_->goal_position_tolerance : solver_params_.terminal.goal_tolerance) &&
+        (!(task_plan_ || solver_params_.terminal.require_goal_yaw) ||
+         std::abs(angleDiff(stop_tail.final_robot.yaw,goal.yaw)) +
+            solver_params_.actuator.angular_tau_sec*std::abs(stop_tail.final_robot.omega) <=
+            (task_plan_ ? task_plan_->goal_yaw_tolerance : solver_params_.terminal.goal_yaw_tolerance));
     TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
         goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max),
         goal_pose_ready && stop_failure.empty() && (!require_vehicle_queues || vehicle_queues_clear) &&
         (!complete_stop || (stop_failure.empty() && stop_tail.valid && stop_readiness.vehicle_stopped &&
-                          stop_readiness.excitation_quiet && stop_readiness.liquid_stable)));
+                          stop_readiness.excitation_quiet && stop_readiness.liquid_stable)),
+        goal_pose_ready && (!require_vehicle_queues || vehicle_queues_clear || tail_finishes_at_goal));
     const auto stamp_terminal = [&]() {
         output.cycle_timing = input.cycle_timing;
         output.terminal_diagnostics = terminal_controller_.diagnostics();
@@ -420,9 +435,9 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     if (terminal_plan.owns_command) return emit_stop_command(false);
 
     SolverInput guarded_input = input;
-    if (budget_stop_pending_) {
-        // A missed compute budget is a temporary stop, not a task/region
-        // handoff. Resume only from feedback with drained command history and
+    if (!retry_stop_cause_.empty()) {
+        // Budget/iterate rejection can use a temporary verified stop. Resume
+        // only from feedback with drained command history and
         // a currently verified stop tail. Never reset the task clock or the
         // terminal controller to obtain another solve.
         const bool retry_ready = vehicle_queues_clear &&
@@ -432,7 +447,8 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         if (!retry_ready) {
             const bool safe = emit_stop_command(false);
             if (safe) {
-                output.status = "SOLVE_BUDGET_STOPPING";
+                output.status = retry_stop_cause_ == "SOLVE_BUDGET_EXHAUSTED" ?
+                    "SOLVE_BUDGET_STOPPING" : "SOLVER_RETRY_STOPPING: " + retry_stop_cause_;
                 output.terminal_diagnostics.mode = output.status;
             }
             return safe;
@@ -444,13 +460,9 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     guarded_input.min_progress_s = proj.s;
     guarded_input.costmap = have_costmap_ ? &costmap_ : nullptr;
     if (solver_params_.terminal.mpc_stop_handoff_enable && terminal_plan.envelope_active) {
-        guarded_input.has_v_ref_current = true;
-        guarded_input.v_ref_current = std::min(
-            input.has_v_ref_current ? input.v_ref_current : configured_v_ref_,
-            terminal_plan.v_envelope);
-        guarded_input.v_ref_status = "TERMINAL_MPC_SLOWDOWN";
+        guarded_input.terminal_v_cap = terminal_plan.v_envelope;
     }
-    if (complete_stop && terminal_plan.terminal_phase) {
+    if (solver_params_.terminal.mpc_stop_handoff_enable && terminal_plan.terminal_phase) {
         guarded_input.task_stop_active = true;
         guarded_input.task_stop_goal_s = std::max(0.0, len - 0.5*solver_params_.terminal.goal_tolerance);
         // Stopping reference is evaluated at each predicted progress state in OCP.
@@ -465,8 +477,9 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     if ((!ok || !output.success) && output.recoverable_solver_failure &&
         check_stop_tail && stop_tail.valid && stop_failure.empty()) {
         const std::string cause = output.status;
-        if (cause == "SOLVE_BUDGET_EXHAUSTED") {
-            budget_stop_pending_ = true;
+        if (cause == "SOLVE_BUDGET_EXHAUSTED" || cause == "PREDICTION_DYNAMICS_VIOLATION" ||
+            cause == "TERMINAL_VELOCITY_BOUND_VIOLATION") {
+            retry_stop_cause_ = cause;
         } else {
             terminal_controller_.requestStop();
             terminal_plan = terminal_controller_.updateAndPlan(
@@ -480,7 +493,7 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         return output.success;
     }
     if (ok && output.success) {
-        budget_stop_pending_ = false;
+        retry_stop_cause_.clear();
         if (!solver_params_.terminal.mpc_stop_handoff_enable) {
             const TerminalClampOutput clamp = terminal_controller_.clampCommand(
                 output.cmd_v, output.cmd_omega, input.robot.v, input.dt,

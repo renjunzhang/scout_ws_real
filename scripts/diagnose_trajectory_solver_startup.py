@@ -67,6 +67,11 @@ def apply_snapshot(solver, snap, prune_implied_bounds=False):
         else:
             lo = np.array([snap.v_min, snap.omega_min, 0., snap.omega_min] + [0.] * 5 + [snap.omega_min] * 10 + [snap.a_min])
             hi = np.array([snap.v_max, snap.omega_max, snap.v_max, snap.omega_max] + [snap.v_max] * 5 + [snap.omega_max] * 10 + [snap.a_max])
+            terminal_caps = getattr(snap, 'terminal_command_caps', [])
+            if terminal_caps:
+                if len(terminal_caps) != n + 1:
+                    raise ValueError('incomplete terminal command bounds')
+                hi[2] = min(hi[2], terminal_caps[k])
             if params[k, list(snap.parameter_names).index('task_goal_active')] > .5:
                 lo[2:] = hi[2:] = 0.
             elif prune_implied_bounds:

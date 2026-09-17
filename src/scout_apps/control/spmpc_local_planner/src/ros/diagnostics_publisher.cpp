@@ -1391,6 +1391,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.v_max = snapshot.runtime_bounds.v_max;
     msg.omega_min = snapshot.runtime_bounds.omega_min;
     msg.omega_max = snapshot.runtime_bounds.omega_max;
+    msg.terminal_command_caps = snapshot.terminal_command_caps;
     msg.parameter_names = snapshot.parameter_names;
     msg.stage_parameters = snapshot.stage_parameters;
 

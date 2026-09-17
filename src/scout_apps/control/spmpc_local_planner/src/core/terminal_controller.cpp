@@ -36,7 +36,7 @@ TerminalPlan TerminalController::updateAndPlan(
     const TerminalGoalInfo& goal,
     double current_v,
     double current_omega,
-    double a_brake, bool completion_ready) {
+    double a_brake, bool completion_ready, bool handoff_ready) {
     diagnostics_ = TerminalDiagnostics{};
     diagnostics_.enabled = params_.enable;
     diagnostics_.distance_to_goal = goal.distance_to_goal;
@@ -107,9 +107,12 @@ TerminalPlan TerminalController::updateAndPlan(
         stop_pending_ = true;
     }
 
-    if (params_.mpc_stop_handoff_enable &&
-        (goal.position_reached || (stop_pending_ && finite(goal.dx_robot) &&
-                                  goal.dx_robot < params_.goal_behind_x))) {
+    // Normal completion may own the command only after pose, motion and the
+    // caller's FIFO/settling gates converge. Passing the goal is not success
+    // and must not disable MPC pose correction. requestStop() remains latched
+    // independently for a certified safety stop.
+    if (params_.mpc_stop_handoff_enable && goal.valid && goal.position_reached &&
+        diagnostics_.speed_gate_reached && diagnostics_.omega_gate_reached && handoff_ready) {
         stop_owned_ = true;
     }
     if (stop_owned_) {
@@ -226,7 +229,7 @@ double TerminalController::computeVelocityEnvelope(const TerminalGoalInfo& goal,
         return std::numeric_limits<double>::infinity();
     }
     if (stop_pending_) {
-        const double brake_dist = std::max(0.0, goal.distance_to_goal - params_.goal_tolerance);
+        const double brake_dist = std::max(0.0, goal.distance_to_goal - 0.5 * params_.goal_tolerance);
         const double brake_cap = std::sqrt(std::max(0.0, 2.0 * std::max(1e-6, a_brake) * brake_dist));
         return std::min(std::max(0.0, params_.capture_v_cap), brake_cap);
     }

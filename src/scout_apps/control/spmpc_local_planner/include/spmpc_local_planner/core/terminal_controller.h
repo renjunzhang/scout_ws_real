@@ -76,7 +76,8 @@ public:
         double current_v,
         double current_omega,
         double a_brake,
-        bool completion_ready = true);
+        bool completion_ready = true,
+        bool handoff_ready = true);
 
     TerminalClampOutput clampCommand(
         double cmd_v,

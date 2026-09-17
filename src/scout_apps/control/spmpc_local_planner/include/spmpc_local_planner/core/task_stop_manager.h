@@ -47,6 +47,7 @@ bool actuatorCommandsClear(const ActuatorState& history, double zero_tolerance);
 struct StopTailPrediction {
     bool valid = false;
     StopCommand first_command;
+    RobotState final_robot;
     double distance_m = 0.0;
     double duration_sec = 0.0;
     double peak_height_m = 0.0;

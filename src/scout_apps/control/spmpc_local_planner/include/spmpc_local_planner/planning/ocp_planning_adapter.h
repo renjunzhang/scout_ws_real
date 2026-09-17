@@ -18,6 +18,9 @@ struct OcpPlanningStage {
     std::array<double, 4> x_coeffs{}, y_coeffs{};
     bool task_goal_active = false;
     bool terminal_goal_tracking = false;
+    // Approach heading for the pose cost only. Deadline constraints always use
+    // goal_pose[2], independently of this intermediate heading reference.
+    double goal_tracking_yaw = 0.0;
     std::array<double,3> goal_pose{};
     ReferenceSample sampleGeometry(double progress) const;
 };

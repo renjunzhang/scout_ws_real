@@ -192,9 +192,17 @@ TEST(OcpPlanningAdapter, RawTrackingStillGuidesTheRequiredTerminalPose) {
     EXPECT_DOUBLE_EQ(p[W_TASK_GOAL], 2.);
     EXPECT_DOUBLE_EQ(p[W_CURVATURE], 0.);
     EXPECT_DOUBLE_EQ(p[W_CURVATURE_RATE], 0.);
-    EXPECT_DOUBLE_EQ(p[TASK_GOAL_YAW], .3);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_YAW], 0.); // Approach the position first.
+    EXPECT_DOUBLE_EQ(stages[1].goal_pose[2], .3); // True final yaw is preserved.
     EXPECT_DOUBLE_EQ(p[TASK_GOAL_REQUIRE_YAW], 1.);
     EXPECT_DOUBLE_EQ(p[TASK_GOAL_ACTIVE], 0.);  // Deadline constraint is unchanged.
+    input.robot.x=4.99;
+    adapter.write(adapter.prepare(route,input,{5.},debug).front(),p,kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_YAW],.3);
+    input.robot.x=0.;input.task_elapsed_sec=45.;
+    adapter.write(adapter.prepare(route,input,{5.},debug).front(),p,kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_YAW],.3); // Deadline never accepts approach yaw.
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_ACTIVE],1.);
     params.terminal.goal_pose_weight = -1.;
     EXPECT_THROW(OcpPlanningAdapter invalid(params), std::invalid_argument);
 }

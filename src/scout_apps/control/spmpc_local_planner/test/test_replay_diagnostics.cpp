@@ -107,6 +107,42 @@ TEST(ReplayDiagnostics, ExpiredComputeBudgetDoesNotStartRti) {
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,0);
 }
 
+TEST(ReplayDiagnostics, TerminalCapBrakesInsideOcpWithoutClippingCommand) {
+    auto params=makeParams();
+    params.jerk_limit_enable=true;
+    params.rti_iterations=10;
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params,makeB0Variant());
+    auto input=makeInput();
+    input.robot.x=4.; input.robot.v=.3*params.actuator.linear_gain;
+    input.min_progress_s=4.;
+    input.actuator.v_cmd=input.actuator.delayed_v_cmd=.3;
+    input.actuator.linear_delay_queue.fill(.3);
+    input.actuator.a_cmd_memory=0.;
+    input.terminal_v_cap=.18;
+    input.task_stop_active=true;
+    input.task_stop_goal_s=4.975;
+    SolverOutput output;
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),output))<<output.status;
+    // Sudden .18 cap would violate command acceleration/jerk. First command
+    // must stay above .29, then obey the cap inside the prediction horizon.
+    EXPECT_GT(output.cmd_v,.29);
+    EXPECT_LT(output.cmd_v,.3);
+    EXPECT_NEAR(output.cmd_v, output.predicted_horizon.states[1].model_state[6], 1e-9);
+    ASSERT_EQ(output.pre_solve_snapshot.terminal_command_caps.size(),
+              output.predicted_horizon.states.size());
+    for (size_t k=1;k<output.predicted_horizon.states.size();++k)
+        EXPECT_LE(output.predicted_horizon.states[k].v_cmd,
+                  output.pre_solve_snapshot.terminal_command_caps[k]+1e-6);
+    EXPECT_LE(output.predicted_horizon.states.back().model_state[6],
+              .18/params.actuator.linear_gain+1e-6);
+    double previous_a=0.;
+    for (const auto& control:output.predicted_horizon.controls) {
+        EXPECT_LE(std::abs(control.a-previous_a),params.jerk_max*input.dt+1e-6);
+        previous_a=control.a;
+    }
+}
+
 TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFixed) {
     auto params=makeParams(); params.rti_iterations=5;
     params.max_prediction_defect=1e-4;
@@ -177,10 +213,13 @@ TEST(TerminalHandoff, InfeasiblePublishedHistoryDoesNotReenterOcpAfterStop) {
     problem.setReferencePath(reference);
     auto input = makeInput();
     input.robot.x = 4.9;
+    input.actuator.a_cmd_memory = 0.;
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input, output));
+    ASSERT_EQ(output.status, "GOAL_REACHED");
     input.robot.v = 0.04;
     input.actuator.v_cmd = 0.0;
     input.actuator.a_cmd_memory = -0.7781120448021244;  // bag cycle 1314
-    SolverOutput output;
     EXPECT_FALSE(problem.solve(input, output));
     EXPECT_EQ(output.status, "STOP_JERK_HISTORY_INFEASIBLE");
     EXPECT_FALSE(output.ocp_solve_attempted);
@@ -228,11 +267,36 @@ TEST(TerminalHandoff, SlowdownKeepsPublishedCandidateInsideOcpPlan) {
     ASSERT_TRUE(output.predicted_horizon.valid);
     EXPECT_TRUE(output.ocp_solve_attempted);
     EXPECT_FALSE(output.terminal_diagnostics.command_owned);
-    EXPECT_EQ(output.pre_solve_snapshot.v_ref_status, "TERMINAL_MPC_SLOWDOWN");
-    EXPECT_LT(output.pre_solve_snapshot.requested_v_ref, 0.2);
+    EXPECT_EQ(output.pre_solve_snapshot.v_ref_status, "TASK_GOAL_STOP_PROFILE");
+    EXPECT_DOUBLE_EQ(output.pre_solve_snapshot.requested_v_ref, 0.2);
+    EXPECT_LE(output.predicted_horizon.states.back().v_cmd,
+              output.terminal_diagnostics.v_envelope/params.actuator.linear_gain+1e-6);
     EXPECT_DOUBLE_EQ(output.cmd_v, output.predicted_horizon.states[1].v_cmd);
     EXPECT_DOUBLE_EQ(output.cmd_omega, output.predicted_horizon.states[1].omega_cmd);
     EXPECT_DOUBLE_EQ(input.v_ref_current, 0.2);
+}
+
+TEST(TerminalHandoff, PredictedGoalAttractionCannotAccelerateBeforeSlowdownZone) {
+    auto params=makeParams();
+    params.jerk_limit_enable=true;
+    params.rti_iterations=10;
+    params.terminal.mpc_stop_handoff_enable=true;
+    params.terminal.require_goal_yaw=true;
+    params.terminal.goal_pose_weight=2.;
+    SpmpcProblem problem;
+    problem.configure(params,makeB0Variant());
+    problem.setReferencePath(makeStraightReference());
+    auto input=makeInput();
+    input.robot.x=3.7; input.robot.v=.3*params.actuator.linear_gain;
+    input.actuator.v_cmd=input.actuator.delayed_v_cmd=.3;
+    input.actuator.linear_delay_queue.fill(.3);
+    input.actuator.a_cmd_memory=0.;
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input,output))<<output.status;
+    EXPECT_FALSE(problem.requiresLiquidState());
+    EXPECT_FALSE(output.terminal_diagnostics.envelope_active);
+    EXPECT_LE(output.predicted_horizon.states.back().v_cmd,
+              params.terminal.slowdown_v_max/params.actuator.linear_gain+1e-6);
 }
 
 TEST(ReplayDiagnostics, CapturesFullHorizonAndPreSolveContext) {
@@ -560,7 +624,7 @@ TEST(LiquidRecovery, PhysicalBoundaryClipsBudgetAndRequiresMeasuredFreeboard) {
 }
 #endif
 
-TEST(CompleteStop, WaitsForQueuesAndModalVelocityWithoutReenteringOcp) {
+TEST(CompleteStop, CertifiedTailDrainsQueuesThenWaitsForLiquidWithoutRestarting) {
     auto params=makeParams();params.jerk_limit_enable=true;
     params.terminal.mpc_stop_handoff_enable=true;params.task_stop.enable=true;
     params.task_stop.stable_hold_sec=.1;
@@ -570,6 +634,7 @@ TEST(CompleteStop, WaitsForQueuesAndModalVelocityWithoutReenteringOcp) {
     input.actuator.angular_delay_queue.back()=.1;input.slosh.eta_x_dot=.1;
     SolverOutput out;ASSERT_TRUE(problem.solve(input,out))<<out.status;
     EXPECT_FALSE(out.ocp_solve_attempted);EXPECT_FALSE(out.terminal_diagnostics.delay_queues_clear);
+    EXPECT_TRUE(out.terminal_diagnostics.command_owned);
     EXPECT_NE(out.status,"GOAL_REACHED");
     input.actuator.angular_delay_queue.fill(0);
     ASSERT_TRUE(problem.solve(input,out))<<out.status;
@@ -680,6 +745,40 @@ TEST(CompleteStop, PhysicalBoundaryCannotBeBypassedByLiquidStabilityOrGoalLatch)
     EXPECT_EQ(out.status,"LIQUID_FREEBOARD_NOT_MEASURED");
 }
 #endif
+
+TEST(TerminalHandoff, LateralGoalErrorConvergesBeforeFinalYaw) {
+    auto params=makeParams();
+    params.jerk_limit_enable=true;
+    params.rti_iterations=5;
+    params.terminal.mpc_stop_handoff_enable=true;
+    params.terminal.require_goal_yaw=true;
+    params.terminal.goal_pose_weight=2.;
+    params.terminal.goal_tolerance=.05;
+    params.terminal.goal_reached_max_speed=.01;
+    params.terminal.goal_reached_max_omega=.02;
+    SpmpcProblem problem;
+    problem.configure(params,makeB0Variant());
+    problem.setReferencePath(makeStraightReference());
+    auto input=makeInput();
+    input.robot.x=4.99;input.robot.y=-.07;input.actuator.a_cmd_memory=0.;
+    SloshDynamics liquid;ASSERT_TRUE(liquid.configure(params.slosh));
+    SolverOutput out;bool reached=false;
+    for(int k=0;k<600;++k) {
+        ASSERT_TRUE(problem.solve(input,out))<<"step="<<k<<" "<<out.status;
+        if(out.status=="GOAL_REACHED") {reached=true;break;}
+        const double a=(out.cmd_v-input.actuator.v_cmd)/input.dt;
+        EXPECT_LE(std::abs(a-input.actuator.a_cmd_memory),params.jerk_max*input.dt+1e-6);
+        ASSERT_TRUE(propagateActualMotion(input.robot,input.slosh,
+            {input.actuator.linear_delay_queue.front(),input.actuator.angular_delay_queue.front()},
+            params.actuator,liquid,input.dt));
+        std::move(input.actuator.linear_delay_queue.begin()+1,input.actuator.linear_delay_queue.end(),input.actuator.linear_delay_queue.begin());
+        std::move(input.actuator.angular_delay_queue.begin()+1,input.actuator.angular_delay_queue.end(),input.actuator.angular_delay_queue.begin());
+        input.actuator.linear_delay_queue.back()=input.actuator.v_cmd=out.cmd_v;
+        input.actuator.angular_delay_queue.back()=input.actuator.omega_cmd=out.cmd_omega;
+        input.actuator.a_cmd_memory=a;
+    }
+    EXPECT_TRUE(reached)<<"x="<<input.robot.x<<" y="<<input.robot.y<<" yaw="<<input.robot.yaw<<" "<<out.status;
+}
 
 TEST(CompleteStop, FullClosedLoopReachesGoalWithJerkQueuesAndLiquidSettled) {
     std::vector<bool> models={false};

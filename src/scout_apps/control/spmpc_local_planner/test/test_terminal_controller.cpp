@@ -246,6 +246,7 @@ TEST(TerminalController, HandoffPersistsUntilNewTaskReset) {
     params.mpc_stop_handoff_enable = true;
     TerminalController controller;
     controller.setParams(params);
+    controller.requestStop();
     const auto stop = controller.updateAndPlan(makeGoal(0.1), 0.1, 0.1, 0.6);
     EXPECT_TRUE(stop.owns_command);
     EXPECT_EQ(stop.mode, "TERMINAL_STOP");
@@ -256,6 +257,32 @@ TEST(TerminalController, HandoffPersistsUntilNewTaskReset) {
     EXPECT_TRUE(controller.updateAndPlan(makeGoal(0.9), 0.1, 0.1, 0.6).owns_command);
     controller.reset();
     EXPECT_FALSE(controller.updateAndPlan(makeGoal(0.9), 0.1, 0.1, 0.6).owns_command);
+}
+
+TEST(TerminalController, NormalHandoffWaitsForMotionAndCommandQueues) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    EXPECT_FALSE(controller.updateAndPlan(makeGoal(0.1), .2, .1, .6).owns_command);
+    EXPECT_FALSE(controller.updateAndPlan(makeGoal(0.1), 0., 0., .6, false, false).owns_command);
+    const auto complete = controller.updateAndPlan(makeGoal(0.1), 0., 0., .6, true);
+    EXPECT_TRUE(complete.owns_command);
+    EXPECT_EQ(complete.mode, "REACHED");
+}
+
+TEST(TerminalController, PassingGoalKeepsPoseCorrectionAvailable) {
+    auto params = makeParams();
+    params.mpc_stop_handoff_enable = true;
+    TerminalController controller;
+    controller.setParams(params);
+    controller.updateAndPlan(makeGoal(.4), .2, 0., .6, false);
+    auto goal = makeGoal(.11, -.10, 0.);
+    goal.position_reached = false;
+    const auto plan = controller.updateAndPlan(goal, .1, .1, .6, false);
+    EXPECT_TRUE(plan.terminal_phase);
+    EXPECT_FALSE(plan.owns_command);
+    EXPECT_FALSE(controller.reached());
 }
 
 TEST(TerminalController, StopUsesPublishedCommandAndNeverReacceleratesFromZero) {

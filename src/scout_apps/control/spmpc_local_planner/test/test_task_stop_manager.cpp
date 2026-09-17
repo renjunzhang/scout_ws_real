@@ -10,6 +10,23 @@ namespace spmpc_local_planner {
 namespace {
 const StopMotionLimits kStopLimits{-0.002, 0.8, 1.2};
 
+class BrakingSolver : public SpmpcSolver {
+public:
+    void configure(const SolverParams& params, const VariantConfig&) override { params_=params; }
+    bool solve(const SolverInput& input, const ReferencePath&, SolverOutput& output) const override {
+        EXPECT_TRUE(input.task_stop_active);
+        EXPECT_TRUE(std::isfinite(input.terminal_v_cap));
+        const auto stop=makeJerkLimitedStopCommand(input.actuator,input.dt,
+            params_.a_max,params_.alpha_max,params_.jerk_max);
+        output=SolverOutput{};
+        output.success=stop.valid;output.status="TEST_BRAKING_OCP";
+        output.cmd_v=stop.v;output.cmd_omega=stop.omega;
+        return stop.valid;
+    }
+private:
+    SolverParams params_;
+};
+
 MotionRegion stopRegion(double right_edge, double footprint = .426,
                         double margin = .02) {
     MotionRegionConfig config;
@@ -44,7 +61,7 @@ TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
     params.jerk_limit_enable=true;
     params.task_stop.enable=false;
     VariantConfig variant; variant.slosh_enable=false; variant.w_slosh=0;
-    SpmpcProblem problem; problem.configure(params, variant);
+    SpmpcProblem problem(std::make_unique<BrakingSolver>()); problem.configure(params, variant);
     EXPECT_FALSE(problem.requiresLiquidState());
     ReferencePath route;
     route.setPoints({{0,0,0,0,0},{1,0,0,0,0}},"map");
@@ -56,6 +73,9 @@ TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
     SolverOutput output;
     ASSERT_TRUE(problem.solve(input,output)) << output.status;
     EXPECT_EQ(output.status,"TERMINAL_DRAINING");
+    EXPECT_FALSE(output.ocp_solve_attempted);
+    EXPECT_TRUE(output.terminal_diagnostics.command_owned);
+    EXPECT_TRUE(output.terminal_diagnostics.predicted_tail_valid);
     EXPECT_FALSE(output.terminal_diagnostics.reached);
     const double a=(output.cmd_v-input.actuator.v_cmd)/input.dt;
     EXPECT_LE(std::abs(a-input.actuator.a_cmd_memory),params.jerk_max*input.dt+1e-9);
@@ -65,6 +85,26 @@ TEST(TaskStop, OrdinaryMpccDrainsCommandsWithJerkWithoutLiquidState) {
     input.actuator.linear_delay_queue.fill(0);
     ASSERT_TRUE(problem.solve(input,output));
     EXPECT_EQ(output.status,"GOAL_REACHED");
+}
+
+TEST(TaskStop, QueuedMotionThatWouldLeaveGoalCannotLatchNormalHandoff) {
+    SolverParams params;
+    params.terminal.mpc_stop_handoff_enable=true;
+    params.terminal.goal_tolerance=.05;
+    params.jerk_limit_enable=true;
+    VariantConfig variant;variant.slosh_enable=false;variant.w_slosh=0;
+    SpmpcProblem problem(std::make_unique<BrakingSolver>());
+    problem.configure(params,variant);
+    ReferencePath route;route.setPoints({{0,0,0,0,0},{1,0,0,0,0}},"map");
+    problem.setReferencePath(route);
+    auto input=stopInput(.99,0.);
+    input.actuator.v_cmd=input.actuator.delayed_v_cmd=.3;
+    input.actuator.linear_delay_queue.fill(.3);
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input,output))<<output.status;
+    EXPECT_TRUE(output.ocp_solve_attempted);
+    EXPECT_FALSE(output.terminal_diagnostics.command_owned);
+    EXPECT_FALSE(output.terminal_diagnostics.reached);
 }
 
 TEST(TaskStop, OrdinaryReachedRechecksPoseMotionAndQueuesWithoutRestarting) {
@@ -332,7 +372,7 @@ TEST(TaskStop, ProblemRejectsTheTerminalRegionBypassForBothStopModes) {
         params.planning.task_deadline_sec=12.;
         params.planning.region=stopRegion(1.).config();
         VariantConfig variant; variant.slosh_enable=false; variant.w_slosh=0;
-        SpmpcProblem problem; problem.configure(params,variant);
+        SpmpcProblem problem(std::make_unique<BrakingSolver>()); problem.configure(params,variant);
         ASSERT_TRUE(problem.configurationError().empty()) << problem.configurationError();
         ReferencePath route; route.setPoints({{0,0,0,0,0},{.55,0,0,0,0}},"map");
         problem.setReferencePath(route);
@@ -350,7 +390,9 @@ TEST(TaskStop, ProblemRejectsTheTerminalRegionBypassForBothStopModes) {
         params.planning.region=stopRegion(3.).config();
         problem.configure(params,variant); problem.setReferencePath(route);
         ASSERT_TRUE(problem.solve(input,output)) << output.status;
-        EXPECT_EQ(output.status,"TERMINAL_DRAINING");
+        EXPECT_EQ(output.status,"TEST_BRAKING_OCP");
+        EXPECT_TRUE(output.ocp_solve_attempted);
+        EXPECT_FALSE(output.terminal_diagnostics.command_owned);
         EXPECT_TRUE(output.terminal_diagnostics.predicted_tail_valid);
         EXPECT_GT(output.terminal_diagnostics.stop_minimum_region_clearance_m,0.);
     }

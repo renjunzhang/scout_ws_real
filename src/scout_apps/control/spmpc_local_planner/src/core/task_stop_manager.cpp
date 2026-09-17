@@ -378,6 +378,7 @@ StopTailPrediction TaskStopManager::predictTail(
             return out;
         }
         out.distance_m+=std::hypot(robot.x-x,robot.y-y);
+        out.final_robot=robot;
         out.duration_sec+=input.dt;
         if (include_liquid_) {
             out.peak_height_m=std::max(out.peak_height_m,liquid_.height(liquid));

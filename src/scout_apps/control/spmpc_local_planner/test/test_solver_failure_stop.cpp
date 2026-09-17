@@ -33,6 +33,7 @@ public:
 
 class BudgetThenHoldSolver : public HoldCommandSolver {
 public:
+    std::string failure_status = "SOLVE_BUDGET_EXHAUSTED";
     mutable int attempts = 0;
     mutable bool remeasured = false;
     bool solve(const SolverInput& input, const ReferencePath& path, SolverOutput& output) const override {
@@ -40,7 +41,7 @@ public:
         if (++attempts == 1) {
             output = SolverOutput{};
             output.recoverable_solver_failure = true;
-            output.status = "SOLVE_BUDGET_EXHAUSTED";
+            output.status = failure_status;
             return false;
         }
         return HoldCommandSolver::solve(input, path, output);
@@ -146,6 +147,25 @@ TEST(SolverFailureStop, BudgetStopRetriesOnlyAfterVehicleAndCommandsClear) {
     EXPECT_FALSE(observed->remeasured);
 }
 
+TEST(SolverFailureStop, RejectedPredictionBrakesWithVerifiedTailThenRetries) {
+    auto solver=std::make_unique<BudgetThenHoldSolver>();
+    auto* observed=solver.get();
+    observed->failure_status="PREDICTION_DYNAMICS_VIOLATION";
+    SpmpcProblem problem(std::move(solver));configure(problem);
+    auto input=moving();SolverOutput output;
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_GT(output.cmd_v,0.);
+    EXPECT_TRUE(output.terminal_diagnostics.predicted_tail_valid);
+    EXPECT_FALSE(output.terminal_diagnostics.command_owned);
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_EQ(output.status,"SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION");
+    EXPECT_EQ(observed->attempts,1);
+    input.robot.v=0.;input.actuator=ActuatorState{};input.actuator.valid=true;
+    ASSERT_TRUE(problem.solve(input,output));
+    EXPECT_EQ(observed->attempts,2);
+    EXPECT_TRUE(output.ocp_solve_attempted);
+}
+
 TEST(SolverFailureStop, BudgetRecoveryDoesNotReleaseGoalHandoffOrUnsafeTail) {
     auto solver = std::make_unique<BudgetThenHoldSolver>();
     auto* observed = solver.get();
@@ -162,7 +182,11 @@ TEST(SolverFailureStop, BudgetRecoveryDoesNotReleaseGoalHandoffOrUnsafeTail) {
     EXPECT_EQ(observed->attempts, 1);
     input = moving();
     input.robot.x = 1.5;
+    input.robot.v = 0.;
+    input.actuator = ActuatorState{};
+    input.actuator.valid = true;
     ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(output.status, "GOAL_REACHED");
     EXPECT_FALSE(output.ocp_solve_attempted);
     input.robot.x = 1.;  // localization correction cannot undo terminal ownership
     input.robot.v = 0.;

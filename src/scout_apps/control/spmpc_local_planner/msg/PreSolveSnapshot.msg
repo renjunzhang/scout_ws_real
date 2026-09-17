@@ -98,6 +98,10 @@ float64 v_max
 float64 omega_min
 float64 omega_max
 
+# Optional additive bounds in the schema-8 layout: command-v upper bounds at
+# nodes 0..N (node 0 is fixed by x0). Empty in historical recordings.
+float64[] terminal_command_caps
+
 string[] parameter_names
 float64[] stage_parameters
 float64[] initial_guess_states

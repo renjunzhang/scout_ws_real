@@ -1,4 +1,5 @@
 #pragma once
+#include <limits>
 
 #include "spmpc_local_planner/core/solve_budget.h"
 
@@ -366,6 +367,7 @@ struct PreSolveSnapshotDebug {
     bool warm_start_applied = false;
     std::string warm_start_source = "CAPSULE_REUSE";
     SolverBoundSummary runtime_bounds;
+    std::vector<double> terminal_command_caps;
     std::vector<std::string> parameter_names;
     std::vector<double> stage_parameters;
     std::vector<HorizonStateDebug> initial_guess_states;
@@ -505,6 +507,9 @@ struct SolverInput {
     std::string v_ref_status = "VARIANT_FALLBACK";
     bool task_stop_active = false;
     double task_stop_goal_s = 0.0;
+    // Actual-speed envelope for terminal approach. The solver converts it to
+    // command bounds and preserves the reachable jerk-limited braking prefix.
+    double terminal_v_cap = std::numeric_limits<double>::infinity();
     // Persistent task time, supplied by SpmpcProblem from the common state
     // epoch (or explicitly by a replay). Never reset when rebuilding a horizon.
     bool has_task_elapsed = false;

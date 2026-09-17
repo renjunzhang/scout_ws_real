@@ -207,7 +207,8 @@ SolverBoundSummary makeGeneratedBounds() {
 }
 
 void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
-                        double* x0, double delta_a_max, const std::vector<OcpPlanningStage>& planning_stages) {
+                        double* x0, double delta_a_max, const std::vector<OcpPlanningStage>& planning_stages,
+                        const std::vector<double>& terminal_command_caps) {
     ocp_nlp_config* cfg = gen.config();
     ocp_nlp_dims* dims = gen.dims();
     ocp_nlp_in* nlp_in = gen.in();
@@ -235,6 +236,7 @@ void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
         for (int i=4;i<9;++i) {lbx[i]=0.;ubx[i]=bounds.v_max;}
         for (int i=9;i<19;++i) {lbx[i]=bounds.omega_min;ubx[i]=bounds.omega_max;}
         lbx[19]=bounds.a_min;ubx[19]=bounds.a_max;
+        ubx[2] = std::min(ubx[2], terminal_command_caps[static_cast<size_t>(stage)]);
         if (planning_stages[static_cast<size_t>(stage)].task_goal_active)
             for (int i=2;i<20;++i) lbx[i]=ubx[i]=0.;
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbx", lbx);
@@ -996,7 +998,41 @@ bool ContinuousMpccSolverAcados::solve(
     output.first_shot_debug.x0_omega = input.robot.omega;
     output.first_shot_debug.x0_s = s0;
 
-    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max, planning_stages);
+    std::vector<double> terminal_command_caps(static_cast<size_t>(n+1), params_.v_max);
+    if (std::isfinite(input.terminal_v_cap) ||
+        std::any_of(planning_stages.begin(), planning_stages.end(),
+                    [](const OcpPlanningStage& stage) { return stage.terminal_goal_tracking; })) {
+        // Bound future COMMAND states inside the OCP, not the published output.
+        // The unavoidable FIFO prefix remains unchanged. Allow only the extra
+        // speed needed to release the truthful command acceleration smoothly;
+        // an abrupt cap on x0/actual velocity would make approach infeasible.
+        auto braking = input.actuator;
+        for (int k=1; k<=n; ++k) {
+            const auto stop = makeJerkLimitedStopCommand(braking, input.dt,
+                params_.a_max, params_.alpha_max,
+                params_.jerk_limit_enable ? params_.jerk_max : 2*params_.a_max/input.dt);
+            if (!stop.valid) {
+                output.status = snapshot.solver_status = stop.status;
+                return false;
+            }
+            // The end-pose objective is already active at predicted terminal
+            // nodes before the measured vehicle enters the slowdown zone.
+            // Apply the speed cap at those SAME nodes to prevent that objective
+            // from accelerating towards the goal before braking can take effect.
+            double cap = input.terminal_v_cap;
+            if (planning_stages[static_cast<size_t>(k)].terminal_goal_tracking)
+                cap = std::min(cap, params_.terminal.slowdown_v_max);
+            const double target = std::max(0.0, cap) /
+                std::max(1.0, params_.actuator.linear_gain);
+            terminal_command_caps[static_cast<size_t>(k)] = std::min(params_.v_max, std::max(target, stop.v));
+            braking.v_cmd = stop.v;
+            braking.omega_cmd = stop.omega;
+            braking.a_cmd_memory = stop.a;
+        }
+    }
+    snapshot.terminal_command_caps = terminal_command_caps;
+    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max, planning_stages,
+                       terminal_command_caps);
 
     ocp_nlp_config* cfg = gen->config();
     ocp_nlp_dims* dims = gen->dims();
@@ -1302,6 +1338,7 @@ bool ContinuousMpccSolverAcados::solve(
         retry.valid = isWarmStartFinite(retry);
         if (retry.valid) retry_warm_start_ = std::move(retry);
         output.status=snapshot.solver_status=output.predicted_horizon.solver_status="PREDICTION_DYNAMICS_VIOLATION";
+        output.recoverable_solver_failure = true;
         return false;
     }
 
@@ -1344,6 +1381,16 @@ bool ContinuousMpccSolverAcados::solve(
                 return false;
             }
             previous_a = control.a;
+        }
+    }
+
+    for (int k=1; k<=n; ++k) {
+        if (solved_states[static_cast<size_t>(k)].v_cmd >
+            terminal_command_caps[static_cast<size_t>(k)] + 1e-6) {
+            output.status = snapshot.solver_status = output.predicted_horizon.solver_status =
+                "TERMINAL_VELOCITY_BOUND_VIOLATION";
+            output.recoverable_solver_failure = true;
+            return false;
         }
     }
 
