@@ -5,7 +5,8 @@ planning:
     enabled: true
     curvature_weight: 0.05
     curvature_rate_weight: 0.01
-    goal_weight: 2.0
+    # Use terminal.goal_pose_weight only during the existing terminal approach.
+    goal_weight: 0.0
     speed_regularization: 0.05
     reference_curvature_speed_limit: false
   region:
@@ -19,7 +20,7 @@ variants:
     slosh_enable: true
     slosh_constraint_enable: false
     w_slosh: 5.0
-    w_contour: 0.02
+    w_contour: 1.0
     w_lag: 0.2
     w_progress: 0.2
     w_v: 1.0
