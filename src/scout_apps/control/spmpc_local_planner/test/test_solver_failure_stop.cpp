@@ -31,6 +31,22 @@ public:
     }
 };
 
+class BudgetThenHoldSolver : public HoldCommandSolver {
+public:
+    mutable int attempts = 0;
+    mutable bool remeasured = false;
+    bool solve(const SolverInput& input, const ReferencePath& path, SolverOutput& output) const override {
+        remeasured = input.solve_budget.remeasure_first_iteration;
+        if (++attempts == 1) {
+            output = SolverOutput{};
+            output.recoverable_solver_failure = true;
+            output.status = "SOLVE_BUDGET_EXHAUSTED";
+            return false;
+        }
+        return HoldCommandSolver::solve(input, path, output);
+    }
+};
+
 SolverParams params() {
     SolverParams p;
     p.jerk_limit_enable = true;
@@ -96,6 +112,65 @@ TEST(SolverFailureStop, InvalidStateAndUnsafeTailCannotUseFallback) {
     input=moving(); input.actuator.valid=false;
     EXPECT_FALSE(unsafe.solve(input,output));
     EXPECT_FALSE(output.success);
+}
+
+TEST(SolverFailureStop, BudgetStopRetriesOnlyAfterVehicleAndCommandsClear) {
+    auto solver = std::make_unique<BudgetThenHoldSolver>();
+    auto* observed = solver.get();
+    SpmpcProblem problem(std::move(solver));
+    configure(problem);
+    auto input = moving();
+    SolverOutput output;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(output.status, "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED");
+    EXPECT_GT(output.cmd_v, 0.);  // certified braking, not an abrupt zero
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_FALSE(output.ocp_solve_attempted);
+    EXPECT_EQ(output.status, "SOLVE_BUDGET_STOPPING");
+    input.robot.v = 0.;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(observed->attempts, 1);  // delayed commands still in flight
+    input.actuator = ActuatorState{};
+    input.actuator.valid = true;
+    input.robot.v = .04;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(observed->attempts, 1);  // measured motion has not stopped
+    input.robot.v = 0.;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_TRUE(output.ocp_solve_attempted);
+    EXPECT_EQ(observed->attempts, 2);
+    EXPECT_TRUE(observed->remeasured);
+    EXPECT_FALSE(output.terminal_diagnostics.reached);  // still far from goal
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(observed->attempts, 3);
+    EXPECT_FALSE(observed->remeasured);
+}
+
+TEST(SolverFailureStop, BudgetRecoveryDoesNotReleaseGoalHandoffOrUnsafeTail) {
+    auto solver = std::make_unique<BudgetThenHoldSolver>();
+    auto* observed = solver.get();
+    SpmpcProblem problem(std::move(solver));
+    configure(problem);
+    ReferencePath short_path;
+    short_path.setPoints({{0,0,0,0,0},{1.5,0,0,0,0}}, "map");
+    problem.setReferencePath(short_path);
+    SolverOutput output;
+    auto input = moving();
+    ASSERT_TRUE(problem.solve(input, output));
+    input.actuator.linear_delay_queue.front() = 1.2;
+    EXPECT_FALSE(problem.solve(input, output));
+    EXPECT_EQ(observed->attempts, 1);
+    input = moving();
+    input.robot.x = 1.5;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_FALSE(output.ocp_solve_attempted);
+    input.robot.x = 1.;  // localization correction cannot undo terminal ownership
+    input.robot.v = 0.;
+    input.actuator = ActuatorState{};
+    input.actuator.valid = true;
+    ASSERT_TRUE(problem.solve(input, output)) << output.status;
+    EXPECT_EQ(observed->attempts, 1);
+    EXPECT_FALSE(output.ocp_solve_attempted);
 }
 
 TEST(SolverFailureStop, LiquidCapUsesIntegrationSubstepsAndRespectsEnableSwitch) {

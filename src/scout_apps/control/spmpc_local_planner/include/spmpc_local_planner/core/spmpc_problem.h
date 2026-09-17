@@ -35,6 +35,7 @@ private:
     SolverParams solver_params_;
     VariantConfig variant_;
     TerminalController terminal_controller_;
+    bool budget_stop_pending_ = false;
     TaskStopManager task_stop_manager_;
     bool task_stop_configured_ = false;
     bool liquid_limit_enabled_ = false;

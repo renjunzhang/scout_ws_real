@@ -101,6 +101,10 @@ TEST(ReplayDiagnostics, ExpiredComputeBudgetDoesNotStartRti) {
     EXPECT_TRUE(output.recoverable_solver_failure);
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,0);
     EXPECT_FALSE(output.predicted_horizon.valid);
+    input.solve_budget.remeasure_first_iteration = true;
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
+    EXPECT_EQ(output.status,"SOLVE_BUDGET_EXHAUSTED");
+    EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,0);
 }
 
 TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFixed) {

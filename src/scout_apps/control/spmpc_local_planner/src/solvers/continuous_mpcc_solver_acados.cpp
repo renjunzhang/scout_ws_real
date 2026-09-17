@@ -1115,7 +1115,8 @@ bool ContinuousMpccSolverAcados::solve(
     int status = 0;
     double time_tot = 0.0;
     int iterations_executed = 0;
-    double iteration_estimate = previous_iteration_wall_sec_;
+    double iteration_estimate = input.solve_budget.remeasure_first_iteration ?
+        0.0 : previous_iteration_wall_sec_;
     const auto rti_start = SolveBudget::Clock::now();
     output.wall_timing.valid = true;
     output.wall_timing.setup_ms = std::chrono::duration<double, std::milli>(rti_start - setup_start).count();

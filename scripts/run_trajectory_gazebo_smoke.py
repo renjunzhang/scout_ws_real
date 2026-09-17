@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Current ROS1 controller integration smoke in the existing isolated Gazebo.
 
-This is development evidence with an explicitly mismatched actuator plant, not
-an R8/formal comparison. Source the freshly built ROS1 overlay before running.
+This is development evidence, not an R8/formal comparison. An optional vehicle
+actuator adapter matches the controller's delay/response parameters. Source the
+freshly built ROS1 overlay before running.
 The external simulator files are read only; only owned child processes stop.
 """
 import argparse
@@ -22,7 +23,7 @@ import xmlrpc.client
 import rospy
 import tf2_ros
 import yaml
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Twist
 from gazebo_msgs.msg import ModelStates
 from nav_msgs.msg import OccupancyGrid, Odometry, Path as RosPath
 from sensor_msgs.msg import Imu, LaserScan
@@ -66,6 +67,8 @@ def main():
     parser.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh'], default='raw_mpcc')
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--task', type=Path)
+    parser.add_argument('--identified-actuator', action='store_true',
+                        help='replace this case\'s guard with the controller\'s actuator response')
     parser.add_argument('--ros-port', type=int, default=11892)
     parser.add_argument('--gazebo-port', type=int, default=11926)
     args = parser.parse_args()
@@ -91,6 +94,15 @@ def main():
                    goal_reached=False, children=[])
     (out/'source.diff').write_bytes(subprocess.check_output(['git', '-C', str(REPO), 'diff', 'HEAD']))
     (out/'runner.py').write_bytes(Path(__file__).read_bytes())
+    if args.identified_actuator:
+        adapter = REPO/'scripts/gazebo_identified_actuator.py'
+        shutil.copy2(adapter, out/adapter.name)
+        shutil.copy2(PKG/'config/planner/common.yaml', out/'actuator_config.yaml')
+        summary.update(plant='Identified FOPDT adapter -> existing planar drive (120 Hz)',
+                       actuator_adapter_sha256=hashlib.sha256(adapter.read_bytes()).hexdigest(),
+                       actuator_plant_matches_controller=False,
+                       actuator_model_parameters_match=False,
+                       actuator_match_limit='ROS receipt timing and 120 Hz output require bag verification')
     # The ROS node is a thin executable; its hash alone does not identify the
     # controller implementation or generated model loaded for this case.
     runtime_dir = out/'runtime'
@@ -172,6 +184,21 @@ def main():
                             ('/imu/data', Imu), ('/map', OccupancyGrid)]:
             rospy.wait_for_message(topic, kind, timeout=90)
         buffer.lookup_transform('map', 'base_link', rospy.Time(0), rospy.Duration(15))
+        actuator = None
+        if args.identified_actuator:
+            # Only this fresh environment's tracked child guard is stopped.
+            # No simulator source/launch/world is modified and no competing
+            # publisher may remain on the drive topic.
+            subprocess.run(['rosnode', 'kill', '/cmd_vel_guard'], env=env,
+                           stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True, timeout=10)
+            deadline = time.monotonic()+10
+            while dict(master.getSystemState('/current_mainline_smoke')[2][0]).get('/cmd_vel_drive'):
+                if time.monotonic() > deadline:
+                    raise RuntimeError('old drive publisher did not stop')
+                time.sleep(.1)
+            actuator = start('actuator_plant', ['python3', out/'gazebo_identified_actuator.py',
+                                             '--config', out/'actuator_config.yaml'])
+            rospy.wait_for_message('/cmd_vel_drive', Twist, timeout=10)
         print('Environment ready; settling for 30 seconds', flush=True)
         time.sleep(30)
         pose = buffer.lookup_transform('map', 'base_link', rospy.Time(0), rospy.Duration(2)).transform
@@ -253,6 +280,15 @@ def main():
         planner = start('planner', command)
         time.sleep(2)
         (out/'live_params.yaml').write_text(yaml.safe_dump(rospy.get_param('/spmpc_local_planner', {})))
+        if args.identified_actuator:
+            configured = yaml.safe_load((out/'actuator_config.yaml').read_text())['execution_model']
+            live_actuator = rospy.get_param('/spmpc_local_planner/execution_model')
+            if any(live_actuator.get(key) != value for key, value in configured.items()):
+                raise RuntimeError('plant/controller actuator parameters differ')
+            summary['actuator_model_parameters_match'] = True
+            publishers = dict(master.getSystemState('/current_mainline_smoke')[2][0])
+            if publishers.get('/cmd_vel_drive') != ['/identified_actuator_plant']:
+                raise RuntimeError('drive must have exactly the owned actuator publisher')
         path.header.stamp = rospy.Time.now()
         publisher.publish(path)
         begin = rospy.Time.now().to_sec()
@@ -261,6 +297,8 @@ def main():
         while rospy.Time.now().to_sec()-begin < 60 and time.monotonic()-wall_begin < 180:
             if planner.poll() is not None:
                 raise RuntimeError('planner exited before observation completed')
+            if actuator is not None and actuator.poll() is not None:
+                raise RuntimeError('actuator plant exited during observation')
             if 'GOAL_REACHED' in status_counts:
                 summary['goal_reached'] = True
                 summary['goal_time_sec'] = rospy.Time.now().to_sec()-begin

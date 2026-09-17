@@ -100,6 +100,7 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
         configuration_error_="region/complete stopping requires terminal handoff, jerk and valid tail parameters";
     configured_v_ref_ = variant.v_ref;
     terminal_controller_.setParams(solver_params_.terminal);
+    budget_stop_pending_ = false;
     start_lock_recovery_.setParams(solver_params_.start_lock_recovery);
     if (!injected_solver_) solver_ = makeSolver(solver_params_.solver_backend);
     solver_->configure(solver_params_, variant);
@@ -129,6 +130,7 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
         last_progress_s_ = 0.0;
         projection_state_.reset();
         terminal_controller_.reset();
+        budget_stop_pending_ = false;
         task_stop_manager_.reset();
         start_lock_recovery_.reset();
     }
@@ -418,6 +420,25 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     if (terminal_plan.owns_command) return emit_stop_command(false);
 
     SolverInput guarded_input = input;
+    if (budget_stop_pending_) {
+        // A missed compute budget is a temporary stop, not a task/region
+        // handoff. Resume only from feedback with drained command history and
+        // a currently verified stop tail. Never reset the task clock or the
+        // terminal controller to obtain another solve.
+        const bool retry_ready = vehicle_queues_clear &&
+            std::abs(input.robot.v) <= solver_params_.terminal.goal_reached_max_speed &&
+            std::abs(input.robot.omega) <= solver_params_.terminal.goal_reached_max_omega &&
+            stop_tail.valid && stop_failure.empty();
+        if (!retry_ready) {
+            const bool safe = emit_stop_command(false);
+            if (safe) {
+                output.status = "SOLVE_BUDGET_STOPPING";
+                output.terminal_diagnostics.mode = output.status;
+            }
+            return safe;
+        }
+        guarded_input.solve_budget.remeasure_first_iteration = true;
+    }
     // Inner solver projection starts on the branch accepted for this very
     // observation. It must not repeat a global search on the full suffix.
     guarded_input.min_progress_s = proj.s;
@@ -444,9 +465,13 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     if ((!ok || !output.success) && output.recoverable_solver_failure &&
         check_stop_tail && stop_tail.valid && stop_failure.empty()) {
         const std::string cause = output.status;
-        terminal_controller_.requestStop();
-        terminal_plan = terminal_controller_.updateAndPlan(
-            goal_info, input.robot.v, input.robot.omega, solver_params_.a_max, false);
+        if (cause == "SOLVE_BUDGET_EXHAUSTED") {
+            budget_stop_pending_ = true;
+        } else {
+            terminal_controller_.requestStop();
+            terminal_plan = terminal_controller_.updateAndPlan(
+                goal_info, input.robot.v, input.robot.omega, solver_params_.a_max, false);
+        }
         emit_stop_command(true);
         output.predicted_horizon.valid = false;
         output.trajectory.clear();
@@ -455,6 +480,7 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
         return output.success;
     }
     if (ok && output.success) {
+        budget_stop_pending_ = false;
         if (!solver_params_.terminal.mpc_stop_handoff_enable) {
             const TerminalClampOutput clamp = terminal_controller_.clampCommand(
                 output.cmd_v, output.cmd_omega, input.robot.v, input.dt,
