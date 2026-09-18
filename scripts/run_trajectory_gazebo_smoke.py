@@ -69,6 +69,8 @@ def main():
     parser.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh'], default='raw_mpcc')
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--task', type=Path)
+    parser.add_argument('--reference-mode', choices=['progress', 'fixed_time'],
+                        help='override this case only; preserve the profile default when omitted')
     parser.add_argument('--identified-actuator', action='store_true',
                         help='replace this case\'s guard with the controller\'s actuator response')
     parser.add_argument('--ros-port', type=int, default=11892)
@@ -78,6 +80,8 @@ def main():
         parser.error('missing compiled ROS1 overlay or explicit map')
     if args.profile == 'planned_slosh' and not (args.plan and args.task):
         parser.error('planned_slosh requires a validated --plan and matching --task')
+    if args.reference_mode and not args.plan:
+        parser.error('--reference-mode requires a --plan')
     if args.ros_port == args.gazebo_port:
         parser.error('ROS and Gazebo need different ports')
     binary = args.setup.resolve().parent/'lib/spmpc_local_planner/spmpc_local_planner_node'
@@ -267,7 +271,11 @@ def main():
         region = dict(planning=dict(region=dict(task['region'], enabled=True)))
         (out/'region.yaml').write_text(yaml.safe_dump(region))
         (out/'task.yaml').write_text(yaml.safe_dump(dict(planning=dict(task_deadline_sec=task['deadline'], evaluation_window_sec=5.))))
-        (out/'overlay.yaml').write_text(yaml.safe_dump(dict(frames=dict(reference_target='map', robot_base='base_footprint'), delay_phase=dict(mode='off'))))
+        overlay = dict(frames=dict(reference_target='map', robot_base='base_footprint'),
+                       delay_phase=dict(mode='off'))
+        if args.reference_mode:
+            overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
+        (out/'overlay.yaml').write_text(yaml.safe_dump(overlay))
         publisher = rospy.Publisher('/scout/global_path_fixed', RosPath, queue_size=1, latch=True)
         # Explicit subscriptions exist before the planner advertises diagnostics;
         # rosbag -a discovers new topics too late to capture startup failures.
