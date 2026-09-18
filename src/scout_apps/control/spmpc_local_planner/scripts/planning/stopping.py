@@ -10,7 +10,7 @@ def _series(times, X, U):
     u = np.asarray(U, dtype=float)
     if t.ndim != 1 or x.ndim != 2 or u.ndim != 2 or x.shape[0] != t.size or u.shape[0] != t.size:
         raise ValueError("times, X and U must have matching sample counts")
-    if x.shape[1] != 28 or u.shape[1] < 1 or t.size == 0 or not np.isfinite(t).all() or not np.isfinite(x).all() or not np.isfinite(u).all():
+    if x.shape[1] != 28 or u.shape[1] not in (2, 3) or t.size == 0 or not np.isfinite(t).all() or not np.isfinite(x).all() or not np.isfinite(u).all():
         raise ValueError("invalid sample arrays")
     if np.any(np.diff(t) <= 0):
         raise ValueError("times must be strictly increasing")
@@ -26,7 +26,7 @@ def stop_mask(X, U, task, clear_tolerance=_CLEAR):
     x = np.asarray(X, dtype=float); u = np.asarray(U, dtype=float)
     if not np.isfinite(x).all() or not np.isfinite(u).all() or not np.isfinite(clear_tolerance) or clear_tolerance <= 0:
         raise ValueError("X, U and clear_tolerance must be finite")
-    if x.ndim != 2 or x.shape[1] != 28 or u.ndim != 2 or u.shape[0] != x.shape[0] or u.shape[1] < 1:
+    if x.ndim != 2 or x.shape[1] != 28 or u.ndim != 2 or u.shape[0] != x.shape[0] or u.shape[1] not in (2, 3):
         raise ValueError("X must be (N,28), and U must have N rows")
     required = ("goal_pose", "goal_position_tolerance", "goal_yaw_tolerance",
                 "stop_speed_tolerance", "stop_omega_tolerance")
@@ -41,7 +41,8 @@ def stop_mask(X, U, task, clear_tolerance=_CLEAR):
     motion = np.abs(x[:, 3]) <= float(task["stop_speed_tolerance"])
     motion &= np.abs(x[:, 5]) <= float(task["stop_omega_tolerance"])
     quiet = np.max(np.abs(x[:, 6:24]), axis=1) <= clear_tolerance
-    quiet &= np.max(np.abs(u), axis=1) <= clear_tolerance
+    # The third control is virtual path progress, not a physical command.
+    quiet &= np.max(np.abs(u[:, :2]), axis=1) <= clear_tolerance
     return pos & yaw & motion & quiet
 
 

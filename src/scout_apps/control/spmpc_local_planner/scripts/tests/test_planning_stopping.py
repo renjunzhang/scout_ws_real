@@ -64,3 +64,10 @@ class StoppingTest(unittest.TestCase):
         self.assertEqual(result["tail_peak_m"], 3.)
         with self.assertRaises(ValueError):
             stopping_windows([0., 1.], [0., -1.], 0., 1.)
+
+    def test_virtual_progress_does_not_delay_physical_stop_but_fifo_does(self):
+        x, _ = samples(3)
+        u = np.zeros((3, 3))
+        u[:, 2] = .01
+        x[0, 13] = .02
+        self.assertEqual(find_stop_time([0., 1., 2.], x, u, task()), 1.)
