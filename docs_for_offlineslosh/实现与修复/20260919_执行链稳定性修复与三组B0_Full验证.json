@@ -1,0 +1,448 @@
+{
+  "formal": false,
+  "evidence": "Fixed-seed Gazebo development comparison; liquid values from odom-driven model",
+  "batch_directory": "/data/a/scout_sim_replacement/results/20260919_tf_epoch_pair3_040005",
+  "code_commit": "13c1d827b4abb43c4e59563edd40cb5123673354",
+  "protocol": {
+    "max_reference_pose_age_sec": 0.05,
+    "max_robot_extrapolation_sec": 0.01,
+    "publish_reserve_sec": 0.003,
+    "max_result_age_sec": 0.0,
+    "qp_iteration_limit": 20,
+    "rti_iteration_limit": 5,
+    "control_hz": 30,
+    "horizon_steps": 40,
+    "simulator_seed": 716,
+    "task_deadline_sec": 45,
+    "tail_window_sec": 5,
+    "identified_actuator": true,
+    "liquid_policy": {
+      "mode": "transport_tail_v1",
+      "move_height_m": 0.0009,
+      "tail_height_m": 8e-05,
+      "height_tolerance_m": 1e-06
+    },
+    "run_acceptance": "Complete fresh lifecycle, closed bag, arrival and sustained stop <=45 s, zero abnormal statuses, observer/stop evidence coverage, coherent odom epochs, fixed runtime/task/parameters",
+    "full_acceptance": "Additionally meet transport/tail caps including explicit 0.001 mm tolerance",
+    "pair_acceptance": "Full has lower goal/stop time and lower transport peak than the paired B0",
+    "baseline_note": "B0 is not required to satisfy the anti-slosh caps",
+    "evidence": "Odom-driven liquid model, fixed seed; development repeated comparisons, not physical validation",
+    "comparison": "Same original task/route; Full additionally uses the same previously optimized 1.35 m plan"
+  },
+  "plan_sha256": "fbd5082dbfa7c9805f5485f82e631b50d4125ded0dee95b7953574a92294980d",
+  "task_sha256": "bc386d7246f33d64d27fca4408fc307aad32cbba0c359414688cd9c6fcb90fff",
+  "start_utc": "2026-09-18T20:00:05.729103+00:00",
+  "end_utc": "2026-09-18T20:13:23.055406+00:00",
+  "current_cohort": {
+    "runs": 6,
+    "passed": 6,
+    "pairs": 3,
+    "abnormal_statuses": 0,
+    "coherent_odom_solve_cycles": 5308
+  },
+  "previous_attempts": {
+    "runs": 7,
+    "passed": 2,
+    "entries": [
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_state_snapshot_pair3_021828",
+        "name": "b0_01",
+        "passed": false,
+        "abnormal_statuses": {
+          "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 1
+        }
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_stopped_seed_pair3_024752",
+        "name": "b0_01",
+        "passed": false,
+        "abnormal_statuses": {
+          "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 1,
+          "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 6
+        }
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_prepared_reference_pair3_030139",
+        "name": "b0_01",
+        "passed": true,
+        "abnormal_statuses": {}
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_prepared_reference_pair3_030139",
+        "name": "full_01",
+        "passed": false,
+        "abnormal_statuses": {
+          "COMMAND_RESULT_EXPIRED": 1,
+          "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 1,
+          "SOLVE_BUDGET_STOPPING": 13
+        }
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_qp_budget_pair3_033006",
+        "name": "b0_01",
+        "passed": true,
+        "abnormal_statuses": {}
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_qp_budget_pair3_033006",
+        "name": "full_01",
+        "passed": false,
+        "abnormal_statuses": {
+          "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 1,
+          "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 31
+        }
+      },
+      {
+        "directory": "/data/a/scout_sim_replacement/results/20260919_budget_reserve_pair3_034919",
+        "name": "b0_01",
+        "passed": false,
+        "abnormal_statuses": {
+          "STATE_TIME_ALIGNMENT_FAILED_TF_POSE_PROPAGATION_LIMIT": 2,
+          "STOP_JERK_HISTORY_INFEASIBLE": 1
+        }
+      }
+    ]
+  },
+  "rows": [
+    {
+      "name": "b0_01",
+      "group": "b0",
+      "pair": 1,
+      "passed": true,
+      "goal_sec": 31.315999999999995,
+      "stop_candidate_sec": 31.28333333300001,
+      "transport_peak_mm": 1.0112101138096476,
+      "transport_p95_mm": 0.46536172934884884,
+      "transport_rms_mm": 0.19770181782355017,
+      "tail_peak_mm": 8.159708610087624e-07,
+      "transport_samples": 1564,
+      "position_error_cm": 0.941444537327403,
+      "yaw_error_deg": 1.8432986877980104,
+      "odom_solve_cycles": 928,
+      "dispatch_max_ms": 19.399186,
+      "rti_max_ms": 16.266844,
+      "first_live_cycle": {
+        "cycle_id": 39,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 1.700319376962689e-08,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.114536,
+        "remaining_budget_wall_ms": 28.839937
+      }
+    },
+    {
+      "name": "full_01",
+      "group": "full",
+      "pair": 1,
+      "passed": true,
+      "goal_sec": 28.179000000000002,
+      "stop_candidate_sec": 28.178333332999998,
+      "transport_peak_mm": 0.8379092376540774,
+      "transport_p95_mm": 0.5176280360467391,
+      "transport_rms_mm": 0.20798021662335733,
+      "tail_peak_mm": 0.000986572371110142,
+      "transport_samples": 1409,
+      "position_error_cm": 2.37273867905165,
+      "yaw_error_deg": 2.8060766039219516,
+      "odom_solve_cycles": 835,
+      "dispatch_max_ms": 15.219392,
+      "rti_max_ms": 12.42294,
+      "first_live_cycle": {
+        "cycle_id": 34,
+        "warm_start_source": "PREPARED_TRAJECTORY_PLAN",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 5.584244097029727e-07,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B_slosh_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 7.699727,
+        "remaining_budget_wall_ms": 28.168332
+      }
+    },
+    {
+      "name": "b0_02",
+      "group": "b0",
+      "pair": 2,
+      "passed": true,
+      "goal_sec": 31.576,
+      "stop_candidate_sec": 31.541333333000004,
+      "transport_peak_mm": 0.9870119974325678,
+      "transport_p95_mm": 0.4946185623769668,
+      "transport_rms_mm": 0.2087438228062911,
+      "tail_peak_mm": 7.572473272549951e-07,
+      "transport_samples": 1577,
+      "position_error_cm": 0.8987409211485929,
+      "yaw_error_deg": 1.7874295103723525,
+      "odom_solve_cycles": 936,
+      "dispatch_max_ms": 11.569095,
+      "rti_max_ms": 9.581721,
+      "first_live_cycle": {
+        "cycle_id": 40,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 3.2451104983732826e-07,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.963923,
+        "remaining_budget_wall_ms": 28.761872
+      }
+    },
+    {
+      "name": "full_02",
+      "group": "full",
+      "pair": 2,
+      "passed": true,
+      "goal_sec": 28.122999999999998,
+      "stop_candidate_sec": 28.088333333,
+      "transport_peak_mm": 0.7424143118804418,
+      "transport_p95_mm": 0.4981466705443047,
+      "transport_rms_mm": 0.1994003877609682,
+      "tail_peak_mm": 0.00023737013280976274,
+      "transport_samples": 1404,
+      "position_error_cm": 2.194604542891873,
+      "yaw_error_deg": 2.80459456114348,
+      "odom_solve_cycles": 832,
+      "dispatch_max_ms": 19.646457,
+      "rti_max_ms": 14.619724,
+      "first_live_cycle": {
+        "cycle_id": 34,
+        "warm_start_source": "PREPARED_TRAJECTORY_PLAN",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 4.023204155891112e-08,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B_slosh_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 8.182239,
+        "remaining_budget_wall_ms": 28.134258
+      }
+    },
+    {
+      "name": "b0_03",
+      "group": "b0",
+      "pair": 3,
+      "passed": true,
+      "goal_sec": 31.445,
+      "stop_candidate_sec": 31.40833333300001,
+      "transport_peak_mm": 0.934211687997709,
+      "transport_p95_mm": 0.4827880696094926,
+      "transport_rms_mm": 0.20224819607542377,
+      "tail_peak_mm": 2.2759137166427903e-06,
+      "transport_samples": 1571,
+      "position_error_cm": 1.0723348317291337,
+      "yaw_error_deg": 1.85705316065491,
+      "odom_solve_cycles": 932,
+      "dispatch_max_ms": 19.267879,
+      "rti_max_ms": 15.663166,
+      "first_live_cycle": {
+        "cycle_id": 38,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 2.2115808145373173e-06,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.19809,
+        "remaining_budget_wall_ms": 28.887662
+      }
+    },
+    {
+      "name": "full_03",
+      "group": "full",
+      "pair": 3,
+      "passed": true,
+      "goal_sec": 28.512,
+      "stop_candidate_sec": 28.511333332999996,
+      "transport_peak_mm": 0.8189302227006362,
+      "transport_p95_mm": 0.5041170634819265,
+      "transport_rms_mm": 0.20420115763373767,
+      "tail_peak_mm": 0.00025994025868154397,
+      "transport_samples": 1425,
+      "position_error_cm": 2.349864730073074,
+      "yaw_error_deg": 2.83210436468941,
+      "odom_solve_cycles": 845,
+      "dispatch_max_ms": 16.833761,
+      "rti_max_ms": 10.818515,
+      "first_live_cycle": {
+        "cycle_id": 34,
+        "warm_start_source": "PREPARED_TRAJECTORY_PLAN",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 1.1359689584387222e-07,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B_slosh_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 8.313551,
+        "remaining_budget_wall_ms": 28.218436
+      }
+    }
+  ],
+  "means": {
+    "b0": {
+      "goal_sec": 31.445666666666664,
+      "stop_candidate_sec": 31.410999999666675,
+      "transport_peak_mm": 0.9774779330799749,
+      "transport_p95_mm": 0.4809227871117694,
+      "transport_rms_mm": 0.2028979455684217,
+      "tail_peak_mm": 1.2830439683021827e-06
+    },
+    "full": {
+      "goal_sec": 28.271333333333335,
+      "stop_candidate_sec": 28.259333332999997,
+      "transport_peak_mm": 0.7997512574117185,
+      "transport_p95_mm": 0.5066305900243234,
+      "transport_rms_mm": 0.2038605873393544,
+      "tail_peak_mm": 0.0004946275875338162
+    }
+  },
+  "full_mean_reduction_percent": {
+    "goal_sec": 10.094660631565544,
+    "stop_candidate_sec": 10.033640020057055,
+    "transport_peak_mm": 18.18216756139448,
+    "transport_p95_mm": -5.345515663116074,
+    "transport_rms_mm": -0.474446287879271,
+    "tail_peak_mm": -38451.10189156989
+  },
+  "pairs": [
+    {
+      "pair": 1,
+      "goal_reduction_percent": 10.017243581555736,
+      "stop_reduction_percent": 9.925412893020013,
+      "peak_reduction_percent": 17.137969032239397,
+      "passed": true
+    },
+    {
+      "pair": 2,
+      "goal_reduction_percent": 10.935520648593878,
+      "stop_reduction_percent": 10.947539736334843,
+      "peak_reduction_percent": 24.781632461244396,
+      "passed": true
+    },
+    {
+      "pair": 3,
+      "goal_reduction_percent": 9.327397042455077,
+      "stop_reduction_percent": 9.223666755205384,
+      "peak_reduction_percent": 12.339972489977624,
+      "passed": true
+    }
+  ],
+  "parameter_differences_b0_full": [
+    {
+      "key": "planner_variant",
+      "b0": "B0",
+      "full": "B_slosh"
+    },
+    {
+      "key": "planning.experiment_profile_id",
+      "b0": "raw_mpcc",
+      "full": "planned_slosh"
+    },
+    {
+      "key": "planning.geometry.curvature_rate_weight",
+      "b0": 0.0,
+      "full": 0.0001
+    },
+    {
+      "key": "planning.geometry.curvature_weight",
+      "b0": 0.0,
+      "full": 0.05
+    },
+    {
+      "key": "planning.geometry.enabled",
+      "b0": false,
+      "full": true
+    },
+    {
+      "key": "planning.geometry.reference_curvature_speed_limit",
+      "b0": true,
+      "full": false
+    },
+    {
+      "key": "planning.geometry.speed_regularization",
+      "b0": null,
+      "full": 0.05
+    },
+    {
+      "key": "planning.liquid_free_baseline",
+      "b0": true,
+      "full": false
+    },
+    {
+      "key": "planning.reference.mode",
+      "b0": "cruise",
+      "full": "progress"
+    },
+    {
+      "key": "planning.reference.plan_file",
+      "b0": "",
+      "full": "/data/a/scout_sim_replacement/results/20260918_early_envelope_135_single_225457/plan.json"
+    },
+    {
+      "key": "variants.B0.w_alpha",
+      "b0": 0.1,
+      "full": null
+    },
+    {
+      "key": "variants.B0.w_du_a",
+      "b0": 0.1,
+      "full": null
+    },
+    {
+      "key": "variants.B0.w_du_vs",
+      "b0": 0.1,
+      "full": null
+    },
+    {
+      "key": "variants.B_slosh.w_alpha",
+      "b0": null,
+      "full": 0.1
+    },
+    {
+      "key": "variants.B_slosh.w_du_a",
+      "b0": null,
+      "full": 0.1
+    },
+    {
+      "key": "variants.B_slosh.w_du_vs",
+      "b0": null,
+      "full": 0.1
+    }
+  ],
+  "limitations": [
+    "Stop candidate uses persistent pose/speed and zero publication plus frozen delay; FIFO clearance is inferred, not directly measured.",
+    "Same seed and model in all runs; three paired development repetitions are not physical validation or a statistical robustness guarantee.",
+    "Full is the combined planned-geometry/progress-speed/liquid-cost system; comparison is not a single slosh switch ablation."
+  ]
+}
