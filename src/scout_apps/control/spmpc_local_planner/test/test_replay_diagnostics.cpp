@@ -161,6 +161,37 @@ TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFi
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,params.rti_iterations);
 }
 
+TEST(ReplayDiagnostics, StoppedColdStartUsesFeedbackSeedWithoutInventingHistory) {
+    auto params = makeParams();
+    params.rti_iterations = 5;
+    params.max_prediction_defect = 1e-4;
+    params.jerk_limit_enable = true;
+    auto input = makeInput();
+    input.actuator.a_cmd_memory = 0.0;
+    input.robot.y = -.005;  // Small localization offset on the recorded start.
+    input.solve_budget.deadline = SolveBudget::Clock::now() + std::chrono::seconds(10);
+    std::vector<TrajectoryPoint> points;
+    for (int i = 0; i <= 100; ++i) {
+        TrajectoryPoint point;
+        point.x = .05 * i;
+        point.y = .6 * (1.0 - std::cos(2.0 * std::acos(-1.0) * i / 100.0));
+        points.push_back(point);
+    }
+    ReferencePath reference;
+    reference.setPoints(points, "map");
+    ContinuousMpccSolverAcados solver;
+    solver.configure(params, makeB0Variant());
+    SolverOutput output;
+    ASSERT_TRUE(solver.solve(input, reference, output)) << output.status;
+    EXPECT_EQ(output.pre_solve_snapshot.warm_start_source, "STOPPED_ACTUATOR_ROLLOUT");
+    EXPECT_EQ(output.pre_solve_snapshot.rti_iterations, 1);
+    EXPECT_LE(output.predicted_horizon.dynamics_max_defect, params.max_prediction_defect);
+    EXPECT_FALSE(output.pre_solve_snapshot.have_previous_solution);
+    EXPECT_FALSE(output.pre_solve_snapshot.have_previous_control);
+    EXPECT_TRUE(output.cost.reconstruction_valid);
+    EXPECT_GT(output.cmd_v, 0.0);  // The numerical rest seed is not a stop command.
+}
+
 TEST(ReplayDiagnostics, RejectedIterateCanSeedRetryWithoutBecomingCommandHistory) {
     auto params=makeParams(); params.rti_iterations=1;
     params.max_prediction_defect=1e-4;
@@ -175,6 +206,7 @@ TEST(ReplayDiagnostics, RejectedIterateCanSeedRetryWithoutBecomingCommandHistory
     }
     ReferencePath reference;reference.setPoints(points,"map");
     auto input=makeInput();input.actuator.a_cmd_memory=0.;
+    input.robot.v=.04;  // Moving cold start still exercises the flatness/retry path.
     ContinuousMpccSolverAcados solver;solver.configure(params,variant);
     SolverOutput output;
     ASSERT_FALSE(solver.solve(input,reference,output));

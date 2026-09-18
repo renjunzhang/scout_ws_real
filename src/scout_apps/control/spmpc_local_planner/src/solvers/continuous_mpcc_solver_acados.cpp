@@ -1154,6 +1154,19 @@ bool ContinuousMpccSolverAcados::solve(
             snapshot.warm_start_source="TRAJECTORY_PLAN";
         }
     }
+    // A cold, stopped actuator has no executed motion to extrapolate. Start
+    // from its zero-input rollout instead of a geometric seed that immediately
+    // advances/turns along the route. Plan and previous-solution seeds retain
+    // priority; the OCP still performs online RTI and every acceptance check.
+    if (warm_start_requested && !warm_start_applied && !have_previous_solution_ && !have_u_prev_ &&
+        makeStoppedActuatorWarmStart(warm_start, warm_input, input.actuator,
+            params_.terminal.goal_reached_max_speed, params_.terminal.goal_reached_max_omega) &&
+        rolloutExplicitActuatorWarmStart(
+            warm_start, warm_input, input.actuator, params_.actuator, slosh_dyn_, slosh)) {
+        setAcadosWarmStart(*gen, warm_start, slosh);
+        warm_start_applied = true;
+        snapshot.warm_start_source = "STOPPED_ACTUATOR_ROLLOUT";
+    }
     if (warm_start_requested && !warm_start_applied && warm_start_generator_) {
         WarmStartDiagnostics diagnostics;
         warm_start_generator_->generate(warm_input, warm_start, diagnostics);
