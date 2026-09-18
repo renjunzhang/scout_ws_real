@@ -101,7 +101,8 @@ if(SPMPC_NATIVE_WITH_ACADOS)
   target_compile_definitions(spmpc_native_core PRIVATE SPMPC_WITH_ACADOS SPMPC_WITH_ACADOS_SLOSH)
   target_link_libraries(spmpc_native_core PUBLIC
     "${ACADOS_SOURCE_DIR}/lib/libacados.so" "${ACADOS_SOURCE_DIR}/lib/libhpipm.so" "${ACADOS_SOURCE_DIR}/lib/libblasfeo.so")
-  add_executable(test_replay_diagnostics "${SPMPC_ROOT}/test/test_replay_diagnostics.cpp")
+  add_executable(test_replay_diagnostics "${SPMPC_ROOT}/test/test_replay_diagnostics.cpp"
+    "${SPMPC_ROOT}/test/test_plan_warm_start.cpp")
   target_compile_definitions(test_replay_diagnostics PRIVATE SPMPC_TEST_WITH_SLOSH)
   target_link_libraries(test_replay_diagnostics PRIVATE spmpc_native_core GTest::gtest_main)
   add_test(NAME test_replay_diagnostics COMMAND test_replay_diagnostics)

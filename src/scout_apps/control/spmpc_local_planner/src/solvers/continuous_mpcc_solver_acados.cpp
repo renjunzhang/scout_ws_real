@@ -107,6 +107,15 @@ struct GenSolver {
         }
         capsule = nullptr;
     }
+    void reset() {
+        if (kind == B0) {
+            spmpc_b0_acados_reset(static_cast<spmpc_b0_solver_capsule*>(capsule), 1);
+        } else {
+#ifdef SPMPC_WITH_ACADOS_SLOSH
+            spmpc_slosh_acados_reset(static_cast<spmpc_slosh_solver_capsule*>(capsule), 1);
+#endif
+        }
+    }
     void update_params(int stage, double* p) {
         if (kind == B0) {
             spmpc_b0_acados_update_params(static_cast<spmpc_b0_solver_capsule*>(capsule), stage, p, np);
@@ -589,6 +598,55 @@ ContinuousMpccSolverAcados::~ContinuousMpccSolverAcados() {
     }
 }
 
+void ContinuousMpccSolverAcados::clearNumericalHistory() {
+    have_u_prev_ = false;
+    std::fill(std::begin(u_prev_), std::end(u_prev_), 0.0);
+    previous_iteration_wall_sec_ = 0.0;
+    have_previous_solution_ = false;
+    previous_warm_start_solution_ = WarmStartOutput{};
+    retry_warm_start_ = WarmStartOutput{};
+}
+
+void ContinuousMpccSolverAcados::preparePlanWarmStart() {
+    const auto* plan = planning_adapter_->plan();
+    if (!plan || !params_.warm_start.enable) return;
+
+    const auto initial = makeWarmStartState(plan->samples.front().state.data(), use_slosh_model_);
+    SolverInput input;
+    input.dt = params_.actuator.dt;
+    input.has_task_elapsed = true;
+    input.robot = {initial.px, initial.py, initial.theta, initial.v, initial.omega};
+    input.min_progress_s = std::max(0.0, initial.s);
+    input.slosh = {initial.eta_x, initial.eta_x_dot, initial.eta_y, initial.eta_y_dot};
+    input.actuator.valid = true;
+    input.actuator.v_cmd = initial.v_cmd;
+    input.actuator.omega_cmd = initial.omega_cmd;
+    input.actuator.a_cmd_memory = initial.a_cmd_memory;
+    input.actuator.linear_delay_queue = initial.linear_delay_queue;
+    input.actuator.angular_delay_queue = initial.angular_delay_queue;
+    input.actuator.delayed_v_cmd = initial.linear_delay_queue.front();
+    input.actuator.delayed_omega_cmd = initial.angular_delay_queue.front();
+
+    std::vector<TrajectoryPoint> points;
+    for (size_t k = 0; k < plan->route.size(); ++k) {
+        const auto& xy = plan->route[k];
+        const double yaw = k+1 < plan->route.size() ?
+            std::atan2(plan->route[k+1].y-xy.y, plan->route[k+1].x-xy.x) : plan->goal_pose[2];
+        points.push_back({xy.x, xy.y, yaw, 0.0, 0.0});
+    }
+    ReferencePath route;
+    route.setPoints(points, plan->frame_id);
+
+    // Reuse the same OCP assembly and validation, with the configured finite
+    // RTI count outside the live cycle. Never retain fictitious command history
+    // or QP/dual memory. A failed preparation leaves the nominal-plan fallback.
+    SolverOutput prepared;
+    if (solve(input, route, prepared))
+        prepared_plan_warm_start_ = previous_warm_start_solution_;
+    clearNumericalHistory();
+    static_cast<GenSolver*>(capsule_)->reset();
+}
+
 void ContinuousMpccSolverAcados::configure(const SolverParams& params, const VariantConfig& variant) {
     params_ = params;
     variant_ = variant;
@@ -596,11 +654,8 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
     if (params_.warm_start_flatness_enable) {
         params_.warm_start.enable = true;
     }
-    have_u_prev_ = false;
-    previous_iteration_wall_sec_ = 0.0;
-    have_previous_solution_ = false;
-    previous_warm_start_solution_ = WarmStartOutput{};
-    retry_warm_start_ = WarmStartOutput{};
+    clearNumericalHistory();
+    prepared_plan_warm_start_ = WarmStartOutput{};
     slosh_dyn_.configure(params.slosh);
     warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
@@ -637,6 +692,7 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         return;
     }
     capsule_ = gen;
+    preparePlanWarmStart();
 }
 
 bool ContinuousMpccSolverAcados::solve(
@@ -1075,6 +1131,18 @@ bool ContinuousMpccSolverAcados::solve(
             snapshot.warm_start_source="SHIFTED_PREVIOUS_SOLUTION";
         }
     }
+    if (warm_start_requested && !warm_start_applied && prepared_plan_warm_start_.valid &&
+        input.has_task_elapsed && input.task_elapsed_sec <= input.dt + 1e-9 &&
+        s0 <= prepared_plan_warm_start_.states.front().s + params_.v_max * input.dt) {
+        warm_start = prepared_plan_warm_start_;
+        warm_start.states.front().s = s0;
+        if (rolloutExplicitActuatorWarmStart(
+                warm_start, warm_input, input.actuator, params_.actuator, slosh_dyn_, slosh)) {
+            setAcadosWarmStart(*gen, warm_start, slosh);
+            warm_start_applied = true;
+            snapshot.warm_start_source = "PREPARED_TRAJECTORY_PLAN";
+        }
+    }
     if (warm_start_requested && !warm_start_applied && !nominal_horizon.empty()) {
         warm_start.valid=true;
         for (const auto& row:nominal_horizon) warm_start.states.push_back(makeWarmStartState(row.state.data(),slosh));
@@ -1202,6 +1270,8 @@ bool ContinuousMpccSolverAcados::solve(
         output.status = snapshot.solver_status = "SOLVE_BUDGET_EXHAUSTED";
         return false;
     }
+    // A cycle that never entered RTI must not consume the prepared seed.
+    prepared_plan_warm_start_ = WarmStartOutput{};
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
         output.recoverable_solver_failure = true;

@@ -30,6 +30,7 @@ struct OcpPlanningStage {
 class OcpPlanningAdapter {
 public:
     explicit OcpPlanningAdapter(const SolverParams& params);
+    const TrajectoryPlan* plan() const;
     ProgressProjection project(const ReferencePath& route, double x, double y, double min_progress = 0) const;
     ProgressProjection project(const ReferencePath& route, double x, double y,
         ProgressProjectionState& state, double min_progress = 0) const;

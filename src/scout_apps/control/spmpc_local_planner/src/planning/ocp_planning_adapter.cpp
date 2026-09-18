@@ -99,6 +99,10 @@ OcpPlanningAdapter::OcpPlanningAdapter(const SolverParams& params)
     }
 }
 
+const TrajectoryPlan* OcpPlanningAdapter::plan() const {
+    return trajectory_ ? &trajectory_->plan() : nullptr;
+}
+
 ReferenceSample OcpPlanningStage::sampleGeometry(double progress) const {
     if (!has_geometry_reference) throw std::logic_error("stage has no planned geometry");
     const double q=(progress-reference.s_knots.front())/(reference.s_knots.back()-reference.s_knots.front());

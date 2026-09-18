@@ -27,6 +27,9 @@ public:
     bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
 
 private:
+    void clearNumericalHistory();
+    void preparePlanWarmStart();
+
     SolverParams params_;
     VariantConfig variant_;
     SloshDynamics slosh_dyn_;             // 与 primitive 共用的液体物理核（注入 slosh 模型参数，§4.3）
@@ -36,6 +39,9 @@ private:
     std::unique_ptr<WarmStartGenerator> warm_start_generator_;
     std::unique_ptr<OcpPlanningAdapter> planning_adapter_;
     std::string configuration_error_;
+    // Prepared before the live task clock starts. Only a numerical seed;
+    // feedback replaces every state and command-history entry before use.
+    mutable WarmStartOutput prepared_plan_warm_start_;
     mutable WarmStartOutput previous_warm_start_solution_;
     mutable bool have_previous_solution_ = false;
     // Finite but rejected RTI iterate: numerical seed only, never a solution
