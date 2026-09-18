@@ -1,0 +1,328 @@
+{
+  "formal": false,
+  "git_sha": "abdd66d8807ded363f1539f878db9f869b786312",
+  "runtime_identity": "Archived c82a09db controller; same frozen solvers/configs",
+  "plan_identity": "REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED",
+  "comparison": {
+    "goal_sec": {
+      "b0": 31.526999999999994,
+      "full": 41.53,
+      "full_change_percent": 31.72835981856823
+    },
+    "peak_height_mm": {
+      "b0": 0.9688644719679824,
+      "full": 0.6847406842918015,
+      "full_change_percent": -29.32544188549524
+    },
+    "active_height_p95_mm": {
+      "b0": 0.48084276976735285,
+      "full": 0.21423935606323177,
+      "full_change_percent": -55.445029116921596
+    },
+    "active_height_rms_mm": {
+      "b0": 0.1991947998594141,
+      "full": 0.1097132627336767,
+      "full_change_percent": -44.92162304884006
+    }
+  },
+  "final_evaluation": "all statuses plus first goal and inferred stop <=45s, complete stop window, closed bag, clean lifecycle",
+  "analysis_sha256": {
+    "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651/analyze_batch.py": "d2d9aac7f310e93269f977ae0f3644ca9e8d6cd059fcf0106d63c5a52495bf30",
+    "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651/finalize_pair.py": "ba7229c9b058ff28e018da29bb4a60aa0ff8bae56e606db5ee6638cd71416b3a",
+    "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651/plot_pair.py": "cd09c934d131a50592e7be7916e7d4ccacec5b0324880a97621d13c9150f0820",
+    "/home/a/scout_ws/scripts/analyze_transport_windows.py": "b0c4fe32708b703040d2464b78d50c5ff6eae960e06bc3e0eca4267581d426dd"
+  },
+  "result_directory": "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651",
+  "trials": [
+    {
+      "name": "b0_01",
+      "clean": true,
+      "deadline_passed": true,
+      "abnormal_statuses": {},
+      "review": {
+        "name": "b0_01",
+        "group": "b0",
+        "pair": 1,
+        "formal": false,
+        "goal_reached": true,
+        "runner_passed": true,
+        "passed": true,
+        "goal_sec": 31.526999999999994,
+        "deadline_missed_status_count": 0,
+        "position_error_cm": 1.3960348952394614,
+        "yaw_error_deg": 1.8376905363234044,
+        "peak_height_mm": 0.9688644719679824,
+        "peak_time_sec": 17.034999999999997,
+        "active_height_p95_mm": 0.48084276976735285,
+        "active_height_rms_mm": 0.1991947998594141,
+        "active_peak_mm": 0.9688644719679824,
+        "active_end_sec": 31.526999999999994,
+        "peak_evaluation_end_sec": 36.51499999999999,
+        "deduplicated_height_samples": 1826,
+        "invalid_observer_status_counts": {},
+        "status_counts": {
+          "WAITING_FOR_ODOM": 1,
+          "WAITING_FOR_REFERENCE_PATH": 27,
+          "B0_ACADOS_OK": 934,
+          "TERMINAL_DRAINING": 11,
+          "GOAL_REACHED": 589
+        },
+        "accepted_ocp_commands": 934,
+        "budget_exhausted": 0,
+        "command_expired": 0,
+        "alignment_rejected": 0,
+        "dynamics_rejected": 0,
+        "stop_history_rejected": 0,
+        "acados_failure": 0,
+        "fault_zero_cycles": 0,
+        "fault_zeros": [],
+        "alignment_failures": [],
+        "peak_nearest_status_event": {
+          "task_sec": 31.159,
+          "status": "TERMINAL_DRAINING"
+        },
+        "max_speed_mps": 0.36313033015617674,
+        "path_length_m": 5.906850635789608,
+        "largest_command_drop": {
+          "task_sec": 16.768,
+          "before": 0.20926485653664223,
+          "after": 0.19026329490902563
+        },
+        "rti_wall_p95_ms": 6.6438478999999955,
+        "rti_wall_max_ms": 14.542343,
+        "dispatch_wall_p95_ms": 9.346321399999995,
+        "dispatch_wall_max_ms": 17.054058,
+        "events": [
+          {
+            "task_sec": -0.8980000000000032,
+            "status": "WAITING_FOR_ODOM"
+          },
+          {
+            "task_sec": -0.875,
+            "status": "WAITING_FOR_REFERENCE_PATH"
+          },
+          {
+            "task_sec": 0.04099999999999682,
+            "status": "B0_ACADOS_OK"
+          },
+          {
+            "task_sec": 31.159,
+            "status": "TERMINAL_DRAINING"
+          },
+          {
+            "task_sec": 31.526999999999994,
+            "status": "GOAL_REACHED"
+          }
+        ],
+        "snapshot_identities": [
+          {
+            "identity": [
+              24,
+              40,
+              0.0333333333,
+              "cruise",
+              false,
+              false,
+              3,
+              1
+            ],
+            "count": 934
+          }
+        ],
+        "motion_limits": [
+          [
+            -0.6,
+            0.6,
+            -1.2,
+            1.2,
+            -0.002,
+            0.8,
+            -1.2,
+            1.2,
+            true,
+            1.0,
+            0.0333333333
+          ]
+        ]
+      },
+      "window_evaluation": {
+        "case": "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651/b0_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 29.324999999999996,
+        "first_sustained_low_speed_sec": 31.134999999999998,
+        "first_sustained_zero_publication_sec": 31.159,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 31.492333332999998,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.0009688644719679824,
+          "tail_peak_m": 8.059778137497763e-10,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 31.492333332999998,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 19.66266666700001,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": 0,
+          "goal_sec": 31.526999999999994
+        }
+      }
+    },
+    {
+      "name": "full_01",
+      "clean": true,
+      "deadline_passed": true,
+      "abnormal_statuses": {},
+      "review": {
+        "name": "full_01",
+        "group": "full",
+        "pair": 1,
+        "formal": false,
+        "goal_reached": true,
+        "runner_passed": true,
+        "passed": true,
+        "goal_sec": 41.53,
+        "deadline_missed_status_count": 0,
+        "position_error_cm": 2.3950799699243164,
+        "yaw_error_deg": 2.711229929898902,
+        "peak_height_mm": 0.6847406842918015,
+        "peak_time_sec": 26.760000000000005,
+        "active_height_p95_mm": 0.21423935606323177,
+        "active_height_rms_mm": 0.1097132627336767,
+        "active_peak_mm": 0.6847406842918015,
+        "active_end_sec": 41.53,
+        "peak_evaluation_end_sec": 46.519999999999996,
+        "deduplicated_height_samples": 2327,
+        "invalid_observer_status_counts": {
+          "ODOM_WAITING_FOR_PREVIOUS": 1
+        },
+        "status_counts": {
+          "WAITING_FOR_ODOM": 1,
+          "WAITING_FOR_REFERENCE_PATH": 18,
+          "B_slosh_ACADOS_OK": 1234,
+          "TERMINAL_DRAINING": 11,
+          "GOAL_REACHED": 290
+        },
+        "accepted_ocp_commands": 1234,
+        "budget_exhausted": 0,
+        "command_expired": 0,
+        "alignment_rejected": 0,
+        "dynamics_rejected": 0,
+        "stop_history_rejected": 0,
+        "acados_failure": 0,
+        "fault_zero_cycles": 0,
+        "fault_zeros": [],
+        "alignment_failures": [],
+        "peak_nearest_status_event": {
+          "task_sec": 41.165000000000006,
+          "status": "TERMINAL_DRAINING"
+        },
+        "max_speed_mps": 0.30116476363989564,
+        "path_length_m": 5.688524088507449,
+        "largest_command_drop": {
+          "task_sec": 26.539,
+          "before": 0.18891722846220463,
+          "after": 0.1745950665837938
+        },
+        "rti_wall_p95_ms": 8.458017499999999,
+        "rti_wall_max_ms": 16.749304,
+        "dispatch_wall_p95_ms": 11.973289249999999,
+        "dispatch_wall_max_ms": 20.187754,
+        "events": [
+          {
+            "task_sec": -0.5959999999999965,
+            "status": "WAITING_FOR_ODOM"
+          },
+          {
+            "task_sec": -0.570999999999998,
+            "status": "WAITING_FOR_REFERENCE_PATH"
+          },
+          {
+            "task_sec": 0.03999999999999915,
+            "status": "B_slosh_ACADOS_OK"
+          },
+          {
+            "task_sec": 41.165000000000006,
+            "status": "TERMINAL_DRAINING"
+          },
+          {
+            "task_sec": 41.53,
+            "status": "GOAL_REACHED"
+          }
+        ],
+        "snapshot_identities": [
+          {
+            "identity": [
+              28,
+              40,
+              0.0333333333,
+              "progress",
+              true,
+              true,
+              3,
+              1
+            ],
+            "count": 1234
+          }
+        ],
+        "motion_limits": [
+          [
+            -0.6,
+            0.6,
+            -1.2,
+            1.2,
+            -0.002,
+            0.8,
+            -1.2,
+            1.2,
+            true,
+            1.0,
+            0.0333333333
+          ]
+        ]
+      },
+      "window_evaluation": {
+        "case": "/data/a/scout_sim_replacement/results/20260918_b0_full_check_153651/full_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 39.528999999999996,
+        "first_sustained_low_speed_sec": 41.16000000000001,
+        "first_sustained_zero_publication_sec": 41.23100000000001,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 41.56433333300001,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.0006847406842918015,
+          "tail_peak_m": 5.4697941044485055e-05,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 41.56433333300001,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 9.595666667000003,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": 0,
+          "goal_sec": 41.53
+        }
+      }
+    }
+  ]
+}
