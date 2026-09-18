@@ -2,7 +2,7 @@
 import numpy as np
 from .task import load_task, halfspaces, PROGRESS_TOLERANCE
 from .optimizer import dynamics
-from actual_motion_kernel import functions as motion_functions
+from .metrics import dense_heights, stopping_metrics
 from model_contract import MODEL_VERSION, COST_VERSION
 
 
@@ -80,14 +80,8 @@ def validate_plan(plan, tolerance=2e-6):
         bound(x[4], cell["s_begin"], cell["s_end"], "region_progress")
     if clearance < -tolerance: errors.append("swept_footprint_region")
     # Dense held-command substeps check liquid peaks hidden between OCP nodes.
-    motion_step = motion_functions()[0]
-    peak = 0.
-    for k in range(n):
-        z = np.r_[X[k, :4], X[k, 5], X[k, 24:28]]
-        for j in range(4):
-            peak = max(peak, task["height_coeff"]*float(np.hypot(z[5], z[7])))
-            z = np.asarray(motion_step(z, X[k, [8, 13]], task["actuator_parameters"], task["liquid_parameters"], dt/4)).ravel()
-        peak = max(peak, task["height_coeff"]*float(np.hypot(z[5], z[7])))
+    dense_times, heights = dense_heights(task, X)
+    peak = float(np.max(heights))
     if task["liquid_constraint_enable"] and peak > task["liquid_height_limit"]+tolerance: errors.append("dense_liquid_cap")
     if errors: raise ValueError("plan violates: " + ", ".join(sorted(set(errors))))
     speed = np.sqrt(X[:, 3]**2+task["objective"]["speed_floor"]**2)
@@ -95,4 +89,5 @@ def validate_plan(plan, tolerance=2e-6):
     return dict(status="SOFTWARE_VERIFIED", dynamics_max_error=defect, minimum_region_clearance=clearance,
                 dense_peak_height_m=peak, residual_height_m=float(task["height_coeff"]*np.hypot(X[-1, 24], X[-1, 26])),
                 curvature_arc_energy=float(np.sum(curvature[:-1]**2*speed[:-1])*dt), actual_path_length=float(np.sum(np.abs(X[:-1, 3]))*dt),
+                stopping_evaluation=stopping_metrics(task, X, U, dense_times, heights, tolerance),
                 hardware_verified=False)
