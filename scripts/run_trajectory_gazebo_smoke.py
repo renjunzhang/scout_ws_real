@@ -19,6 +19,7 @@ import socket
 import subprocess
 import time
 import xmlrpc.client
+from simulation_observation import ObservationWindow
 
 import rospy
 import roslib.packages
@@ -103,6 +104,9 @@ def main():
                    goal_reached=False, children=[])
     (out/'source.diff').write_bytes(subprocess.check_output(['git', '-C', str(REPO), 'diff', 'HEAD']))
     (out/'runner.py').write_bytes(Path(__file__).read_bytes())
+    observation_module = Path(__file__).with_name('simulation_observation.py')
+    shutil.copy2(observation_module, out/observation_module.name)
+    summary['observation_module_sha256'] = hashlib.sha256(observation_module.read_bytes()).hexdigest()
     if args.identified_actuator:
         adapter = REPO/'scripts/gazebo_identified_actuator.py'
         shutil.copy2(adapter, out/adapter.name)
@@ -301,19 +305,20 @@ def main():
         path.header.stamp = rospy.Time.now()
         publisher.publish(path)
         begin = rospy.Time.now().to_sec()
+        window = ObservationWindow(begin, task['deadline'], task['stop_window'])
+        summary['observation_target_sim_sec'] = window.duration_sec
         wall_begin = time.monotonic()
         print('Recording and running '+args.profile, flush=True)
-        while rospy.Time.now().to_sec()-begin < 60 and time.monotonic()-wall_begin < 180:
+        while not window.complete(rospy.Time.now().to_sec()) and time.monotonic()-wall_begin < 180:
             if planner.poll() is not None:
                 raise RuntimeError('planner exited before observation completed')
             if actuator is not None and actuator.poll() is not None:
                 raise RuntimeError('actuator plant exited during observation')
-            if 'GOAL_REACHED' in status_counts:
+            if 'GOAL_REACHED' in status_counts and not summary['goal_reached']:
                 summary['goal_reached'] = True
-                summary['goal_time_sec'] = rospy.Time.now().to_sec()-begin
-                time.sleep(5)
-                break
+                summary['goal_time_sec'] = next(t for t, status in records if status == 'GOAL_REACHED')-begin
             time.sleep(.2)
+        summary['observation_sim_window_complete'] = window.complete(rospy.Time.now().to_sec())
         summary['observation_sim_sec'] = rospy.Time.now().to_sec()-begin
         summary['observation_wall_sec'] = time.monotonic()-wall_begin
         final = buffer.lookup_transform('map', 'base_link', rospy.Time(0), rospy.Duration(2)).transform
@@ -331,7 +336,7 @@ def main():
         summary['post_ports'] = {str(p): reachable(p) for p in (args.ros_port, args.gazebo_port)}
         summary['valid_fresh_lifecycle'] = not any(summary.get('pre_ports', {}).values()) and not any(summary['post_ports'].values())
         summary['closed_bag'] = (out/'run.bag').is_file() and not (out/'run.bag.active').exists()
-        summary['passed'] = bool(summary['goal_reached'] and summary['valid_fresh_lifecycle'] and summary['closed_bag'] and 'error' not in summary)
+        summary['passed'] = bool(summary['goal_reached'] and summary['valid_fresh_lifecycle'] and summary['closed_bag'] and summary.get('observation_sim_window_complete', False) and 'error' not in summary)
         (out/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
         print(json.dumps(summary, indent=2), flush=True)
     return 0 if summary['passed'] else 1
