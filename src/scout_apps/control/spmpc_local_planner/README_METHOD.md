@@ -1,6 +1,8 @@
 # 两层轨迹规划与液体感知 MPCC
 
-本文档描述 `feat/spmpc-liquid-control` 主线（2026-09-16）。代码和测试是最终事实来源；实验依据见[两层协同实现与软件验证记录](../../../../docs/实物实验注意事项/对比试验/解决问题的思路/20260916_两层协同实现与软件验证记录.md)，配置和入口见[`config/experiments/trajectory_mpcc/README.md`](config/experiments/trajectory_mpcc/README.md)。
+> 2026-09-18 接续：本次改造文档统一在 [docs_for_offlineslosh](../../../../docs_for_offlineslosh/README.md)，最新状态见[状态索引](../../../../docs_for_offlineslosh/当前实验状态与文档索引.md)。已完成 ROS1 编译与开发级 Gazebo 运行；当前 Full 为 N40/30 Hz、contour=1。下文 9 月 16 日验证描述保留当时语境。
+
+本文档描述 `feat/spmpc-liquid-control` 主线（2026-09-16）。代码和测试是最终事实来源；实验依据见[两层协同实现与软件验证记录](../../../../docs_for_offlineslosh/实现与修复/20260916_两层协同实现与软件验证记录.md)，配置和入口见[`config/experiments/trajectory_mpcc/README.md`](config/experiments/trajectory_mpcc/README.md)。
 
 ## 方法定位
 
@@ -87,10 +89,10 @@ H_{modal}=c_h\sqrt{\eta_x^2+\eta_y^2}
 
 `raw_mpcc` 保留普通 contour=1，其他三组为0.02；它不做新增路径优化。旧 `Full/Smooth`、旧 direct-omega 或历史 governor 结果属于历史路线，不能与当前两层主线混为同一实现。
 
-前一轮五项修复后，stub 17个、真实acados 18个C++测试程序均已通过；当时49项Python检查通过，另2项依赖roslaunch的用例受环境阻断。24组模型闭环完成22组，当时两个geometry单弯失败，最长周期82.2 ms。当前候选尚未取得相对原始 MPCC 的稳定降晃收益，也未通过30 Hz实时性验收，见[前轮回归记录](../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。ROS1/catkin整节点未在本轮ROS2 Jazzy主机完成编译运行；`diag/lt-dwa-collision-tracking`是历史实物分支，不由模型结果替代。
+前一轮五项修复后，stub 17个、真实acados 18个C++测试程序均已通过；当时49项Python检查通过，另2项依赖roslaunch的用例受环境阻断。24组模型闭环完成22组，当时两个geometry单弯失败，最长周期82.2 ms。当前候选尚未取得相对原始 MPCC 的稳定降晃收益，也未通过30 Hz实时性验收，见[前轮回归记录](../../../../docs_for_offlineslosh/实现与修复/20260916_局部规划器五项修复与回归.md)。ROS1/catkin整节点未在本轮ROS2 Jazzy主机完成编译运行；`diag/lt-dwa-collision-tracking`是历史实物分支，不由模型结果替代。
 
 离线后缀诊断保留真实 progress、FIFO 和液体状态；它不清零状态、不投影回名义位姿、不改变在线命令，也不宣称递归可行性。后缀失败会保留候选失败原因；剩余段反馈尚未接入在线控制。
 
 输入核对、录制边界和复现入口见[`config/experiments/trajectory_mpcc/README.md`](config/experiments/trajectory_mpcc/README.md)及其中引用的脚本说明。录制脚本只核对 live 参数并记录已有节点，不启动 ROS、不发布速度、不代表实物安全验收。
 
-四项收敛修复后，stub 18/18、真实acados 19/19及35项Python定向测试通过。两个geometry单拐角仍在10 s求解失败，现接管停车后超时；B0和Full名义单弯完成，仍无降晃结论。详细状态与定向复跑见[执行链回归](../../../../docs/实物实验注意事项/后续改进/20260916_执行链收敛修复与定向回归.md)，不覆盖上述历史运行身份。
+四项收敛修复后，stub 18/18、真实acados 19/19及35项Python定向测试通过。两个geometry单拐角仍在10 s求解失败，现接管停车后超时；B0和Full名义单弯完成，仍无降晃结论。详细状态与定向复跑见[执行链回归](../../../../docs_for_offlineslosh/实现与修复/20260916_执行链收敛修复与定向回归.md)，不覆盖上述历史运行身份。

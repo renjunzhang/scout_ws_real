@@ -4,7 +4,7 @@
 
 本包为 **ROS1/catkin**。实包读取通常需要ROS1 `rosbag`和对应消息工作区；纯计划/数值工具使用Python、NumPy、CasADi/IPOPT，真实OCP重算还需acados。不要将`roslaunch/rosbag`换成ROS2命令直接运行。
 
-本轮连续投影、区域停车与回放合同的参数和回归结果见[五项修复记录](../../../../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)。无输出回放使用下方现有入口；本轮没有增加新的实物runner。
+本轮连续投影、区域停车与回放合同的参数和回归结果见[五项修复记录](../../../../../docs_for_offlineslosh/实现与修复/20260916_局部规划器五项修复与回归.md)。无输出回放使用下方现有入口；本轮没有增加新的实物runner。
 
 ## 先按目的选入口
 
@@ -184,7 +184,7 @@ command_history:
   external_audit_topic: /spmpc/replay/control_cycle_audit
 ```
 
-launch加载该文件（`planner_overlay_file:=/path/replay_overlay.yaml`）并保留上面的显式source/topic参数；recorder传 `PLANNER_OVERLAY_FILE=/path/replay_overlay.yaml PUBLISH_CMD_VEL=false`。已有overlay应合入这两个字段，其他profile、region、task/plan参数仍须匹配。**目前需要两边同时传同值**：launch最后会覆盖YAML的history字段，recorder尚无对应环境变量；只改launch会被live核对拒绝，只改YAML会被launch默认published覆盖。`LAUNCH_ARGS`只记备注，不能代替参数合并。纯文件核对已验证不匹配时拒绝、上述匹配配置通过；ROS1实际回放待联调，见[主线复盘](../../../../../docs/实物实验注意事项/后续改进/20260916_当前主线复盘与剩余缺口.md)。
+launch加载该文件（`planner_overlay_file:=/path/replay_overlay.yaml`）并保留上面的显式source/topic参数；recorder传 `PLANNER_OVERLAY_FILE=/path/replay_overlay.yaml PUBLISH_CMD_VEL=false`。已有overlay应合入这两个字段，其他profile、region、task/plan参数仍须匹配。**目前需要两边同时传同值**：launch最后会覆盖YAML的history字段，recorder尚无对应环境变量；只改launch会被live核对拒绝，只改YAML会被launch默认published覆盖。`LAUNCH_ARGS`只记备注，不能代替参数合并。纯文件核对已验证不匹配时拒绝、上述匹配配置通过；ROS1实际回放待联调，见[主线复盘](../../../../../docs_for_offlineslosh/实现与修复/20260916_当前主线复盘与剩余缺口.md)。
 
 播放时只选择状态、路径、TF 和原始审计消息；本节点审计输出与输入分开：
 
@@ -210,7 +210,7 @@ topic 名按原录制参数替换。放开暂停后，先等真实历史覆盖�
 
 ## 本轮执行链验证与B0高度旁路
 
-当前主比较是 `raw_mpcc/B0` 与 `planned_slosh`；实物基线按用户确认的 `7d17f6c` 记录。最新修复、定向模型回归及未验证边界见[执行链记录](../../../../../docs/实物实验注意事项/后续改进/20260916_执行链收敛修复与定向回归.md)。原有实物runner继续按其冻结配置索引，不把trajectory新默认等同于旧bag条件。
+当前主比较是 `raw_mpcc/B0` 与 `planned_slosh`；实物基线按用户确认的 `7d17f6c` 记录。最新修复、定向模型回归及未验证边界见[执行链记录](../../../../../docs_for_offlineslosh/实现与修复/20260916_执行链收敛修复与定向回归.md)。原有实物runner继续按其冻结配置索引，不把trajectory新默认等同于旧bag条件。
 
 [analysis/rotating_liquid_replay.py](analysis/rotating_liquid_replay.py) 新增同核预测高度旁路：B0与Full都可使用schema8/cost3的同cycle快照和预测，输入显式可信液体初态、对应 `solver_input_epoch_ns`、冻结液体系数与高度系数；按每stage的actual状态和FIFO头传播，输出独立 `liquid_states/h_modal`。初态缺失、无效或epoch不一致会拒绝，不能以B0原始零占位代替。该CLI不向ROS发命令，不反馈B0决策。
 

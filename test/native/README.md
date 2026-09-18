@@ -98,7 +98,7 @@ Lower curve energy has not established lower liquid peaks than raw.
 Post-review checks passed 17 stub CTest programs and all 18 real-acados programs
 (the replay diagnostics program was rerun after correcting two old test assumptions).
 The focused Python run passed 49 checks; two roslaunch-dependent checks could not
-run on this host. See the [repair record](../../docs/实物实验注意事项/后续改进/20260916_局部规划器五项修复与回归.md)
+run on this host. See the [repair record](../../docs_for_offlineslosh/实现与修复/20260916_局部规划器五项修复与回归.md)
 for coverage and remaining ROS1/physical validation boundaries.
 
 ## 2026-09-16 执行链收敛回归
@@ -111,4 +111,4 @@ B0/Full完成；两个geometry组仍在10 s发生 `ACADOS_SOLVE_FAILED_4`，本�
 
 native 默认不设置在线求解预算，固定次数用于名义模型回归；本轮最长核心耗时69.83 ms，
 不能据此宣称30 Hz通过。ROS路径才设置周期预算和发布时效门。
-修复边界、参数及新验证顺序见[执行链报告](../../docs/实物实验注意事项/后续改进/20260916_执行链收敛修复与定向回归.md)。
+修复边界、参数及新验证顺序见[执行链报告](../../docs_for_offlineslosh/实现与修复/20260916_执行链收敛修复与定向回归.md)。
