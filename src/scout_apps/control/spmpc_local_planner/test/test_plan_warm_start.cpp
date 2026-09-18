@@ -171,7 +171,32 @@ TEST_F(PlanWarmStart, LateStartAndReconfiguredRawBaselineDoNotUsePreparedSeed) {
     EXPECT_FALSE(output.pre_solve_snapshot.have_previous_control);
 }
 
+TEST_F(PlanWarmStart, BoundedQpWorkRetainsProblemParametersAndLiveAcceptance) {
+    auto observed = input();
+    observed.solve_budget.deadline = SolveBudget::Clock::now() + std::chrono::seconds(1);
+    SolverOutput original;
+    ASSERT_TRUE(solver.solve(observed, route, original)) << original.status;
+    params.qp_iteration_limit = 20;
+    solver.configure(params, variant);
+    observed.solve_budget.deadline = SolveBudget::Clock::now() + std::chrono::seconds(1);
+    SolverOutput bounded;
+    ASSERT_TRUE(solver.solve(observed, route, bounded)) << bounded.status;
+    EXPECT_EQ(bounded.pre_solve_snapshot.qp_iteration_limit, 20);
+    EXPECT_EQ(bounded.pre_solve_snapshot.stage_parameters, original.pre_solve_snapshot.stage_parameters);
+    EXPECT_EQ(bounded.pre_solve_snapshot.warm_start_source, "PREPARED_TRAJECTORY_PLAN");
+    EXPECT_FALSE(bounded.pre_solve_snapshot.have_previous_control);
+    EXPECT_LE(bounded.predicted_horizon.dynamics_max_defect, params.max_prediction_defect);
+    EXPECT_TRUE(bounded.cost.reconstruction_valid);
+    for (int invalid : {-1, 51}) {
+        params.qp_iteration_limit = invalid;
+        solver.configure(params, variant);
+        EXPECT_FALSE(solver.solve(observed, route, bounded));
+        EXPECT_EQ(bounded.status, "INVALID_PLANNING_CONFIG: QP iteration limit must be in [0,50]");
+    }
+}
+
 TEST_F(PlanWarmStart, RawReferencePreparationPreservesBudgetAndReanchorsFeedback) {
+    params.qp_iteration_limit = 20;
     params.planning.trajectory = {};
     params.planning.liquid_free_baseline = true;
     variant.name = "B0"; variant.slosh_enable = false; variant.w_slosh = 0.0;

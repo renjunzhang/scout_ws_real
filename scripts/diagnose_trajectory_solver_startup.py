@@ -6,6 +6,7 @@ guesses, not dual/internal history. Extra iterations and condensing choices are
 diagnostic counterfactuals, not online timing or closed-loop success evidence.
 """
 import argparse
+import ctypes
 import hashlib
 import json
 from pathlib import Path
@@ -40,7 +41,20 @@ def first_pair(bag_path):
     return snap, horizons[cycle]
 
 
+def apply_qp_iteration_limit(solver, limit):
+    """Replay the recorded numerical work bound (old snapshots keep defaults)."""
+    if not 0 <= limit <= 50:
+        raise ValueError('QP iteration limit must be in [0,50]')
+    if limit:
+        setter = solver.shared_lib.ocp_nlp_solver_opts_set
+        setter.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_char_p, ctypes.c_void_p]
+        setter.restype = None
+        value = ctypes.c_int(limit)
+        setter(solver.nlp_config, solver.nlp_opts, b'qp_iter_max', ctypes.byref(value))
+
+
 def apply_snapshot(solver, snap, prune_implied_bounds=False):
+    apply_qp_iteration_limit(solver, getattr(snap, "qp_iteration_limit", 0))
     n, nx, nu, np_ = snap.horizon_steps, snap.state_width, snap.control_width, snap.parameter_width
     expected = (28, 3, 104) if snap.slosh_enabled else (24, 3, 92)
     if (nx, nu, np_) != expected or snap.cost_model_version != 3 or snap.liquid_model_version != 1:

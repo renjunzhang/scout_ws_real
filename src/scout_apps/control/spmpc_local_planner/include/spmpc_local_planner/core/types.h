@@ -321,6 +321,7 @@ struct PredictedHorizonDebug {
 struct PreSolveSnapshotDebug {
     PlanningCycleDebug planning;
     int rti_iterations = 0;
+    int qp_iteration_limit = 0;  // 0 retains the generated solver setting.
     double max_prediction_defect = 0.0;
     bool valid = false;
     std::string backend;

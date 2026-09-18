@@ -538,6 +538,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     SolverParams solver_params;
     solver_params.planning = planning_config;
     pnh_.param("acados/rti_iterations", solver_params.rti_iterations, solver_params.rti_iterations);
+    pnh_.param("acados/qp_iteration_limit", solver_params.qp_iteration_limit, solver_params.qp_iteration_limit);
     pnh_.param("acados/max_prediction_defect", solver_params.max_prediction_defect, solver_params.max_prediction_defect);
     pnh_.param("robot/v_max", solver_params.v_max, solver_params.v_max);
     pnh_.param("robot/omega_max", solver_params.omega_max, solver_params.omega_max);

@@ -13,6 +13,7 @@ execution_contract:
   fail_closed_on_post_limit_change: true
 acados:
   rti_iterations: 5
+  qp_iteration_limit: 20  # Bound work per RTI; keep all feasibility/publication checks.
   max_prediction_defect: 0.0001
 terminal:
   mpc_stop_handoff_enable: true

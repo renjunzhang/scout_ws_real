@@ -1306,6 +1306,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.jerk_limit_enable = snapshot.jerk_limit_enable;
     msg.jerk_max = snapshot.jerk_max;
     msg.rti_iterations = snapshot.rti_iterations;
+    msg.qp_iteration_limit = snapshot.qp_iteration_limit;
     msg.max_prediction_defect = snapshot.max_prediction_defect;
     msg.delta_a_max = snapshot.delta_a_max;
     msg.experiment_profile_id = snapshot.planning.experiment_profile_id;

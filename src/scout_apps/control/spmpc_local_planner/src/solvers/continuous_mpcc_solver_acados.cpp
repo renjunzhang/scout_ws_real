@@ -125,6 +125,10 @@ struct GenSolver {
 #endif
         }
     }
+    void limitQpIterations(int limit) {
+        if (limit > 0)
+            ocp_nlp_solver_opts_set(config(), solver()->opts, "qp_iter_max", &limit);
+    }
     int solve() {
         if (kind == B0) {
             return spmpc_b0_acados_solve(static_cast<spmpc_b0_solver_capsule*>(capsule));
@@ -693,6 +697,10 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         if (params_.rti_iterations<1 || params_.rti_iterations>20 ||
             !std::isfinite(params_.max_prediction_defect) || params_.max_prediction_defect<0)
             throw std::invalid_argument("invalid RTI iteration/defect configuration");
+        // Generated capsules allocate QP statistics/workspace for 50 steps.
+        // Reducing this bound is supported after creation; increasing it is not.
+        if (params_.qp_iteration_limit < 0 || params_.qp_iteration_limit > 50)
+            throw std::invalid_argument("QP iteration limit must be in [0,50]");
         if (params_.planning.liquid_free_baseline && (variant_.slosh_enable ||
             variant_.slosh_constraint_enable || variant_.w_slosh != 0 || params_.task_stop.enable ||
             params_.liquid_limit.recovery_enable || params_.zero_liquid_initial_state))
@@ -713,6 +721,7 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         capsule_ = nullptr;
         return;
     }
+    gen->limitQpIterations(params_.qp_iteration_limit);
     capsule_ = gen;
     preparePlanWarmStart();
 }
@@ -730,6 +739,7 @@ bool ContinuousMpccSolverAcados::solve(
     }
     output = SolverOutput{};
     output.pre_solve_snapshot.max_prediction_defect = params_.max_prediction_defect;
+    output.pre_solve_snapshot.qp_iteration_limit = params_.qp_iteration_limit;
     output.cycle_timing = input.cycle_timing;
     if ((params_.zero_liquid_initial_state && !use_slosh_model_) ||
         !std::isfinite(params_.jerk_max) || params_.jerk_max <= 0.0 ||

@@ -116,6 +116,8 @@ bool jerk_limit_enable
 float64 jerk_max
 # Actual iterations executed; 0 means the computation budget ran out first.
 int32 rti_iterations
+# Numerical work limit; zero preserves the generated solver default.
+int32 qp_iteration_limit
 float64 max_prediction_defect
 # Bounds on C*x + D*u = a_cmd - a_cmd_memory, at stages 0..N-1.
 # Disabled: +/-1e15. No terminal control row.
