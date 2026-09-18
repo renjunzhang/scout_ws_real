@@ -11,6 +11,8 @@ import time
 import casadi as ca
 import numpy as np
 from .task import load_task, model_parameters, halfspaces
+from .warm_start import warm_start_values
+from .diagnostics import solver_summary
 from spmpc_acados_model import export_spmpc_slosh_symbols, PIDX_SLOSH
 from planning_terms import geometry_terms
 from actual_motion_kernel import actual_motion_rhs
@@ -24,8 +26,12 @@ def dynamics(task):
                        [ca.substitute(sym["disc_dyn"], sym["p"], ca.DM(p))])
 
 
-def solve_task(source, warm_plan=None):
+def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
+    emit = progress if progress is not None else lambda stage, **details: None
+    if isinstance(solver_verbosity, bool) or not isinstance(solver_verbosity, int) or not 0 <= solver_verbosity <= 12:
+        raise ValueError("solver_verbosity must be an integer from 0 to 12")
     task = load_task(source)
+    emit("task_loaded", transport_duration=task["transport_duration"], dt=task["dt"])
     dt = task["dt"]
     moving = round(task["transport_duration"]/dt)
     count = round((task["deadline"]+task["stop_window"])/dt)
@@ -125,16 +131,26 @@ def solve_task(source, warm_plan=None):
     opt.set_initial(U, 0)
     opt.set_initial(progress_scale,1.)
     if warm_plan is not None:
-        old_x = np.asarray([r["state"] for r in warm_plan["samples"]])
-        old_u = np.asarray([r["control"] for r in warm_plan["samples"][:-1]])
-        if old_x.shape != (count+1, 28) or old_u.shape != (count, 3):
-            raise ValueError("warm plan grid/layout mismatch")
-        opt.set_initial(X, old_x.T); opt.set_initial(U, old_u.T)
-    opt.solver("ipopt", {"print_time": False}, {"print_level": 0, "max_iter": task["max_iterations"],
+        warm_x, warm_u, warm_scale = warm_start_values(warm_plan, task, count)
+        opt.set_initial(X, warm_x)
+        opt.set_initial(U, warm_u)
+        opt.set_initial(progress_scale, warm_scale)
+        emit("warm_start_loaded", progress_scale=warm_scale)
+    opt.solver("ipopt", {"print_time": False}, {"print_level": solver_verbosity, "max_iter": task["max_iterations"],
         "tol": task["constraint_tolerance"], "constr_viol_tol": task["constraint_tolerance"],
         "acceptable_tol": task["constraint_tolerance"], "bound_relax_factor": 0., "fixed_variable_treatment": "make_constraint"})
     begun = time.monotonic()
-    solution = opt.solve()
+    emit("solve_started", states=count+1, variables=int(opt.nx), constraints=int(opt.ng))
+    try:
+        solution = opt.solve()
+    except RuntimeError:
+        try:
+            failure_stats = solver_summary(opt.stats())
+        except RuntimeError:
+            failure_stats = {}
+        emit("solve_failed", **failure_stats)
+        raise
+    emit("solve_finished", **solver_summary(solution.stats()))
     states, controls = np.asarray(solution.value(X)).T, np.asarray(solution.value(U)).T
     controls = np.vstack((controls, np.zeros(3)))
     plan = {k: task[k] for k in ("frame_id", "region", "dt", "transport_duration", "deadline", "stop_window", "height_coeff",
@@ -154,5 +170,7 @@ def solve_task(source, warm_plan=None):
         phase="TAIL" if k >= moving else ("BRAKE" if k >= brake else "MOVE"), region_cell_id=region_ids[k])
         for k, (x, u) in enumerate(zip(states, controls))]
     from .validation import validate_plan
+    emit("validation_started")
     plan["validation"] = validate_plan(plan)
+    emit("validation_finished", **plan["validation"])
     return plan
