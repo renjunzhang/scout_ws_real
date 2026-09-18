@@ -161,35 +161,38 @@ TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFi
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,params.rti_iterations);
 }
 
-TEST(ReplayDiagnostics, StoppedColdStartUsesFeedbackSeedWithoutInventingHistory) {
+TEST(ReplayDiagnostics, TimedRawReferencePreparesOnceAndRepeatedPathKeepsLiveHistory) {
     auto params = makeParams();
     params.rti_iterations = 5;
     params.max_prediction_defect = 1e-4;
+    params.planning.task_deadline_sec = 45.0;
+    params.terminal.mpc_stop_handoff_enable = true;
     params.jerk_limit_enable = true;
+    params.warm_start.use_previous_solution = true;
+    SpmpcProblem problem;
+    problem.configure(params, makeB0Variant());
+    const auto reference = makeStraightReference();
+    problem.setReferencePath(reference);
     auto input = makeInput();
+    input.has_task_elapsed = true;
     input.actuator.a_cmd_memory = 0.0;
-    input.robot.y = -.005;  // Small localization offset on the recorded start.
-    input.solve_budget.deadline = SolveBudget::Clock::now() + std::chrono::seconds(10);
-    std::vector<TrajectoryPoint> points;
-    for (int i = 0; i <= 100; ++i) {
-        TrajectoryPoint point;
-        point.x = .05 * i;
-        point.y = .6 * (1.0 - std::cos(2.0 * std::acos(-1.0) * i / 100.0));
-        points.push_back(point);
-    }
-    ReferencePath reference;
-    reference.setPoints(points, "map");
-    ContinuousMpccSolverAcados solver;
-    solver.configure(params, makeB0Variant());
+    input.robot.y = -.005;
     SolverOutput output;
-    ASSERT_TRUE(solver.solve(input, reference, output)) << output.status;
-    EXPECT_EQ(output.pre_solve_snapshot.warm_start_source, "STOPPED_ACTUATOR_ROLLOUT");
-    EXPECT_EQ(output.pre_solve_snapshot.rti_iterations, 1);
-    EXPECT_LE(output.predicted_horizon.dynamics_max_defect, params.max_prediction_defect);
-    EXPECT_FALSE(output.pre_solve_snapshot.have_previous_solution);
-    EXPECT_FALSE(output.pre_solve_snapshot.have_previous_control);
-    EXPECT_TRUE(output.cost.reconstruction_valid);
-    EXPECT_GT(output.cmd_v, 0.0);  // The numerical rest seed is not a stop command.
+    for (int k = 0; k < 12; ++k) {
+        input.task_elapsed_sec = k * input.dt;
+        problem.setReferencePath(reference);
+        input.solve_budget.deadline = SolveBudget::Clock::now() + std::chrono::seconds(1);
+        ASSERT_TRUE(problem.solve(input, output)) << "cycle=" << k << " " << output.status;
+        const auto& snapshot = output.pre_solve_snapshot;
+        EXPECT_EQ(snapshot.warm_start_source,
+                  k == 0 ? "PREPARED_REFERENCE_PATH" : "SHIFTED_PREVIOUS_SOLUTION");
+        EXPECT_EQ(snapshot.have_previous_solution, k > 0);
+        EXPECT_EQ(snapshot.have_previous_control, k > 0);
+        EXPECT_LE(output.predicted_horizon.dynamics_max_defect, params.max_prediction_defect);
+        input.actuator.v_cmd = output.cmd_v;
+        input.actuator.omega_cmd = output.cmd_omega;
+        input.actuator.a_cmd_memory = output.first_shot_debug.u0_a;
+    }
 }
 
 TEST(ReplayDiagnostics, RejectedIterateCanSeedRetryWithoutBecomingCommandHistory) {
@@ -206,7 +209,6 @@ TEST(ReplayDiagnostics, RejectedIterateCanSeedRetryWithoutBecomingCommandHistory
     }
     ReferencePath reference;reference.setPoints(points,"map");
     auto input=makeInput();input.actuator.a_cmd_memory=0.;
-    input.robot.v=.04;  // Moving cold start still exercises the flatness/retry path.
     ContinuousMpccSolverAcados solver;solver.configure(params,variant);
     SolverOutput output;
     ASSERT_FALSE(solver.solve(input,reference,output));

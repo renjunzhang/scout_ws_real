@@ -607,6 +607,34 @@ void ContinuousMpccSolverAcados::clearNumericalHistory() {
     retry_warm_start_ = WarmStartOutput{};
 }
 
+void ContinuousMpccSolverAcados::prepareWarmStart(
+    const SolverInput& input, const ReferencePath& reference, const char* source) {
+    // One shared preparation path for a supplied plan or a raw reference. Keep
+    // only a primal numerical seed; no fictitious successful/control history or
+    // generated solver memory may enter the live task.
+    prepared_warm_start_ = WarmStartOutput{};
+    SolverOutput prepared;
+    if (solve(input, reference, prepared)) {
+        prepared_warm_start_ = previous_warm_start_solution_;
+        prepared_warm_start_source_ = source;
+    }
+    clearNumericalHistory();
+    static_cast<GenSolver*>(capsule_)->reset();
+}
+
+void ContinuousMpccSolverAcados::prepareReference(const ReferencePath& reference) {
+    if (!capsule_ || !planning_adapter_ || planning_adapter_->plan() ||
+        !params_.warm_start.enable || reference.points().size() < 2) return;
+    const auto& start = reference.points()[0];
+    const auto& next = reference.points()[1];
+    SolverInput nominal;
+    nominal.dt = params_.actuator.dt;
+    nominal.has_task_elapsed = true;
+    nominal.robot = {start.x, start.y, std::atan2(next.y-start.y, next.x-start.x), 0.0, 0.0};
+    nominal.actuator.valid = true;
+    prepareWarmStart(nominal, reference, "PREPARED_REFERENCE_PATH");
+}
+
 void ContinuousMpccSolverAcados::preparePlanWarmStart() {
     const auto* plan = planning_adapter_->plan();
     if (!plan || !params_.warm_start.enable) return;
@@ -637,14 +665,7 @@ void ContinuousMpccSolverAcados::preparePlanWarmStart() {
     ReferencePath route;
     route.setPoints(points, plan->frame_id);
 
-    // Reuse the same OCP assembly and validation, with the configured finite
-    // RTI count outside the live cycle. Never retain fictitious command history
-    // or QP/dual memory. A failed preparation leaves the nominal-plan fallback.
-    SolverOutput prepared;
-    if (solve(input, route, prepared))
-        prepared_plan_warm_start_ = previous_warm_start_solution_;
-    clearNumericalHistory();
-    static_cast<GenSolver*>(capsule_)->reset();
+    prepareWarmStart(input, route, "PREPARED_TRAJECTORY_PLAN");
 }
 
 void ContinuousMpccSolverAcados::configure(const SolverParams& params, const VariantConfig& variant) {
@@ -655,7 +676,8 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
         params_.warm_start.enable = true;
     }
     clearNumericalHistory();
-    prepared_plan_warm_start_ = WarmStartOutput{};
+    prepared_warm_start_ = WarmStartOutput{};
+    prepared_warm_start_source_.clear();
     slosh_dyn_.configure(params.slosh);
     warm_start_generator_ = makeWarmStartGenerator(params_.warm_start, params_.platform);
 
@@ -1131,16 +1153,16 @@ bool ContinuousMpccSolverAcados::solve(
             snapshot.warm_start_source="SHIFTED_PREVIOUS_SOLUTION";
         }
     }
-    if (warm_start_requested && !warm_start_applied && prepared_plan_warm_start_.valid &&
+    if (warm_start_requested && !warm_start_applied && prepared_warm_start_.valid &&
         input.has_task_elapsed && input.task_elapsed_sec <= input.dt + 1e-9 &&
-        s0 <= prepared_plan_warm_start_.states.front().s + params_.v_max * input.dt) {
-        warm_start = prepared_plan_warm_start_;
+        s0 <= prepared_warm_start_.states.front().s + params_.v_max * input.dt) {
+        warm_start = prepared_warm_start_;
         warm_start.states.front().s = s0;
         if (rolloutExplicitActuatorWarmStart(
                 warm_start, warm_input, input.actuator, params_.actuator, slosh_dyn_, slosh)) {
             setAcadosWarmStart(*gen, warm_start, slosh);
             warm_start_applied = true;
-            snapshot.warm_start_source = "PREPARED_TRAJECTORY_PLAN";
+            snapshot.warm_start_source = prepared_warm_start_source_;
         }
     }
     if (warm_start_requested && !warm_start_applied && !nominal_horizon.empty()) {
@@ -1153,19 +1175,6 @@ bool ContinuousMpccSolverAcados::solve(
             setAcadosWarmStart(*gen,warm_start,slosh); warm_start_applied=true;
             snapshot.warm_start_source="TRAJECTORY_PLAN";
         }
-    }
-    // A cold, stopped actuator has no executed motion to extrapolate. Start
-    // from its zero-input rollout instead of a geometric seed that immediately
-    // advances/turns along the route. Plan and previous-solution seeds retain
-    // priority; the OCP still performs online RTI and every acceptance check.
-    if (warm_start_requested && !warm_start_applied && !have_previous_solution_ && !have_u_prev_ &&
-        makeStoppedActuatorWarmStart(warm_start, warm_input, input.actuator,
-            params_.terminal.goal_reached_max_speed, params_.terminal.goal_reached_max_omega) &&
-        rolloutExplicitActuatorWarmStart(
-            warm_start, warm_input, input.actuator, params_.actuator, slosh_dyn_, slosh)) {
-        setAcadosWarmStart(*gen, warm_start, slosh);
-        warm_start_applied = true;
-        snapshot.warm_start_source = "STOPPED_ACTUATOR_ROLLOUT";
     }
     if (warm_start_requested && !warm_start_applied && warm_start_generator_) {
         WarmStartDiagnostics diagnostics;
@@ -1284,7 +1293,7 @@ bool ContinuousMpccSolverAcados::solve(
         return false;
     }
     // A cycle that never entered RTI must not consume the prepared seed.
-    prepared_plan_warm_start_ = WarmStartOutput{};
+    prepared_warm_start_ = WarmStartOutput{};
     output.first_shot_debug.status_code = static_cast<double>(status);
     if (status != 0) {
         output.recoverable_solver_failure = true;
@@ -1578,6 +1587,8 @@ bool ContinuousMpccSolverAcados::solve(
 #else  // SPMPC_WITH_ACADOS
 
 namespace spmpc_local_planner {
+
+void ContinuousMpccSolverAcados::prepareReference(const ReferencePath&) {}
 
 ContinuousMpccSolverAcados::ContinuousMpccSolverAcados() = default;
 ContinuousMpccSolverAcados::~ContinuousMpccSolverAcados() = default;

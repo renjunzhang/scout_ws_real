@@ -71,46 +71,6 @@ protected:
     SloshDynamics liquid;
 };
 
-TEST_F(ExplicitActuatorWarmStart, StoppedSeedPreservesMeasuredMotionAndLiquidMemory) {
-    input.robot = {.1, -.02, .3, -.001, .002};
-    input.s0 = .1;
-    actuator = ActuatorState{};
-    actuator.valid = true;
-    WarmStartOutput output;
-    ASSERT_TRUE(makeStoppedActuatorWarmStart(output, input, actuator, .01, .02));
-    ASSERT_TRUE(rolloutExplicitActuatorWarmStart(output, input, actuator, params, liquid, true));
-    EXPECT_DOUBLE_EQ(output.states.front().v, input.robot.v);
-    EXPECT_DOUBLE_EQ(output.states.front().omega, input.robot.omega);
-    EXPECT_DOUBLE_EQ(output.states.front().eta_x, input.slosh.eta_x);
-    EXPECT_DOUBLE_EQ(output.states.front().eta_y_dot, input.slosh.eta_y_dot);
-    EXPECT_NE(output.states.back().eta_x, input.slosh.eta_x);
-    EXPECT_FALSE(output.diagnostics.used_flatness);
-    EXPECT_FALSE(output.diagnostics.used_previous_solution);
-    for (const auto& control : output.controls) {
-        EXPECT_DOUBLE_EQ(control.a, 0.0);
-        EXPECT_DOUBLE_EQ(control.alpha, 0.0);
-        EXPECT_DOUBLE_EQ(control.v_s, 0.0);
-    }
-    expectConsistent(output);
-}
-
-TEST_F(ExplicitActuatorWarmStart, StoppedSeedRequiresMeasuredStopAndClearedActuator) {
-    input.robot = {};
-    actuator = ActuatorState{};
-    actuator.valid = true;
-    WarmStartOutput output;
-    ASSERT_TRUE(makeStoppedActuatorWarmStart(output, input, actuator, .01, .02));
-    for (double* value : {&input.robot.v, &input.robot.omega, &actuator.v_cmd,
-                         &actuator.omega_cmd, &actuator.a_cmd_memory,
-                         &actuator.linear_delay_queue.back(), &actuator.angular_delay_queue.back()}) {
-        *value = .03;
-        EXPECT_FALSE(makeStoppedActuatorWarmStart(output, input, actuator, .01, .02));
-        *value = std::numeric_limits<double>::quiet_NaN();
-        EXPECT_FALSE(makeStoppedActuatorWarmStart(output, input, actuator, .01, .02));
-        *value = 0.0;
-    }
-}
-
 TEST_F(ExplicitActuatorWarmStart, GeometryControlsDoNotDependOnProvisionalLiquidRollout) {
     const auto geometry = candidate();
     input.config.use_slosh_rollout = true;

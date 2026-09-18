@@ -125,6 +125,8 @@ void SpmpcProblem::setReferencePath(const ReferencePath& reference) {
     reference_ = reference;
     if (!same_path) {
         if (changed_task && solver_) solver_->configure(solver_params_,variant_);
+        if (solver_ && !task_plan_ && solver_params_.planning.task_deadline_sec > 0)
+            solver_->prepareReference(reference_);
         // Republishing/reassembling a route cannot buy more time for a plan.
         // A different task/plan requires configure(), which resets the clock.
         if (!task_plan_ && solver_params_.planning.task_deadline_sec<=0) task_clock_.reset();

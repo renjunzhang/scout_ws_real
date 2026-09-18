@@ -98,6 +98,7 @@ protected:
 };
 
 TEST_F(PlanWarmStart, PreparationKeepsLiveHistoryEmptyAndRequiresOnlineRti) {
+    solver.prepareReference(route);  // A route notification must retain the prepared plan.
     auto observed = input();
     observed.solve_budget.deadline = SolveBudget::Clock::now()+std::chrono::seconds(1);
     SolverOutput output;
@@ -168,6 +169,36 @@ TEST_F(PlanWarmStart, LateStartAndReconfiguredRawBaselineDoNotUsePreparedSeed) {
     EXPECT_NE(output.pre_solve_snapshot.warm_start_source, "PREPARED_TRAJECTORY_PLAN");
     EXPECT_FALSE(output.pre_solve_snapshot.have_previous_solution);
     EXPECT_FALSE(output.pre_solve_snapshot.have_previous_control);
+}
+
+TEST_F(PlanWarmStart, RawReferencePreparationPreservesBudgetAndReanchorsFeedback) {
+    params.planning.trajectory = {};
+    params.planning.liquid_free_baseline = true;
+    variant.name = "B0"; variant.slosh_enable = false; variant.w_slosh = 0.0;
+    solver.configure(params, variant);
+    solver.prepareReference(route);
+    auto observed = input();
+    observed.robot = {.003, .002, .001, .01, .002};
+    observed.actuator.v_cmd = .013;
+    observed.actuator.a_cmd_memory = .012;
+    observed.actuator.linear_delay_queue.fill(.004);
+    observed.solve_budget.deadline = SolveBudget::Clock::now() - std::chrono::seconds(1);
+    for (int attempt = 0; attempt < 2; ++attempt) {
+        SolverOutput output;
+        EXPECT_FALSE(solver.solve(observed, route, output));
+        EXPECT_EQ(output.status, "SOLVE_BUDGET_EXHAUSTED");
+        const auto& snapshot = output.pre_solve_snapshot;
+        EXPECT_EQ(snapshot.warm_start_source, "PREPARED_REFERENCE_PATH");
+        EXPECT_FALSE(snapshot.have_previous_solution);
+        EXPECT_FALSE(snapshot.have_previous_control);
+        EXPECT_EQ(snapshot.rti_iterations, 0);
+        const auto& initial = snapshot.initial_guess_states.front();
+        EXPECT_DOUBLE_EQ(initial.model_state[0], observed.robot.x);
+        EXPECT_DOUBLE_EQ(initial.model_state[3], observed.robot.v);
+        EXPECT_DOUBLE_EQ(initial.model_state[6], observed.actuator.v_cmd);
+        EXPECT_DOUBLE_EQ(initial.model_state[8], observed.actuator.linear_delay_queue.front());
+        EXPECT_DOUBLE_EQ(initial.model_state[23], observed.actuator.a_cmd_memory);
+    }
 }
 
 }  // namespace

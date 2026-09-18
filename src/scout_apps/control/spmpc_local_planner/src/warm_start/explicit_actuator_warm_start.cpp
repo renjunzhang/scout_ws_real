@@ -92,32 +92,6 @@ bool isWarmStartFinite(const WarmStartOutput& warm_start) {
     return true;
 }
 
-bool makeStoppedActuatorWarmStart(
-    WarmStartOutput& warm_start, const WarmStartInput& input,
-    const ActuatorState& actuator_state, double speed_tolerance, double omega_tolerance) {
-    const auto zero = [](double value) {
-        return std::isfinite(value) && std::abs(value) <= 1e-9;
-    };
-    if (input.horizon_steps <= 0 || !actuator_state.valid ||
-        !std::isfinite(speed_tolerance) || speed_tolerance < 0.0 ||
-        !std::isfinite(omega_tolerance) || omega_tolerance < 0.0 ||
-        !std::isfinite(input.robot.v) || std::abs(input.robot.v) > speed_tolerance ||
-        !std::isfinite(input.robot.omega) || std::abs(input.robot.omega) > omega_tolerance ||
-        !zero(actuator_state.v_cmd) || !zero(actuator_state.omega_cmd) ||
-        !zero(actuator_state.a_cmd_memory) ||
-        !std::all_of(actuator_state.linear_delay_queue.begin(), actuator_state.linear_delay_queue.end(), zero) ||
-        !std::all_of(actuator_state.angular_delay_queue.begin(), actuator_state.angular_delay_queue.end(), zero)) {
-        return false;
-    }
-    WarmStartOutput candidate;
-    candidate.states.resize(static_cast<size_t>(input.horizon_steps + 1));
-    candidate.controls.resize(static_cast<size_t>(input.horizon_steps));
-    candidate.states.front().s = input.s0;
-    candidate.valid = true;
-    warm_start = std::move(candidate);
-    return true;
-}
-
 bool rolloutExplicitActuatorWarmStart(
     WarmStartOutput& warm_start, const WarmStartInput& input,
     const ActuatorState& actuator_state, const ActuatorModelParams& actuator_params,

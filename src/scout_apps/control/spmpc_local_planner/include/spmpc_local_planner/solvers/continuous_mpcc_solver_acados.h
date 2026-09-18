@@ -24,11 +24,13 @@ public:
     ~ContinuousMpccSolverAcados() override;
 
     void configure(const SolverParams& params, const VariantConfig& variant) override;
+    void prepareReference(const ReferencePath& reference) override;
     bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const override;
 
 private:
     void clearNumericalHistory();
     void preparePlanWarmStart();
+    void prepareWarmStart(const SolverInput& input, const ReferencePath& reference, const char* source);
 
     SolverParams params_;
     VariantConfig variant_;
@@ -41,7 +43,8 @@ private:
     std::string configuration_error_;
     // Prepared before the live task clock starts. Only a numerical seed;
     // feedback replaces every state and command-history entry before use.
-    mutable WarmStartOutput prepared_plan_warm_start_;
+    mutable WarmStartOutput prepared_warm_start_;
+    std::string prepared_warm_start_source_;
     mutable WarmStartOutput previous_warm_start_solution_;
     mutable bool have_previous_solution_ = false;
     // Finite but rejected RTI iterate: numerical seed only, never a solution

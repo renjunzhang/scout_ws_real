@@ -60,6 +60,8 @@ public:
     virtual ~SpmpcSolver() = default;
 
     virtual void configure(const SolverParams& params, const VariantConfig& variant) = 0;
+    // Optional numerical preparation on a new timed task, outside live solve().
+    virtual void prepareReference(const ReferencePath&) {}
     virtual bool solve(const SolverInput& input, const ReferencePath& reference, SolverOutput& output) const = 0;
 };
 
