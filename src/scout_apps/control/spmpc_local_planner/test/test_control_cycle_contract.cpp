@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/ros/odom_state_buffer.h"
 #include "spmpc_local_planner/reference/progress_projector.h"
 
 #include <gtest/gtest.h>
@@ -21,6 +22,70 @@ StampedRobotState sample(std::int64_t stamp_ns,
     out.state.v = v;
     out.state.omega = omega;
     return out;
+}
+
+TEST(OdomStateBuffer, ObserverAdvancingBeforeOdomCommitCannotSplitControlEpochs) {
+    SloshObserverBank observer;
+    ASSERT_TRUE(observer.configure(SloshModelParams{}, .02));
+    MotionExcitation excitation;
+    excitation.valid = true; excitation.source = MotionExcitationSource::Odom;
+    excitation.sample_dt_sec = .02; excitation.measurement_stamp_ns = 42925000000LL;
+    ASSERT_TRUE(observer.stepOdom(excitation));
+    OdomStateBuffer buffer;
+    const auto previous = sample(excitation.measurement_stamp_ns, 1., .1, .55, -.1);
+    ASSERT_TRUE(buffer.commit(previous, observer.odom(), "odom", previous.stamp_ns+1000000, 1.));
+
+    // Reproduce the recorded scheduling window: the observer has processed
+    // 42.945 s but the odom worker has not committed that robot/history yet.
+    excitation.measurement_stamp_ns += 20000000LL;
+    excitation.ax = .1;
+    ASSERT_TRUE(observer.stepOdom(excitation));
+    const auto during_update = buffer.snapshot();
+    EXPECT_EQ(alignRobotStateToEpoch(during_update.history,
+        observer.odom().state_stamp_ns, .05, .01).status, "EXTRAPOLATION_LIMIT");
+    const auto coherent = alignRobotStateToEpoch(during_update.history,
+        during_update.liquid.state_stamp_ns, .05, .01);
+    ASSERT_TRUE(coherent.valid); EXPECT_EQ(coherent.status, "EXACT");
+    EXPECT_EQ(during_update.robot.stamp_ns, during_update.liquid.state_stamp_ns);
+    EXPECT_DOUBLE_EQ(coherent.state.v, .55);
+
+    const auto current = sample(excitation.measurement_stamp_ns, 1.011, .098, .552, -.1);
+    ASSERT_TRUE(buffer.commit(current, observer.odom(), "odom", current.stamp_ns+1000000, 1.));
+    const auto after = buffer.snapshot();
+    EXPECT_EQ(after.robot.stamp_ns, after.liquid.state_stamp_ns);
+    EXPECT_TRUE(alignRobotStateToEpoch(after.history, after.liquid.state_stamp_ns, .05, .01).valid);
+    EXPECT_EQ(during_update.history.back().stamp_ns, previous.stamp_ns);
+    EXPECT_EQ(during_update.liquid.state_stamp_ns, previous.stamp_ns);
+    EXPECT_EQ(after.history.back().stamp_ns, current.stamp_ns);
+}
+
+TEST(OdomStateBuffer, RejectsMismatchedValidPairWithoutReplacingAcceptedState) {
+    OdomStateBuffer buffer;
+    SloshObserverSnapshot liquid; liquid.configured = liquid.valid = true;
+    liquid.state_stamp_ns = 1000000000LL;
+    ASSERT_TRUE(buffer.commit(sample(liquid.state_stamp_ns, 0,0,0,0), liquid, "odom", 1001000000LL, 1.));
+    liquid.state_stamp_ns += 20000000LL;
+    EXPECT_FALSE(buffer.commit(sample(1000000000LL, 0,0,0,0), liquid, "odom", 1021000000LL, 1.));
+    EXPECT_EQ(buffer.snapshot().liquid.state_stamp_ns, 1000000000LL);
+    EXPECT_EQ(buffer.snapshot().robot.stamp_ns, 1000000000LL);
+}
+
+TEST(OdomStateBuffer, ClockResetRetainsLiquidInvalidationAndClearsOldHistory) {
+    OdomStateBuffer buffer;
+    SloshObserverSnapshot liquid; liquid.configured = liquid.valid = true;
+    for (int k=0; k<10; ++k) {
+        liquid.state_stamp_ns = 1000000000LL+k*20000000LL;
+        ASSERT_TRUE(buffer.commit(sample(liquid.state_stamp_ns, 0,0,0,0), liquid,
+                                 "odom", liquid.state_stamp_ns, .1));
+    }
+    EXPECT_LE(buffer.snapshot().history.size(), 6u);
+    liquid.valid = false; liquid.state.eta_x = .003;
+    ASSERT_TRUE(buffer.commit(sample(500000000LL, 0,0,0,0), liquid, "odom", 500000000LL, .1));
+    const auto reset = buffer.snapshot();
+    ASSERT_EQ(reset.history.size(), 1u);
+    EXPECT_EQ(reset.robot.stamp_ns, 500000000LL);
+    EXPECT_FALSE(reset.liquid.valid);
+    EXPECT_DOUBLE_EQ(reset.liquid.state.eta_x, .003);
 }
 
 TEST(ControlCycleContract, InterpolatesRobotAtLiquidEpoch) {

@@ -1420,11 +1420,11 @@ void SpmpcLocalPlannerROS::publishDelayPhaseDiagnostics(
         return;
     }
 
-    ros::Time odom_receive_stamp;
+    const auto odom_receive_stamp = rosTimeFromNanoseconds(
+        odom_state_buffer_.snapshot().receive_stamp_ns);
     OdomTimingDebug odom_timing;
     {
-        std::lock_guard<std::mutex> lock(odom_mutex_);
-        odom_receive_stamp = last_odom_receive_stamp_;
+        std::lock_guard<std::mutex> lock(odom_timing_mutex_);
         odom_timing = last_odom_timing_;
     }
 
@@ -1876,14 +1876,20 @@ void SpmpcLocalPlannerROS::odomCallback(const nav_msgs::OdometryConstPtr& msg) {
     if (!processOdomInput(*msg, receive_stamp)) {
         return;
     }
-    // Commit odom to the formal control path only after the same monotonicity
-    // and finite-value checks used by the liquid-observer input boundary. The
-    // potentially expensive observer update stays outside this short lock.
-    std::lock_guard<std::mutex> lock(odom_mutex_);
-    last_odom_receive_stamp_ = receive_stamp;
-    last_odom_ = *msg;
-    have_odom_ = true;
-    appendOdomStateHistory(*msg);
+    // The single odom worker has finished this sample's observer update.
+    // Commit both states and their alignment history as one control snapshot;
+    // observer computation/diagnostics never hold the snapshot lock.
+    SloshObserverSnapshot liquid;
+    {
+        std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
+        liquid = slosh_observers_.odom();
+    }
+    if (!odom_state_buffer_.commit(
+            {static_cast<std::int64_t>(msg->header.stamp.toNSec()), robotStateFromOdom(*msg)},
+            liquid, msg->header.frame_id, static_cast<std::int64_t>(receive_stamp.toNSec()),
+            state_timing_params_.odom_history_sec)) {
+        ROS_ERROR_THROTTLE(1.0, "[spmpc_local_planner] rejected inconsistent odom/observer snapshot");
+    }
 }
 
 void SpmpcLocalPlannerROS::imuCallback(const sensor_msgs::ImuConstPtr& msg) {
@@ -2043,16 +2049,9 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         return;
     }
 
-    nav_msgs::Odometry latest_odom;
-    ros::Time latest_odom_receive_stamp;
-    {
-        std::lock_guard<std::mutex> lock(odom_mutex_);
-        if (have_odom_) {
-            latest_odom = last_odom_;
-            latest_odom_receive_stamp = last_odom_receive_stamp_;
-        }
-    }
-    if (latest_odom.header.stamp.isZero()) {
+    const auto odom_snapshot = odom_state_buffer_.snapshot();
+    const auto latest_odom_receive_stamp = rosTimeFromNanoseconds(odom_snapshot.receive_stamp_ns);
+    if (odom_snapshot.robot.stamp_ns <= 0) {
         resetTerminalSpinFailGate();
         resetTrackingSafetyGate();
         diagnostics_.publishStatus("WAITING_FOR_ODOM");
@@ -2077,14 +2076,12 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
 
     SolverInput input;
     SloshObserverHealth odom_observer_health;
+    odom_observer_health.snapshot = odom_snapshot.liquid;
+    odom_observer_health.input_ready = odom_snapshot.liquid.valid;
     SloshObserverHealth imu_observer_health;
     double slosh_height_coeff = 0.0;
     {
         std::lock_guard<std::mutex> lock(slosh_observers_mutex_);
-        odom_observer_health.snapshot = slosh_observers_.odom();
-        // Odom has no separate bias/filter state. Snapshot validity and age are
-        // its complete admission contract.
-        odom_observer_health.input_ready = odom_observer_health.snapshot.valid;
         imu_observer_health.snapshot = slosh_observers_.imu();
         imu_observer_health.input_ready = imu_input_ready_;
         imu_observer_health.input_reset_epoch = imu_input_reset_epoch_;
@@ -2104,8 +2101,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
         odom_observer_health.snapshot.excitation);
     cycle_audit.imu_excitation = makeExcitationAudit(
         imu_observer_health.snapshot.excitation);
-    cycle_audit.timing.raw_robot_state_stamp_ns =
-        static_cast<std::int64_t>(latest_odom.header.stamp.toNSec());
+    cycle_audit.timing.raw_robot_state_stamp_ns = odom_snapshot.robot.stamp_ns;
     cycle_audit.timing.raw_liquid_state_stamp_ns =
         observer_selection.selected_state_stamp_ns;
     cycle_audit.timing.state_alignment_required =
@@ -2193,7 +2189,7 @@ void SpmpcLocalPlannerROS::controlTimerCallback(const ros::TimerEvent& event) {
     bool extrapolated = false;
     std::string alignment_status;
     const auto alignment_wall_start = SolveBudget::Clock::now();
-    const bool robot_aligned = robotStateAtEpoch(rosTimeFromNanoseconds(robot_epoch_ns), input.robot,
+    const bool robot_aligned = robotStateAtEpoch(odom_snapshot, rosTimeFromNanoseconds(robot_epoch_ns), input.robot,
         interpolated, extrapolated, alignment_status, cycle_audit.pose_propagation_sec);
     cycle_audit.state_alignment_wall_ms = std::chrono::duration<double, std::milli>(
         SolveBudget::Clock::now() - alignment_wall_start).count();
@@ -2596,30 +2592,8 @@ RobotState SpmpcLocalPlannerROS::robotStateFromOdom(const nav_msgs::Odometry& od
     return state;
 }
 
-void SpmpcLocalPlannerROS::appendOdomStateHistory(
-    const nav_msgs::Odometry& odom) {
-    if (odom.header.stamp.isZero()) {
-        return;
-    }
-    StampedRobotState sample;
-    sample.stamp_ns = static_cast<std::int64_t>(odom.header.stamp.toNSec());
-    sample.state = robotStateFromOdom(odom);
-    if (!odom_state_history_.empty() &&
-        sample.stamp_ns <= odom_state_history_.back().stamp_ns) {
-        // processOdomInput only admits a regression for a detected source clock
-        // reset.  A new epoch must not interpolate across that reset.
-        odom_state_history_.clear();
-    }
-    odom_state_history_.push_back(sample);
-    const std::int64_t history_ns = static_cast<std::int64_t>(
-        std::max(0.1, state_timing_params_.odom_history_sec) * 1e9);
-    while (odom_state_history_.size() > 1 &&
-           sample.stamp_ns - odom_state_history_.front().stamp_ns > history_ns) {
-        odom_state_history_.pop_front();
-    }
-}
-
 bool SpmpcLocalPlannerROS::robotStateAtEpoch(
+    const OdomControlSnapshot& odom,
     const ros::Time& target_stamp,
     RobotState& state,
     bool& interpolated,
@@ -2633,13 +2607,8 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
     if (target_stamp.isZero()) {
         return false;
     }
-    std::deque<StampedRobotState> odom_history;
-    std::string latest_odom_frame;
-    {
-        std::lock_guard<std::mutex> lock(odom_mutex_);
-        odom_history = odom_state_history_;
-        latest_odom_frame = last_odom_.header.frame_id;
-    }
+    const auto& odom_history = odom.history;
+    const auto& latest_odom_frame = odom.frame_id;
     const auto aligned = alignRobotStateToEpoch(
         odom_history,
         static_cast<std::int64_t>(target_stamp.toNSec()),
@@ -2735,7 +2704,7 @@ bool SpmpcLocalPlannerROS::processOdomInput(
     const nav_msgs::Odometry& odom,
     const ros::Time& receive_stamp) {
     const auto commit_timing = [this](const OdomTimingDebug& timing) {
-        std::lock_guard<std::mutex> lock(odom_mutex_);
+        std::lock_guard<std::mutex> lock(odom_timing_mutex_);
         last_odom_timing_ = timing;
     };
     if (odom.header.frame_id.empty() ||

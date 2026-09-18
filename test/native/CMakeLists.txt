@@ -25,6 +25,7 @@ set(SPMPC_NATIVE_SOURCES
   ${SPMPC_ROOT}/src/core/start_lock_recovery.cpp
   ${SPMPC_ROOT}/src/core/terminal_controller.cpp
   ${SPMPC_ROOT}/src/ros/control_cycle_contract.cpp
+  ${SPMPC_ROOT}/src/ros/odom_state_buffer.cpp
   ${SPMPC_ROOT}/src/ros/recorded_command_contract.cpp
   ${SPMPC_ROOT}/src/reference/reference_path.cpp
   ${SPMPC_ROOT}/src/reference/reference_path_preprocessor.cpp

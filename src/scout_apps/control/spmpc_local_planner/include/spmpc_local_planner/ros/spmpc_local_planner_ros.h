@@ -10,6 +10,7 @@
 #include "spmpc_local_planner/reference/reference_path_preprocessor.h"
 #include "spmpc_local_planner/ros/command_history_buffer.h"
 #include "spmpc_local_planner/ros/control_cycle_contract.h"
+#include "spmpc_local_planner/ros/odom_state_buffer.h"
 #include "spmpc_local_planner/ros/diagnostics_publisher.h"
 #include "spmpc_local_planner/ros/execution_state_predictor.h"
 #include "spmpc_local_planner/ros/recorded_command_contract.h"
@@ -85,13 +86,13 @@ private:
                                   std::string& failure_status);
     void resetTrackingSafetyGate();
     RobotState robotStateFromOdom(const nav_msgs::Odometry& odom) const;
-    bool robotStateAtEpoch(const ros::Time& target_stamp,
+    bool robotStateAtEpoch(const OdomControlSnapshot& odom,
+                           const ros::Time& target_stamp,
                            RobotState& state,
                            bool& interpolated,
                            bool& extrapolated,
                            std::string& status,
                            double& pose_propagation_sec);
-    void appendOdomStateHistory(const nav_msgs::Odometry& odom);
     bool processOdomInput(const nav_msgs::Odometry& odom,
                           const ros::Time& receive_stamp);
     void publishOdomSloshObserverDebug(const nav_msgs::Odometry& odom,
@@ -180,16 +181,12 @@ private:
     SpeedSafetyContract speed_safety_contract_;
     EffectiveConfigDebug effective_config_;
     OdomTimingDebug last_odom_timing_;
-    ros::Time last_odom_receive_stamp_;
-    std::mutex odom_mutex_;
+    std::mutex odom_timing_mutex_;
+    OdomStateBuffer odom_state_buffer_;
     std::mutex slosh_observers_mutex_;
     bool imu_input_ready_ = false;
     std::uint32_t imu_input_reset_epoch_ = 0;
 
-    // Formal control snapshots are guarded by odom_mutex_.
-    nav_msgs::Odometry last_odom_;
-    std::deque<StampedRobotState> odom_state_history_;
-    bool have_odom_ = false;
     // Derivative baseline: private to the single-threaded odom callback queue.
     nav_msgs::Odometry prev_odom_;
     bool have_prev_odom_ = false;

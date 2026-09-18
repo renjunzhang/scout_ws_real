@@ -135,6 +135,7 @@ add_library(${PROJECT_NAME}
   src/ros/command_history_buffer.cpp
   src/ros/recorded_command_contract.cpp
   src/ros/control_cycle_contract.cpp
+  src/ros/odom_state_buffer.cpp
   src/ros/execution_state_predictor.cpp
   src/ros/imu_shadow_ros_adapter.cpp
   src/ros/diagnostics_publisher.cpp
