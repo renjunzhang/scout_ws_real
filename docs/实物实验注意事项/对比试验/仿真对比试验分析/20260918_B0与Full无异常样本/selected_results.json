@@ -1,0 +1,116 @@
+{
+  "formal": false,
+  "scope": "Post-hoc fault-free subset of six recorded runs; Full n=1, B0 n=3",
+  "source": "/data/a/scout_sim_replacement/results/20260918_b0_full_repeat3/comparison.json",
+  "source_sha256": "6abed4f0131f52c8cb642b3c1899e6089ad45edea864f8a54a03a08955bd65cb",
+  "source_code_commit": "c82a09db0ab44ac13c88f2b813d11c762eeb3338",
+  "criteria": {
+    "require_within_45_seconds": true,
+    "allowed_statuses": [
+      "B0_ACADOS_OK",
+      "B_slosh_ACADOS_OK",
+      "GOAL_REACHED",
+      "INITIALIZED",
+      "TERMINAL_DRAINING",
+      "WAITING_FOR_ODOM",
+      "WAITING_FOR_REFERENCE_PATH"
+    ],
+    "exclude_any_other_status": true
+  },
+  "evaluation": {
+    "peak": "task start to first GOAL_REACHED + 5 s, including late arrivals; no goal: full observation",
+    "p95_rms": "task start to first GOAL_REACHED, including late arrivals; no goal: 45 s deadline",
+    "success": "first GOAL_REACHED <= 45 s and no TASK_DEADLINE_MISSED status",
+    "source": "deduplicated state_stamp, valid odom observer modal_height_m, liquid model version 1"
+  },
+  "selected": [
+    {
+      "name": "b0_01",
+      "group": "b0",
+      "pair": 1,
+      "passed": true,
+      "peak_height_mm": 0.9570151934211943,
+      "active_height_p95_mm": 0.4870313505115452,
+      "active_height_rms_mm": 0.20287165944277213,
+      "goal_sec": 31.452999999999996
+    },
+    {
+      "name": "full_02",
+      "group": "full",
+      "pair": 2,
+      "passed": true,
+      "peak_height_mm": 0.6979872038020264,
+      "active_height_p95_mm": 0.21001192266047272,
+      "active_height_rms_mm": 0.10910166075823013,
+      "goal_sec": 41.167
+    },
+    {
+      "name": "b0_02",
+      "group": "b0",
+      "pair": 2,
+      "passed": true,
+      "peak_height_mm": 1.0279879169419022,
+      "active_height_p95_mm": 0.49095653165801967,
+      "active_height_rms_mm": 0.20721096666365102,
+      "goal_sec": 31.674999999999997
+    },
+    {
+      "name": "b0_03",
+      "group": "b0",
+      "pair": 3,
+      "passed": true,
+      "peak_height_mm": 0.9952116251333403,
+      "active_height_p95_mm": 0.4730842369255083,
+      "active_height_rms_mm": 0.2005424488462986,
+      "goal_sec": 31.352000000000004
+    }
+  ],
+  "excluded": [
+    {
+      "name": "full_01",
+      "passed": true,
+      "abnormal_status_counts": {
+        "STATE_TIME_ALIGNMENT_FAILED_EXTRAPOLATION_LIMIT": 3,
+        "STOP_JERK_HISTORY_INFEASIBLE": 3,
+        "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 1,
+        "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 15
+      }
+    },
+    {
+      "name": "full_03",
+      "passed": false,
+      "abnormal_status_counts": {
+        "STATE_TIME_ALIGNMENT_FAILED_EXTRAPOLATION_LIMIT": 7,
+        "STOP_JERK_HISTORY_INFEASIBLE": 6,
+        "STATE_TIME_ALIGNMENT_FAILED_TF_POSE_PROPAGATION_LIMIT": 1,
+        "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 1,
+        "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 12,
+        "TASK_DEADLINE_MISSED": 1
+      }
+    }
+  ],
+  "summary": {
+    "b0": {
+      "n": 3,
+      "peak_height_mm": 0.9934049118321456,
+      "active_height_p95_mm": 0.4836907063650244,
+      "active_height_rms_mm": 0.20354169165090727,
+      "goal_sec": 31.49333333333333
+    },
+    "full": {
+      "n": 1,
+      "peak_height_mm": 0.6979872038020264,
+      "active_height_p95_mm": 0.21001192266047272,
+      "active_height_rms_mm": 0.10910166075823013,
+      "goal_sec": 41.167
+    }
+  },
+  "full_vs_b0_mean_change_percent": {
+    "peak_height_mm": -29.737894841417457,
+    "active_height_p95_mm": -56.58136079588345,
+    "active_height_rms_mm": -46.398371815957226,
+    "goal_sec": 30.716553767993247
+  },
+  "full_fault_free_fraction": "1/3",
+  "raw_records_preserved": true
+}
