@@ -1,0 +1,190 @@
+{
+  "formal": false,
+  "evidence": "STARTUP_REPAIR_WITH_ONE_UNFILTERED_FULL_RUN",
+  "source_commit": "f09e982bd6bcffea082d178d0e0602e392addb76",
+  "result_directory": "/data/a/scout_sim_replacement/results/20260919_first_shot_repair_005117",
+  "startup_repair_verified": true,
+  "closed_loop_passed": false,
+  "liquid_caps_passed": false,
+  "transport_height_source": "odom-driven modal model; no independent physical liquid measurement",
+  "task_sha256": "bc386d7246f33d64d27fca4408fc307aad32cbba0c359414688cd9c6fcb90fff",
+  "plan_sha256": "fbd5082dbfa7c9805f5485f82e631b50d4125ded0dee95b7953574a92294980d",
+  "live_parameter_differences": [],
+  "runtime_and_inputs_unchanged_during_run": true,
+  "frozen_runtime_sha256": {
+    "/data/a/scout_sim_replacement/results/20260918_early_envelope_135_single_225457/task.json": "bc386d7246f33d64d27fca4408fc307aad32cbba0c359414688cd9c6fcb90fff",
+    "/data/a/scout_sim_replacement/results/20260918_early_envelope_135_single_225457/plan.json": "fbd5082dbfa7c9805f5485f82e631b50d4125ded0dee95b7953574a92294980d",
+    "/tmp/scout_first_shot_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node": "cd57748c47b74b1ad7c7e4cb6c21a908b011e4baeae51e77c6a372341533a2ac",
+    "/tmp/scout_first_shot_overlay_20260919/lib/libspmpc_local_planner.so": "294376b65740c875d2bc99a92747d2b09428e68bce7454f9c71fb92911d0bdb5",
+    "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c",
+    "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7",
+    "/home/a/scout_ws/devel/lib/libslosh_models.so": "e71be7b5750c546bd9f766cdf6ac2222c3db4f07435f79bb9cac31ca8aa7c769"
+  },
+  "native_reproduction": {
+    "success": true,
+    "status": "B_slosh_ACADOS_OK",
+    "warm_start_source": "PREPARED_TRAJECTORY_PLAN",
+    "iterations": 1.0,
+    "defect": 1.3778954987414549e-08,
+    "prepare_and_configure_ms": 131.91491,
+    "remaining_budget_ms": 26.820071,
+    "rti_ms": 12.573239,
+    "have_previous_control": false,
+    "have_previous_solution": false,
+    "recorded_parameter_linf": 0.0,
+    "cmd_v": 0.0011111111088886812,
+    "cmd_omega": 0.0009202128284617921
+  },
+  "native_checks": {
+    "programs": 3,
+    "test_cases": 54,
+    "all_passed": true,
+    "program_names": [
+      "test_trajectory_reference",
+      "test_explicit_actuator_warm_start",
+      "test_replay_diagnostics"
+    ]
+  },
+  "first_live_cycle": {
+    "cycle_id": 31,
+    "warm_start_source": "PREPARED_TRAJECTORY_PLAN",
+    "rti_iterations": 1,
+    "task_elapsed_sec": 0.0,
+    "have_previous_solution": false,
+    "have_previous_control": false,
+    "solver_status": "B_slosh_ACADOS_OK",
+    "max_prediction_defect": 0.0001,
+    "robot": [
+      0.017044292171480707,
+      -0.002864170607804907,
+      0.0005752424667889141,
+      0.0,
+      0.0
+    ],
+    "dynamics_max_defect": 9.414144664505319e-07,
+    "horizon_valid": true,
+    "status": "B_slosh_ACADOS_OK",
+    "solve_success": true,
+    "command_accepted": true,
+    "rti_wall_ms": 14.207109,
+    "dispatch_wall_ms": 16.728509,
+    "remaining_budget_wall_ms": 24.983746
+  },
+  "first_live_cycle_cold_replay": {
+    "seed_defect": 5.551115123125783e-17,
+    "iterations": 1,
+    "solver_status": 0,
+    "dynamics_defect": 9.414144664505319e-07,
+    "recorded_state_linf": 0.0
+  },
+  "comparison": [
+    {
+      "name": "before_startup_repair",
+      "goal_sec": 28.154000000000003,
+      "t_stop_sec": 28.120333333000012,
+      "transport_peak_mm": 0.7228388330054517,
+      "tail_peak_mm": 5.6167258711274415e-05,
+      "p95_mm": 0.5074172359741806,
+      "rms_mm": 0.20045745202067838,
+      "fault_zero_cycles": 1,
+      "alignment_rejected": 0,
+      "budget_exhausted": 0
+    },
+    {
+      "name": "after_startup_repair",
+      "goal_sec": 28.537000000000006,
+      "t_stop_sec": 28.503333333,
+      "transport_peak_mm": 10.548056397505134,
+      "tail_peak_mm": 0.00013299636161426097,
+      "p95_mm": 0.6219995466988957,
+      "rms_mm": 0.7157629257405178,
+      "fault_zero_cycles": 3,
+      "alignment_rejected": 2,
+      "budget_exhausted": 0
+    }
+  ],
+  "abnormal_statuses": {
+    "STATE_TIME_ALIGNMENT_FAILED_EXTRAPOLATION_LIMIT": 2,
+    "STOP_JERK_HISTORY_INFEASIBLE": 1
+  },
+  "alignment_rejections": [
+    {
+      "cycle_id": 147,
+      "status": "STATE_TIME_ALIGNMENT_FAILED_EXTRAPOLATION_LIMIT",
+      "raw_state_skew_ms": 20.0,
+      "published_cmd_v": 0.0,
+      "solve_attempted": false
+    },
+    {
+      "cycle_id": 1089,
+      "status": "STATE_TIME_ALIGNMENT_FAILED_EXTRAPOLATION_LIMIT",
+      "raw_state_skew_ms": 20.0,
+      "published_cmd_v": 0.0,
+      "solve_attempted": false
+    }
+  ],
+  "peak_time_sec": 4.161000000000001,
+  "task_windows": {
+    "case": "/data/a/scout_sim_replacement/results/20260919_first_shot_repair_005117/full_01/case",
+    "formal": false,
+    "frame_contract_matches": true,
+    "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+    "first_sustained_pose_sec": 26.567000000000007,
+    "first_sustained_low_speed_sec": 28.161,
+    "first_sustained_zero_publication_sec": 28.17,
+    "inferred_fifo_delay_sec": 0.333333333,
+    "t_stop_candidate_sec": 28.503333333,
+    "fifo_clearance_measured": false,
+    "command_epsilon": 1e-06,
+    "maximum_allowed_sample_gap_sec": 0.1,
+    "invalid_observer_after_task_start": 0,
+    "windows": {
+      "transport_peak_m": 0.010548056397505133,
+      "tail_peak_m": 1.3299636161426096e-07,
+      "transport_covered": true,
+      "tail_covered": true,
+      "covered": true,
+      "t_stop": 28.503333333,
+      "window_sec": 5.0
+    },
+    "stop_evidence_covers_tail": true,
+    "height_coverage_after_stop_sec": 22.61766666700001,
+    "archived_anomalies": {
+      "alignment_rejected": 2,
+      "budget_exhausted": 0,
+      "fault_zero_cycles": 3,
+      "goal_sec": 28.537000000000006
+    }
+  },
+  "lifecycle": {
+    "valid_fresh_lifecycle": true,
+    "closed_bag": true,
+    "pre_ports": {
+      "11892": false,
+      "11926": false
+    },
+    "post_ports": {
+      "11892": false,
+      "11926": false
+    },
+    "observation_sim_sec": 51.041
+  },
+  "attempted_runs": 1,
+  "plan_resolves": 0,
+  "raw_b0_reruns": 0,
+  "next_issue": "Common-epoch state snapshots and stop-command history after an alignment rejection",
+  "artifacts_sha256": {
+    "run_full_once.py": "0ff81fb8bc3e097b8dfb4f2ecc8c7402e6b026c9aab15fcfd5f1629609123663",
+    "compare.py": "2ee314c6511fee8a57fb44b405a8462d1e7865d71ec801c7da549451b4d8a4d0",
+    "first_shot_probe.cpp": "046378dc00b23369464213791518333717d6bd3eec3fb8d4c3f45602875ef0c6",
+    "prepared_probe_exact.json": "fae460b5314f83aca9f05cde9e19304e2881eb10bd38dc6a276c559252933e02",
+    "native_ctest.log": "696778490c66f4b4bbe3203625b29c3e0864067e1be771851f0ba130315cd93f",
+    "full_01/case/run.bag": "f21f8a48cbe2a1a7da2e5d640f87c09967775b15a8bafbd59113c64763f9d568",
+    "diagnose_cycles.py": "9fb23747949202a6025dd163cdb5ed6551e5c3b539d0d81509a1b06c5ec48fa8",
+    "new_recorded_cycles.json": "640b04a5cc9b6d1f07e8e61a87186e1a2f0cd523528d78f9a99cc0bc2ae6e611",
+    "prepared_cold_replay.json": "1e1fdcc78638a4160834a17616d25416483089e246b15c720b692905bf9cfbe3",
+    "cold_replay.json": "25b2867deb9d1a6976233d8c7a18f3e26491e7aec937dc753505c016eeeada42",
+    "replay_defects.json": "b8231eba05f6487811ad8e2794149b702a38bd98038db99658f71cdb1ff85ed6",
+    "recorded_cycles.json": "09c97ebffc79365030c2943792fea861b3538272f5fee1d40165a1f5e3d9bb0b"
+  }
+}
