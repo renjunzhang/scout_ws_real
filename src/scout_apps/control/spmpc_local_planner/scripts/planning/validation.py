@@ -3,6 +3,7 @@ import numpy as np
 from .task import load_task, halfspaces, PROGRESS_TOLERANCE
 from .optimizer import dynamics
 from .metrics import dense_heights, stopping_metrics
+from .liquid_policy import height_limits, objective_end_index
 from model_contract import MODEL_VERSION, COST_VERSION
 
 
@@ -10,6 +11,8 @@ def validate_plan(plan, tolerance=2e-6):
     if (plan["schema_version"], plan["liquid_model_version"], plan["cost_model_version"]) != (1, MODEL_VERSION, COST_VERSION):
         raise ValueError("unsupported plan schema/model")
     task = load_task(plan["task"])
+    if plan.get("liquid_policy") != task.get("liquid_policy"):
+        raise ValueError("plan/task contract mismatch: liquid_policy")
     for key in ("dt", "deadline", "transport_duration", "stop_window", "height_coeff", "motion_limits",
                 "actuator_parameters", "liquid_parameters", "goal_pose", "goal_position_tolerance",
                 "goal_yaw_tolerance", "stop_speed_tolerance", "stop_omega_tolerance", "route", "region"):
@@ -82,12 +85,26 @@ def validate_plan(plan, tolerance=2e-6):
     # Dense held-command substeps check liquid peaks hidden between OCP nodes.
     dense_times, heights = dense_heights(task, X)
     peak = float(np.max(heights))
-    if task["liquid_constraint_enable"] and peak > task["liquid_height_limit"]+tolerance: errors.append("dense_liquid_cap")
+    stopping = stopping_metrics(task, X, U, dense_times, heights, tolerance)
+    policy = task.get("liquid_policy")
+    if policy is not None:
+        stopped = stopping["t_stop_sec"]
+        if stopped is None or stopped > task["transport_duration"]+1e-8:
+            errors.append("transport_not_stopped")
+        if not stopping["windows"] or not stopping["windows"]["covered"]:
+            errors.append("incomplete_stopping_window")
+        caps = height_limits(task, dense_times, stopped)
+        if np.any(heights > caps + policy["height_tolerance_m"]):
+            errors.append("dense_transport_tail_liquid_cap")
+        stopping["liquid_policy"] = policy
+        stopping["liquid_objective_end_sec"] = objective_end_index(task)*dt
+    elif task["liquid_constraint_enable"] and peak > task["liquid_height_limit"]+tolerance:
+        errors.append("dense_liquid_cap")
     if errors: raise ValueError("plan violates: " + ", ".join(sorted(set(errors))))
     speed = np.sqrt(X[:, 3]**2+task["objective"]["speed_floor"]**2)
     curvature = X[:, 5]/speed
     return dict(status="SOFTWARE_VERIFIED", dynamics_max_error=defect, minimum_region_clearance=clearance,
                 dense_peak_height_m=peak, residual_height_m=float(task["height_coeff"]*np.hypot(X[-1, 24], X[-1, 26])),
                 curvature_arc_energy=float(np.sum(curvature[:-1]**2*speed[:-1])*dt), actual_path_length=float(np.sum(np.abs(X[:-1, 3]))*dt),
-                stopping_evaluation=stopping_metrics(task, X, U, dense_times, heights, tolerance),
+                stopping_evaluation=stopping,
                 hardware_verified=False)

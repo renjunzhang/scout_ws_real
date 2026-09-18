@@ -10,6 +10,7 @@ from pathlib import Path
 import sys
 import numpy as np
 import yaml
+from .liquid_policy import normalize_policy
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "acados"))
 from generate_spmpc_acados import load_config, default_parameter_values
@@ -76,6 +77,10 @@ def load_task(source):
     task.setdefault("stop_omega_tolerance", .02)
     task.setdefault("liquid_constraint_enable", False)
     task.setdefault("liquid_height_limit", .005)
+    if "liquid_policy" in task:
+        task["liquid_policy"] = normalize_policy(task["liquid_policy"])
+        if task["liquid_policy"] is not None and task["liquid_constraint_enable"]:
+            raise ValueError("choose liquid_policy or the legacy liquid constraint")
     supplied_objective = task.get("objective", {})
     unknown_objective = set(supplied_objective) - set(DEFAULT_OBJECTIVE)
     if unknown_objective:
