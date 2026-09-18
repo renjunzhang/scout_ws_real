@@ -4,6 +4,7 @@ from .task import load_task, halfspaces, PROGRESS_TOLERANCE
 from .optimizer import dynamics
 from .metrics import dense_heights, stopping_metrics
 from .liquid_policy import height_limits, objective_end_index
+from .terminal_speed import speed_limits
 from model_contract import MODEL_VERSION, COST_VERSION
 
 
@@ -11,6 +12,8 @@ def validate_plan(plan, tolerance=2e-6):
     if (plan["schema_version"], plan["liquid_model_version"], plan["cost_model_version"]) != (1, MODEL_VERSION, COST_VERSION):
         raise ValueError("unsupported plan schema/model")
     task = load_task(plan["task"])
+    if plan.get("terminal_speed_policy") != task.get("terminal_speed_policy"):
+        raise ValueError("plan/task contract mismatch: terminal_speed_policy")
     if plan.get("liquid_policy") != task.get("liquid_policy"):
         raise ValueError("plan/task contract mismatch: liquid_policy")
     for key in ("dt", "deadline", "transport_duration", "stop_window", "height_coeff", "motion_limits",
@@ -100,6 +103,11 @@ def validate_plan(plan, tolerance=2e-6):
         stopping["liquid_objective_end_sec"] = objective_end_index(task)*dt
     elif task["liquid_constraint_enable"] and peak > task["liquid_height_limit"]+tolerance:
         errors.append("dense_liquid_cap")
+    if task.get("terminal_speed_policy") is not None:
+        distance = np.sqrt(np.sum((X[:, :2]-goal[:2])**2, axis=1)+1e-16)
+        speed_cap, command_cap_squared = speed_limits(task, route_length-X[:, 4], distance)
+        bound(X[:, 3], limits["actual_v_min"], np.asarray(speed_cap).ravel(), "terminal_actual_speed")
+        bound(X[:, 6], 0, np.sqrt(np.asarray(command_cap_squared).ravel()), "terminal_command_speed")
     if errors: raise ValueError("plan violates: " + ", ".join(sorted(set(errors))))
     speed = np.sqrt(X[:, 3]**2+task["objective"]["speed_floor"]**2)
     curvature = X[:, 5]/speed

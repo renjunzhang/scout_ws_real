@@ -15,6 +15,7 @@ from .warm_start import warm_start_values
 from .diagnostics import solver_summary
 from .liquid_policy import height_limits, objective_end_index
 from .guide import route_guide
+from .terminal_speed import speed_limits
 from spmpc_acados_model import export_spmpc_slosh_symbols, PIDX_SLOSH
 from planning_terms import geometry_terms
 from actual_motion_kernel import actual_motion_rhs
@@ -99,6 +100,13 @@ def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
     opt.subject_to(opt.bounded(-task["goal_yaw_tolerance"], X[2, moving:]-goal[2], task["goal_yaw_tolerance"]))
     opt.subject_to(opt.bounded(-task["stop_speed_tolerance"], X[3, moving:], task["stop_speed_tolerance"]))
     opt.subject_to(opt.bounded(-task["stop_omega_tolerance"], X[5, moving:], task["stop_omega_tolerance"]))
+    terminal_policy = task.get("terminal_speed_policy")
+    if terminal_policy is not None:
+        distance = ca.sqrt((X[0, :]-goal[0])**2+(X[1, :]-goal[1])**2+1e-16)
+        speed_cap, command_cap_squared = speed_limits(task, length-X[4, :], distance)
+        opt.subject_to(X[3, 1:] <= speed_cap[1:])
+        # Command zero is already fixed from `clear` onward.
+        opt.subject_to((X[6, 1:clear]**2-command_cap_squared[1:clear])/limits["v_max"]**2 <= 0)
     height_sq = task["height_coeff"]**2*(X[24, :]**2+X[26, :]**2)
     policy = task.get("liquid_policy")
     if policy is not None:
@@ -184,6 +192,8 @@ def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
         "goal_yaw_tolerance", "stop_speed_tolerance", "stop_omega_tolerance", "route")}
     if policy is not None:
         plan["liquid_policy"] = policy
+    if terminal_policy is not None:
+        plan["terminal_speed_policy"] = terminal_policy
     task_hash = hashlib.sha256(json.dumps(task, sort_keys=True, allow_nan=False).encode()).hexdigest()
     plan.update(schema_version=1, liquid_model_version=MODEL_VERSION, cost_model_version=COST_VERSION,
                 plan_id=task["task_id"]+"-"+task_hash[:12], region_id=task["region"]["id"], task=task,
