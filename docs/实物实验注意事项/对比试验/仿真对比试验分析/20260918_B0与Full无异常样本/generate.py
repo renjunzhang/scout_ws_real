@@ -27,7 +27,7 @@ report=dict(formal=False,scope='Post-hoc fault-free subset of six recorded runs;
  full_fault_free_fraction='1/3',raw_records_preserved=True)
 (OUT/'selected_results.json').write_text(json.dumps(report,ensure_ascii=False,indent=2)+'\n')
 with (OUT/'selected_results.csv').open('w',newline='') as f:
- writer=csv.DictWriter(f,fieldnames=['name','group','pair','passed',*keys]);writer.writeheader();writer.writerows(report['selected'])
+ writer=csv.DictWriter(f,fieldnames=['name','group','pair','passed',*keys],lineterminator='\n');writer.writeheader();writer.writerows(report['selected'])
 fig,axes=plt.subplots(1,2,figsize=(11,3.9),constrained_layout=True)
 for r in sorted(selected,key=lambda x:(x['group'],x['pair'])):
  a=np.load(SOURCE/r['name']/'series.npz');b0=r['group']=='b0';color='#D17B13' if b0 else '#166BB0'
