@@ -90,6 +90,7 @@ struct StateTimingParams {
     double odom_history_sec = 1.0;
     double max_interpolation_gap_sec = 0.050;
     double max_robot_extrapolation_sec = 0.010;
+    double max_reference_pose_age_sec = 0.010;
 };
 
 struct CommandExecutionContractParams {

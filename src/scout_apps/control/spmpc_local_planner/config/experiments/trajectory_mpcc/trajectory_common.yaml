@@ -4,6 +4,10 @@ planning:
   evaluation_window_sec: 1.0
 execution_model:
   actual_v_min: -0.002
+state_timing:
+  # Accommodate one 50 Hz localization publication gap using measured odom.
+  # Unmeasured robot extrapolation remains limited to 10 ms.
+  max_reference_pose_age_sec: 0.050
 platform:
   shared_constraints:
     # Acceleration/jerk are enforced inside the common explicit-actuator OCP.

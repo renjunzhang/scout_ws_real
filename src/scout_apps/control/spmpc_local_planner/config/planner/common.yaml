@@ -279,7 +279,8 @@ state_timing:
   max_raw_skew_sec: 0.080
   odom_history_sec: 1.0
   max_interpolation_gap_sec: 0.050
-  max_robot_extrapolation_sec: 0.010  # Also bounds stamped TF pose propagation using odom motion.
+  max_robot_extrapolation_sec: 0.010  # Unmeasured motion beyond the odom history.
+  max_reference_pose_age_sec: 0.010  # Localization anchor age; odom reconstructs relative motion.
   max_position_innovation_m: 0.20
   max_yaw_innovation_rad: 0.35
 

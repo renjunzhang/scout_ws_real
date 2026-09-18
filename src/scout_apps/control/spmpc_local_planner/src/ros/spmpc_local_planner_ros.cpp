@@ -480,6 +480,9 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("state_timing/max_robot_extrapolation_sec",
                state_timing_params_.max_robot_extrapolation_sec,
                state_timing_params_.max_robot_extrapolation_sec);
+    pnh_.param("state_timing/max_reference_pose_age_sec",
+               state_timing_params_.max_reference_pose_age_sec,
+               state_timing_params_.max_reference_pose_age_sec);
     pnh_.param("execution_contract/fail_closed_on_post_limit_change",
                command_contract_params_.fail_closed_on_post_limit_change,
                command_contract_params_.fail_closed_on_post_limit_change);
@@ -510,6 +513,9 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         state_timing_params_.max_interpolation_gap_sec > 0.0 &&
         std::isfinite(state_timing_params_.max_robot_extrapolation_sec) &&
         state_timing_params_.max_robot_extrapolation_sec >= 0.0 &&
+        std::isfinite(state_timing_params_.max_reference_pose_age_sec) &&
+        state_timing_params_.max_reference_pose_age_sec >= 0.0 &&
+        state_timing_params_.max_reference_pose_age_sec <= state_timing_params_.odom_history_sec &&
         std::isfinite(pose_continuity_params_.max_position_innovation_m) &&
         pose_continuity_params_.max_position_innovation_m > 0.0 &&
         std::isfinite(pose_continuity_params_.max_yaw_innovation_rad) &&
@@ -2671,14 +2677,16 @@ bool SpmpcLocalPlannerROS::robotStateAtEpoch(
         if (propagate_pose) {
             // The TF pose is an explicitly timestamped anchor, not a latest
             // pose mislabeled as target_stamp. Relative odom motion reconstructs
-            // the requested state within the existing extrapolation limit.
+            // the requested state. Localization age and any unmeasured odom
+            // extrapolation have independent bounds.
             // Keep the anchor age in diagnostics even when propagation fails.
             pose_propagation_sec = (target_stamp - tf.header.stamp).toSec();
             const auto propagated = propagateReferencePoseToEpoch(
                 {static_cast<std::int64_t>(tf.header.stamp.toNSec()), state},
                 odom_history, static_cast<std::int64_t>(target_stamp.toNSec()),
                 state_timing_params_.max_interpolation_gap_sec,
-                state_timing_params_.max_robot_extrapolation_sec);
+                state_timing_params_.max_robot_extrapolation_sec,
+                state_timing_params_.max_reference_pose_age_sec);
             status = propagated.status;
             if (!propagated.valid) return false;
             state = propagated.state;

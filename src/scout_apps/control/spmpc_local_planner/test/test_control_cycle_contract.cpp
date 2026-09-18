@@ -149,7 +149,7 @@ TEST(ControlCycleContract, PropagatesDelayedLocalizationUsingStampedOdomMotion) 
     };
     auto pose = sample(1000000000LL, 10., M_PI/2., 0., 0.);
     pose.state.y = 20.;
-    const auto result = propagateReferencePoseToEpoch(pose, history, 1010000000LL, .05, .01);
+    const auto result = propagateReferencePoseToEpoch(pose, history, 1010000000LL, .05, .01, .01);
     ASSERT_TRUE(result.valid);
     EXPECT_TRUE(result.extrapolated);
     EXPECT_NEAR(result.state.x, 10., 1e-12);
@@ -165,11 +165,39 @@ TEST(ControlCycleContract, LocalizationPropagationRejectsOldFutureAndMissingAnch
         sample(1020000000LL, .004, 0., .2, 0.),
     };
     const auto pose = sample(1000000000LL, 10., .1, 0., 0.);
-    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1010000001LL, .05, .01).valid);
-    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 999000000LL, .05, .01).valid);
-    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1001000000LL, .05, 0.).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1010000001LL, .05, .01, .01).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 999000000LL, .05, .01, .01).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1001000000LL, .05, 0., 0.).valid);
     history.pop_front();
-    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1005000000LL, .05, .01).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1005000000LL, .05, .01, .01).valid);
+}
+
+TEST(ControlCycleContract, MeasuredOdomBridgeDoesNotUseRobotExtrapolationAllowance) {
+    // The recorded failures had a 20/21 ms old localization anchor while both
+    // odom endpoints were already measured. No constant-twist prediction is needed.
+    std::deque<StampedRobotState> history{
+        sample(1000000000LL, 1., 0., .2, .1),
+        sample(1020000000LL, 1.006, .004, .4, .2),
+        sample(1040000000LL, 1.014, .008, .5, .2),
+    };
+    const auto pose = sample(1000000000LL, 10., M_PI/2., 0., 0.);
+    const auto measured = propagateReferencePoseToEpoch(pose, history, 1020000000LL, .05, 0., .05);
+    ASSERT_TRUE(measured.valid);
+    EXPECT_NEAR(measured.state.x, 10., 1e-12);
+    EXPECT_NEAR(measured.state.y, .006, 1e-12);
+    EXPECT_NEAR(measured.state.yaw, M_PI/2.+.004, 1e-12);
+    EXPECT_DOUBLE_EQ(measured.state.v, .4);
+    const auto interpolated = propagateReferencePoseToEpoch(pose, history, 1021000000LL, .05, 0., .05);
+    ASSERT_TRUE(interpolated.valid);
+    EXPECT_TRUE(interpolated.interpolated);
+    EXPECT_NEAR(interpolated.state.y, .0064, 1e-12);
+    // A wider localization age does not allow missing odom, a wider sample gap,
+    // or motion beyond the unchanged 10 ms unmeasured extrapolation bound.
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1051000000LL, .05, .01, .10).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1021000000LL, .01, .01, .05).valid);
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1020000000LL, .05, .01, .01).valid);
+    history.push_back(sample(1060000000LL, 1.02, .012, .5, .2));
+    EXPECT_FALSE(propagateReferencePoseToEpoch(pose, history, 1050000001LL, .05, .01, .05).valid);
 }
 
 TEST(ControlCycleContract, LocalizationPropagationInterpolatesAndWrapsYaw) {
@@ -178,7 +206,7 @@ TEST(ControlCycleContract, LocalizationPropagationInterpolatesAndWrapsYaw) {
         sample(1010000000LL, .002, -M_PI+.01, .4, .5),
     };
     const auto pose = sample(1002000000LL, 5., M_PI-.005, 0., 0.);
-    const auto result = propagateReferencePoseToEpoch(pose, history, 1008000000LL, .05, .01);
+    const auto result = propagateReferencePoseToEpoch(pose, history, 1008000000LL, .05, .01, .01);
     ASSERT_TRUE(result.valid);
     EXPECT_TRUE(result.interpolated);
     EXPECT_NEAR(result.state.yaw, -M_PI+.007, 1e-12);

@@ -100,13 +100,15 @@ RobotStateAlignmentResult propagateReferencePoseToEpoch(
     const std::deque<StampedRobotState>& odom_history,
     std::int64_t target_stamp_ns,
     double max_interpolation_gap_sec,
-    double max_extrapolation_sec) {
+    double max_extrapolation_sec,
+    double max_reference_pose_age_sec) {
     RobotStateAlignmentResult out;
     out.status = "TF_POSE_PROPAGATION_LIMIT";
     const double age_sec = (target_stamp_ns - reference_pose.stamp_ns) * kNsToSec;
     if (reference_pose.stamp_ns <= 0 || target_stamp_ns <= 0 ||
         !std::isfinite(max_extrapolation_sec) || max_extrapolation_sec < 0.0 ||
-        age_sec < 0.0 || age_sec > max_extrapolation_sec) return out;
+        !std::isfinite(max_reference_pose_age_sec) || max_reference_pose_age_sec < 0.0 ||
+        age_sec < 0.0 || age_sec > max_reference_pose_age_sec) return out;
     const auto anchor = alignRobotStateToEpoch(odom_history, reference_pose.stamp_ns,
         max_interpolation_gap_sec, max_extrapolation_sec);
     const auto target = alignRobotStateToEpoch(odom_history, target_stamp_ns,
