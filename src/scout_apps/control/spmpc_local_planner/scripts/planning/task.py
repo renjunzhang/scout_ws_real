@@ -64,7 +64,14 @@ def _halfspaces_have_area(normal, offset):
 
 
 def load_task(source):
-    task = deepcopy(source) if isinstance(source, dict) else yaml.safe_load(Path(source).read_text())
+    if isinstance(source, dict):
+        task = deepcopy(source)
+    else:
+        text = Path(source).read_text()
+        try:
+            task = json.loads(text)
+        except json.JSONDecodeError:
+            task = yaml.safe_load(text)
     for key in ("task_id", "frame_id", "route", "start_state", "goal_pose", "deadline", "stop_window",
                 "actuator_parameters", "liquid_parameters", "height_coeff", "motion_limits", "region"):
         if key not in task:
