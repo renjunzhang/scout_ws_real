@@ -29,3 +29,16 @@ def test_short_route_has_a_smooth_line_or_quadratic_guide():
         route = np.column_stack([distance, distance**2])
         guide = route_guide(distance, route)
         np.testing.assert_allclose(np.asarray(guide(.5)[0]).ravel(), [.5, .5 if count==2 else .25], atol=1e-12)
+
+
+def test_endpoint_roundoff_preserves_position_and_unit_tangent():
+    route = np.array([[.02, -.01], [1., .5], [2., -.5], [3., .2]])
+    distance = np.r_[0., np.cumsum(np.linalg.norm(np.diff(route, axis=0), axis=1))]
+    guide = route_guide(distance, route)
+    for endpoint in (distance[0], distance[-1]):
+        position, tangent = guide(endpoint)
+        assert np.linalg.norm(tangent) > .999
+        for offset in (-1e-12, 1e-12):
+            near_position, near_tangent = guide(endpoint+offset)
+            np.testing.assert_allclose(near_position, position, atol=1e-10)
+            np.testing.assert_allclose(near_tangent, tangent, atol=1e-10)

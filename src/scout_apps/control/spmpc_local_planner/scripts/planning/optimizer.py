@@ -187,7 +187,7 @@ def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
     task_hash = hashlib.sha256(json.dumps(task, sort_keys=True, allow_nan=False).encode()).hexdigest()
     plan.update(schema_version=1, liquid_model_version=MODEL_VERSION, cost_model_version=COST_VERSION,
                 plan_id=task["task_id"]+"-"+task_hash[:12], region_id=task["region"]["id"], task=task,
-                optimization=dict(status=solution.stats()["return_status"], guide_interpolation="smooth_route_v1", objective=float(solution.value(objective)),
+                optimization=dict(status=solution.stats()["return_status"], guide_interpolation="smooth_route_v2_padded", objective=float(solution.value(objective)),
                                   solve_seconds=time.monotonic()-begun, iterations=solution.stats()["iter_count"]))
     plan["progress_parameterization"]={"method":"scaled_actual_speed_trapezoid", "scale":float(solution.value(progress_scale))}
     # Find final command braking segment without assuming actual a == commanded a.
