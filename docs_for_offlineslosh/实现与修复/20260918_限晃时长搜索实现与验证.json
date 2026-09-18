@@ -1,0 +1,357 @@
+{
+  "formal": false,
+  "result_root": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636",
+  "implementation": "finite transport duration search implemented; one new Full executed; closed-loop liquid acceptance failed",
+  "liquid_policy": {
+    "mode": "transport_tail_v1",
+    "move_height_m": 0.0009,
+    "tail_height_m": 8e-05,
+    "height_tolerance_m": 1e-06
+  },
+  "selected_duration_sec": 31.5,
+  "search_wall_sec": 1929.517437006998,
+  "attempts": [
+    {
+      "transport_duration": 40.0,
+      "status": "python_verified",
+      "task_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/task.json",
+      "warm_plan": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/baseline_smooth_plan.json",
+      "task_sha256": "d5f9a3ae9a3c5aae661356bc2286652f73ab0fe1c764f4d148cf9f838c189b53",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/task.json",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/baseline_smooth_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/events.jsonl",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 475.6914728729971,
+        "timeout": 600.0
+      },
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 1.3116507879828987e-11,
+        "minimum_region_clearance": 1.3033333333333332,
+        "dense_peak_height_m": 0.0004311248658687082,
+        "residual_height_m": 3.43910969179613e-13,
+        "curvature_arc_energy": 0.9102715636202512,
+        "actual_path_length": 5.223184549475056,
+        "stopping_evaluation": {
+          "t_stop_sec": 40.0,
+          "clear_tolerance": 2e-06,
+          "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+          "windows": {
+            "transport_peak_m": 0.0004311248658687082,
+            "tail_peak_m": 9.730102192360273e-06,
+            "transport_covered": true,
+            "tail_covered": true,
+            "covered": true,
+            "t_stop": 40.0,
+            "window_sec": 5.0
+          },
+          "liquid_policy": {
+            "mode": "transport_tail_v1",
+            "move_height_m": 0.0009,
+            "tail_height_m": 8e-05,
+            "height_tolerance_m": 1e-06
+          },
+          "liquid_objective_end_sec": 45.0
+        },
+        "hardware_verified": false
+      },
+      "optimization": {
+        "status": "Solve_Succeeded",
+        "guide_interpolation": "smooth_route_v2_padded",
+        "objective": 2.051612298834095,
+        "solve_seconds": 471.5554277730007,
+        "iterations": 564
+      },
+      "plan_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+      "plan_sha256": "064cc18fa518ac76c8db8b444abe0a51e0e1c2989919a83013fa307a39bc56fe"
+    },
+    {
+      "transport_duration": 36.0,
+      "status": "failed",
+      "task_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1080/task.json",
+      "warm_plan": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+      "task_sha256": "a25b8393c2ebcbc56d961f6c09775f1acfdbe646a4c4d9184101e81e58e4e021",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1080/task.json",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1080/plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1080/events.jsonl",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "timeout",
+        "wall_seconds": 600.0659610779985,
+        "timeout": 600.0
+      },
+      "failure_kind": "process_timeout"
+    },
+    {
+      "transport_duration": 33.0,
+      "status": "python_verified",
+      "task_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/task.json",
+      "warm_plan": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+      "task_sha256": "b01e96f9b4724e54b7501c02d500099c72148979396d9f8fc5bc50f94ab297da",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/task.json",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_1200/plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/events.jsonl",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 561.9834550269989,
+        "timeout": 600.0
+      },
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 2.804145804446989e-12,
+        "minimum_region_clearance": 1.3033333333333332,
+        "dense_peak_height_m": 0.0004590207954275245,
+        "residual_height_m": 4.643063085109321e-18,
+        "curvature_arc_energy": 0.873739200420445,
+        "actual_path_length": 5.200876235922125,
+        "stopping_evaluation": {
+          "t_stop_sec": 33.0,
+          "clear_tolerance": 2e-06,
+          "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+          "windows": {
+            "transport_peak_m": 0.0004590207954275245,
+            "tail_peak_m": 1.0817042710049818e-05,
+            "transport_covered": true,
+            "tail_covered": true,
+            "covered": true,
+            "t_stop": 33.0,
+            "window_sec": 5.0
+          },
+          "liquid_policy": {
+            "mode": "transport_tail_v1",
+            "move_height_m": 0.0009,
+            "tail_height_m": 8e-05,
+            "height_tolerance_m": 1e-06
+          },
+          "liquid_objective_end_sec": 38.0
+        },
+        "hardware_verified": false
+      },
+      "optimization": {
+        "status": "Solve_Succeeded",
+        "guide_interpolation": "smooth_route_v2_padded",
+        "objective": 2.1220055095798065,
+        "solve_seconds": 558.3678650809998,
+        "iterations": 675
+      },
+      "plan_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/plan.json",
+      "plan_sha256": "7f02749bb255e7e1f5df4bf851dd3a3afa8bb00b8fa78c1b254e12691e2c6900"
+    },
+    {
+      "transport_duration": 31.5,
+      "status": "python_verified",
+      "task_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/task.json",
+      "warm_plan": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/plan.json",
+      "task_sha256": "60fe752a556547206f34819ec04ce0f5e38889c976a5999a8ee33381ec034d61",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/task.json",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0990/plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/events.jsonl",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 289.24417675400036,
+        "timeout": 600.0
+      },
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "dynamics_max_error": 2.4052981828504016e-13,
+        "minimum_region_clearance": 1.3033333333333332,
+        "dense_peak_height_m": 0.0004116952042058773,
+        "residual_height_m": 7.341015012023623e-21,
+        "curvature_arc_energy": 1.0853630579128355,
+        "actual_path_length": 5.235757796810252,
+        "stopping_evaluation": {
+          "t_stop_sec": 31.5,
+          "clear_tolerance": 2e-06,
+          "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+          "windows": {
+            "transport_peak_m": 0.0004116952042058773,
+            "tail_peak_m": 1.1645881059572845e-07,
+            "transport_covered": true,
+            "tail_covered": true,
+            "covered": true,
+            "t_stop": 31.5,
+            "window_sec": 5.0
+          },
+          "liquid_policy": {
+            "mode": "transport_tail_v1",
+            "move_height_m": 0.0009,
+            "tail_height_m": 8e-05,
+            "height_tolerance_m": 1e-06
+          },
+          "liquid_objective_end_sec": 36.5
+        },
+        "hardware_verified": false
+      },
+      "optimization": {
+        "status": "Solve_Succeeded",
+        "guide_interpolation": "smooth_route_v2_padded",
+        "objective": 2.462435347069122,
+        "solve_seconds": 285.7428215,
+        "iterations": 359
+      },
+      "plan_file": "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/plan.json",
+      "plan_sha256": "13ce76ed6bcebf11f96c58e14d696b0527e5f4da941e6d30afc40a3167ada28a",
+      "cpp_validation": {
+        "command": [
+          "/tmp/scout_time_search_native_20260918/validate_plan",
+          "/data/a/scout_sim_replacement/results/20260918_liquid_time_resume_161636/time_search/T_0945/plan.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 0.1659738769994874,
+        "timeout": 60.0
+      }
+    }
+  ],
+  "closed_loop_passed": false,
+  "liquid_caps_passed": false,
+  "control_abnormal_statuses": {},
+  "rows": [
+    {
+      "name": "B0（最近单次）",
+      "goal_sec": 31.526999999999994,
+      "t_stop_sec": 31.492333332999998,
+      "transport_peak_mm": 0.9688644719679824,
+      "tail_peak_mm": 8.059778137497763e-07,
+      "p95_mm": 0.48084276976735285,
+      "rms_mm": 0.1991947998594141
+    },
+    {
+      "name": "Full（旧种子）",
+      "goal_sec": 41.53,
+      "t_stop_sec": 41.56433333300001,
+      "transport_peak_mm": 0.6847406842918015,
+      "tail_peak_mm": 0.054697941044485054,
+      "p95_mm": 0.21423935606323177,
+      "rms_mm": 0.1097132627336767
+    },
+    {
+      "name": "Full（新31.5秒计划）",
+      "goal_sec": 27.725,
+      "t_stop_sec": 27.791333333000004,
+      "transport_peak_mm": 1.1221515074948678,
+      "tail_peak_mm": 0.022875937220525226,
+      "p95_mm": 0.5192508329565995,
+      "rms_mm": 0.2585222350851025
+    }
+  ],
+  "changes": {
+    "B0（最近单次）": {
+      "goal_change_percent": -12.059504551654122,
+      "peak_change_percent": 15.821308342076446
+    },
+    "Full（旧种子）": {
+      "goal_change_percent": -33.2410305803034,
+      "peak_change_percent": 63.87977715322437
+    }
+  },
+  "execution_deviation": {
+    "basis": "OCP input snapshots; progress reference nominal_times[0]; same-progress nominal quantities interpolated from selected full plan",
+    "planned_first_speed_above_001_sec": 8.466666666666667,
+    "actual_first_speed_above_001_sec": 0.4859999999999971,
+    "first_snapshot": {
+      "task_sec": 0.0,
+      "nominal_query_time_sec": 0.0,
+      "actual_speed": 0.0,
+      "nominal_speed": 2.8027699491240573e-27,
+      "actual_omega": 0.0,
+      "nominal_omega": -1.8116112106520073e-30,
+      "actual_accel": 0.0,
+      "nominal_accel": -4.616254129727554e-26,
+      "s0": 8.206584814324813e-29,
+      "actual_xy": [
+        0.015786909293152452,
+        -0.0009044131926890264
+      ],
+      "nominal_xy": [
+        0.020268121297657215,
+        -0.008730177324257944
+      ],
+      "v_ref_status": "VARIANT_FALLBACK",
+      "stop_parameters": {
+        "stop_active": 0.0,
+        "stop_goal_s": 0.0,
+        "stop_brake_accel": 0.6,
+        "stop_delay_margin": 0.8786666665,
+        "task_goal_active": 0.0
+      }
+    },
+    "peak_nearest_snapshot": {
+      "task_sec": 13.133000000000001,
+      "nominal_query_time_sec": 24.702099494107937,
+      "actual_speed": 0.24578534015306774,
+      "nominal_speed": 0.5652745166898251,
+      "actual_omega": 0.029137903105051006,
+      "nominal_omega": 0.22969446064966653,
+      "actual_accel": -0.6176667274969462,
+      "nominal_accel": -0.03752902276356626,
+      "s0": 4.742429069526358,
+      "actual_xy": [
+        4.08125825162035,
+        -0.2723251012717056
+      ],
+      "nominal_xy": [
+        4.086419427420483,
+        -0.2978720037727307
+      ],
+      "v_ref_status": "TASK_GOAL_STOP_PROFILE",
+      "stop_parameters": {
+        "stop_active": 1.0,
+        "stop_goal_s": 5.784330484645974,
+        "stop_brake_accel": 0.6,
+        "stop_delay_margin": 0.8786666665,
+        "task_goal_active": 0.0
+      }
+    },
+    "nominal_minus_actual_time_range_sec": [
+      -0.7993333333333335,
+      11.717026508506974
+    ],
+    "snapshots_count": 821
+  },
+  "no_rerun": true
+}
