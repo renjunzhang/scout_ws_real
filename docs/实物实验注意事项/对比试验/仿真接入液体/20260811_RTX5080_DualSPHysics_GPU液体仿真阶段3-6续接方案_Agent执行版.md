@@ -1436,5 +1436,5 @@ PHYSICAL_REFERENCE_PENDING=true
 2. [DualSPHysics 物理液体接入 SIM-R8 方案](./20260805_DualSPHysics物理液体接入SIM-R8方案.md)
 3. [Ubuntu 24.04 液体仿真电脑任务与数据交接说明](./20260806_Ubuntu24.04液体仿真电脑任务与数据交接说明.md)
 4. [RTX 5080 GPU 构建阶段进度与下一步（当前状态页）](./20260810_RTX5080_DualSPHysics_GPU构建阶段进度与下一步.md)
-5. [SIM-MECHANISM-R7 40/64/88 结果分析与正式实物流程对照](../仿真对比试验分析/20260804_SIM-MECHANISM-R7_40_64_88结果分析与正式实物S-MPCC流程对照.md)
+5. [SIM-MECHANISM-R7 40/64/88 结果分析与正式实物流程对照](../仿真对比试验分析/04_历史实验/20260804_SIM-MECHANISM-R7_40_64_88结果分析与正式实物S-MPCC流程对照.md)
 6. [SIM-R8 源码隔离、仿真实验矩阵与执行方案](../仿真对比试验/20260804_SIM-R8源码隔离_仿真实验矩阵与执行方案.md)

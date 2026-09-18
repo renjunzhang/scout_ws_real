@@ -947,7 +947,7 @@ C1 development geometry
 - C1/C2 development 配置：
   `src/scout_apps/simulation/spmpc_sim_local_planner/config/containers/`
 - R8/R7 边界：
-  `docs/实物实验注意事项/对比试验/仿真对比试验分析/20260804_SIM-R8源码隔离迁移与R7历史边界.md`
+  `docs/实物实验注意事项/对比试验/仿真对比试验分析/04_历史实验/20260804_SIM-R8源码隔离迁移与R7历史边界.md`
 - DualSPHysics Gauge：
   [https://github.com/DualSPHysics/DualSPHysics/blob/master/doc/xml_format/_FmtXML_Gauges.xml](https://github.com/DualSPHysics/DualSPHysics/blob/master/doc/xml_format/_FmtXML_Gauges.xml)
 - DualSPHysics motion：
