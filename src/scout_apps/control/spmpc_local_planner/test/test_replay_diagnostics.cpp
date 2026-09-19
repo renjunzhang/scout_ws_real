@@ -176,13 +176,14 @@ TEST(ReplayDiagnostics, RequiredRtiCountKeepsLiveAndOfflineSolvesAligned) {
     ASSERT_TRUE(solver.solve(input,makeStraightReference(),live))<<live.status;
     EXPECT_EQ(live.pre_solve_snapshot.rti_iterations,3);
     ASSERT_EQ(live.wall_timing.iteration_details.size(),3u);
+    double expected_estimate=live.wall_timing.iteration_details.front().estimate_ms;
     for (size_t i=0;i<live.wall_timing.iteration_details.size();++i) {
         const auto& detail=live.wall_timing.iteration_details[i];
         EXPECT_GT(detail.remaining_ms,detail.estimate_ms);
         EXPECT_GE(detail.wall_ms,0.);
         EXPECT_GE(detail.acados_ms,0.);
-        if (i>0) EXPECT_DOUBLE_EQ(detail.estimate_ms,
-                                 live.wall_timing.iteration_details[i-1].wall_ms);
+        EXPECT_DOUBLE_EQ(detail.estimate_ms,expected_estimate);
+        expected_estimate=std::max(expected_estimate,detail.wall_ms);
     }
     solver.configure(params,makeB0Variant());
     input.solve_budget={};

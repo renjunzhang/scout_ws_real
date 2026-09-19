@@ -1,0 +1,366 @@
+{
+  "date": "2026-09-19",
+  "formal": false,
+  "evidence": "ONE_REJECTED_BUDGET_ESTIMATOR_CANDIDATE",
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_rti_recent_budget",
+  "protocol": {
+    "evidence": "SINGLE_RECENT_RTI_ESTIMATE_NATIVE_THEN_CONDITIONAL_GAZEBO",
+    "formal": false,
+    "source_head": "495264057d884956c4e84fa5fb1ec5973f20af83",
+    "build_type": "Release",
+    "fast_math": false,
+    "plan": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+    "plan_sha256": "5a48e38b9528f52595183a531e71a12950ffda1e6035963a2bd5d007af44ce8d",
+    "task": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+    "rti_iterations": 3,
+    "rti_min_iterations": 3,
+    "control_period_ms": 33.333333333333336,
+    "publish_reserve_ms": 3,
+    "native_solve_budget_ms": 30.333333333333336,
+    "actual_jerk_max": 1,
+    "jerk_semantics": "30 Hz actuator-model acceleration difference, including FIFO head transitions",
+    "online_liquid_hard_constraint": false,
+    "online_liquid_weight": 5,
+    "progress_weight": 0,
+    "max_native_trials": 1,
+    "max_gazebo_trials": 1,
+    "max_retries": 0,
+    "native_timeout_sec": 180,
+    "gazebo_timeout_sec": 480,
+    "native_gate": [
+      "complete by deadline and full observation window",
+      "no abnormal status",
+      "actual jerk <= 1 + 3e-5",
+      "all active solves execute 3 RTIs",
+      "cycle through solve max <=30.333333 ms"
+    ],
+    "gazebo_gate": [
+      "task complete, full observation window, clean lifecycle",
+      "inspect all statuses, timing/publication, actual actuator/odom mismatch"
+    ],
+    "comparison": "reuse first preselected B0 and FP-AS; unequal-version development comparison, model liquid only",
+    "hardware": false,
+    "protected_paths": [
+      "Testing/",
+      "isolated simulation environment files"
+    ],
+    "runtime_head": "65ac0dab1987e1ccddc0011232240230ae1115e3",
+    "change": "Replace within-cycle maximum iteration estimate with latest completed iteration wall duration. Deadline, fixed three RTIs, physical constraints and task unchanged.",
+    "diagnostic": "Native CSV records each admission estimate, remaining budget, wall duration and acados duration; -1 duration means refused before solve."
+  },
+  "runtime": {
+    "geometry_trial": {
+      "source": "/tmp/scout_jerk_release_native/geometry_trial",
+      "sha256": "d377d0bccf56dd39d35d5d1e59aa809a73e9ff3bfc4def05b156c5c3bd8a50b0"
+    },
+    "libspmpc_local_planner.so": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+      "sha256": "9ce1fab4f01298444005ad8e3256b21167cb88e36e5d967f01e0ac3e3aaba88c"
+    },
+    "spmpc_local_planner_node": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+    },
+    "libacados_ocp_solver_spmpc_b0.so": {
+      "source": "/tmp/scout_jerk_release_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+      "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+    },
+    "libacados_ocp_solver_spmpc_slosh.so": {
+      "source": "/tmp/scout_jerk_release_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+      "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+    }
+  },
+  "process": {
+    "command": [
+      "/tmp/scout_jerk_release_native/geometry_trial",
+      "planned_slosh",
+      "/data/a/scout_sim_replacement/results/20260919_rti_recent_budget/native",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+      "1",
+      ".05",
+      "1",
+      "3",
+      "0",
+      "0",
+      "30.333333333333336",
+      "3"
+    ],
+    "returncode": 1,
+    "status": "failed",
+    "wall_seconds": 9.234049516000141,
+    "timeout": 180
+  },
+  "gate": {
+    "complete": false,
+    "no_abnormal_status": false,
+    "actual_jerk": true,
+    "full_rti": true,
+    "cycle_timing": true,
+    "full_window": false,
+    "process_ok": false,
+    "status_counts": {
+      "B_slosh_ACADOS_OK": 790,
+      "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 2,
+      "SOLVE_BUDGET_STOPPING": 42,
+      "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1,
+      "TERMINAL_DRAINING": 516,
+      "TASK_DEADLINE_MISSED": 1
+    },
+    "active_rti_counts": {
+      "3": 790
+    },
+    "abnormal_statuses": {
+      "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 2,
+      "SOLVE_BUDGET_STOPPING": 42,
+      "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1,
+      "TASK_DEADLINE_MISSED": 1
+    },
+    "passed": false
+  },
+  "native": {
+    "mode": "planned_slosh",
+    "scenario_plan_id": "full_s_slow_single_20260919__actual_jerk_1-ecb23f376965",
+    "deadline": "45",
+    "evaluation_window": "5",
+    "curvature_weight": "0.050000000000000003",
+    "contour_weight": "1",
+    "rti_iterations": "3",
+    "max_prediction_defect": "6.7608265652552291e-08",
+    "rti_min_iterations": "3",
+    "solve_budget_ms": "30.333333333333336",
+    "cycle_p95_ms": "15.636167",
+    "cycle_max_ms": "26.044074999999999",
+    "actual_v_min": "0",
+    "actual_v_max": "0.25154644066748399",
+    "actual_omega_min": "-0.13774279907407982",
+    "actual_omega_max": "0.36303893426500472",
+    "walltime_p95_ms": "15.633792",
+    "walltime_max_ms": "26.040233000000001",
+    "solver_time_p95_ms": "14.743",
+    "solver_time_max_ms": "24.191999999999997",
+    "max_actual_jerk": "0.99999999999967504",
+    "actual_jerk_max": "1",
+    "max_jerk": "0.99999999999863798",
+    "max_solve_ms": "24.191999999999997",
+    "evidence": "MODEL_IN_THE_LOOP",
+    "actuator_scale": "1",
+    "deadline_lateness_sec": "-1",
+    "deadline_tolerance_sec": "0",
+    "complete": "false",
+    "completion_time": "-1",
+    "final_goal_position_error": "0.86170323653821901",
+    "final_goal_yaw_error": "0.26431076310917717",
+    "evaluation_end_time": "50",
+    "evaluation_last_sample_time": "45.033333333333331",
+    "height_sampling": "30 Hz model nodes; not continuous peak certification",
+    "failures": "1",
+    "failure_status": "TASK_DEADLINE_MISSED",
+    "curvature_arc_energy": "1.2336197413668117",
+    "path_length": "4.3043104500501332",
+    "low_speed_spin_samples": "0",
+    "peak_modal_height_m": "0.00066965073328970591",
+    "minimum_region_clearance": "1.3300000000000001"
+  },
+  "status_transitions": [
+    {
+      "t": 0.0,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 25.9,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 25.933333333333334,
+      "status": "SOLVE_BUDGET_STOPPING"
+    },
+    {
+      "t": 27.03333333333333,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 27.066666666666666,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 27.099999999999998,
+      "status": "SOLVE_BUDGET_STOPPING"
+    },
+    {
+      "t": 27.4,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 27.8,
+      "status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4"
+    },
+    {
+      "t": 27.833333333333332,
+      "status": "TERMINAL_DRAINING"
+    },
+    {
+      "t": 45.03333333333333,
+      "status": "TASK_DEADLINE_MISSED"
+    }
+  ],
+  "failures": [
+    {
+      "cycle": {
+        "t": "25.899999999999999",
+        "iterations": "2",
+        "cycle_ms": "18.266394999999999",
+        "solve_ms": "18.264509",
+        "setup_ms": "0.76252900000000001",
+        "rti_ms": "17.343021",
+        "residual_ms": "0",
+        "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+      },
+      "iterations": [
+        {
+          "t": "25.899999999999999",
+          "iteration": "1",
+          "estimate_ms": "5.4201830000000006",
+          "remaining_ms": "29.433287",
+          "wall_ms": "5.1040110000000007",
+          "acados_ms": "5.0990000000000002",
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+        },
+        {
+          "t": "25.899999999999999",
+          "iteration": "2",
+          "estimate_ms": "5.1040110000000007",
+          "remaining_ms": "24.327390000000001",
+          "wall_ms": "12.229442000000001",
+          "acados_ms": "12.221",
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+        },
+        {
+          "t": "25.899999999999999",
+          "iteration": "3",
+          "estimate_ms": "12.229442000000001",
+          "remaining_ms": "12.094106",
+          "wall_ms": "-1",
+          "acados_ms": "-1",
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+        }
+      ]
+    },
+    {
+      "cycle": {
+        "t": "27.066666666666666",
+        "iterations": "1",
+        "cycle_ms": "17.081047000000002",
+        "solve_ms": "17.078672000000001",
+        "setup_ms": "2.3582649999999998",
+        "rti_ms": "14.538748999999999",
+        "residual_ms": "0",
+        "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+      },
+      "iterations": [
+        {
+          "t": "27.066666666666666",
+          "iteration": "1",
+          "estimate_ms": "5.0548420000000007",
+          "remaining_ms": "27.803816000000001",
+          "wall_ms": "14.531485999999999",
+          "acados_ms": "14.524000000000001",
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+        },
+        {
+          "t": "27.066666666666666",
+          "iteration": "2",
+          "estimate_ms": "14.531485999999999",
+          "remaining_ms": "13.268909000000001",
+          "wall_ms": "-1",
+          "acados_ms": "-1",
+          "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+        }
+      ]
+    },
+    {
+      "cycle": {
+        "t": "27.800000000000001",
+        "iterations": "1",
+        "cycle_ms": "7.2880919999999998",
+        "solve_ms": "7.286626",
+        "setup_ms": "0.77468099999999995",
+        "rti_ms": "6.3752639999999996",
+        "residual_ms": "0",
+        "status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4"
+      },
+      "iterations": [
+        {
+          "t": "27.800000000000001",
+          "iteration": "1",
+          "estimate_ms": "4.7173689999999997",
+          "remaining_ms": "29.42728",
+          "wall_ms": "6.3710050000000003",
+          "acados_ms": "6.367",
+          "status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4"
+        }
+      ]
+    }
+  ],
+  "same_trace_admission_differences": [
+    {
+      "t": 0.0,
+      "iteration": 3,
+      "previous_max_ms": 11.890222000000001,
+      "latest_ms": 6.13934,
+      "remaining_ms": 10.698395,
+      "executed_wall_ms": 6.178731
+    }
+  ],
+  "admission_comparison_limit": "Local decisions on the same observed trace only; not a counterfactual closed-loop trial.",
+  "qp_failure": {
+    "t": 27.8,
+    "acados_status": 4,
+    "qp_status": 3,
+    "qp_status_name": "ACADOS_MINSTEP",
+    "qp_iterations": 12
+  },
+  "diagnosis": "The rejected cycles contain actual 12.229/14.531 ms RTIs, and both latest and maximum estimates would refuse the next call on those observations. Changing the estimator is insufficient. Wall/acados agreement places the measured time inside solve(), but does not distinguish QP work from OS scheduling.",
+  "disposition": {
+    "candidate_policy_retained": false,
+    "restored_policy": "within-cycle max of previous and current measured RTI wall times",
+    "retained_change": "per-iteration native timing and admission diagnostics, no ROS message/schema change",
+    "candidate_trial_head": "65ac0dab",
+    "restored_policy_has_new_s_path_trial": false
+  },
+  "validation": {
+    "candidate_test_suites_passed": 3,
+    "candidate_test_cases_passed": 73,
+    "candidate_ros_release_build": true,
+    "candidate_native_release_build": true,
+    "retained_test_suites_passed": 1,
+    "retained_test_cases_passed": 34,
+    "retained_native_release_build": true,
+    "retained_ros_release_build": true
+  },
+  "closeout": {
+    "native_runs": 1,
+    "gazebo_runs": 0,
+    "hardware_runs": 0,
+    "parameter_sweeps": 0,
+    "retries": 0,
+    "comparison_plot": "NOT_GENERATED_NATIVE_GATE_FAILED",
+    "protected_paths_untouched": [
+      "Testing/",
+      "isolated simulation environment files"
+    ]
+  },
+  "retained_runtime": {
+    "geometry_trial": {
+      "source": "/tmp/scout_jerk_release_native/geometry_trial",
+      "sha256": "ef8be0581d606f64cc7bb5865487af16d143eb80e290f0cf80f050b397f703b0"
+    },
+    "libspmpc_local_planner.so": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+      "sha256": "495ea5048a88ccf579c71e435ac1a5612395bff2f68ed0e5b724018f889b4780"
+    },
+    "spmpc_local_planner_node": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+    }
+  }
+}

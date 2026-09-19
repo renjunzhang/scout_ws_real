@@ -1328,10 +1328,7 @@ bool ContinuousMpccSolverAcados::solve(
         }
         previous_iteration_wall_sec_ = std::chrono::duration<double>(
             SolveBudget::Clock::now() - iteration_start).count();
-        // Re-estimate from the latest completed RTI. An earlier slow call must
-        // not remain the cost estimate after a newer, cheaper call. This is
-        // only admission prediction: the hard publication deadline still wins.
-        iteration_estimate = previous_iteration_wall_sec_;
+        iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
         timing.wall_ms = previous_iteration_wall_sec_ * 1000.;
         timing.acados_ms = iteration_time * 1000.;
         output.wall_timing.iteration_details.push_back(timing);
