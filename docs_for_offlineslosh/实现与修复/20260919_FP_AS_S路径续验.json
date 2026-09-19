@@ -1,0 +1,60 @@
+{
+  "stage": "offline_and_native_passed_pending_single_gazebo",
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514",
+  "optimization": {
+    "status": "Solve_Succeeded",
+    "solve_seconds": 286.1519837260021,
+    "iterations": 250,
+    "objective": 0.23554411670234157
+  },
+  "validation": {
+    "status": "SOFTWARE_VERIFIED",
+    "liquid_policy_qualification": {
+      "passed": true,
+      "failures": [],
+      "enforced": true
+    },
+    "dynamics_max_error": 8.223630110215652e-14,
+    "minimum_region_clearance": 1.3033333333333332,
+    "dense_peak_height_m": 0.00026240886573547186,
+    "residual_height_m": 5.0776958703014005e-15,
+    "curvature_arc_energy": 6.141258449664536,
+    "actual_path_length": 5.812517612095367,
+    "stopping_evaluation": {
+      "t_stop_sec": 40.0,
+      "clear_tolerance": 2e-06,
+      "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+      "windows": {
+        "transport_peak_m": 0.00026240886573547186,
+        "transport_p95_m": 0.00013976679978744045,
+        "transport_rms_m": 7.71962703634813e-05,
+        "transport_samples": 4800,
+        "tail_peak_m": 5.966288964875572e-07,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 40.0,
+        "window_sec": 5.0
+      },
+      "liquid_policy": {
+        "mode": "transport_tail_v1",
+        "move_height_m": 0.0009,
+        "tail_height_m": 8e-05,
+        "height_tolerance_m": 1e-06
+      },
+      "liquid_objective_end_sec": 45.0
+    },
+    "hardware_verified": false
+  },
+  "geometry": {
+    "maximum_node_path_error_m": 8.11537772743617e-14,
+    "maximum_substep_path_error_m": 1.5248844387327183e-05,
+    "substeps_per_interval": 4,
+    "node_tolerance_m": 2e-06,
+    "substep_tolerance_m": 0.001
+  },
+  "tests": 21,
+  "task_unchanged": true,
+  "geometry_unchanged": true,
+  "real_robot_started": false
+}
