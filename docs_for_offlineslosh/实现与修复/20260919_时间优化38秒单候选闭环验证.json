@@ -1,0 +1,271 @@
+{
+  "formal": false,
+  "raw_directory": "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130",
+  "baseline_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+  "new_numerical_solves": 1,
+  "new_closed_loop_trials": 1,
+  "retries": 0,
+  "default_time_optimization_enabled": false,
+  "nominal_duration_before": 40,
+  "nominal_duration_after": 38,
+  "baseline_runs": [
+    {
+      "name": "full_01",
+      "peak_mm": 0.5408323017290326,
+      "p95_mm": 0.2271372257632544,
+      "rms_mm": 0.11222955264848235,
+      "tail_peak_mm": 3.209236659501734e-08,
+      "goal_sec": 28.314999999999998,
+      "stop_sec": 28.280333333
+    },
+    {
+      "name": "full_02",
+      "peak_mm": 0.47736531452827324,
+      "p95_mm": 0.2230089628554845,
+      "rms_mm": 0.11084501338916364,
+      "tail_peak_mm": 7.056650003810778e-06,
+      "goal_sec": 28.298000000000002,
+      "stop_sec": 28.26433333300001
+    },
+    {
+      "name": "full_03",
+      "peak_mm": 0.49802594806715,
+      "p95_mm": 0.2190799124159951,
+      "rms_mm": 0.111553805258875,
+      "tail_peak_mm": 9.253121761576004e-06,
+      "goal_sec": 28.233999999999995,
+      "stop_sec": 28.233333333000004
+    }
+  ],
+  "baseline_mean": {
+    "peak_mm": 0.5054078547748186,
+    "p95_mm": 0.22307536701157799,
+    "rms_mm": 0.11154279043217366,
+    "tail_peak_mm": 5.447288043993933e-06,
+    "goal_sec": 28.28233333333333,
+    "stop_sec": 28.259333333000004
+  },
+  "enabled_run": {
+    "peak_mm": 0.671215298320357,
+    "p95_mm": 0.27762661674300154,
+    "rms_mm": 0.14026953829992916,
+    "tail_peak_mm": 4.7099840122113184e-05,
+    "goal_sec": 24.256,
+    "stop_sec": 24.224333333000004
+  },
+  "enabled_vs_baseline_mean_change_percent": {
+    "peak_mm": 32.80666138823918,
+    "p95_mm": 24.4541790795719,
+    "rms_mm": 25.754015796496965,
+    "goal_sec": -14.236213419449118,
+    "stop_sec": -14.278468470762206
+  },
+  "actual_arrival_saved_sec": 4.02633333333333,
+  "actual_stop_saved_sec": 4.035,
+  "baseline_goal_range_sec": [
+    28.233999999999995,
+    28.314999999999998
+  ],
+  "qualification": {
+    "formal": false,
+    "closed_loop_verified": true,
+    "actual_arrival_faster_than_baseline_mean": true,
+    "actual_stop_faster_than_baseline_mean": true,
+    "time_optimization_effect_observed": true,
+    "slosh_evaluation": {
+      "passed": true,
+      "metrics": {
+        "transport_peak_m": 0.000671215298320357,
+        "transport_p95_m": 0.00027762661674300156,
+        "transport_rms_m": 0.00014026953829992918
+      },
+      "upper_exclusive_m": {
+        "transport_peak_m": 0.000934211687997709,
+        "transport_p95_m": 0.00046536172934884886,
+        "transport_rms_m": 0.00019770181782355017
+      },
+      "failures": []
+    },
+    "liquid_caps_passed": true,
+    "execution_valid": true,
+    "observed_new_runs": 1
+  },
+  "search_process": {
+    "command": [
+      "/usr/bin/python3",
+      "-u",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/search_transport_duration.py",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/task.json",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search",
+      "--warm-plan",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+      "--slosh-limits",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/slosh_limits.json",
+      "--cpp-validator",
+      "/tmp/scout_terminal_envelope_native_20260918/validate_plan",
+      "--optimize-time",
+      "--times",
+      "40",
+      "38",
+      "--process-seconds",
+      "600",
+      "--total-seconds",
+      "720"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 40.24965491700004,
+    "timeout": 780
+  },
+  "candidate": {
+    "transport_duration": 38.0,
+    "status": "python_verified",
+    "task_file": "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/task.json",
+    "warm_plan": "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1200/plan.json",
+    "task_sha256": "67a98f912da5efdb851bdba77f454bd0595fd97929943a0693fb21fc9d8d18de",
+    "baseline_reused": false,
+    "process": {
+      "command": [
+        "/usr/bin/python3",
+        "-u",
+        "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+        "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/task.json",
+        "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/plan.json",
+        "--warm-plan",
+        "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1200/plan.json",
+        "--diagnostics",
+        "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/events.jsonl",
+        "--solver-verbosity",
+        "5"
+      ],
+      "returncode": 0,
+      "status": "completed",
+      "wall_seconds": 38.69807412800037,
+      "timeout": 600.0
+    },
+    "validation": {
+      "status": "SOFTWARE_VERIFIED",
+      "dynamics_max_error": 1.057198772969059e-11,
+      "minimum_region_clearance": 1.3033333333333332,
+      "dense_peak_height_m": 0.0003008393386071332,
+      "residual_height_m": 1.6245714184683172e-14,
+      "curvature_arc_energy": 0.11939870373456755,
+      "actual_path_length": 4.955743992572526,
+      "stopping_evaluation": {
+        "t_stop_sec": 38.0,
+        "clear_tolerance": 2e-06,
+        "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+        "windows": {
+          "transport_peak_m": 0.0003008393386071332,
+          "transport_p95_m": 0.00018377322843153617,
+          "transport_rms_m": 6.701214155131135e-05,
+          "transport_samples": 4560,
+          "tail_peak_m": 2.3550717239692802e-05,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 38.0,
+          "window_sec": 5.0
+        },
+        "liquid_policy": {
+          "mode": "transport_tail_v1",
+          "move_height_m": 0.0009,
+          "tail_height_m": 8e-05,
+          "height_tolerance_m": 1e-06
+        },
+        "liquid_objective_end_sec": 43.0
+      },
+      "hardware_verified": false
+    },
+    "slosh_evaluation": {
+      "passed": true,
+      "metrics": {
+        "transport_peak_m": 0.0003008393386071332,
+        "transport_p95_m": 0.00018377322843153617,
+        "transport_rms_m": 6.701214155131135e-05
+      },
+      "upper_exclusive_m": {
+        "transport_peak_m": 0.000934211687997709,
+        "transport_p95_m": 0.00046536172934884886,
+        "transport_rms_m": 0.00019770181782355017
+      },
+      "failures": []
+    },
+    "optimization": {
+      "status": "Solve_Succeeded",
+      "guide_interpolation": "smooth_route_v2_padded",
+      "objective": 31.286209093336012,
+      "solve_seconds": 34.92575638800008,
+      "iterations": 37
+    },
+    "plan_file": "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/plan.json",
+    "plan_sha256": "239024c232ba9d93933071d24b46b21b26b2118f6e609bde8b6fa55f706988fe",
+    "cpp_validation": {
+      "command": [
+        "/tmp/scout_terminal_envelope_native_20260918/validate_plan",
+        "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/plan.json"
+      ],
+      "returncode": 0,
+      "status": "completed",
+      "wall_seconds": 0.21675844400033384,
+      "timeout": 60.0
+    }
+  },
+  "closed_loop_process": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/a/scout_ws/scripts/run_trajectory_gazebo_smoke.py",
+      "--output",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/full_38/case",
+      "--setup",
+      "/tmp/scout_tf_epoch_overlay_20260919/setup.bash",
+      "--profile",
+      "planned_slosh",
+      "--identified-actuator",
+      "--task",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/T_1140/task.json",
+      "--plan",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/search/selected_plan.json"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 128.4052484390004,
+    "timeout": 480
+  },
+  "cycles": {
+    "odom_solve_cycles": 716,
+    "mismatched_odom_liquid_cycles": 0,
+    "command_contract_violations": 0,
+    "qp_iteration_limits": [
+      20
+    ],
+    "first_live_cycle": {
+      "cycle_id": 25,
+      "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+    }
+  },
+  "abnormal_statuses": {},
+  "identity_passed": true,
+  "frozen_unchanged": true,
+  "non_plan_parameter_differences": [],
+  "task_changes": [
+    "transport_duration"
+  ],
+  "assessment_sha256": {
+    "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/full_38/assessment.json": "2f22d110d3c128f49582a0ee2cc1899eacc46c54ee9cd376c388d422541332a0",
+    "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_01/assessment.json": "e87b96d44831729b4b8ffda15854dbf238a52c430bef5c4a1e1a5629848221fa",
+    "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_02/assessment.json": "52a26b06f05be08bea2a74e157894be29e2cf254506f2d81422f826ff9ee1987",
+    "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_03/assessment.json": "839d1ad28d4d6c880379cc0e9a2b28f987f7a7df5ab595354103bd55618e4875"
+  },
+  "script_sha256": {
+    "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/experiment.json": "e31d5514de73bfb1325ce4626cb5c3390f2bc16fffaf72061da8588d214b75a9",
+    "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/run_search_once.py": "ab87f36a94a25424bef4c414e21506272f252d65a8e8d17cb29b11f6d03a5598",
+    "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/run_closed_loop.py": "502a1c4802a5579ba234f1751ce587affa2b049b9477ec25fed9b10c3c3a1338",
+    "/data/a/scout_sim_replacement/results/20260919_time_switch_38_151130/compare.py": "271f25849fd28c92ed9f3172998638ce43c73d193893aa23a00b7a7e8176b4e9"
+  },
+  "limitations": [
+    "One enabled run versus three archived disabled runs; development evidence without a statistical significance claim.",
+    "Upper-layer geometry and speed are reoptimized under the same task when nominal duration changes; not a fixed-geometry timing ablation.",
+    "Slosh uses unchanged B0-derived model-response gates and absolute caps; not independent measured liquid surfaces."
+  ]
+}
