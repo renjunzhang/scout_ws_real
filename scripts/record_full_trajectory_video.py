@@ -71,7 +71,8 @@ def main():
                     profile=args.profile, identified_actuator=args.identified_actuator,
                     video=video_name, fps=15, width=1600, height=900,
                     controller_changes=False, replay=False,
-                    plan_identity='REPLAYED_FEASIBLE_SEED_NOT_REOPTIMIZED' if args.profile == 'planned_slosh' else 'NO_PLAN_CRUISE', children=[],
+                    plan_identity=(json.loads(args.plan.read_text()).get('optimization', {}).get('status', 'UNKNOWN')
+                                   if args.plan else 'NO_PLAN_CRUISE'), children=[],
                     git_sha=subprocess.check_output(['git', '-C', str(ROOT), 'rev-parse', 'HEAD'], text=True).strip())
 
     def start(name, command, child_env=env):
