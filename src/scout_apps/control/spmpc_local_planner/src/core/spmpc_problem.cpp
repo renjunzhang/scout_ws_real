@@ -320,12 +320,21 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
          std::abs(angleDiff(stop_tail.final_robot.yaw,goal.yaw)) +
             solver_params_.actuator.angular_tau_sec*std::abs(stop_tail.final_robot.omega) <=
             (task_plan_ ? task_plan_->goal_yaw_tolerance : solver_params_.terminal.goal_yaw_tolerance));
+    // An offline timed reference already contains its braking schedule and
+    // delayed tail. Distance-triggered slowdown/capture would reshape it.
+    // Defer only normal completion until its transport interval ends; the
+    // continuously verified failure-stop path and all physical gates remain.
+    const bool scheduled_transport = task_plan_ &&
+        solver_params_.planning.trajectory.mode == TrajectoryReferenceMode::TimeTracking &&
+        input.task_elapsed_sec < task_plan_->transport_duration;
+    auto terminal_goal = goal_info;
+    if (scheduled_transport) terminal_goal.task_end_approach = false;
     TerminalPlan terminal_plan = terminal_controller_.updateAndPlan(
-        goal_info, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max),
-        goal_pose_ready && stop_failure.empty() && (!require_vehicle_queues || vehicle_queues_clear) &&
+        terminal_goal, input.robot.v, input.robot.omega, std::max(1e-6, solver_params_.a_max),
+        !scheduled_transport && goal_pose_ready && stop_failure.empty() && (!require_vehicle_queues || vehicle_queues_clear) &&
         (!complete_stop || (stop_failure.empty() && stop_tail.valid && stop_readiness.vehicle_stopped &&
                           stop_readiness.excitation_quiet && stop_readiness.liquid_stable)),
-        goal_pose_ready && (!require_vehicle_queues || vehicle_queues_clear || tail_finishes_at_goal));
+        !scheduled_transport && goal_pose_ready && (!require_vehicle_queues || vehicle_queues_clear || tail_finishes_at_goal));
     const auto stamp_terminal = [&]() {
         output.cycle_timing = input.cycle_timing;
         output.terminal_diagnostics = terminal_controller_.diagnostics();

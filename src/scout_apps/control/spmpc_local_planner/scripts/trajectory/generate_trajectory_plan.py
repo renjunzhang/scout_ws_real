@@ -7,7 +7,7 @@ import sys
 # Import shared planning modules when invoked as a standalone CLI.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from planning.optimizer import solve_task
+from planning.optimizer import solve_task, PlanValidationError
 from planning.validation import validate_plan
 from planning.diagnostics import ProgressLog
 
@@ -20,7 +20,11 @@ def main():
     parser.add_argument("--validate-plan", action="store_true", help="input is an existing plan, skip optimization")
     parser.add_argument("--diagnostics", type=Path, help="new JSONL file for stage/solver diagnostics")
     parser.add_argument("--solver-verbosity", type=int, choices=range(13), default=0)
+    parser.add_argument("--rejected-plan", type=Path,
+                        help="new diagnostic file for a solved candidate rejected by validation; not a plan")
     args = parser.parse_args()
+    if args.rejected_plan and args.rejected_plan.exists():
+        parser.error("rejected-plan diagnostic already exists")
     progress = ProgressLog(args.diagnostics) if args.diagnostics else None
     try:
         if args.validate_plan:
@@ -38,6 +42,10 @@ def main():
         # An infeasible task is an explicit failure, never a saved executable plan.
         if progress is not None:
             progress("attempt_failed", error=str(error))
+        if isinstance(error, PlanValidationError) and args.rejected_plan:
+            args.rejected_plan.parent.mkdir(parents=True, exist_ok=True)
+            args.rejected_plan.write_text(json.dumps(dict(executable=False,
+                rejection=str(error), candidate=error.candidate), indent=2, allow_nan=False)+"\n")
         print(f"planning failed: {error}", file=sys.stderr)
         return 2
     finally:

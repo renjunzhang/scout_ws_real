@@ -12,6 +12,7 @@ const char* trajectoryReferenceModeName(TrajectoryReferenceMode mode) {
     case TrajectoryReferenceMode::Cruise: return "cruise";
     case TrajectoryReferenceMode::Progress: return "progress";
     case TrajectoryReferenceMode::FixedTime: return "fixed_time";
+    case TrajectoryReferenceMode::TimeTracking: return "time_tracking";
     }
     return "invalid";
 }
@@ -20,6 +21,7 @@ TrajectoryReferenceMode parseTrajectoryReferenceMode(const std::string& value) {
     if (value == "cruise") return TrajectoryReferenceMode::Cruise;
     if (value == "progress") return TrajectoryReferenceMode::Progress;
     if (value == "fixed_time") return TrajectoryReferenceMode::FixedTime;
+    if (value == "time_tracking") return TrajectoryReferenceMode::TimeTracking;
     throw std::invalid_argument("unknown trajectory reference mode: " + value);
 }
 
@@ -40,7 +42,10 @@ bool validatePlanningConfig(const PlanningConfig& c, std::string* reason) {
         return fail("invalid deadline tolerance");
     if (c.trajectory.mode != TrajectoryReferenceMode::Cruise &&
         c.trajectory.mode != TrajectoryReferenceMode::Progress &&
-        c.trajectory.mode != TrajectoryReferenceMode::FixedTime) return fail("invalid reference mode");
+        c.trajectory.mode != TrajectoryReferenceMode::FixedTime &&
+        c.trajectory.mode != TrajectoryReferenceMode::TimeTracking) return fail("invalid reference mode");
+    if (c.trajectory.mode == TrajectoryReferenceMode::TimeTracking && (!g.enabled || g.goal_weight <= 0))
+        return fail("time tracking requires a positive pose tracking weight");
     if (c.trajectory.mode != TrajectoryReferenceMode::Cruise && c.trajectory.plan_file.empty())
         return fail("trajectory reference requested without plan_file");
     if (g.enabled && !c.region.enabled) return fail("autonomous geometry requires an explicit motion region");

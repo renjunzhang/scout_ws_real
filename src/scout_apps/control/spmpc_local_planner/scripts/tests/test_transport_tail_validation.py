@@ -58,3 +58,19 @@ def test_height_acceptance_uses_explicit_metre_tolerance():
     with patch('planning.validation.dense_heights', return_value=(times, heights)):
         with pytest.raises(ValueError, match='dense_transport_tail_liquid_cap'):
             validate_plan(plan)
+
+
+def test_public_feasibility_keeps_liquid_rejection_visible_and_motion_mandatory():
+    plan = new_plan()
+    times = np.arange(601)/120.
+    heights = np.full_like(times, .002)
+    with patch('planning.validation.dense_heights', return_value=(times, heights)):
+        result = validate_plan(plan, enforce_liquid_policy=False)
+        assert result['status'] == 'PUBLIC_FEASIBILITY_VERIFIED'
+        assert not result['liquid_policy_qualification']['passed']
+        assert result['liquid_policy_qualification']['failures']
+        with pytest.raises(ValueError, match='dense_transport_tail_liquid_cap'):
+            validate_plan(plan)  # Default contract remains strict.
+        plan['samples'][30]['state'][6] = 2.
+        with pytest.raises(ValueError, match='rollout mismatch'):
+            validate_plan(plan, enforce_liquid_policy=False)

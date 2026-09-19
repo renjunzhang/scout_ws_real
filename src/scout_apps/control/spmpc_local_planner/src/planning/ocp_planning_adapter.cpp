@@ -185,6 +185,17 @@ std::vector<OcpPlanningStage> OcpPlanningAdapter::prepare(const ReferencePath& r
         if (stage.terminal_goal_tracking &&
             std::hypot(goal_dx,goal_dy) > .75*terminal_.goal_tolerance)
             stage.goal_tracking_yaw=std::atan2(goal_dy,goal_dx);
+        if (trajectory_ && config_.trajectory.mode == TrajectoryReferenceMode::TimeTracking &&
+            !stage.task_goal_active) {
+            // Reuse the existing terminal pose objective as a moving target.
+            // The persistent task clock selects pose AND speed; geometry stays
+            // spatial for contour/projection/region checks. At the deadline the
+            // original hard final-pose constraints remain authoritative.
+            const auto timed = trajectory_->sampleAtTime(input.task_elapsed_sec+k*dt_);
+            stage.goal_pose = {{timed.state[0], timed.state[1], timed.state[2]}};
+            stage.goal_tracking_yaw = timed.state[2];
+            stage.terminal_goal_tracking = false;
+        }
         if (config_.region.enabled) {
             bool found = false;
             for (const auto& cell : region_stages_) {

@@ -66,10 +66,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--setup', type=Path, required=True)
-    parser.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh'], default='raw_mpcc')
+    parser.add_argument('--profile', choices=['raw_mpcc', 'planned_slosh', 'external_timed'], default='raw_mpcc')
     parser.add_argument('--plan', type=Path)
     parser.add_argument('--task', type=Path)
-    parser.add_argument('--reference-mode', choices=['progress', 'fixed_time'],
+    parser.add_argument('--reference-mode', choices=['progress', 'fixed_time', 'time_tracking'],
                         help='override this case only; preserve the profile default when omitted')
     parser.add_argument('--slosh-weight', type=float,
                         help='planned_slosh only: override liquid cost weight for same-plan ablation')
@@ -80,8 +80,8 @@ def main():
     args = parser.parse_args()
     if not args.setup.is_file() or not MAP.is_file():
         parser.error('missing compiled ROS1 overlay or explicit map')
-    if args.profile == 'planned_slosh' and not (args.plan and args.task):
-        parser.error('planned_slosh requires a validated --plan and matching --task')
+    if args.profile in ('planned_slosh', 'external_timed') and not (args.plan and args.task):
+        parser.error('planned profiles require a validated --plan and matching --task')
     if args.reference_mode and not args.plan:
         parser.error('--reference-mode requires a --plan')
     if args.slosh_weight is not None and (args.profile != 'planned_slosh' or

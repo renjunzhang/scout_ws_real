@@ -22,6 +22,13 @@ from actual_motion_kernel import actual_motion_rhs
 from model_contract import MODEL_VERSION, COST_VERSION
 
 
+class PlanValidationError(ValueError):
+    """Retain a solved but rejected candidate for diagnosis, never execution."""
+    def __init__(self, message, candidate):
+        super().__init__(message)
+        self.candidate = candidate
+
+
 def dynamics(task):
     sym = export_spmpc_slosh_symbols()
     p = model_parameters(task)
@@ -209,6 +216,9 @@ def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
         for k, (x, u) in enumerate(zip(states, controls))]
     from .validation import validate_plan
     emit("validation_started")
-    plan["validation"] = validate_plan(plan)
+    try:
+        plan["validation"] = validate_plan(plan)
+    except ValueError as error:
+        raise PlanValidationError(str(error), plan) from error
     emit("validation_finished", **plan["validation"])
     return plan

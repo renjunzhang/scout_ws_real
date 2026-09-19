@@ -8,7 +8,13 @@ from .terminal_speed import speed_limits
 from model_contract import MODEL_VERSION, COST_VERSION
 
 
-def validate_plan(plan, tolerance=2e-6):
+def validate_plan(plan, tolerance=2e-6, *, enforce_liquid_policy=True):
+    """Check public execution contracts and report model-liquid qualification.
+
+    Default exports still require both. A comparison may explicitly inspect a
+    physically executable candidate that missed its method's liquid target;
+    this never relaxes dynamics, actuator, motion, region or parking checks.
+    """
     if (plan["schema_version"], plan["liquid_model_version"], plan["cost_model_version"]) != (1, MODEL_VERSION, COST_VERSION):
         raise ValueError("unsupported plan schema/model")
     task = load_task(plan["task"])
@@ -90,6 +96,7 @@ def validate_plan(plan, tolerance=2e-6):
     peak = float(np.max(heights))
     stopping = stopping_metrics(task, X, U, dense_times, heights, tolerance)
     policy = task.get("liquid_policy")
+    liquid_errors = []
     if policy is not None:
         stopped = stopping["t_stop_sec"]
         if stopped is None or stopped > task["transport_duration"]+1e-8:
@@ -98,11 +105,16 @@ def validate_plan(plan, tolerance=2e-6):
             errors.append("incomplete_stopping_window")
         caps = height_limits(task, dense_times, stopped)
         if np.any(heights > caps + policy["height_tolerance_m"]):
-            errors.append("dense_transport_tail_liquid_cap")
+            worst = int(np.argmax(heights-caps))
+            liquid_errors.append("dense_transport_tail_liquid_cap"
+                          f"(t={dense_times[worst]:.9g}, height={heights[worst]:.9g},"
+                          f" cap={caps[worst]:.9g}, stop={stopped})")
         stopping["liquid_policy"] = policy
         stopping["liquid_objective_end_sec"] = objective_end_index(task)*dt
     elif task["liquid_constraint_enable"] and peak > task["liquid_height_limit"]+tolerance:
-        errors.append("dense_liquid_cap")
+        liquid_errors.append("dense_liquid_cap")
+    if enforce_liquid_policy:
+        errors.extend(liquid_errors)
     if task.get("terminal_speed_policy") is not None:
         distance = np.sqrt(np.sum((X[:, :2]-goal[:2])**2, axis=1)+1e-16)
         speed_cap, command_cap_squared = speed_limits(task, route_length-X[:, 4], distance)
@@ -111,7 +123,10 @@ def validate_plan(plan, tolerance=2e-6):
     if errors: raise ValueError("plan violates: " + ", ".join(sorted(set(errors))))
     speed = np.sqrt(X[:, 3]**2+task["objective"]["speed_floor"]**2)
     curvature = X[:, 5]/speed
-    return dict(status="SOFTWARE_VERIFIED", dynamics_max_error=defect, minimum_region_clearance=clearance,
+    return dict(status="SOFTWARE_VERIFIED" if enforce_liquid_policy else "PUBLIC_FEASIBILITY_VERIFIED",
+                liquid_policy_qualification=dict(passed=not liquid_errors, failures=liquid_errors,
+                                                 enforced=enforce_liquid_policy),
+                dynamics_max_error=defect, minimum_region_clearance=clearance,
                 dense_peak_height_m=peak, residual_height_m=float(task["height_coeff"]*np.hypot(X[-1, 24], X[-1, 26])),
                 curvature_arc_energy=float(np.sum(curvature[:-1]**2*speed[:-1])*dt), actual_path_length=float(np.sum(np.abs(X[:-1, 3]))*dt),
                 stopping_evaluation=stopping,

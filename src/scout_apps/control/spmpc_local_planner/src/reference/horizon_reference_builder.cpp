@@ -20,7 +20,8 @@ std::vector<StageTrajectoryReference> HorizonReferenceBuilder::build(const Traje
         !std::isfinite(cfg.max_speed_error) || cfg.max_speed_error <= 0)
         throw std::invalid_argument("invalid horizon timing/interpolation config");
     if (cfg.mode != TrajectoryReferenceMode::Cruise && cfg.mode != TrajectoryReferenceMode::Progress &&
-        cfg.mode != TrajectoryReferenceMode::FixedTime) throw std::invalid_argument("invalid reference mode");
+        cfg.mode != TrajectoryReferenceMode::FixedTime &&
+        cfg.mode != TrajectoryReferenceMode::TimeTracking) throw std::invalid_argument("invalid reference mode");
     std::vector<StageTrajectoryReference> result(progress.size());
     if (cfg.mode == TrajectoryReferenceMode::Cruise) return result;
     const auto& samples = ref.plan().samples;
@@ -34,6 +35,7 @@ std::vector<StageTrajectoryReference> HorizonReferenceBuilder::build(const Traje
         // Startup needs a time-domain launch reference even at v_s == 0.
         // Waiting/tail plateaus have no invertible s -> time map.
         const bool time_mode = cfg.mode == TrajectoryReferenceMode::FixedTime ||
+            cfg.mode == TrajectoryReferenceMode::TimeTracking ||
             s <= lo+1e-9 || s >= hi-1e-9 || ref.atPlateau(s);
         out.mode = time_mode ? 2 : 1;
         auto selected = time_mode ? ref.sampleAtTime(time) : spatial;

@@ -5,7 +5,7 @@
 
 namespace spmpc_local_planner {
 
-enum class TrajectoryReferenceMode { Cruise = 0, Progress = 1, FixedTime = 2 };
+enum class TrajectoryReferenceMode { Cruise = 0, Progress = 1, FixedTime = 2, TimeTracking = 3 };
 
 struct GeometryObjectiveConfig {
     bool enabled = false;

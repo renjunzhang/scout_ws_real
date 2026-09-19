@@ -1,5 +1,7 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
 #include "trajectory_fixture.h"
+#include "spmpc_local_planner/planning/ocp_planning_adapter.h"
+#include "../src/core/generated/ocp_parameter_contract.h"
 #include <boost/property_tree/json_parser.hpp>
 #include <gtest/gtest.h>
 #include <cstdio>
@@ -96,6 +98,38 @@ protected:
         return result;
     }
 };
+
+TEST_F(PlanWarmStart, TimeTrackingUsesPersistentPoseAndKeepsFinalDeadline) {
+    using namespace ocp_parameters;
+    params.planning.trajectory.mode = TrajectoryReferenceMode::TimeTracking;
+    params.planning.geometry.enabled = true;
+    params.planning.geometry.goal_weight = 2.;
+    OcpPlanningAdapter adapter(params);
+    auto observed = input();
+    observed.task_elapsed_sec = 1.;
+    PlanningCycleDebug debug;
+    double p[kB0ParameterCount]{};
+    for (double progress : {0., plan.route.back().x}) {
+        auto stages = adapter.prepare(route, observed, {progress}, debug);
+        adapter.write(stages.front(), p, kB0ParameterCount);
+        EXPECT_DOUBLE_EQ(p[TASK_GOAL_ACTIVE], 0.);
+        EXPECT_NEAR(p[TASK_GOAL_X], plan.samples[30].state[0], 1e-10);
+        EXPECT_NEAR(p[REFERENCE_V0], plan.samples[30].state[3], 1e-10);
+        EXPECT_DOUBLE_EQ(p[W_TASK_GOAL], 2.);
+    }
+    observed.task_elapsed_sec = plan.deadline;
+    adapter.write(adapter.prepare(route, observed, {plan.route.back().x}, debug).front(), p, kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_ACTIVE], 1.);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_X], plan.goal_pose[0]);
+    params.planning.trajectory.mode = TrajectoryReferenceMode::FixedTime;
+    OcpPlanningAdapter legacy(params);
+    observed.task_elapsed_sec = 1.;
+    legacy.write(legacy.prepare(route, observed, {0.}, debug).front(), p, kB0ParameterCount);
+    EXPECT_DOUBLE_EQ(p[TASK_GOAL_X], plan.goal_pose[0]);
+    params.planning.trajectory.mode = TrajectoryReferenceMode::TimeTracking;
+    params.planning.geometry.goal_weight = 0.;
+    EXPECT_THROW(OcpPlanningAdapter invalid(params), std::invalid_argument);
+}
 
 TEST_F(PlanWarmStart, PreparationKeepsLiveHistoryEmptyAndRequiresOnlineRti) {
     solver.prepareReference(route);  // A route notification must retain the prepared plan.

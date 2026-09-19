@@ -26,11 +26,11 @@ struct TrialConfig { SolverParams params; VariantConfig variant; };
 
 Options parseOptions(int argc, char** argv) {
     if (argc<4 || argc>9) throw std::invalid_argument(
-        "usage: geometry_trial raw|geometry|planned|planned_slosh output-prefix plan.json "
+        "usage: geometry_trial raw|geometry|planned|planned_slosh|external_timed output-prefix plan.json "
         "[actuator-scale] [curvature-weight] [contour-weight] [rti-iterations] [goal-weight]");
     Options out;
     out.mode=argv[1]; out.prefix=argv[2]; out.plan_file=argv[3];
-    if (out.mode!="raw" && out.mode!="geometry" && out.mode!="planned" && out.mode!="planned_slosh")
+    if (out.mode!="raw" && out.mode!="geometry" && out.mode!="planned" && out.mode!="planned_slosh" && out.mode!="external_timed")
         throw std::invalid_argument("unknown trial mode");
     if(argc>4) out.actuator_scale=std::stod(argv[4]);
     if(argc>5) out.curvature_weight=std::stod(argv[5]);
@@ -95,6 +95,15 @@ TrialConfig makeConfig(const Options& options, const TrajectoryPlan& plan) {
     if (mode=="planned" || mode=="planned_slosh") {
         params.planning.trajectory.mode=TrajectoryReferenceMode::Progress;
         params.planning.trajectory.plan_file=options.plan_file;
+    }
+    if (mode=="external_timed") {
+        params.qp_iteration_limit=20;
+        params.planning.trajectory.mode=TrajectoryReferenceMode::TimeTracking;
+        params.planning.trajectory.plan_file=options.plan_file;
+        params.planning.geometry.curvature_weight=0.;
+        params.planning.geometry.curvature_rate_weight=0.;
+        params.planning.geometry.goal_weight=2.;
+        variant.w_contour=1.; variant.w_progress=0.; variant.w_v=10.;
     }
     return config;
 }
