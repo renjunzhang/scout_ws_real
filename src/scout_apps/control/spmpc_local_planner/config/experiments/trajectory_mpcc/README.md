@@ -72,7 +72,7 @@ VALIDATE_ONLY=true PROFILE=planned_mpcc PUBLISH_CMD_VEL=false \
 REGION_CONFIG=/path/region.yaml PLAN_FILE=/path/plan.json \
 TASK_OVERLAY_FILE=/path/task_deadline.yaml \
 OUT_DIR=/path/new_run NAME=planned_mpcc_r01 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_trajectory_mpcc_comparison.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/trajectory/record_trajectory_mpcc_comparison.sh
 ```
 
 实际录制时去掉 `VALIDATE_ONLY=true`，`PROFILE`、`TASK_CONFIG`、`TASK_OVERLAY_FILE`、`REGION_CONFIG`、`PLANNER_OVERLAY_FILE`、`PLAN_FILE`、`PLANNER_VARIANT` 和 `PUBLISH_CMD_VEL` 须与已启动节点一致。脚本只录包，不 launch、不发速度；以 Ctrl-C 结束，没有 `RECORD_SEC` 定时参数。

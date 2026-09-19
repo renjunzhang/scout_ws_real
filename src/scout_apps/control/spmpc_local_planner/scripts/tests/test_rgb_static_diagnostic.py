@@ -8,7 +8,7 @@ import threading
 import unittest
 
 spec = importlib.util.spec_from_file_location("rgb_diag", Path(__file__).resolve().parents[1] /
-                                            "diagnose_spmpc_rgb_recording.py")
+                                            "rgb/diagnose_spmpc_rgb_recording.py")
 diag = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(diag)
 

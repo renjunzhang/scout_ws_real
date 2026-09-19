@@ -332,7 +332,7 @@ class B0DelayGateTest(unittest.TestCase):
 
 class ReleaseWiringTest(unittest.TestCase):
     def test_runner_requires_motion_arm_hash_and_mocap(self):
-        wrapper = (SCRIPT_ROOT / "run_spmpc_mocap_execution_chain_trial.sh").read_text(
+        wrapper = (SCRIPT_ROOT / "mocap/run_spmpc_mocap_execution_chain_trial.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn('ARM_MOTION="${ARM_MOTION:-NO}"', wrapper)
@@ -342,7 +342,7 @@ class ReleaseWiringTest(unittest.TestCase):
         self.assertIn("validate_mocap_execution_chain_bag.py", wrapper)
 
     def test_common_runner_forwards_mocap_contract(self):
-        runner = (SCRIPT_ROOT / "run_spmpc_real_fixed_path_trial.sh").read_text(
+        runner = (SCRIPT_ROOT / "real/run_spmpc_real_fixed_path_trial.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn('RECORD_MOCAP="${RECORD_MOCAP}"', runner)
@@ -350,7 +350,7 @@ class ReleaseWiringTest(unittest.TestCase):
         self.assertIn('MOCAP_TRACKER="${MOCAP_TRACKER}"', runner)
 
     def test_b0_delay_wrapper_freezes_agile_speed_and_mode_contract(self):
-        wrapper = (SCRIPT_ROOT / "run_spmpc_mocap_b0_delay_mode_trial.sh").read_text(
+        wrapper = (SCRIPT_ROOT / "mocap/run_spmpc_mocap_b0_delay_mode_trial.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn('VARIANT="${VARIANT:-B0}"', wrapper)
@@ -369,10 +369,10 @@ class ReleaseWiringTest(unittest.TestCase):
         self.assertNotIn("CONFIRM_HARD_SPEED_LIMIT", wrapper)
 
     def test_common_runner_and_recorder_preserve_speed_safety_intent(self):
-        runner = (SCRIPT_ROOT / "run_spmpc_real_fixed_path_trial.sh").read_text(
+        runner = (SCRIPT_ROOT / "real/run_spmpc_real_fixed_path_trial.sh").read_text(
             encoding="utf-8"
         )
-        recorder = (SCRIPT_ROOT / "record_spmpc_full_rgb_bag.sh").read_text(
+        recorder = (SCRIPT_ROOT / "real/record_spmpc_full_rgb_bag.sh").read_text(
             encoding="utf-8"
         )
         for token in (
@@ -391,7 +391,7 @@ class ReleaseWiringTest(unittest.TestCase):
         )
 
     def test_static_smoke_cannot_start_motion(self):
-        smoke = (SCRIPT_ROOT / "record_spmpc_mocap_static_smoke.sh").read_text(
+        smoke = (SCRIPT_ROOT / "mocap/record_spmpc_mocap_static_smoke.sh").read_text(
             encoding="utf-8"
         )
         self.assertNotIn("roslaunch spmpc_local_planner", smoke)

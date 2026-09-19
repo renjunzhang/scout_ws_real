@@ -57,7 +57,7 @@ Row 04  B_smooth
 入口脚本：
 
 ```text
-src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_o0_l22_bsmooth_bours_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_o0_l22_bsmooth_bours_trial.sh
 ```
 
 传感器、Cartographer 定位和 NOKOV monitor 保持运行。先执行 Row 01：
@@ -65,7 +65,7 @@ src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_o0_l22_bsmooth_bour
 ```bash
 cd /home/geist/scout_ws
 VALIDATE_ONLY=false ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-ROW=01 bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_o0_l22_bsmooth_bours_trial.sh
+ROW=01 bash src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_o0_l22_bsmooth_bours_trial.sh
 ```
 
 之后按相同命令依次把 `ROW` 改为 `02`、`03`、`04`。如果某次采集失败且已有同名产物，保留原产物并使用 `ATTEMPT=02` 重试。

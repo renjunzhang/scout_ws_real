@@ -108,7 +108,7 @@ METHOD=mpc_local_planner
 相关脚本：
 
 ```text
-src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 当前逻辑中 MPC 分支使用：

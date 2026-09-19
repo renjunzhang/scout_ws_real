@@ -484,7 +484,7 @@ rostopic info /cmd_vel
 ```bash
 export I0FC_DATE=20260901
 export I0FC_OUT=/home/geist/slosh_bags/real/${I0FC_DATE}_spmpc_i0_failclosed_fixed_short100_abba_v2/H0
-export I0FC_RUNNER=src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
+export I0FC_RUNNER=src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
 ```
 
 先验证两个 variant：

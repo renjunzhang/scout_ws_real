@@ -300,7 +300,7 @@ RECORD_RGB=true
 脚本：
 
 ```text
-src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 最小命令模板（以 `B_slosh` N=1 smoke 为例）：
@@ -326,7 +326,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 脚本默认值仍可能是 delay off；正式执行必须每个 run 显式写出完整控制口径，避免现场误用：
@@ -404,7 +404,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 目的：给当天三方法对比建立同日 B0 参考。这个 run 应接近 `B0_fixed_150_220_baseline_run01` 的 tracking 水平。
@@ -432,7 +432,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 目的：只相对 B0 改 variant，验证 slosh-aware soft cost 在同一 tracking baseline 下是否降低内部晃动模型指标。
@@ -460,7 +460,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 目的：在 B_slosh 基础上验证 ours 的 smooth priority 是否还能保持 tracking，并观察内部晃动、cmd smoothness 和 completion time。
@@ -531,7 +531,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 B_slosh：
@@ -553,7 +553,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 B_ours：
@@ -575,7 +575,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 如果 N=1 smoke 或 N=3 中出现下面任一情况，先停止，不把该 run 当 clean 方法比较样本：
@@ -812,7 +812,7 @@ source /opt/ros/noetic/setup.bash
 source /home/geist/scout_ws/devel/setup.bash
 cd /home/geist/scout_ws
 
-python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
+python3 src/scout_apps/control/spmpc_local_planner/scripts/real/summarize_spmpc_real_trial.py \
   /home/geist/slosh_bags/real/${DATE}_fixed_path_compare/${ALG}/${RUN_LABEL}.bag
 ```
 

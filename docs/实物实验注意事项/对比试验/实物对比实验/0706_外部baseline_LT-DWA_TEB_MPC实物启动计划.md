@@ -236,7 +236,7 @@ RECORD_STANDALONE_SLOSH=true \
 RECORD_ONLINE_LIQUID=true \
 RECORD_ALL_EXISTING_TOPICS=true \
 RECORD_TOPIC_INFO=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
 ```
 
 说明：外部 baseline 第一轮建议 `RECORD_ALL_EXISTING_TOPICS=true`，避免漏录 `/baseline/*` 诊断。等 topic whitelist 确认后，再切回 whitelist recorder。
@@ -509,7 +509,7 @@ roslaunch baseline_local_planner_runner nav_core_runner.launch \
 新增外部 baseline 单 run 一键脚本：
 
 ```bash
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 脚本一次只跑一个 `METHOD + STAGE`，不自动跑完整 N=3：
@@ -527,28 +527,28 @@ METHOD=lt_dwa_official \
 STAGE=shadow \
 RUN_LABEL=LTDWA_fixed_0706_shadow01 \
 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 # LT-DWA actuated N=1 smoke
 METHOD=lt_dwa_official \
 STAGE=actuated \
 RUN_LABEL=LTDWA_fixed_0706_smoke01 \
 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 # TEB shadow / actuated
 METHOD=teb STAGE=shadow RUN_LABEL=TEB_fixed_0706_shadow01 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 METHOD=teb STAGE=actuated RUN_LABEL=TEB_fixed_0706_smoke01 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 # mpc_local_planner shadow / actuated
 METHOD=mpc_local_planner STAGE=shadow RUN_LABEL=MPC_fixed_0706_shadow01 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 METHOD=mpc_local_planner STAGE=actuated RUN_LABEL=MPC_fixed_0706_smoke01 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 脚本默认口径：

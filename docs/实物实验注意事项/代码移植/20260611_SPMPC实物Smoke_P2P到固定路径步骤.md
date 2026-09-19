@@ -182,7 +182,7 @@ RECORD_SEC=0 \
 RECORD_SCAN=true \
 OUT_DIR=${OUT_DIR} \
 NAME=spmpc_P0_straight_B0_default_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 `RECORD_SEC=0` 表示手动 Ctrl-C 停录。第一轮建议 10~20s 即可，或到点后马上停。
@@ -206,7 +206,7 @@ RECORD_DEPTH=false \
 RECORD_ONLINE_LIQUID=false \
 OUT_DIR=${OUT_DIR} \
 NAME=spmpc_full_P0_straight_B0_rgb \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
 ```
 
 说明：`RECORD_CAMERA=true` 会录 `/camera/color/image_raw` 与 `/camera/color/camera_info`，用于离线 RGB 液面分析；`RECORD_SCAN=true` 会录 `/scan_front`，用于现场障碍/安全证据；`RECORD_DEPTH`、`RECORD_ONLINE_LIQUID`、`RECORD_MOCAP` 默认关闭，需要时再显式打开，避免 bag 过大。
@@ -225,7 +225,7 @@ LIQUID_EXPORT_SOURCE=rgb \
 LIQUID_CALIBRATION=/home/geist/slosh_bags/real/${DATE}_calib/red_3ruler.yaml \
 OUT_DIR=${OUT_DIR} \
 NAME=spmpc_full_P0_straight_B0_rgb \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
 ```
 
 手动 Ctrl-C 停 rosbag 后，脚本会继续调用 `export_liquid_variation_from_bags.py`，在 `${OUT_DIR}/spmpc_full_P0_straight_B0_rgb_liquid_variation/` 下生成 `liquid_variation_timeseries.csv`、`liquid_variation_summary.csv` 和曲线图。
@@ -362,7 +362,7 @@ RECORD_SEC=0 \
 RECORD_SCAN=true \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_smoke \
 NAME=spmpc_P2_s_curve_B0_default_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 #### B0 闭环
@@ -387,7 +387,7 @@ RECORD_SEC=0 \
 RECORD_SCAN=true \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_smoke \
 NAME=spmpc_P2_s_curve_B_slosh_default_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 ```bash
@@ -410,7 +410,7 @@ RECORD_SEC=0 \
 RECORD_SCAN=true \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_smoke \
 NAME=spmpc_P2_s_curve_B_ours_default_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 ```bash
@@ -460,7 +460,7 @@ RECORD_SEC=0 \
 RECORD_SCAN=true \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_smoke \
 NAME=spmpc_P2_s_curve_B_ours_fastdiag_vref050_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 第一档建议 `v_ref:=0.50`，不要直接 `0.65`；如果 `0.50` 的 tracking/core 速度、误差、slosh、安全状态都正常，再考虑 `0.60`。

@@ -35,13 +35,13 @@ OUT_DIR=/home/geist/slosh_bags/real/20260731_spmpc_g2s_source_selection/camera_p
 ### 3. 检查 G2S 配置，不动车
 
 ```bash
-VALIDATE_ONLY=true G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+VALIDATE_ONLY=true G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 ```
 
 ### 4. 执行一条 G2S，会自动发速度并自动停止
 
 ```bash
-ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 ```
 
 依次把 `G2S_ROW` 改成 `01`、`02`、`03`、`04`。每次只跑一条；回位并等液体静稳后再执行下一条。
@@ -49,7 +49,7 @@ ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 bash /home/geist/scout_ws/src
 ### 5. 四条都 PASS 后分析 odom/IMU
 
 ```bash
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_g2s_source_selection.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/analyze_spmpc_g2s_source_selection.sh
 ```
 
 当前到这里就停止，不执行 W2/W5、G3 或正式 40 条。
@@ -136,7 +136,7 @@ source /home/geist/scout_ws/devel/setup.bash
 
 VALIDATE_ONLY=true \
 G2S_ROW=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 ```
 
 输出必须明确包含：
@@ -163,7 +163,7 @@ ARM_MOTION=YES \
 CONFIRM_RGB_GEOMETRY=YES \
 G2S_ROW=01 \
 G2S_ATTEMPT=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 ```
 
 四条依次把 `G2S_ROW` 改为 `01`、`02`、`03`、`04`，每条的首次 attempt 都是 `G2S_ATTEMPT=01`。脚本行为固定为：
@@ -783,10 +783,10 @@ current 与 rotation-consistent candidate 必须先通过冻结的 rotation-rele
 >
 > ```bash
 > VALIDATE_ONLY=true G2S_ROW=01 \
-> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 >
 > ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G2S_ROW=01 \
-> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2s_h0s_source_selection_trial.sh
+> bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2s_h0s_source_selection_trial.sh
 > ```
 >
 > `G2S_ROW=01..04` 每次只跑一条。旧模板中的 `PILOT_RECORD_RGB=true`、`/camera/color/image_raw` required topic 和 80 GiB raw-RGB 空间门均已被覆盖，不得复制到新命令。正式 development registry 以后要吸收新 wrapper 的 stamped-quality、相机手动参数和 algorithm/config hash，而不是重新启用视频录制。
@@ -1173,7 +1173,7 @@ IMU_SHADOW_READY_TOPIC=/spmpc/debug/slosh_observer_imu \
 IMU_SHADOW_READY_TIMEOUT_SEC=20 \
 RECORDER_ACTIVE_TIMEOUT_SEC=15 \
 OPERATOR_NOTE="development G2S source-selection release=${DEV_RELEASE_ID}; revision=${DEV_RELEASE_GIT_REVISION}; attempt_id=${ATTEMPT_ID}; repeat=${DEV_REPEAT}; retry_of=${RETRY_OF_ATTEMPT_ID:-none}; retry_reason_sha256=${RETRY_REASON_FILE_SHA256:-none}; failure_evidence_sha256=${RETRY_FAILURE_EVIDENCE_MANIFEST_SHA256:-none}; solver_source=odom; imu=shadow-only; g2a_sha256=${G2A_AUDIT_REPORT_SHA256}; cal_validation_sha256=${IMU_CAL_VALIDATION_REPORT_SHA256}; prereg_index_sha256=${G2S_PREREG_INDEX_SHA256}; row_sha256=${G2S_ROW_REPORT_SHA256}; prereq_verification_sha256=${G2S_PREREQ_VERIFICATION_SHA256}; imu_config_sha256=${PROCESSED_IMU_CONFIG_SHA256}; rgb_calib_sha256=${RGB_CALIB_SHA256}" \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 运行命令前车辆必须已经位于 H0s 起点门内，且 `/imu/data.header.frame_id=imu_link`。该命令在 replay 模式下的真实安全顺序是：检查 reference/cmd/IMU-debug 残留 publisher → recorder `.bag.active` → planner 在无 reference 时零速等待 → IMU `READY + valid + bias_ready + filter_ready` → 启动 replay path/start gate；replay 不发布 goal，goal idle 检查只适用于 generate 模式。车辆必须从 planner 启动前一直静止到 `READY`；脚本超时或 recorder/planner 提前退出会自动停止，不得手工绕过。预先启动 planner、path 或其他 shadow 多终端流程会触发 idle gate，不能与此 one-click 命令混用。
@@ -1586,7 +1586,7 @@ DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
 DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 IMU_SHADOW_ENABLE=false \
 OPERATOR_NOTE="development G2C release=${DEV_RELEASE_ID}; revision=${DEV_RELEASE_GIT_REVISION}; attempt_id=${ATTEMPT_ID}; repeat=${DEV_REPEAT}; retry_of=${RETRY_OF_ATTEMPT_ID:-none}; retry_reason_sha256=${RETRY_REASON_FILE_SHA256:-none}; failure_evidence_sha256=${RETRY_FAILURE_EVIDENCE_MANIFEST_SHA256:-none}; source=odom; source_report_sha256=${SOURCE_SELECTION_REPORT_SHA256}; prereg_index_sha256=${G2C_PREREG_INDEX_SHA256}; row_sha256=${G2C_ROW_REPORT_SHA256}; prereq_verification_sha256=${G2C_PREREQ_VERIFICATION_SHA256}; method=${PILOT_METHOD}" \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 该命令只能筛安全、trajectory mechanism、tracking、runtime 和内部候选差异，不能凭 `H_modal` 宣告物理有效。全部 W2/W5 planned rows 结束后先生成 G2C dataset index，逐行绑定 prereg、planned row、每个 `ATTEMPT_ID`/retry chain、prerequisite-verification、postflight、bag 与失败/排除 hash。G2C 完成后的 final-candidate report 至少以唯一 key 记录 `report_type/status/release_id/git_revision`、`current_observer_source`、source-selection/G2C-prereg/verifier/完整 G2C dataset-index hashes、`final_pilot_method`，以及 `n_cand/planned_row_coverage_count/minimum_eligible_pair_count/eligible_pair_count/attempt_count/postflight_complete_attempt_count/acquisition_failure_attempt_count/method_success_planned_row_count/method_failure_planned_row_count/unresolved_acquisition_planned_row_count/valid_unpaired_planned_row_count`、acceptance/failure/analyzer hashes；attempt 分类与 planned-row partition 均由 dataset index 独立重算，不得用 `attempts-2*pairs` 代替。随后整体计算 SHA-256，供每条 G3 row 反向绑定。当前 one-click runner 尚不生成 monitor-reset/`T_SETTLE`/release-hash 全部证据，且 runner 退出 0 不证明 bag 可读；未补齐 wrapper 并通过第 4.5.1 节 postflight 前，只能作执行器 smoke，不能单独签署 G2C。
@@ -2117,7 +2117,7 @@ DELAY_PHASE_LINEAR_DELAY_SEC=0.15 \
 DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 IMU_SHADOW_ENABLE=false \
 OPERATOR_NOTE="development G3 RGB efficacy release=${DEV_RELEASE_ID}; revision=${DEV_RELEASE_GIT_REVISION}; attempt_id=${ATTEMPT_ID}; repeat=${DEV_REPEAT}; retry_of=${RETRY_OF_ATTEMPT_ID:-none}; retry_reason_sha256=${RETRY_REASON_FILE_SHA256:-none}; failure_evidence_sha256=${RETRY_FAILURE_EVIDENCE_MANIFEST_SHA256:-none}; source=odom; source_report_sha256=${SOURCE_SELECTION_REPORT_SHA256}; candidate_report_sha256=${FINAL_CANDIDATE_REPORT_SHA256}; prereg_index_sha256=${G3_PREREG_INDEX_SHA256}; t_hvis_tail_sec=${T_HVIS_TAIL}; g3_outcome_window_rule_sha256=${G3_OUTCOME_WINDOW_RULE_SHA256}; row_sha256=${G3_ROW_REPORT_SHA256}; prereq_verification_sha256=${G3_PREREQ_VERIFICATION_SHA256}; condition=${DEV_CONDITION}" \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 #### 4.5.1 G2S/G2C/G3 独立 postflight（runner 退出 0 之后仍必做）
@@ -3057,7 +3057,7 @@ set -euo pipefail
 : "${SCOUT_WS:?}"
 export FREEZE_ROOT="${SCOUT_WS}/docs/实物实验注意事项/对比试验/实物对比实验/freeze"
 export FREEZE_MANIFEST="${FREEZE_ROOT}/freeze_manifest.yaml"
-export VALIDATOR="${SCOUT_WS}/src/scout_apps/control/spmpc_local_planner/scripts/validate_spmpc_formal_freeze.py"
+export VALIDATOR="${SCOUT_WS}/src/scout_apps/control/spmpc_local_planner/scripts/protocols/validate_spmpc_formal_freeze.py"
 
 test -s "${FREEZE_MANIFEST}"
 test -x "${VALIDATOR}"
@@ -3652,7 +3652,7 @@ RETRY_FAILURE_EVIDENCE_MANIFEST_SHA256="${RETRY_FAILURE_EVIDENCE_MANIFEST_SHA256
 RETRY_AUTHORIZATION_REPORT="${RETRY_AUTHORIZATION_REPORT}" \
 RETRY_AUTHORIZATION_REPORT_SHA256="${RETRY_AUTHORIZATION_REPORT_SHA256}" \
 OPERATOR_NOTE="protocol=${PROTOCOL_ID} freeze=${FREEZE_ID} attempt=${ATTEMPT_ID} repeat=${REPEAT} condition=${CONDITION_ID} backend=${METHOD_BACKEND} block=${BLOCK} position=${ORDER_POSITION} planned_segment=${PLANNED_BLOCK_SEGMENT_ID} actual_segment=${ACTUAL_BLOCK_SEGMENT_ID} split_block=${SPLIT_BLOCK} retry_of=${RETRY_OF_ATTEMPT_ID:-none} t_hvis_tail_sec=${T_HVIS_TAIL} g3_outcome_window_rule_sha256=${G3_OUTCOME_WINDOW_RULE_SHA256} g3_efficacy_report_sha256=${G3_EFFICACY_REPORT_SHA256} g6_measurement_analysis_report_sha256=${G6_MEASUREMENT_ANALYSIS_REPORT_SHA256}" \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
 ```
 
 `FORMAL_RECORD_SEC` 不能固定凭经验写 90 s。validator 必须证明 `T_HVIS_TAIL>0`、`T_POST_RECORD >= T_HVIS_TAIL`，并证明总记录预算不少于 recorder/backend startup、`T_SETTLE`、`T_ADMISSION_MAX`、冻结的 `T_MOTION_MAX` 与 `T_POST_RECORD` 之和，另留 buffer；由于 recorder 在 backend 和 admission 前启动，任一部分都必须计入。第 8.1 节释放路径前还必须实时证明 `.bag.active` 仍存在且持续增长。

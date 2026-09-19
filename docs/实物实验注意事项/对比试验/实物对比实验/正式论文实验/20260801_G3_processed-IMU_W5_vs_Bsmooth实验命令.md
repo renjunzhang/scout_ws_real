@@ -48,13 +48,13 @@ bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/lau
 
 ```bash
 VALIDATE_ONLY=true \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/rgb/prepare_spmpc_g3_realsense.sh
 ```
 
 ### 3.2 应用并核对冻结参数
 
 ```bash
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/rgb/prepare_spmpc_g3_realsense.sh
 ```
 
 脚本固定并验证：
@@ -78,7 +78,7 @@ calibration SHA-256=7186b4bda05a1b73c19fd97b3a34b08a82bfab0df52272eaf2829115de04
 
 ```bash
 DATE=20260801 VALIDATE_ONLY=true G3_ROW=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 dry-run 会核对 source/G2C/path/RGB/runtime 证据并打印：
@@ -100,56 +100,56 @@ dry-run 不录 bag、不启动 planner、不发布 `/cmd_vel`。
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 02 — Block 01 / W5
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=02 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 03 — Block 02 / W5
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=03 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 04 — Block 02 / Bsmooth
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=04 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 05 — Block 03 / W5
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=05 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 06 — Block 03 / Bsmooth
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=06 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 07 — Block 04 / Bsmooth
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=07 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ### Row 08 — Block 04 / W5
 
 ```bash
 DATE=20260801 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES G3_ROW=08 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3_processed_imu_w5_vs_bsmooth_trial.sh
 ```
 
 ## 6. 单条脚本的自动行为

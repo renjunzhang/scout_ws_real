@@ -275,8 +275,8 @@ R0 不是 full automation，建议保持多终端半手动流程：先录包，�
 | 在线 RGB 观察 | `roslaunch realsense_liquid_measurement online_liquid_monitor_combined.launch ...` | 源码位于 `src/scout_apps/sensors/realsense_liquid_measurement`；`/liquid/height` 只作现场观察 |
 | fixed path 生成 | `rosrun scout_local_planner publish_straight_fixed_path.py ...` / `template_fixed_path_generator.py ...` | R0 直线采集优先用 straight helper；曲线/点击终点模板再用 template generator。必须 RViz 人工确认不穿墙/不贴墙 |
 | goal 发送 | `publish_straight_fixed_path.py --publish-goal` / `send_fixed_goal.py ...` | 直线路径 helper 可同步发布 terminal goal；只发送目标，不替代人工安全确认 |
-| 全量 RGB recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh` | R0 推荐 recorder；只录包，不发控制；白名单需包含 Map-vref debug topics |
-| 短安全 smoke recorder | `src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh` | 只用于短 smoke；不能替代 RGB R0 数据 |
+| 全量 RGB recorder | `src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh` | R0 推荐 recorder；只录包，不发控制；白名单需包含 Map-vref debug topics |
+| 短安全 smoke recorder | `src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh` | 只用于短 smoke；不能替代 RGB R0 数据 |
 | SPMPC fixed path | `roslaunch spmpc_local_planner spmpc_fixed_path.launch ...` | R0-A 首批关闭 Map-vref：`profile_enable=false`、`runtime_v_ref_enable=false` |
 | offline RGB | `red_liquid_infer_from_bag.py` / `export_liquid_variation_from_bags.py` | 正式液面真值来自离线 max-LCR，不来自在线 `/liquid/height` |
 
@@ -458,7 +458,7 @@ RECORD_DEPTH=false \
 RECORD_STANDALONE_SLOSH=true \
 RECORD_ONLINE_LIQUID=true \
 RECORD_ALL_EXISTING_TOPICS=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
 ```
 
 录完每个 run 后，立即跑轻量指标提取，先判断这个 run 是否有效：

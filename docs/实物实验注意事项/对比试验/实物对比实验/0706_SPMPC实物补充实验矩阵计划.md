@@ -164,7 +164,7 @@ IMU disabled / not introduced
 已经把 0706 主线矩阵整理进今天使用的一键脚本：
 
 ```text
-src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 使用 `MATRIX_PRESET=0706_bsmooth_bours` 即可按本文件推荐顺序执行：
@@ -200,7 +200,7 @@ RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 脚本会在每个 run 前暂停，提示现场人员：
@@ -253,7 +253,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 通过建议：
@@ -294,7 +294,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 目的：只看 smooth-only 是否已经足够降低 RGB 液面和 internal model；后续与 `B_ours` 同日 bridge 比较。
@@ -326,7 +326,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 目的：同日桥接 `B_smooth`，避免把 0706 的 RGB 环境直接和 0705 的 `B_ours` 强比较。

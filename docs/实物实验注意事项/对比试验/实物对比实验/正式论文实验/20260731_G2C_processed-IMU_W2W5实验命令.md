@@ -39,7 +39,7 @@ SHA-256 = 5635d31e0221bdc54a00ee9eb11043515112a3326eb7945d10d0ffb5e13cc5d3
 机器报告由下列只读命令从三包和三个离线 CSV 重算；正式 G2C wrapper 会逐项核对报告 hash、三包 hash、`3/3` 同向、覆盖率和 scope：
 
 ```bash
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/analyze_spmpc_g2s_raw_rgb_three_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/analyze_spmpc_g2s_raw_rgb_three_trial.sh
 ```
 
 人类可读说明见 [20260731_G2S重标尺与IMU_odom输入源三包预分析.md](../../实物对比试验分析/20260731_G2S重标尺与IMU_odom输入源三包预分析.md)。
@@ -87,7 +87,7 @@ wrapper 会拒绝有 tracked diff/staged diff 的工作树，并确认 planner r
 
 ```bash
 DATE=20260801 VALIDATE_ONLY=true G2C_ROW=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2c_processed_imu_w2w5_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2c_processed_imu_w2w5_trial.sh
 ```
 
 ## 5. 逐条执行
@@ -96,28 +96,28 @@ Row 01 / W2：
 
 ```bash
 DATE=20260801 ARM_MOTION=YES G2C_ROW=01 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2c_processed_imu_w2w5_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2c_processed_imu_w2w5_trial.sh
 ```
 
 Row 02 / W5：
 
 ```bash
 DATE=20260801 ARM_MOTION=YES G2C_ROW=02 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2c_processed_imu_w2w5_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2c_processed_imu_w2w5_trial.sh
 ```
 
 Row 03 / W5：
 
 ```bash
 DATE=20260801 ARM_MOTION=YES G2C_ROW=03 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2c_processed_imu_w2w5_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2c_processed_imu_w2w5_trial.sh
 ```
 
 Row 04 / W2：
 
 ```bash
 DATE=20260801 ARM_MOTION=YES G2C_ROW=04 \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g2c_processed_imu_w2w5_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g2c_processed_imu_w2w5_trial.sh
 ```
 
 ## 6. 单条自动行为

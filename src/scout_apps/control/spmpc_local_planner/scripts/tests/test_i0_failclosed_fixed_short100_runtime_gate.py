@@ -9,7 +9,7 @@ from pathlib import Path
 TEST_DIR = Path(__file__).resolve().parent
 SCRIPTS_DIR = TEST_DIR.parent
 ANALYSIS_DIR = SCRIPTS_DIR / "analysis"
-RUNNER = SCRIPTS_DIR / "run_spmpc_real_fixed_path_trial.sh"
+RUNNER = SCRIPTS_DIR / "real/run_spmpc_real_fixed_path_trial.sh"
 ENGINE = SCRIPTS_DIR / "lib" / "run_spmpc_i0_failclosed_fixed_abba_engine.sh"
 DIAGNOSTICS = SCRIPTS_DIR.parent / "src" / "ros" / "diagnostics_publisher.cpp"
 
@@ -51,7 +51,7 @@ class Short100RuntimeGateTest(unittest.TestCase):
         self.assertIn('"SOLVER_BACKEND=${I0FC_RUNTIME_SOLVER_BACKEND}"', self.engine)
         self.assertIn('"MATRIX_PRESET="', self.engine)
         self.assertIn(
-            '"RECORDER_SCRIPT=${SCRIPT_DIR}/record_spmpc_full_rgb_bag.sh"',
+            '"RECORDER_SCRIPT=${SCRIPT_DIR}/real/record_spmpc_full_rgb_bag.sh"',
             self.engine,
         )
 

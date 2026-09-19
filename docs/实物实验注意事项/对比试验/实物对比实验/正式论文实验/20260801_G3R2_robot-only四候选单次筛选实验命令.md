@@ -44,7 +44,7 @@ Row 03 当时唯一合法的重录是保持 `W5_S10` 配置不变的 attempt 02�
 ```bash
 DATE=20260801 G3R2_ROW=03 G3R2_ATTEMPT=02 \
 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3r2_weight_screen_trial.sh
 ```
 
 wrapper 会在运动前两次检查 `/camera/color/camera_info`，分别位于在线 RGB 零点建立之前和录包之前。每次会在不动车的状态下等待连续 90 帧健康时间戳，最长 50 秒；到期仍不通过才会 fail-closed 停止。只有该 gate 最终返回 `PASS` 后流程才会继续。
@@ -75,7 +75,7 @@ stage-0 contour P95 = 0.053296 m > 0.050000 m
 ```bash
 DATE=20260801 G3R2_ROW=05 G3R2_ATTEMPT=01 \
 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_weight_screen_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3r2_weight_screen_trial.sh
 ```
 
 不要使用循环，不要跳行。每条 bag 上限 `70 s`，不录图像，只录在线 RGB 标量。wrapper 自动核对 RealSense、路径、基线证据、二进制、权重、IMU source 和 robot/liquid 分流。

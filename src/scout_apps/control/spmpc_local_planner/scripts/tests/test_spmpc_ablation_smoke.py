@@ -209,9 +209,11 @@ done
         # Only the copied engine is replaced; even --run cannot reach ROS.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            entry = root / 'run_spmpc_ablation_smoke.sh'
-            entry.write_text((SCRIPTS / entry.name).read_text())
-            engine = root / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            entry = root / 'real' / 'run_spmpc_ablation_smoke.sh'
+            entry.parent.mkdir()
+            entry.write_text((SCRIPTS / 'real' / entry.name).read_text())
+            engine = root / 'lib' / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            engine.parent.mkdir()
             engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps(dict(os.environ)))\nPY\n")
             for condition, weight, action in (('smooth', '0', '--validate-only'),
                                                ('full', '0.5', '--run')):
@@ -263,9 +265,11 @@ done
         # Replace only the engine with an environment capture: no ROS or motion.
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            entry = root / 'run_spmpc_ablation_smoke.sh'
-            entry.write_text((SCRIPTS / entry.name).read_text())
-            engine = root / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            entry = root / 'real' / 'run_spmpc_ablation_smoke.sh'
+            entry.parent.mkdir()
+            entry.write_text((SCRIPTS / 'real' / entry.name).read_text())
+            engine = root / 'lib' / 'run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh'
+            engine.parent.mkdir()
             engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps(dict(os.environ)))\nPY\n")
             for condition in ('smooth', 'nostate', 'full'):
                 result = subprocess.run(['bash', str(entry), '--experiment', 'ablation-rgb',
@@ -288,7 +292,7 @@ done
                 self.assertEqual(json.loads(result.stdout)['ABLATION_JERK_MAX'], expected)
 
     def test_invalid_arguments_fail_before_acquisition(self):
-        entry = str(SCRIPTS / "run_spmpc_ablation_smoke.sh")
+        entry = str(SCRIPTS / "real/run_spmpc_ablation_smoke.sh")
         for args in (("--condition", "typo"), ("--jerk-max", "nan"),
                      ("--jerk-max", "0"), ("--jerk-max", "-1"), ("--jerk-max",),
                      ("--scene", "typo"), ("--scene",),
@@ -300,7 +304,7 @@ done
 
     def test_real_runner_forwards_switches_to_launch(self):
         # Evaluate only its command-array expression, never the acquisition body.
-        source = (SCRIPTS / "run_spmpc_real_fixed_path_trial.sh").read_text()
+        source = (SCRIPTS / "real/run_spmpc_real_fixed_path_trial.sh").read_text()
         command_array = source[source.index("planner_cmd=("):source.index("planner_command_string=")]
         for liquid, zero, jerk in (("true", "false", "true"), ("true", "true", "true"),
                                   ("false", "false", "true"), ("false", "false", "false"),

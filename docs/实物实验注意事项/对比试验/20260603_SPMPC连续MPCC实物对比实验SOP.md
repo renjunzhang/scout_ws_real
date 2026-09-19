@@ -3,7 +3,7 @@
 > 状态：2026-06-04 整理版。对象：`spmpc_local_planner` 的 `continuous_mpcc_acados` 后端，即规控一体连续 MPCC 实物主线。
 > 主评价真值：**离线从 bag 推断的 RGB max(left, center, right) 液面高度**。`/spmpc/*`、observer、在线 RGB 只作调试/工程辅助。
 > 仿真只用于集成联调，**抑晃效果只在实物上以离线 RGB 真值评定**。
-> 运行脚本：`src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh`
+> 运行脚本：`src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh`
 > 工控机迁移与 acados 安装：`docs/实物实验注意事项/代码移植/20260602_实物端代码拉取与子模块注意事项.md`
 > 论文实验设计、证据链和正式方法矩阵以 `docs/实物实验注意事项/对比试验/20260605_SPMPC论文对比实验设计建议.md` 为准；本文只作为连续 MPCC 仿真/实物操作 SOP。
 >
@@ -241,7 +241,7 @@ DATE=<DATE> \
 GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> \
 VARIANT=B0 \
 SOLVER_BACKEND=continuous_mpcc_acados \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
 ```
 
 每组前把车摆回同一地面标记；当天所有组使用同一 goal 和同一模板参数。
@@ -306,10 +306,10 @@ q/Esc   只关闭 UI 前端
 alpha-state 主线：
 
 ```bash
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B0       bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_smooth bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh  bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_ours   bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B0       bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_smooth bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh  bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_ours   bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
 ```
 
 RouteB 若升为候选主线，也必须四组全用同一 backend 和同一 `alpha_max`；不要只给 B0 或 B_ours 单独放宽。当前脚本需先补 `alpha_max` 透传后再写正式命令。
@@ -319,10 +319,10 @@ RouteB 若升为候选主线，也必须四组全用同一 backend 和同一 `al
 先用 `B_slosh` 扫定工作点，再跑四组主实验：
 
 ```bash
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=1 BAG_NAME=B_slosh_w1 bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=2 BAG_NAME=B_slosh_w2 bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=3 BAG_NAME=B_slosh_w3 bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
-DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=5 BAG_NAME=B_slosh_w5 bash src/scout_apps/control/spmpc_local_planner/scripts/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=1 BAG_NAME=B_slosh_w1 bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=2 BAG_NAME=B_slosh_w2 bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=3 BAG_NAME=B_slosh_w3 bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
+DATE=<D> GOAL_X=<x> GOAL_Y=<y> GOAL_YAW=<yaw> SOLVER_BACKEND=continuous_mpcc_acados VARIANT=B_slosh W_SLOSH=5 BAG_NAME=B_slosh_w5 bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_continuous_real.sh
 ```
 
 辅助判据：

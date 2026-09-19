@@ -12,19 +12,19 @@ from types import SimpleNamespace
 SCRIPT_DIR = Path(__file__).resolve().parent
 PLANNER_SCRIPTS = SCRIPT_DIR.parent
 ANALYSIS_DIR = PLANNER_SCRIPTS / "analysis"
-LEGACY_WRAPPER = PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_abba_trial.sh"
+LEGACY_WRAPPER = PLANNER_SCRIPTS / "protocols/comparisons/run_spmpc_i0_failclosed_fixed_abba_trial.sh"
 SHORT100_WRAPPER = (
-    PLANNER_SCRIPTS / "run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh"
+    PLANNER_SCRIPTS / "protocols/comparisons/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh"
 )
 EXPLICIT_WRAPPER = (
     PLANNER_SCRIPTS
-    / "run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh"
+    / "protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh"
 )
 WS1_WA03_WRAPPER = (
     PLANNER_SCRIPTS
-    / "run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh"
+    / "protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh"
 )
-WS1_WA03_OPERATOR = PLANNER_SCRIPTS / "run_spmpc_ws1_wa03_rgb_abba.sh"
+WS1_WA03_OPERATOR = PLANNER_SCRIPTS / "protocols/comparisons/run_spmpc_ws1_wa03_rgb_abba.sh"
 ENGINE = (
     PLANNER_SCRIPTS
     / "lib"

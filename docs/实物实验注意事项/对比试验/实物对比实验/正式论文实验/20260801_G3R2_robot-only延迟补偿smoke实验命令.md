@@ -28,7 +28,7 @@ bash /home/geist/scout_ws/src/scout_apps/control/scout_local_planner/scripts/lau
 
 ```bash
 DATE=20260801 G3R2_ROW=01 VALIDATE_ONLY=true \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_robot_only_smoke_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3r2_robot_only_smoke_trial.sh
 ```
 
 必须看到：
@@ -46,7 +46,7 @@ liquid state  = current processed-IMU (no delay rollout)
 
 ```bash
 DATE=20260801 G3R2_ROW=01 ARM_MOTION=YES CONFIRM_RGB_GEOMETRY=YES \
-bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_g3r2_robot_only_smoke_trial.sh
+bash /home/geist/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/protocols/g_series/run_spmpc_g3r2_robot_only_smoke_trial.sh
 ```
 
 输出固定为：

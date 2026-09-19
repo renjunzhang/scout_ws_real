@@ -69,7 +69,7 @@ No-obstacle costmap:
 src/scout_apps/control/baseline_local_planner_runner/config/local_costmap_real_no_obstacles.yaml
 
 One-click runner:
-src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 
 Metric extractor:
 src/scout_apps/control/spmpc_experiments/scripts/extract_fixed_path_paper_metrics.py
@@ -302,7 +302,7 @@ RECORD_STANDALONE_SLOSH=true：
 ```bash
 START_STANDALONE_SLOSH=true \
 RECORD_STANDALONE_SLOSH=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 默认 monitor 固定使用：
@@ -350,7 +350,7 @@ RECORD_STANDALONE_SLOSH=true \
 RECORD_TOPIC_INFO=true \
 RECORD_SEC=30 \
 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 Shadow 通过条件：
@@ -384,7 +384,7 @@ RECORD_TOPIC_INFO=true \
 RECORDER_STARTUP_SEC=8 \
 RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 手在急停上。首轮不同时修改 speed、via-point 和 angular limit。
@@ -739,7 +739,7 @@ MAX_V=0.30 MAX_W=1.20 MAX_ACC=0.60 MAX_ANGULAR_ACC=1.20 \
 RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=false RECORD_TOPIC_INFO=true \
 RECORD_SEC=30 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 shadow 通过条件：
@@ -769,7 +769,7 @@ RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=true RECORD_TOPIC_INFO=true \
 RECORDER_STARTUP_SEC=8 \
 RECORD_SEC=20 MAX_RECORD_SEC=25 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 短程 gate：
@@ -920,7 +920,7 @@ PATH_TRACKING_LOOKAHEAD_M=1.20 \
 PATH_TRACKING_MIN_V=0.08 \
 RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=false RECORD_SEC=30 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 shadow 通过后，只跑 `15~25s` actuated：
@@ -938,7 +938,7 @@ PATH_TRACKING_LOOKAHEAD_M=1.20 \
 PATH_TRACKING_MIN_V=0.08 \
 RECORD_ALL_EXISTING_TOPICS=false \
 RECORD_RGB=true RECORD_SEC=20 MAX_RECORD_SEC=25 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 短程通过条件：

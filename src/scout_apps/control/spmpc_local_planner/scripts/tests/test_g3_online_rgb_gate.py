@@ -19,7 +19,7 @@ def load_module(name):
 
 VALIDATOR = load_module("validate_g3_online_rgb_trial")
 ANALYZER = load_module("analyze_g3_w5_vs_bsmooth")
-TIMESTAMP_GATE_PATH = ANALYSIS_DIR.parent / "validate_realsense_timestamp_health.py"
+TIMESTAMP_GATE_PATH = ANALYSIS_DIR.parent / "rgb/validate_realsense_timestamp_health.py"
 TIMESTAMP_GATE_SPEC = importlib.util.spec_from_file_location(
     "validate_realsense_timestamp_health", TIMESTAMP_GATE_PATH
 )

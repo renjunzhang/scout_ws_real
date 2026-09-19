@@ -12,7 +12,7 @@ SCRIPT_NAME=run_spmpc_i0_failclosed_fixed_abba_engine
 ENGINE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_DIR="$(cd "${ENGINE_DIR}/.." && pwd)"
 REPO_ROOT="$(git -C "${SCRIPT_DIR}" rev-parse --show-toplevel)"
-RUNNER="${SCRIPT_DIR}/run_spmpc_real_fixed_path_trial.sh"
+RUNNER="${SCRIPT_DIR}/real/run_spmpc_real_fixed_path_trial.sh"
 PROFILE_TOOL="${SCRIPT_DIR}/analysis/i0_failclosed_fixed_abba_profile.py"
 EXACT_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_i0_failclosed_fixed_abba_bag.py"
 WINDOW_CONTRACT="${SCRIPT_DIR}/analysis/liquid_cost_window_contract.py"
@@ -20,10 +20,10 @@ OBSERVER_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_slosh_nowcast_shadow_bag.py
 RGB_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_g3_online_rgb_trial.py"
 RGB_ANALYZER="${SCRIPT_DIR}/analysis/analyze_i0_failclosed_fixed_abba_rgb.py"
 CHAIN_POSTFLIGHT="${SCRIPT_DIR}/analysis/validate_mocap_execution_chain_bag.py"
-SUMMARIZER="${SCRIPT_DIR}/summarize_spmpc_real_trial.py"
+SUMMARIZER="${SCRIPT_DIR}/real/summarize_spmpc_real_trial.py"
 PATH_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_s_path.py"
 MAP_VALIDATOR="${SCRIPT_DIR}/analysis/validate_mocap_field_map.py"
-CAMERA_PREP="${SCRIPT_DIR}/prepare_spmpc_g3_realsense.sh"
+CAMERA_PREP="${SCRIPT_DIR}/rgb/prepare_spmpc_g3_realsense.sh"
 CONTRACT_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_abba_contract.py"
 SHORT_HORIZON_TEST="${SCRIPT_DIR}/tests/test_short_horizon_matched_release.py"
 RUNTIME_GATE_TEST="${SCRIPT_DIR}/tests/test_i0_failclosed_fixed_short100_runtime_gate.py"
@@ -532,13 +532,13 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/msg
   src/scout_apps/control/spmpc_local_planner/src
   src/scout_apps/control/spmpc_local_planner/generated
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_full_rgb_bag.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_abba_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh
-  src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_ws1_wa03_rgb_abba.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_full_rgb_bag.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_fixed_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_fixed_short100_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_ws1_wa03_abba_trial.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_ws1_wa03_rgb_abba.sh
   src/scout_apps/control/spmpc_local_planner/scripts/lib/run_spmpc_i0_failclosed_fixed_abba_engine.sh
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/i0_failclosed_fixed_abba_profile.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/liquid_cost_window_contract.py
@@ -549,8 +549,8 @@ runtime_paths=(
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_mocap_execution_chain_bag.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_mocap_s_path.py
   src/scout_apps/control/spmpc_local_planner/scripts/analysis/validate_mocap_field_map.py
-  src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py
-  src/scout_apps/control/spmpc_local_planner/scripts/prepare_spmpc_g3_realsense.sh
+  src/scout_apps/control/spmpc_local_planner/scripts/real/summarize_spmpc_real_trial.py
+  src/scout_apps/control/spmpc_local_planner/scripts/rgb/prepare_spmpc_g3_realsense.sh
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_i0_failclosed_fixed_abba_contract.py
   src/scout_apps/control/spmpc_local_planner/scripts/tests/test_explicit_actuator_model.py
   src/scout_apps/sensors/realsense_liquid_measurement
@@ -819,7 +819,7 @@ if truthy "${STRICT_RUNTIME_CONTRACT}"; then
     "SHARED_LINEAR_ACCEL_MAX=${I0FC_RUNTIME_SHARED_LINEAR_ACCEL_MAX}"
     "SHARED_ANGULAR_RATE_MAX=${I0FC_RUNTIME_SHARED_ANGULAR_RATE_MAX}"
     "SHARED_ANGULAR_ACCEL_MAX=${I0FC_RUNTIME_SHARED_ANGULAR_ACCEL_MAX}"
-    "RECORDER_SCRIPT=${SCRIPT_DIR}/record_spmpc_full_rgb_bag.sh"
+    "RECORDER_SCRIPT=${SCRIPT_DIR}/real/record_spmpc_full_rgb_bag.sh"
     "RECORDER_STARTUP_SEC=${I0FC_RUNTIME_RECORDER_STARTUP_SEC}"
     "RECORDER_ACTIVE_TIMEOUT_SEC=${I0FC_RUNTIME_RECORDER_ACTIVE_TIMEOUT_SEC}"
     "PLANNER_STARTUP_SEC=${I0FC_RUNTIME_PLANNER_STARTUP_SEC}"

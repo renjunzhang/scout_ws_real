@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 
 SCRIPT_ROOT = pathlib.Path(__file__).resolve().parents[1]
-RUNNER = SCRIPT_ROOT / "run_spmpc_mocap_slosh_delay_diagnostic_trial.sh"
+RUNNER = SCRIPT_ROOT / "mocap/run_spmpc_mocap_slosh_delay_diagnostic_trial.sh"
 POSTFLIGHT_PATH = SCRIPT_ROOT / "analysis/validate_slosh_nowcast_shadow_bag.py"
 
 SPEC = importlib.util.spec_from_file_location(

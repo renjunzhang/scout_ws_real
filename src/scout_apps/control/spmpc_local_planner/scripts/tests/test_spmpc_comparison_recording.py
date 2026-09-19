@@ -208,12 +208,12 @@ class RgbSwitchContractTest(unittest.TestCase):
                 "LIQUID_EXPORT_AFTER_RECORD": "false",
                 "TEST_ROSBAG_ARGS": str(command_log), **switches,
             }
-            recorder = SCRIPTS / "record_spmpc_full_rgb_bag.sh"
+            recorder = SCRIPTS / "real/record_spmpc_full_rgb_bag.sh"
             command = ["bash", str(recorder)]
             if pilot is not None:
                 # Execute only the real runner's RGB policy before passing
                 # the resolved switches to the recorder; never start a trial.
-                runner = (SCRIPTS / "run_spmpc_real_fixed_path_trial.sh").read_text()
+                runner = (SCRIPTS / "real/run_spmpc_real_fixed_path_trial.sh").read_text()
                 truthy = runner[runner.index("truthy() {"):runner.index("\nfail() {")]
                 begin = runner.index('if truthy "${PILOT_MODE}"; then\n  # Pilot image')
                 end = runner.index('RECORD_ONLINE_LIQUID_DEBUG_IMAGES=', begin)
@@ -261,9 +261,11 @@ class SourceEntryTest(unittest.TestCase):
         # Substitute only the acquisition executable in a temporary copy.
         # This never invokes the real engine, ROS, recorder or movement.
         with tempfile.TemporaryDirectory() as directory:
-            entry = Path(directory)/"entry.sh"
-            entry.write_text((SCRIPTS/"run_spmpc_ablation_smoke.sh").read_text())
-            engine = Path(directory)/"run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
+            entry = Path(directory)/"real"/"entry.sh"
+            entry.parent.mkdir()
+            entry.write_text((SCRIPTS/"real/run_spmpc_ablation_smoke.sh").read_text())
+            engine = Path(directory)/"lib"/"run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
+            engine.parent.mkdir()
             keys = ("ABLATION_OBSERVER_SOURCE", "ABLATION_SOURCE_COMPARISON", "ABLATION_RECORD_RGB", "VALIDATE_ONLY")
             engine.write_text("python3 - <<'PY'\nimport json,os\nprint(json.dumps({k:os.environ[k] for k in " + repr(keys) + "}))\nPY\n")
             for args, source, rgb, compare in (([], "processed_imu", "false", "false"),
@@ -279,7 +281,7 @@ class SourceEntryTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
 
     def test_common_launch_changes_only_liquid_source(self):
-        text = (SCRIPTS/"run_spmpc_real_fixed_path_trial.sh").read_text()
+        text = (SCRIPTS/"real/run_spmpc_real_fixed_path_trial.sh").read_text()
         array = text[text.index("planner_cmd=("):text.index("planner_command_string=")]
         results = []
         for source in ("processed_imu", "odom"):

@@ -37,7 +37,7 @@
 
 ```text
 src/scout_apps/control/baseline_local_planner_runner/
-src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 src/scout_apps/control/baseline_local_planner_runner/config/local_costmap_real_no_obstacles.yaml
 ```
 
@@ -471,7 +471,7 @@ RECORD_STANDALONE_SLOSH=true \
 RECORD_TOPIC_INFO=true \
 RECORD_SEC=30 \
 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 shadow 通过标准：
@@ -527,7 +527,7 @@ RECORD_TOPIC_INFO=true \
 RECORDER_STARTUP_SEC=8 \
 RECORD_SEC=20 \
 MAX_RECORD_SEC=25 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 20 秒通过标准：

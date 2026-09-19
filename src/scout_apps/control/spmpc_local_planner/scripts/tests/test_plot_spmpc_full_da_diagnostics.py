@@ -19,7 +19,7 @@ MODULE_PATH = (
 )
 SMOKE_ENGINE = (
     Path(__file__).resolve().parents[1]
-    / "run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
+    / "lib/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
 )
 SPEC = importlib.util.spec_from_file_location(
     "plot_spmpc_full_da_diagnostics", MODULE_PATH

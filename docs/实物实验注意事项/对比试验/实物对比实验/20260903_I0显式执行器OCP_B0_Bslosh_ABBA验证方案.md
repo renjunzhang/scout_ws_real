@@ -90,7 +90,7 @@ run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
 ```bash
 cd /home/geist/scout_ws
 PAIR_ROW=01 VALIDATE_ONLY=true \
-  bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
+  bash src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
 ```
 
 实车按 Row01 到 Row04 逐条运行，只修改 `PAIR_ROW`：
@@ -98,7 +98,7 @@ PAIR_ROW=01 VALIDATE_ONLY=true \
 ```bash
 PAIR_ROW=01 VALIDATE_ONLY=false ARM_MOTION=YES \
 CONFIRM_RGB_GEOMETRY=YES CONFIRM_NEW_SPEED_PROFILE=YES \
-  bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
+  bash src/scout_apps/control/spmpc_local_planner/scripts/protocols/comparisons/run_spmpc_i0_failclosed_explicit_actuator_abba_trial.sh
 ```
 
 Row02 完成后，脚本自动分析 Block 1。只有输出 `PROMOTE_BLOCK2` 才继续 Row03、Row04；若输出 `STOP_BLOCK1_FUTILITY`，立即停止。每行之间回到同一起点并等待液体稳定。

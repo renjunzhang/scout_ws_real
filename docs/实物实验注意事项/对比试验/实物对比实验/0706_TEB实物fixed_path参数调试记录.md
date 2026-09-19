@@ -46,7 +46,7 @@ PATH_SPACING=0.05
 外部 baseline 脚本：
 
 ```bash
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 基础环境：
@@ -89,7 +89,7 @@ RECORD_ALL_EXISTING_TOPICS=true \
 RECORD_RGB=false \
 RECORD_SEC=30 \
 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 判定：shadow 正常，TEB 能接收 fixed path 并输出 shadow cmd，没有动真车。
@@ -114,7 +114,7 @@ RECORD_ALL_EXISTING_TOPICS=true \
 RECORD_RGB=true \
 RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 现场判断：
@@ -257,7 +257,7 @@ RECORD_ALL_EXISTING_TOPICS=true \
 RECORD_RGB=false \
 RECORD_SEC=30 \
 MAX_RECORD_SEC=30 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 判定：shadow 正常。
@@ -284,7 +284,7 @@ RECORD_ALL_EXISTING_TOPICS=true \
 RECORD_RGB=true \
 RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 现场判断：
@@ -383,7 +383,7 @@ RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 现场判断：
@@ -479,7 +479,7 @@ RECORD_SEC=60 \
 MAX_RECORD_SEC=60 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 现场反馈：

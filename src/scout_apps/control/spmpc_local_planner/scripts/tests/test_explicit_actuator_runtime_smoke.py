@@ -12,11 +12,11 @@ import sys
 SCRIPTS_DIR = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(SCRIPTS_DIR / "acados"))
 from spmpc_acados_model import NP  # noqa: E402
-WRAPPER = SCRIPTS_DIR / "run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
-SHORT_WRAPPER = SCRIPTS_DIR / "run_spmpc_weight_smoke.sh"
+WRAPPER = SCRIPTS_DIR / "lib/run_spmpc_i0_failclosed_explicit_actuator_runtime_smoke.sh"
+SHORT_WRAPPER = SCRIPTS_DIR / "protocols/comparisons/run_spmpc_weight_smoke.sh"
 ANALYZER = SCRIPTS_DIR / "analysis" / "validate_explicit_actuator_runtime_smoke.py"
 EXACT_VALIDATOR = SCRIPTS_DIR / "analysis" / "validate_i0_failclosed_fixed_abba_bag.py"
-FULL_DA_WRAPPER = SCRIPTS_DIR / "run_spmpc_full_da_smoke.sh"
+FULL_DA_WRAPPER = SCRIPTS_DIR / "protocols/comparisons/run_spmpc_full_da_smoke.sh"
 
 SPEC = importlib.util.spec_from_file_location("runtime_smoke", ANALYZER)
 runtime_smoke = importlib.util.module_from_spec(SPEC)

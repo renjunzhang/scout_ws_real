@@ -164,7 +164,7 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
         self.assertIn("export WAIT_FOR_LOCALIZATION_MAP=false", mapping_stack)
 
     def test_freeze_is_disarmed_and_validate_only_writes_nothing(self):
-        freeze = SCRIPT_ROOT / "freeze_spmpc_mocap_field_map.sh"
+        freeze = SCRIPT_ROOT / "mocap/freeze_spmpc_mocap_field_map.sh"
         text = freeze.read_text(encoding="utf-8")
         self.assertIn('ARM_MAP_FREEZE="${ARM_MAP_FREEZE:-NO}"', text)
         self.assertIn('[[ "${ARM_MAP_FREEZE}" == "YES" ]]', text)
@@ -190,7 +190,7 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
             self.assertEqual(list(pathlib.Path(directory).iterdir()), [])
 
     def test_freeze_refuses_large_field_map_identity(self):
-        freeze = SCRIPT_ROOT / "freeze_spmpc_mocap_field_map.sh"
+        freeze = SCRIPT_ROOT / "mocap/freeze_spmpc_mocap_field_map.sh"
         with tempfile.TemporaryDirectory() as directory:
             result = subprocess.run(
                 ["bash", str(freeze)],
@@ -211,7 +211,7 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
             self.assertEqual(list(pathlib.Path(directory).iterdir()), [])
 
     def test_path_selection_is_low_speed_nonformal_and_validate_only(self):
-        selector = SCRIPT_ROOT / "run_spmpc_mocap_path_selection_trial.sh"
+        selector = SCRIPT_ROOT / "mocap/run_spmpc_mocap_path_selection_trial.sh"
         text = selector.read_text(encoding="utf-8")
         self.assertIn('ARM_MOTION="${ARM_MOTION:-NO}"', text)
         self.assertIn("formal_trial_consumed", text)
@@ -316,7 +316,7 @@ class FieldMapWiringTest(FakeMapMixin, unittest.TestCase):
         self.assertIn("W_SLOSH=5.0", wrong_weight.stderr)
 
     def test_formal_execution_chain_is_bound_to_runtime_field_map(self):
-        formal = (SCRIPT_ROOT / "run_spmpc_mocap_execution_chain_trial.sh").read_text(
+        formal = (SCRIPT_ROOT / "mocap/run_spmpc_mocap_execution_chain_trial.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn("FIELD_MAP_EXPECTED_SHA256", formal)

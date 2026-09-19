@@ -381,7 +381,7 @@ rosnode info /spmpc_local_planner
 RECORD_MOCAP=true MOCAP_TRACKER=Scout \
 OUT_DIR=/tmp/spmpc_bags \
 NAME=spmpc_mocap_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_experiment.sh
 ```
 
 会追加记录：
@@ -398,7 +398,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.
 
 ```bash
 RECORD_MOCAP=true MOCAP_TRACKER=Tracker2 \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_experiment.sh
 ```
 
 ### 9.2 Phase4 固定路径实验追加动捕 topic
@@ -407,7 +407,7 @@ bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_experiment.
 RECORD_MOCAP=true MOCAP_TRACKER=Scout \
 VARIANT=B_ours \
 OUT_DIR=/home/geist/slosh_bags/real/20260604_spmpc_mocap \
-bash src/scout_apps/control/spmpc_local_planner/scripts/phase4_fixed_path_run.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/protocols/smoke/phase4_fixed_path_run.sh
 ```
 
 metadata 中会写入：

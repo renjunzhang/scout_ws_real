@@ -204,7 +204,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=0.22 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 期望：
@@ -253,7 +253,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 期望与判读：
@@ -311,7 +311,7 @@ DELAY_PHASE_ANGULAR_DELAY_SEC=-1.0 \
 RECORD_TOPIC_INFO=false \
 RECORDER_STARTUP_SEC=8 \
 RECORD_RGB=false \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_spmpc_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_spmpc_real_fixed_path_trial.sh
 ```
 
 判读：
@@ -335,7 +335,7 @@ Run C 仍失败：
 ### 9.1 先看 status / safety
 
 ```bash
-python3 src/scout_apps/control/spmpc_local_planner/scripts/summarize_spmpc_real_trial.py \
+python3 src/scout_apps/control/spmpc_local_planner/scripts/real/summarize_spmpc_real_trial.py \
   /home/geist/slosh_bags/real/${DATE}_fixed_path_compare/B0/${RUN_LABEL}.bag
 ```
 

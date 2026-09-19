@@ -73,10 +73,10 @@ def main():
             original = json.loads(task.read_text())
             if any(data["task"].get(key) != value for key, value in original.items()):
                 raise ValueError(f"{scenario}: reused plan differs from the input task")
-            command = [sys.executable, PACKAGE / "scripts/generate_trajectory_plan.py", plan,
+            command = [sys.executable, PACKAGE / "scripts/trajectory/generate_trajectory_plan.py", plan,
                        out / f"{scenario}_revalidation.json", "--validate-plan"]
         else:
-            command = [sys.executable, PACKAGE / "scripts/generate_trajectory_plan.py", task, plan]
+            command = [sys.executable, PACKAGE / "scripts/trajectory/generate_trajectory_plan.py", task, plan]
         code = run(command, out / f"{scenario}_planning.log", args.plan_timeout, environment)
         plan_record = {"scenario": scenario, "task_sha256": digest(task), "exit_code": code}
         report["plans"].append(plan_record)
@@ -104,7 +104,7 @@ def main():
                     trial["result"] = json.loads(result.read_text())
                 predicted_checkpoint = Path(str(prefix) + "_checkpoint.json")
                 if predicted_checkpoint.exists():
-                    command = [sys.executable, PACKAGE / "scripts/diagnose_trajectory_suffix.py",
+                    command = [sys.executable, PACKAGE / "scripts/trajectory/diagnose_trajectory_suffix.py",
                                plan, predicted_checkpoint, out / f"{name}_suffix.json"]
                     if not args.suffix_reoptimize:
                         command.append("--nominal-only")
@@ -116,7 +116,7 @@ def main():
         row = data["samples"][len(data["samples"]) // 3]
         checkpoint.write_text(json.dumps({"task_elapsed_sec": row["t"], "state": row["state"]}))
         plan_record["suffix_exit_code"] = run(
-            [sys.executable, PACKAGE / "scripts/diagnose_trajectory_suffix.py", plan, checkpoint,
+            [sys.executable, PACKAGE / "scripts/trajectory/diagnose_trajectory_suffix.py", plan, checkpoint,
              out / f"{scenario}_suffix.json", "--nominal-only"],
             out / f"{scenario}_suffix.log", 60., environment)
     report["all_trials_completed"] = (len(report["trials"]) == len(args.scenarios)*len(args.actuator_scales)*len(MODES)

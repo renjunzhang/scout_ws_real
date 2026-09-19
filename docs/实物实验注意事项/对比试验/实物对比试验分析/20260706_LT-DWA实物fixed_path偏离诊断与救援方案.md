@@ -335,7 +335,7 @@ PLANNER_RATE_HZ=10.0 \
 RECORD_SEC=25 \
 MAX_RECORD_SEC=25 \
 RECORD_ALL_EXISTING_TOPICS=true \
-bash src/scout_apps/control/spmpc_local_planner/scripts/run_external_baseline_real_fixed_path_trial.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/run_external_baseline_real_fixed_path_trial.sh
 ```
 
 但这不能改变 `path_tracking_min_v=0.18` 和 `lookahead=0.75`，所以不作为首选救援方案。

@@ -149,7 +149,7 @@ rostopic echo -n 1 /scout/global_path_fixed/poses
 本次不录全量，使用轻量脚本：
 
 ```text
-src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 它默认只录关键控制和 `/spmpc/*` 诊断，不录全量相机图像。
@@ -168,7 +168,7 @@ SOLVER_BACKEND=continuous_mpcc_acados \
 RECORD_SEC=0 \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_ground \
 NAME=spmpc_B0_acados_ground_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 `RECORD_SEC=0` 表示一直录到你按 Ctrl-C。第一轮 B0 跑 10~20s 就可以停。
@@ -183,7 +183,7 @@ SOLVER_BACKEND=continuous_mpcc_acados \
 RECORD_SEC=20 \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_ground \
 NAME=spmpc_B_slosh_acados_ground_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 ```bash
@@ -192,7 +192,7 @@ SOLVER_BACKEND=continuous_mpcc_acados \
 RECORD_SEC=20 \
 OUT_DIR=/home/geist/slosh_bags/real/$(date +%Y%m%d)_spmpc_mainline_ground \
 NAME=spmpc_B_ours_acados_ground_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 如果确实要录 RGB 原始图像做离线液面真值，才加：
@@ -405,7 +405,7 @@ SOLVER_BACKEND=continuous_mpcc_acados \
 RECORD_SEC=0 \
 OUT_DIR=/home/geist/slosh_bags/real/20260610_spmpc_mainline_ground \
 NAME=spmpc_B0_acados_ground_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 **bag 分析：**
@@ -453,7 +453,7 @@ SOLVER_BACKEND=continuous_mpcc_acados \
 RECORD_SEC=0 \
 OUT_DIR=/home/geist/slosh_bags/real/20260610_spmpc_mainline_ground \
 NAME=spmpc_B_slosh_acados_ground_smoke \
-bash src/scout_apps/control/spmpc_local_planner/scripts/record_spmpc_mainline_ground_smoke.sh
+bash src/scout_apps/control/spmpc_local_planner/scripts/real/record_spmpc_mainline_ground_smoke.sh
 ```
 
 **bag 分析：**
