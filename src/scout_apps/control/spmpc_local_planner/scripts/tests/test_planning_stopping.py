@@ -71,3 +71,19 @@ class StoppingTest(unittest.TestCase):
         u[:, 2] = .01
         x[0, 13] = .02
         self.assertEqual(find_stop_time([0., 1., 2.], x, u, task()), 1.)
+
+
+    def test_transport_statistics_exclude_stop_and_tail_samples(self):
+        result = stopping_windows([0., 1., 2., 3.], [.001, .002, .008, .010], 2., 1.)
+        self.assertAlmostEqual(result['transport_p95_m'], .00195)
+        self.assertAlmostEqual(result['transport_rms_m'], np.sqrt((.001**2+.002**2)/2))
+        self.assertEqual(result['transport_samples'], 2)
+        # Peak retains the interpolated left limit of the stop boundary.
+        self.assertEqual(result['transport_peak_m'], .008)
+
+    def test_empty_or_incomplete_windows_cannot_supply_statistics(self):
+        for times, stop, gap in [([0., 1., 2.], 0., 2.), ([.1, 1., 2.], 1., 2.),
+                                 ([0., 1., 2.], 1., .5)]:
+            result = stopping_windows(times, [.001]*3, stop, 1., gap)
+            self.assertIsNone(result['transport_p95_m'])
+            self.assertIsNone(result['transport_rms_m'])

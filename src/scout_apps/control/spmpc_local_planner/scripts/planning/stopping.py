@@ -56,10 +56,12 @@ def find_stop_time(times, X, U, task, clear_tolerance=_CLEAR):
 
 
 def stopping_windows(times, heights_m, t_stop, window_sec, max_sample_gap_sec=None):
-    """Report model peaks on [0,t_stop) and [t_stop,t_stop+W].
+    """Report transport peak/P95/RMS and the peak on [t_stop,t_stop+W].
 
     Boundary heights use linear interpolation; the transport supremum includes
     the left limit at t_stop. Missing endpoints produce None, not extrapolation.
+    P95 and RMS use recorded samples strictly in [0,t_stop), without adding
+    interpolated endpoints. Incomplete or empty transport windows yield None.
     Sampling coverage is not a proof of continuous-time constraint satisfaction.
     """
     t = np.asarray(times, dtype=float); h = np.asarray(heights_m, dtype=float)
@@ -95,7 +97,12 @@ def stopping_windows(times, heights_m, t_stop, window_sec, max_sample_gap_sec=No
         return None if vals.size == 0 else float(np.max(vals))
     tc = covered(0.0, ts)
     wc = covered(ts, end)
+    transport = h[(t >= 0) & (t < ts)]
+    statistics_available = tc and transport.size > 0
     return {"transport_peak_m": peak(0.0, ts),
+            "transport_p95_m": float(np.percentile(transport, 95)) if statistics_available else None,
+            "transport_rms_m": float(np.sqrt(np.mean(transport**2))) if statistics_available else None,
+            "transport_samples": int(transport.size),
             "tail_peak_m": peak(ts, end),
             "transport_covered": tc, "tail_covered": wc,
             "covered": bool(tc and wc), "t_stop": ts, "window_sec": w}

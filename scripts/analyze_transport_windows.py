@@ -17,6 +17,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] /
                        'src/scout_apps/control/spmpc_local_planner/scripts'))
 from planning.stopping import stopping_windows
+from planning.transport_objective import normalize_limits, evaluate_transport
 
 
 def sustained_start(series, good):
@@ -34,7 +35,9 @@ def interval_covered(series, begin, end, gap):
     return bool(np.all(np.diff(times[left:right]) <= gap))
 
 
-def analyze_case(case, max_gap=.1, command_epsilon=1e-6):
+def analyze_case(case, max_gap=.1, command_epsilon=1e-6, *, slosh_limits=None):
+    if slosh_limits is not None:
+        slosh_limits = normalize_limits(slosh_limits)
     task = json.loads((case/'task.json').read_text())
     params = yaml.safe_load((case/'live_params.yaml').read_text())
     heights, velocities, commands, poses = {}, {}, {}, []
@@ -106,6 +109,9 @@ def analyze_case(case, max_gap=.1, command_epsilon=1e-6):
         result['stop_evidence_covers_tail'] = bool(frames_match and all(
             interval_covered(a, candidate, end, max_gap) for a in (pose, velocity, command)))
         result['height_coverage_after_stop_sec'] = float(height[-1, 0] - candidate)
+    result['stop_within_deadline'] = candidate is not None and candidate <= task['deadline']
+    if slosh_limits is not None:
+        result['slosh_evaluation'] = evaluate_transport(result.get('windows', {}), slosh_limits)
     review = json.loads((case.parent/'review.json').read_text())
     result['archived_anomalies'] = {key: review.get(key) for key in
         ('alignment_rejected', 'budget_exhausted', 'fault_zero_cycles', 'goal_sec')}
@@ -116,12 +122,15 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('cases', nargs='+', type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--slosh-limits', type=Path,
+                        help='frozen transport peak/P95/RMS upper limits in metres')
     args = parser.parse_args()
     if args.output.exists():
         parser.error('output must be new; do not replace previous evidence')
+    limits = json.loads(args.slosh_limits.read_text()) if args.slosh_limits else None
     result = dict(method='persistent pose/speed and first sustained zero publication + frozen maximum delay',
                   evidence='development candidate; FIFO not directly observed and raw pose has receipt timestamps',
-                  units='seconds and metres', trials=[analyze_case(case) for case in args.cases])
+                  units='seconds and metres', trials=[analyze_case(case, slosh_limits=limits) for case in args.cases])
     args.output.write_text(json.dumps(result, indent=2, allow_nan=False) + '\n')
     print(json.dumps(result, indent=2))
 
