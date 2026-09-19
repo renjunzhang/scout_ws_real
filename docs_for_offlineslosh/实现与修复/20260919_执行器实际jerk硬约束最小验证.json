@@ -1,0 +1,213 @@
+{
+  "date": "2026-09-19",
+  "code_commit": "f37a1e1c5bb3997df08c6ccc51bdb2e79495042f",
+  "formal": false,
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal",
+  "outcome": "HARD_CONSTRAINT_IMPLEMENTED; S_PATH_CLOSED_LOOP_NOT_QUALIFIED",
+  "contract": {
+    "axis": "longitudinal",
+    "actual_jerk_max_m_s3": 1.0,
+    "dt_sec": 0.03333333333333333,
+    "definition": "(a_actual[k+1]-a_actual[k])/dt; a_actual=(gain*FIFO_head-v_actual)/tau",
+    "fifo_shift_included": true,
+    "continuous_ZOH_jerk_certified": false,
+    "hardware_verified": false,
+    "online_liquid_hard_constraint": false,
+    "online_liquid_soft_cost_unchanged": true,
+    "online_delta_acceleration_tolerance": 1e-06,
+    "offline_delta_acceleration_tolerance": 2e-06
+  },
+  "protocol": {
+    "actual_jerk_max": 1.0,
+    "definition": "longitudinal acceleration change / dt including FIFO head switch, 30 Hz",
+    "online_liquid_hard_constraint": false,
+    "online_liquid_soft_weight": 5.0,
+    "full_progress_reward": 0.0,
+    "solve_timeout_sec": 600,
+    "max_native_trials": 1,
+    "max_gazebo_trials": 1,
+    "warm_plan": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+    "hardware": false
+  },
+  "repair": {
+    "reason": "native t=4.366667 candidate stop used command jerk 1, violating actual jerk tail; terminal latched and deadline missed",
+    "change": "derive fallback command jerk cap J*tau*(1-r)/(gain*dt) with production RK4 decay; qualify actual tail unchanged",
+    "retained_attempt": "native_before_stop_fix",
+    "authorized_retry": "one native replay of identical task/plan/weights after stopping implementation fix",
+    "startup_errors": [
+      "acados_template import path missing in codegen environment, corrected PYTHONPATH",
+      "actual_jerk import before task initialized model path, fixed source imports"
+    ],
+    "test_harness_errors": [
+      "pytest dependency omitted initially; reused existing /tmp/scout_external_pydeps_20260919",
+      "old ctest ignored --test-dir and wrote Testing/Temporary logging in repository; no tests ran there; corrected cwd and did not modify Testing again"
+    ]
+  },
+  "solve_process": {
+    "command": [
+      "/usr/bin/python3",
+      "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+      "--warm-plan",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+      "--diagnostics",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/solve_events.jsonl",
+      "--rejected-plan",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/rejected_plan.json",
+      "--solver-verbosity",
+      "5"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 47.51316498400047,
+    "timeout": 600
+  },
+  "offline_validation": {
+    "status": "SOFTWARE_VERIFIED",
+    "liquid_policy_qualification": {
+      "passed": true,
+      "failures": [],
+      "enforced": true
+    },
+    "actual_jerk_max": 1.0,
+    "peak_actual_jerk_m_s3": 0.4054473835780536,
+    "dynamics_max_error": 3.730349362740526e-14,
+    "minimum_region_clearance": 1.3033333333333332,
+    "dense_peak_height_m": 9.876918967925696e-05,
+    "residual_height_m": 3.365576061218135e-11,
+    "curvature_arc_energy": 1.057787844589908,
+    "actual_path_length": 5.111949998211567,
+    "stopping_evaluation": {
+      "t_stop_sec": 44.0,
+      "clear_tolerance": 2e-06,
+      "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+      "windows": {
+        "transport_peak_m": 9.876918967925696e-05,
+        "transport_p95_m": 6.736492256930257e-05,
+        "transport_rms_m": 3.288840645500386e-05,
+        "transport_samples": 5280,
+        "tail_peak_m": 1.6219784820683426e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 44.0,
+        "window_sec": 5.0
+      },
+      "liquid_policy": {
+        "mode": "transport_tail_v1",
+        "move_height_m": 0.0009,
+        "tail_height_m": 8e-05,
+        "height_tolerance_m": 1e-06
+      },
+      "liquid_objective_end_sec": 49.0
+    },
+    "hardware_verified": false
+  },
+  "native_before_stop_fix": {
+    "complete": "false",
+    "failures": "1",
+    "failure_status": "TASK_DEADLINE_MISSED",
+    "max_actual_jerk": "0.97472669880692342",
+    "path_length": "0.032641625904457502"
+  },
+  "native_after_stop_fix": {
+    "complete": "false",
+    "completion_time": "-1",
+    "failures": "1",
+    "failure_status": "TASK_DEADLINE_MISSED",
+    "max_actual_jerk": "0.99999999999832279",
+    "max_jerk": "0.99999999999999878",
+    "path_length": "4.1816550580012777",
+    "final_goal_position_error": "0.98511676419500604",
+    "max_prediction_defect": "0.0012143212193240496",
+    "peak_modal_height_m": "0.00065145521777536458",
+    "walltime_p95_ms": "14.529855",
+    "solver_time_p95_ms": "5.5009999999999994"
+  },
+  "native_status_counts": {
+    "B_slosh_ACADOS_OK": 778,
+    "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 2,
+    "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION": 25,
+    "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1,
+    "TERMINAL_DRAINING": 545,
+    "TASK_DEADLINE_MISSED": 1
+  },
+  "native_status_transitions": [
+    {
+      "t": 0.0,
+      "status": "B_slosh_ACADOS_OK",
+      "actual_v": 0.0
+    },
+    {
+      "t": 25.3,
+      "status": "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION",
+      "actual_v": 0.12021428150483786
+    },
+    {
+      "t": 25.333333333333332,
+      "status": "SOLVER_RETRY_STOPPING: PREDICTION_DYNAMICS_VIOLATION",
+      "actual_v": 0.11981891890125708
+    },
+    {
+      "t": 26.166666666666668,
+      "status": "SOLVER_FAILURE_STOPPING: PREDICTION_DYNAMICS_VIOLATION",
+      "actual_v": 0.009247013059699001
+    },
+    {
+      "t": 26.2,
+      "status": "B_slosh_ACADOS_OK",
+      "actual_v": 0.006866686120263886
+    },
+    {
+      "t": 26.833333333333332,
+      "status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4",
+      "actual_v": 0.07847997045882005
+    },
+    {
+      "t": 26.866666666666667,
+      "status": "TERMINAL_DRAINING",
+      "actual_v": 0.09033809748577268
+    },
+    {
+      "t": 45.03333333333333,
+      "status": "TASK_DEADLINE_MISSED",
+      "actual_v": 7.503852453435188e-68
+    }
+  ],
+  "validation": {
+    "native_test_targets_passed": 6,
+    "native_affected_targets_rechecked_after_stop_fix": 4,
+    "unique_python_tests_passed": 34,
+    "native_and_ros_builds": "passed",
+    "gazebo": "NOT_RUN_NATIVE_GATE_FAILED",
+    "real_robot": "NOT_STARTED"
+  },
+  "gaps": [
+    "S path failed prediction-defect acceptance at 25.3 s and acados at 26.833333 s; fault stop led to deadline miss",
+    "No new Gazebo or physical liquid efficacy result; partial native liquid height cannot be compared with archived completed Gazebo trials",
+    "Actual grid jerk follows identified model; timing/model mismatch and real high-frequency/curved-motion vector jerk remain unverified"
+  ],
+  "runtime_manifest": {
+    "geometry_trial": {
+      "source_path": "/tmp/scout_actual_jerk_native/geometry_trial",
+      "sha256": "a4022aac4e38833cf7a720fc2fd30cf9ebea788f95fd5184ae3a231467e9e08a"
+    },
+    "libspmpc_local_planner.so": {
+      "source_path": "/tmp/scout_actual_jerk_overlay/lib/libspmpc_local_planner.so",
+      "sha256": "71fb1dd00c62625d094162b19dafe87ebcdb61e3159048dbeaeaa7c02273bce1"
+    },
+    "spmpc_local_planner_node": {
+      "source_path": "/tmp/scout_actual_jerk_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "sha256": "639c7e0fb982b4a1054bff83bdbf3d4c1796baad0d0cfc53ebc24c25e95718d3"
+    },
+    "libacados_ocp_solver_spmpc_b0.so": {
+      "source_path": "/tmp/scout_actual_jerk_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+      "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+    },
+    "libacados_ocp_solver_spmpc_slosh.so": {
+      "source_path": "/tmp/scout_actual_jerk_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+      "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+    }
+  }
+}
