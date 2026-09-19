@@ -1,0 +1,375 @@
+{
+  "formal": false,
+  "raw_directory": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_repeat2_145556",
+  "previous_cost0_directory": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122",
+  "baseline_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+  "new_simulations": 2,
+  "repeated_full_simulations": 0,
+  "retries": 0,
+  "scope": "Add exactly two same-plan liquid-cost-zero repetitions; combine with existing cost0_01 and three archived Full",
+  "rows": [
+    {
+      "name": "cost0_01",
+      "group": "cost0",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/cost0_01/assessment.json",
+      "assessment_sha256": "cafd117433cace0b2a4505d5d20ea7b3c35c3aebe970a4b7a84ebf580a8ff24f",
+      "execution_valid": true,
+      "peak_mm": 0.5392387802703045,
+      "p95_mm": 0.2784535369096801,
+      "rms_mm": 0.12526562491360507,
+      "tail_peak_mm": 3.0360550485100246e-07,
+      "goal_sec": 27.955,
+      "stop_sec": 27.954333333000008,
+      "peak_time_sec": 14.931000000000004,
+      "initial_pose": [
+        0.01567521597633174,
+        -0.0032563656426838616,
+        0.0004898917626511621
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 828,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 23,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": [
+        {
+          "key": "variants.B_slosh.w_slosh",
+          "full": 5.0,
+          "cost0": 0.0
+        }
+      ]
+    },
+    {
+      "name": "cost0_02",
+      "group": "cost0",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_repeat2_145556/cost0_02/assessment.json",
+      "assessment_sha256": "7c17a265e188f15ad894e00179ce5bbfa0630dacaf8c6f3cb70940c94a4fb919",
+      "execution_valid": true,
+      "peak_mm": 0.7123393046968406,
+      "p95_mm": 0.33179601502181694,
+      "rms_mm": 0.13822038270055415,
+      "tail_peak_mm": 2.0670301955092566e-05,
+      "goal_sec": 27.913999999999994,
+      "stop_sec": 27.879333332999998,
+      "peak_time_sec": 14.957,
+      "initial_pose": [
+        0.01767632085669503,
+        -0.005287847029173621,
+        0.0009751437056839213
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 826,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 25,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": [
+        {
+          "key": "variants.B_slosh.w_slosh",
+          "full": 5.0,
+          "cost0": 0.0
+        }
+      ]
+    },
+    {
+      "name": "cost0_03",
+      "group": "cost0",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_repeat2_145556/cost0_03/assessment.json",
+      "assessment_sha256": "66d24c4d3b75e5d194a9a32bc485a66cc99b2a1d25984e8f252d1149d921416d",
+      "execution_valid": true,
+      "peak_mm": 0.5241097725728157,
+      "p95_mm": 0.2797168782795839,
+      "rms_mm": 0.12271850988289046,
+      "tail_peak_mm": 1.3245322555188964e-05,
+      "goal_sec": 28.254999999999995,
+      "stop_sec": 28.223333333,
+      "peak_time_sec": 15.119,
+      "initial_pose": [
+        0.020362629202143295,
+        -0.00724050682196153,
+        0.0011756883438613951
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 836,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 26,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": [
+        {
+          "key": "variants.B_slosh.w_slosh",
+          "full": 5.0,
+          "cost0": 0.0
+        }
+      ]
+    },
+    {
+      "name": "full_01",
+      "group": "full",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_01/assessment.json",
+      "assessment_sha256": "e87b96d44831729b4b8ffda15854dbf238a52c430bef5c4a1e1a5629848221fa",
+      "execution_valid": true,
+      "peak_mm": 0.5408323017290326,
+      "p95_mm": 0.2271372257632544,
+      "rms_mm": 0.11222955264848235,
+      "tail_peak_mm": 3.209236659501734e-08,
+      "goal_sec": 28.314999999999998,
+      "stop_sec": 28.280333333,
+      "peak_time_sec": 15.534000000000006,
+      "initial_pose": [
+        0.01578631857072829,
+        -0.003745986201182909,
+        0.0005504439979977091
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 838,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 24,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": []
+    },
+    {
+      "name": "full_02",
+      "group": "full",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_02/assessment.json",
+      "assessment_sha256": "52a26b06f05be08bea2a74e157894be29e2cf254506f2d81422f826ff9ee1987",
+      "execution_valid": true,
+      "peak_mm": 0.47736531452827324,
+      "p95_mm": 0.2230089628554845,
+      "rms_mm": 0.11084501338916364,
+      "tail_peak_mm": 7.056650003810778e-06,
+      "goal_sec": 28.298000000000002,
+      "stop_sec": 28.26433333300001,
+      "peak_time_sec": 15.411000000000001,
+      "initial_pose": [
+        0.01567521597633174,
+        -0.0032563656426838616,
+        0.0004898917626511621
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 837,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 26,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": []
+    },
+    {
+      "name": "full_03",
+      "group": "full",
+      "assessment_path": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_03/assessment.json",
+      "assessment_sha256": "839d1ad28d4d6c880379cc0e9a2b28f987f7a7df5ab595354103bd55618e4875",
+      "execution_valid": true,
+      "peak_mm": 0.49802594806715,
+      "p95_mm": 0.2190799124159951,
+      "rms_mm": 0.111553805258875,
+      "tail_peak_mm": 9.253121761576004e-06,
+      "goal_sec": 28.233999999999995,
+      "stop_sec": 28.233333333000004,
+      "peak_time_sec": 15.412999999999997,
+      "initial_pose": [
+        0.018557907671212282,
+        -0.009275063543130298,
+        0.0015107577776686122
+      ],
+      "identity_passed": true,
+      "frozen_unchanged": true,
+      "liquid_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 836,
+        "mismatched_odom_liquid_cycles": 0,
+        "command_contract_violations": 0,
+        "qp_iteration_limits": [
+          20
+        ],
+        "first_live_cycle": {
+          "cycle_id": 26,
+          "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+        }
+      },
+      "abnormal_statuses": {},
+      "window_covered": true,
+      "stop_within_deadline": true,
+      "stop_evidence_covers_tail": true,
+      "live_parameter_differences": []
+    }
+  ],
+  "group_statistics": {
+    "cost0": {
+      "peak_mm": {
+        "n": 3,
+        "mean": 0.5918959525133203,
+        "stdev": 0.10458093771037007,
+        "min": 0.5241097725728157,
+        "max": 0.7123393046968406
+      },
+      "p95_mm": {
+        "n": 3,
+        "mean": 0.29665547673702697,
+        "stdev": 0.030439153750766768,
+        "min": 0.2784535369096801,
+        "max": 0.33179601502181694
+      },
+      "rms_mm": {
+        "n": 3,
+        "mean": 0.12873483916568323,
+        "stdev": 0.008312857562768155,
+        "min": 0.12271850988289046,
+        "max": 0.13822038270055415
+      },
+      "goal_sec": {
+        "n": 3,
+        "mean": 28.04133333333333,
+        "stdev": 0.18617285874512757,
+        "min": 27.913999999999994,
+        "max": 28.254999999999995
+      },
+      "stop_sec": {
+        "n": 3,
+        "mean": 28.01899999966667,
+        "stdev": 0.1808876262582185,
+        "min": 27.879333332999998,
+        "max": 28.223333333
+      }
+    },
+    "full": {
+      "peak_mm": {
+        "n": 3,
+        "mean": 0.5054078547748186,
+        "stdev": 0.03237103683952495,
+        "min": 0.47736531452827324,
+        "max": 0.5408323017290326
+      },
+      "p95_mm": {
+        "n": 3,
+        "mean": 0.22307536701157799,
+        "stdev": 0.004029067103926248,
+        "min": 0.2190799124159951,
+        "max": 0.2271372257632544
+      },
+      "rms_mm": {
+        "n": 3,
+        "mean": 0.11154279043217366,
+        "stdev": 0.0006923353486238771,
+        "min": 0.11084501338916364,
+        "max": 0.11222955264848235
+      },
+      "goal_sec": {
+        "n": 3,
+        "mean": 28.28233333333333,
+        "stdev": 0.04271221527073427,
+        "min": 28.233999999999995,
+        "max": 28.314999999999998
+      },
+      "stop_sec": {
+        "n": 3,
+        "mean": 28.259333333000004,
+        "stdev": 0.02389560629069636,
+        "min": 28.233333333000004,
+        "max": 28.280333333
+      }
+    }
+  },
+  "full_vs_cost0_mean_change_percent": {
+    "peak_mm": -14.612044122155954,
+    "p95_mm": -24.803219726388114,
+    "rms_mm": -13.354620120652195,
+    "goal_sec": 0.8594455803337953,
+    "stop_sec": 0.8577512878268134
+  },
+  "strict_per_metric": {
+    "peak_mm": {
+      "passed": false,
+      "full_max": 0.5408323017290326,
+      "cost0_min": 0.5241097725728157
+    },
+    "p95_mm": {
+      "passed": true,
+      "full_max": 0.2271372257632544,
+      "cost0_min": 0.2784535369096801
+    },
+    "rms_mm": {
+      "passed": true,
+      "full_max": 0.11222955264848235,
+      "cost0_min": 0.12271850988289046
+    }
+  },
+  "all_three_strictly_improved": false,
+  "all_executions_valid": true,
+  "all_identities_passed": true,
+  "limitations": [
+    "Same upper-layer anti-slosh geometry and speed reference; only lower-layer liquid cost changes.",
+    "Cost0 includes one prior run plus two additions; Full uses three archived runs. No fresh paired or randomized design.",
+    "Three runs per group describe variation but do not establish statistical significance or prove noise as the cause.",
+    "Heights are odom-driven liquid-model outputs; raw-S whole-method and time-optimization benefits remain unverified."
+  ],
+  "protocol_sha256": "c61f18f42755f0c7edb42a878c2fd0a49a80e7511cdc3e6284c0d0dd2cf66589",
+  "comparison_script_sha256": "7a59fb7f7380fd9172960e3d0e682413c41dddf26ceee666ae75cfe803cd71de"
+}
