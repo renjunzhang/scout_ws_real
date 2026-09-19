@@ -1,0 +1,1290 @@
+{
+  "date": "2026-09-19",
+  "formal": false,
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821",
+  "protocol": {
+    "candidate_count": 1,
+    "nominal_transport_sec": 44.0,
+    "deadline_sec": 45.0,
+    "progress_weight": 0.0,
+    "reference_mode": "progress",
+    "selection_basis": "Use the latest preselected nominal arrival with 1 s execution margin within the common 45 s deadline. Remove the existing positive progress reward rather than change execution mode; do not tune this setting after observing results. Target archived FP-AS ~40.43 s completion; 5% tolerance.",
+    "offline_timeout_sec": 600.0,
+    "gazebo_runs_max": 1,
+    "fp_as_reruns_only_if_runtime_incompatible": 1,
+    "old_full_root": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+    "fp_as_root": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514",
+    "changed_task_fields": [
+      "task_id",
+      "transport_duration"
+    ],
+    "changed_full_profile_fields": {
+      "variants.B_slosh.w_progress": [
+        0.2,
+        0.0
+      ]
+    },
+    "common_physics_unchanged": true,
+    "full_liquid_weights_unchanged": true,
+    "full_liquid_caps_unchanged": true,
+    "git_head": "e241f203165db6a43382a48a6e41e864ae05fc97",
+    "warm_plan": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+    "stop_condition": "600 s timeout, failed qualification or execution gate: stop without parameter/duration search; repair only evidenced implementation/config errors."
+  },
+  "solve_process": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/task.json",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+      "--warm-plan",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+      "--diagnostics",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/solve_events.jsonl",
+      "--rejected-plan",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/rejected_plan.json",
+      "--solver-verbosity",
+      "5"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 51.82348898899727,
+    "timeout": 600
+  },
+  "optimization": {
+    "status": "Solve_Succeeded",
+    "guide_interpolation": "smooth_route_v2_padded",
+    "objective": 11.582254323465655,
+    "solve_seconds": 47.74243164600193,
+    "iterations": 52
+  },
+  "validation": {
+    "status": "SOFTWARE_VERIFIED",
+    "liquid_policy_qualification": {
+      "passed": true,
+      "failures": [],
+      "enforced": true
+    },
+    "dynamics_max_error": 2.827825751339219e-10,
+    "minimum_region_clearance": 1.3033333333333332,
+    "dense_peak_height_m": 9.878197875688777e-05,
+    "residual_height_m": 3.3702145154603677e-11,
+    "curvature_arc_energy": 1.0577531760191228,
+    "actual_path_length": 5.111943429267355,
+    "stopping_evaluation": {
+      "t_stop_sec": 44.0,
+      "clear_tolerance": 2e-06,
+      "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+      "windows": {
+        "transport_peak_m": 9.878197875688777e-05,
+        "transport_p95_m": 6.736505092589964e-05,
+        "transport_rms_m": 3.288843297524408e-05,
+        "transport_samples": 5280,
+        "tail_peak_m": 1.6222486079577154e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 44.0,
+        "window_sec": 5.0
+      },
+      "liquid_policy": {
+        "mode": "transport_tail_v1",
+        "move_height_m": 0.0009,
+        "tail_height_m": 8e-05,
+        "height_tolerance_m": 1e-06
+      },
+      "liquid_objective_end_sec": 49.0
+    },
+    "hardware_verified": false
+  },
+  "native": {
+    "mode": "planned_slosh",
+    "scenario_plan_id": "full_s_slow_single_20260919-82ccccd156f4",
+    "deadline": "45",
+    "evaluation_window": "5",
+    "curvature_weight": "0.050000000000000003",
+    "contour_weight": "1",
+    "rti_iterations": "1",
+    "max_prediction_defect": "0.0013201369704801311",
+    "actual_v_min": "0",
+    "actual_v_max": "0.25153742069100221",
+    "actual_omega_min": "-0.14081277138777201",
+    "actual_omega_max": "0.33657367889196743",
+    "walltime_p95_ms": "6.0142509999999998",
+    "walltime_max_ms": "13.555094",
+    "solver_time_p95_ms": "5.0209999999999999",
+    "solver_time_max_ms": "12.772",
+    "max_jerk": "1.0000000000000815",
+    "max_solve_ms": "12.772",
+    "evidence": "MODEL_IN_THE_LOOP",
+    "actuator_scale": "1",
+    "deadline_lateness_sec": "0",
+    "deadline_tolerance_sec": "0",
+    "complete": "true",
+    "completion_time": "41.333333333333336",
+    "final_goal_position_error": "0.028502868683293978",
+    "final_goal_yaw_error": "0.050842630969199089",
+    "evaluation_end_time": "50",
+    "evaluation_last_sample_time": "50",
+    "height_sampling": "30 Hz model nodes; not continuous peak certification",
+    "effective_parameter_manifest": {
+      "planning": {
+        "schema_version": "1",
+        "experiment_profile_id": "planned_slosh",
+        "liquid_free_baseline": "false",
+        "task_deadline_sec": "45",
+        "evaluation_window_sec": "5",
+        "projection": {
+          "lookahead": "2"
+        },
+        "geometry": {
+          "enabled": "true",
+          "curvature_weight": "0.050000000000000003",
+          "curvature_rate_weight": "0.0001",
+          "curvature_scale": "1",
+          "curvature_rate_scale": "1",
+          "speed_regularization": "0.050000000000000003",
+          "goal_weight": "0",
+          "goal_position_scale": "0.29999999999999999",
+          "goal_yaw_scale": "1",
+          "reference_curvature_speed_limit": "false"
+        },
+        "reference": {
+          "mode": "progress",
+          "plan_file": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+          "progress_window": "0.29999999999999999",
+          "max_speed_error": "0.02",
+          "route_tolerance": "1.0000000000000001e-05",
+          "deadline_tolerance": "0"
+        },
+        "region": {
+          "enabled": "true",
+          "id": "proxy_open_room",
+          "frame_id": "map",
+          "footprint_radius": "0.45000000000000001",
+          "margin": "0.02",
+          "cells": [
+            {
+              "id": "room",
+              "s_begin": "0",
+              "s_end": "5.8093304846459741",
+              "vertices": [
+                {
+                  "x": "-1.7738649019045563",
+                  "y": "-3.8115037302794277"
+                },
+                {
+                  "x": "9.8261212824125312",
+                  "y": "-3.7936005559044066"
+                },
+                {
+                  "x": "9.8143916164426894",
+                  "y": "3.806390392441271"
+                },
+                {
+                  "x": "-1.7855945678743976",
+                  "y": "3.7884872180662499"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": "native explicit configuration; not a ROS launch validation",
+      "variant": "B_slosh",
+      "rti_iterations": "1",
+      "prediction_defect_limit": "0.0001",
+      "jerk_limit_enable": "true",
+      "terminal_goal_position_tolerance": "0.050000000000000003",
+      "terminal_goal_yaw_tolerance": "0.10000000000000001",
+      "terminal_stop_speed": "0.01",
+      "terminal_stop_omega": "0.02",
+      "liquid_constraint_enable": "false",
+      "liquid_complete_stop": "false",
+      "terminal_goal_pose_weight": "2",
+      "use_previous_solution": "true",
+      "height_coeff": "1.8179308248624537",
+      "motion_limits": {
+        "actual_v_min": "-0.002",
+        "v_max": "0.80000000000000004",
+        "omega_max": "1.2",
+        "a_max": "0.59999999999999998",
+        "alpha_max": "1.2",
+        "jerk_max": "1"
+      },
+      "first_ocp_stage": {
+        "rx0": "0.020268121297657166",
+        "rx1": "0.26466832415129249",
+        "rx2": "-0.0018877909407290477",
+        "rx3": "-0.0018460314720949735",
+        "ry0": "-0.0087301773242579386",
+        "ry1": "-0.002642782812198144",
+        "ry2": "0.045459994117152978",
+        "ry3": "-0.00733672221178282",
+        "w_contour": "1",
+        "w_lag": "0.20000000000000001",
+        "w_progress": "0",
+        "w_a": "0.10000000000000001",
+        "w_omega": "0.10000000000000001",
+        "w_v": "1",
+        "w_vs": "0.29999999999999999",
+        "w_alpha": "0.10000000000000001",
+        "w_du_a": "0.10000000000000001",
+        "w_du_vs": "0",
+        "a_prev": "0",
+        "vs_prev": "0",
+        "e_c_ref": "0.14999999999999999",
+        "e_l_ref": "0.10000000000000001",
+        "v_ref": "0.25",
+        "actuator_dt": "0.033333333333333333",
+        "actuator_tau_v": "0.112",
+        "actuator_tau_omega": "0.11899999999999999",
+        "actuator_gain_v": "1.018",
+        "actuator_gain_omega": "1.0960000000000001",
+        "anticreep_gain": "8",
+        "stop_active": "0",
+        "stop_goal_s": "0",
+        "stop_brake_accel": "0.59999999999999998",
+        "stop_delay_margin": "0.87866666666666671",
+        "stop_velocity_weight": "1",
+        "w_curvature": "0.050000000000000003",
+        "w_curvature_rate": "0.0001",
+        "curvature_speed_floor": "0.050000000000000003",
+        "curvature_ref": "1",
+        "curvature_rate_ref": "1",
+        "reference_curvature_speed_enable": "0",
+        "reference_mode": "2",
+        "reference_s0": "-1.2784819286415706e-26",
+        "reference_s1": "0.099999999999999992",
+        "reference_s2": "0.19999999999999998",
+        "reference_s3": "0.29999999999999999",
+        "reference_v0": "2.5568096111067233e-26",
+        "reference_v1": "2.5568096111067233e-26",
+        "reference_v2": "2.5568096111067233e-26",
+        "reference_v3": "2.5568096111067233e-26",
+        "reference_vs0": "-2.0550709743073025e-24",
+        "reference_vs1": "-2.0550709743073025e-24",
+        "reference_vs2": "-2.0550709743073025e-24",
+        "reference_vs3": "-2.0550709743073025e-24",
+        "region_active": "1",
+        "region_s_begin": "0",
+        "region_s_end": "5.8093304846459741",
+        "region_nx0": "0.0015433771012949217",
+        "region_ny0": "-0.99999880899285243",
+        "region_offset0": "3.312094781614185",
+        "region_nx1": "0.99999880899285232",
+        "region_ny1": "0.0015433771012949762",
+        "region_offset1": "9.3235879565357411",
+        "region_nx2": "-0.0015433771012949217",
+        "region_ny2": "0.99999880899285243",
+        "region_offset2": "3.2945718850524819",
+        "region_nx3": "-0.99999880899285232",
+        "region_ny3": "-0.0015433771012949176",
+        "region_offset3": "1.2830787101309258",
+        "region_nx4": "0",
+        "region_ny4": "0",
+        "region_offset4": "1",
+        "region_nx5": "0",
+        "region_ny5": "0",
+        "region_offset5": "1",
+        "region_nx6": "0",
+        "region_ny6": "0",
+        "region_offset6": "1",
+        "region_nx7": "0",
+        "region_ny7": "0",
+        "region_offset7": "1",
+        "task_goal_active": "0",
+        "task_goal_x": "5",
+        "task_goal_y": "0",
+        "task_goal_yaw": "0",
+        "task_goal_position_tolerance": "0.050000000000000003",
+        "task_goal_yaw_tolerance": "0.10000000000000001",
+        "task_goal_speed_tolerance": "0.01",
+        "task_goal_omega_tolerance": "0.02",
+        "task_goal_require_yaw": "1",
+        "w_task_goal": "0",
+        "task_goal_position_scale": "0.29999999999999999",
+        "task_goal_yaw_scale": "1",
+        "two_zeta_omega_n": "3.2358258380412885",
+        "omega_n_sq": "1047.0568854135606",
+        "kappa_x": "1",
+        "kappa_y": "1",
+        "eta_ref": "0.0027503796798089416",
+        "eta_dot_ref": "0.08899749632349499",
+        "w_slosh_eta": "5",
+        "w_slosh_eta_dot": "1.5",
+        "eta_target_sq": "1000000000000",
+        "slack_linear_weight": "0",
+        "slack_quadratic_weight": "0",
+        "eta_max_sq": "1000000000000"
+      }
+    },
+    "failures": "0",
+    "failure_status": "",
+    "curvature_arc_energy": "1.5771091507912371",
+    "path_length": "5.1380590536571003",
+    "low_speed_spin_samples": "0",
+    "peak_modal_height_m": "0.00068311936217625995",
+    "minimum_region_clearance": "1.3300000000000001"
+  },
+  "cpp_validation": {
+    "command": [
+      "/tmp/scout_external_native_20260919/validate_plan",
+      "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 0.1648528690020612,
+    "timeout": 120
+  },
+  "gazebo": {
+    "name": "full_01",
+    "process": {
+      "command": [
+        "/usr/bin/python3",
+        "/home/a/scout_ws/scripts/run_trajectory_gazebo_smoke.py",
+        "--setup",
+        "/tmp/scout_external_overlay_20260919/setup.bash",
+        "--output",
+        "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case",
+        "--profile",
+        "planned_slosh",
+        "--identified-actuator",
+        "--task",
+        "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/task.json",
+        "--plan",
+        "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+        "--progress-weight",
+        "0"
+      ],
+      "returncode": 0,
+      "status": "completed",
+      "wall_seconds": 127.89884690700273,
+      "timeout": 480
+    },
+    "summary": {
+      "formal": false,
+      "evidence": "CURRENT_MAINLINE_GAZEBO_INTEGRATION",
+      "profile": "planned_slosh",
+      "actuator_plant_matches_controller": false,
+      "plant": "Identified FOPDT adapter -> existing planar drive (120 Hz)",
+      "controller": "Production fixed 5/10-step FIFO + identified actuator response",
+      "map_file": "/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream",
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "runner_sha256": "ed5ec66f295ebc5725a1215ac600aad7c5f6fda56e668b9fac80ecec15ac6fa1",
+      "binary_file": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "binary_sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3",
+      "git_sha": "a4177c962cc560eb290a83dfe50752fce74c3d99",
+      "goal_reached": true,
+      "children": [
+        {
+          "name": "environment_launcher",
+          "pid": 308952,
+          "command": [
+            "/data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh"
+          ]
+        },
+        {
+          "name": "actuator_plant",
+          "pid": 309548,
+          "command": [
+            "python3",
+            "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/gazebo_identified_actuator.py",
+            "--config",
+            "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/actuator_config.yaml"
+          ]
+        },
+        {
+          "name": "recorder",
+          "pid": 310308,
+          "command": [
+            "rosbag",
+            "record",
+            "-O",
+            "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/run.bag",
+            "__name:=current_mainline_recorder",
+            "/clock",
+            "/map",
+            "/tf",
+            "/tf_static",
+            "/odom",
+            "/imu/data",
+            "/scan_front",
+            "/scout/global_path_fixed",
+            "/cmd_vel",
+            "/cmd_vel_drive",
+            "/spmpc/status",
+            "/spmpc/local_trajectory",
+            "/spmpc/solver_time_ms",
+            "/spmpc/cost_breakdown",
+            "/spmpc/slosh_height",
+            "/spmpc/slosh_horizon_summary",
+            "/spmpc/terminal/debug",
+            "/spmpc/terminal/mode",
+            "/spmpc/debug/effective_config",
+            "/spmpc/debug/planning_config",
+            "/spmpc/debug/pre_solve_snapshot",
+            "/spmpc/debug/predicted_horizon",
+            "/spmpc/debug/control_cycle_audit",
+            "/spmpc/debug/command_intervention",
+            "/spmpc/debug/control_cycle_wall_timing",
+            "/spmpc/debug/raw_state",
+            "/spmpc/debug/predicted_state",
+            "/spmpc/debug/solver_input_state",
+            "/spmpc/debug/slosh_state",
+            "/spmpc/debug/slosh_observer_selection",
+            "/spmpc/debug/slosh_observer_odom",
+            "/spmpc/debug/slosh_observer_imu",
+            "/spmpc/debug/slosh_cost_monitor"
+          ]
+        },
+        {
+          "name": "planner",
+          "pid": 310382,
+          "command": [
+            "roslaunch",
+            "spmpc_local_planner",
+            "trajectory_mpcc.launch",
+            "profile:=planned_slosh",
+            "region_config:=/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/region.yaml",
+            "task_overlay_file:=/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/task.yaml",
+            "planner_overlay_file:=/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/overlay.yaml",
+            "plan_file:=/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json"
+          ]
+        }
+      ],
+      "observation_module_sha256": "783647a60a82053305db0d0cacf3c23f9986be1c2bda0ee65d5cde601ec88a45",
+      "actuator_adapter_sha256": "87445f0eae51f9965484495eb8a1a7163a163365bf290bbe83f1f1d14043fe91",
+      "actuator_model_parameters_match": true,
+      "actuator_match_limit": "ROS receipt timing and 120 Hz output require bag verification",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.020362629202143295,
+        -0.00724050682196153,
+        0.0011756883438613951
+      ],
+      "odom_child_frame": "base_footprint",
+      "task_sha256": "c2ef5800b23a6738f532d7918b286d69404b6ae6adf2f8334e5171ef0ae8ee91",
+      "plan_file": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+      "plan_sha256": "2203d67bac2c2e3682e3eef9a0937658d740a86f05f8a6340660e2c4216c5b90",
+      "progress_weight_override": 0.0,
+      "observation_target_sim_sec": 51.0,
+      "goal_time_sec": 41.055,
+      "observation_sim_window_complete": true,
+      "observation_sim_sec": 51.047000000000004,
+      "observation_wall_sec": 51.26583376100098,
+      "final_pose": [
+        4.97554786956553,
+        -0.005961638908684681,
+        0.048615857861931545
+      ],
+      "status_counts": {
+        "WAITING_FOR_ODOM": 4,
+        "WAITING_FOR_REFERENCE_PATH": 28,
+        "B_slosh_ACADOS_OK": 1220,
+        "TERMINAL_DRAINING": 11,
+        "GOAL_REACHED": 300
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "passed": true
+    },
+    "windows": {
+      "case": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case",
+      "formal": false,
+      "frame_contract_matches": true,
+      "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+      "first_sustained_pose_sec": 39.083999999999996,
+      "first_sustained_low_speed_sec": 40.69700000000001,
+      "first_sustained_zero_publication_sec": 40.68800000000001,
+      "inferred_fifo_delay_sec": 0.333333333,
+      "t_stop_candidate_sec": 41.02133333300001,
+      "fifo_clearance_measured": false,
+      "command_epsilon": 1e-06,
+      "maximum_allowed_sample_gap_sec": 0.1,
+      "invalid_observer_after_task_start": 0,
+      "windows": {
+        "transport_peak_m": 0.00048696280523666437,
+        "transport_p95_m": 0.00018243411853500064,
+        "transport_rms_m": 7.87202359390768e-05,
+        "transport_samples": 2051,
+        "tail_peak_m": 5.0080049197015365e-08,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 41.02133333300001,
+        "window_sec": 5.0
+      },
+      "stop_evidence_covers_tail": true,
+      "height_coverage_after_stop_sec": 10.055666666999997,
+      "stop_within_deadline": true,
+      "archived_anomalies": {
+        "alignment_rejected": 0,
+        "budget_exhausted": 0,
+        "fault_zero_cycles": null,
+        "goal_sec": 41.055
+      }
+    },
+    "abnormal_statuses": {},
+    "abnormal_audit_statuses": {},
+    "cycles": {
+      "odom_solve_cycles": 1220,
+      "mismatched_odom_liquid": 0,
+      "command_contract_violations": 0,
+      "qp_limits": [
+        20
+      ],
+      "snapshot_identities": [
+        [
+          28,
+          40,
+          "progress",
+          true
+        ]
+      ],
+      "identity_matches": true,
+      "online_liquid_weight_max": 5.0
+    },
+    "actual_path_length_odom_m": 5.171690236421794,
+    "online_wall": {
+      "state_alignment_wall_ms": {
+        "count": 1220,
+        "min": 0.0044,
+        "p50": 0.0166925,
+        "p95": 0.083042,
+        "max": 0.209105
+      },
+      "pre_solve_wall_ms": {
+        "count": 1220,
+        "min": 1.034562,
+        "p50": 1.7933925,
+        "p95": 3.46848155,
+        "max": 4.208721
+      },
+      "problem_solve_wall_ms": {
+        "count": 1220,
+        "min": 4.373199,
+        "p50": 8.993847500000001,
+        "p95": 14.09254695,
+        "max": 17.60867
+      },
+      "dispatch_wall_ms": {
+        "count": 1220,
+        "min": 5.700887,
+        "p50": 11.208697,
+        "p95": 16.80308375,
+        "max": 20.623799
+      },
+      "solver_setup_wall_ms": {
+        "count": 1220,
+        "min": 0.344669,
+        "p50": 1.054049,
+        "p95": 2.461449949999999,
+        "max": 5.564837
+      },
+      "rti_wall_ms": {
+        "count": 1220,
+        "min": 3.427824,
+        "p50": 7.112561,
+        "p95": 11.95013825,
+        "max": 16.703523
+      },
+      "residual_wall_ms": {
+        "count": 1220,
+        "min": 0.29103,
+        "p50": 0.3824525,
+        "p95": 0.94566195,
+        "max": 1.369243
+      },
+      "iteration_estimate_wall_ms": {
+        "count": 1220,
+        "min": 0.0,
+        "p50": 7.092515499999999,
+        "p95": 11.89993455,
+        "max": 16.697376
+      },
+      "remaining_budget_wall_ms": {
+        "count": 1220,
+        "min": 21.52617,
+        "p50": 27.279441,
+        "p95": 28.2902063,
+        "max": 28.780265
+      }
+    },
+    "full_qualification": null,
+    "implementation_passed": true,
+    "reference_execution": {
+      "speed_rmse_mps": 0.07711105438772456,
+      "position_error_p95_m": 1.1425976140592375,
+      "timing": {
+        "nominal_actual_onset_sec": 0.4666666666666667,
+        "actual_onset_sec": 4.337000000000003,
+        "nominal_stop_sec": 44.0,
+        "actual_stop_sec": 41.02133333300001,
+        "nominal_transport_sec": 44.0
+      },
+      "clock_reference_error_sec": 9.699999999999996,
+      "yaw_rate_rmse_radps": 0.08665695541236756,
+      "yaw_error_p95_rad": 0.42263001622700513,
+      "position_error_max_m": 1.169296140718696,
+      "clock_regressions": 0,
+      "timing_note": "S path has varying speed and steering; no single 95% cruise braking onset is defined."
+    }
+  },
+  "current_completion": {
+    "method": "Full_slow",
+    "case": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case",
+    "goal_sec": 41.055,
+    "completion_sec": 41.02133333300001,
+    "motion_onset_sec": 4.337000000000003,
+    "completion_basis": "Persistent goal pose/yaw AND low linear/angular speed AND sustained zero command + max identified delay; inferred FIFO clearance, not directly measured.",
+    "stop_analysis": {
+      "case": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case",
+      "formal": false,
+      "frame_contract_matches": true,
+      "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+      "first_sustained_pose_sec": 39.083999999999996,
+      "first_sustained_low_speed_sec": 40.69700000000001,
+      "first_sustained_zero_publication_sec": 40.68800000000001,
+      "inferred_fifo_delay_sec": 0.333333333,
+      "t_stop_candidate_sec": 41.02133333300001,
+      "fifo_clearance_measured": false,
+      "command_epsilon": 1e-06,
+      "maximum_allowed_sample_gap_sec": 0.1,
+      "invalid_observer_after_task_start": 0,
+      "windows": {
+        "transport_peak_m": 0.00048696280523666437,
+        "transport_p95_m": 0.00018243411853500064,
+        "transport_rms_m": 7.87202359390768e-05,
+        "transport_samples": 2051,
+        "tail_peak_m": 5.0080049197015365e-08,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 41.02133333300001,
+        "window_sec": 5.0
+      },
+      "stop_evidence_covers_tail": true,
+      "height_coverage_after_stop_sec": 10.055666666999997,
+      "stop_within_deadline": true,
+      "archived_anomalies": {
+        "alignment_rejected": 0,
+        "budget_exhausted": 0,
+        "fault_zero_cycles": null,
+        "goal_sec": 41.055
+      }
+    },
+    "motion_windows": {
+      "transport_peak_m": 0.00048696280523666437,
+      "transport_p95_m": 0.00019353945333658675,
+      "transport_rms_m": 8.31744013196156e-05,
+      "transport_samples": 1835,
+      "tail_peak_m": 5.0080049197015365e-08,
+      "transport_covered": true,
+      "tail_covered": true,
+      "covered": true,
+      "t_stop": 36.684333333000005,
+      "window_sec": 5.0
+    },
+    "runtime": {
+      "spmpc_local_planner_node": {
+        "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+        "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+      },
+      "libspmpc_local_planner.so": {
+        "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+        "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+      },
+      "libacados_ocp_solver_spmpc_b0.so": {
+        "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+        "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+      },
+      "libacados_ocp_solver_spmpc_slosh.so": {
+        "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+        "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+      }
+    }
+  },
+  "archive_completion": [
+    {
+      "method": "Full",
+      "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_01/case",
+      "goal_sec": 28.313999999999993,
+      "completion_sec": 28.280333333,
+      "motion_onset_sec": 0.39400000000000546,
+      "completion_basis": "Persistent goal pose/yaw AND low linear/angular speed AND sustained zero command + max identified delay; all persist and coverage verified through 5 s tail. Inferred FIFO clearance, not directly measured.",
+      "stop_analysis": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 26.37700000000001,
+        "first_sustained_low_speed_sec": 27.93400000000001,
+        "first_sustained_zero_publication_sec": 27.947000000000003,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 28.280333333,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.0005408323017290326,
+          "transport_p95_m": 0.0002271372257632544,
+          "transport_rms_m": 0.00011222955264848234,
+          "transport_samples": 1414,
+          "tail_peak_m": 3.2092366595017334e-11,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 28.280333333,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 22.79366666700001,
+        "stop_within_deadline": true,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": 0,
+          "goal_sec": 28.314999999999998
+        }
+      },
+      "motion_windows": {
+        "transport_peak_m": 0.0005408323017290326,
+        "transport_p95_m": 0.0002274022506208053,
+        "transport_rms_m": 0.00011262016528013537,
+        "transport_samples": 1395,
+        "tail_peak_m": 3.209236659501707e-11,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 27.886333332999996,
+        "window_sec": 5.0
+      },
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "f8c9c74897f450c0015cb8bc9b89a38072146087850a00c84da1ecc066f8679c"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "608b2b7ec0cc85f1aadca1d44bd130784538c4b3a26c2188354d92bcee1f0b08"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      }
+    },
+    {
+      "method": "Full",
+      "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_02/case",
+      "goal_sec": 28.298000000000002,
+      "completion_sec": 28.26433333300001,
+      "motion_onset_sec": 0.41100000000000136,
+      "completion_basis": "Persistent goal pose/yaw AND low linear/angular speed AND sustained zero command + max identified delay; all persist and coverage verified through 5 s tail. Inferred FIFO clearance, not directly measured.",
+      "stop_analysis": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_02/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 26.363,
+        "first_sustained_low_speed_sec": 27.93100000000001,
+        "first_sustained_zero_publication_sec": 27.93100000000001,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 28.26433333300001,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.00047736531452827327,
+          "transport_p95_m": 0.0002230089628554845,
+          "transport_rms_m": 0.00011084501338916364,
+          "transport_samples": 1413,
+          "tail_peak_m": 7.056650003810778e-09,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 28.26433333300001,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 22.806666667000002,
+        "stop_within_deadline": true,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": 0,
+          "goal_sec": 28.298000000000002
+        }
+      },
+      "motion_windows": {
+        "transport_peak_m": 0.00047736531452827327,
+        "transport_p95_m": 0.00022398248371197196,
+        "transport_rms_m": 0.00011128306183204602,
+        "transport_samples": 1393,
+        "tail_peak_m": 7.056650003810778e-09,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 27.85333333300001,
+        "window_sec": 5.0
+      },
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "f8c9c74897f450c0015cb8bc9b89a38072146087850a00c84da1ecc066f8679c"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "608b2b7ec0cc85f1aadca1d44bd130784538c4b3a26c2188354d92bcee1f0b08"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      }
+    },
+    {
+      "method": "Full",
+      "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_03/case",
+      "goal_sec": 28.233999999999995,
+      "completion_sec": 28.233333333000004,
+      "motion_onset_sec": 0.4129999999999967,
+      "completion_basis": "Persistent goal pose/yaw AND low linear/angular speed AND sustained zero command + max identified delay; all persist and coverage verified through 5 s tail. Inferred FIFO clearance, not directly measured.",
+      "stop_analysis": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_03/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 26.331999999999994,
+        "first_sustained_low_speed_sec": 27.893,
+        "first_sustained_zero_publication_sec": 27.900000000000006,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 28.233333333000004,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.00049802594806715,
+          "transport_p95_m": 0.0002190799124159951,
+          "transport_rms_m": 0.000111553805258875,
+          "transport_samples": 1412,
+          "tail_peak_m": 9.253121761576004e-09,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 28.233333333000004,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 22.799666666999997,
+        "stop_within_deadline": true,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": 0,
+          "goal_sec": 28.233999999999995
+        }
+      },
+      "motion_windows": {
+        "transport_peak_m": 0.00049802594806715,
+        "transport_p95_m": 0.00021964151200022037,
+        "transport_rms_m": 0.00011196514421545229,
+        "transport_samples": 1392,
+        "tail_peak_m": 9.253121761576004e-09,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 27.820333333000008,
+        "window_sec": 5.0
+      },
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "f8c9c74897f450c0015cb8bc9b89a38072146087850a00c84da1ecc066f8679c"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "608b2b7ec0cc85f1aadca1d44bd130784538c4b3a26c2188354d92bcee1f0b08"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      }
+    },
+    {
+      "method": "FP-AS",
+      "case": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case",
+      "goal_sec": 40.39900000000001,
+      "completion_sec": 40.43233333300001,
+      "motion_onset_sec": 1.0730000000000004,
+      "completion_basis": "Persistent goal pose/yaw AND low linear/angular speed AND sustained zero command + max identified delay; all persist and coverage verified through 5 s tail. Inferred FIFO clearance, not directly measured.",
+      "stop_analysis": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": 38.397,
+        "first_sustained_low_speed_sec": 39.713,
+        "first_sustained_zero_publication_sec": 40.09900000000001,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": 40.43233333300001,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "windows": {
+          "transport_peak_m": 0.0002693439859934105,
+          "transport_p95_m": 0.00014810399592970355,
+          "transport_rms_m": 7.757556770748569e-05,
+          "transport_samples": 2021,
+          "tail_peak_m": 1.502927349294497e-05,
+          "transport_covered": true,
+          "tail_covered": true,
+          "covered": true,
+          "t_stop": 40.43233333300001,
+          "window_sec": 5.0
+        },
+        "stop_evidence_covers_tail": true,
+        "height_coverage_after_stop_sec": 10.600666666999999,
+        "stop_within_deadline": true,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": null,
+          "goal_sec": 40.39900000000001
+        }
+      },
+      "motion_windows": {
+        "transport_peak_m": 0.0002693439859934105,
+        "transport_p95_m": 0.00014973321156284419,
+        "transport_rms_m": 7.854225057767449e-05,
+        "transport_samples": 1968,
+        "tail_peak_m": 1.502927349294497e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 39.35933333300001,
+        "window_sec": 5.0
+      },
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      }
+    }
+  ],
+  "metrics": {
+    "Full_slow": {
+      "goal_sec": 41.055,
+      "completion_sec": 41.02133333300001,
+      "motion_onset_sec": 4.337000000000003,
+      "transport_peak_mm": 0.48696280523666435,
+      "transport_p95_mm": 0.19353945333658676,
+      "transport_rms_mm": 0.0831744013196156,
+      "tail_peak_mm": 5.0080049197015366e-05
+    },
+    "FP_AS_40s": {
+      "goal_sec": 40.39900000000001,
+      "completion_sec": 40.43233333300001,
+      "motion_onset_sec": 1.0730000000000004,
+      "transport_peak_mm": 0.26934398599341053,
+      "transport_p95_mm": 0.1497332115628442,
+      "transport_rms_mm": 0.07854225057767449,
+      "tail_peak_mm": 0.01502927349294497
+    }
+  },
+  "completion_relative_difference": 0.014358382630292807,
+  "completion_match_5_percent": true,
+  "difference_full_vs_fp_as_percent": {
+    "transport_peak_mm": 80.79587091600324,
+    "transport_p95_mm": 29.256195947788612,
+    "transport_rms_mm": 5.897654711791267,
+    "tail_peak_mm": -99.66678329980138
+  },
+  "identity": {
+    "task_fields": {
+      "frame_id": true,
+      "route": true,
+      "start_state": true,
+      "goal_pose": true,
+      "deadline": true,
+      "stop_window": true,
+      "actuator_parameters": true,
+      "liquid_parameters": true,
+      "height_coeff": true,
+      "motion_limits": true,
+      "region": true,
+      "liquid_policy": true,
+      "goal_position_tolerance": true,
+      "goal_yaw_tolerance": true,
+      "stop_speed_tolerance": true,
+      "stop_omega_tolerance": true
+    },
+    "physical_parameter_groups": {
+      "execution_model": true,
+      "state_timing": true,
+      "terminal": true,
+      "platform": true,
+      "frames": true,
+      "slosh_observer": true,
+      "liquid_nowcast": true
+    },
+    "runtime": {
+      "spmpc_local_planner_node": true,
+      "libspmpc_local_planner.so": true,
+      "libacados_ocp_solver_spmpc_b0.so": true,
+      "libacados_ocp_solver_spmpc_slosh.so": true
+    },
+    "map": true,
+    "adapter": true,
+    "parameter_differences": [
+      {
+        "key": "planner_variant",
+        "archived": "B0",
+        "current": "B_slosh"
+      },
+      {
+        "key": "planning.experiment_profile_id",
+        "archived": "external_timed",
+        "current": "planned_slosh"
+      },
+      {
+        "key": "planning.geometry.curvature_rate_weight",
+        "archived": 0.0,
+        "current": 0.0001
+      },
+      {
+        "key": "planning.geometry.curvature_weight",
+        "archived": 0.0,
+        "current": 0.05
+      },
+      {
+        "key": "planning.geometry.goal_weight",
+        "archived": 2.0,
+        "current": 0.0
+      },
+      {
+        "key": "planning.reference.mode",
+        "archived": "time_tracking",
+        "current": "progress"
+      },
+      {
+        "key": "planning.reference.plan_file",
+        "archived": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+        "current": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json"
+      },
+      {
+        "key": "variants.B0.w_alpha",
+        "archived": 0.1,
+        "current": null
+      },
+      {
+        "key": "variants.B0.w_du_a",
+        "archived": 0.1,
+        "current": null
+      },
+      {
+        "key": "variants.B0.w_du_vs",
+        "archived": 0.1,
+        "current": null
+      },
+      {
+        "key": "variants.B0.w_progress",
+        "archived": 0.0,
+        "current": 0.2
+      },
+      {
+        "key": "variants.B0.w_v",
+        "archived": 10.0,
+        "current": 1.0
+      },
+      {
+        "key": "variants.B_slosh.w_alpha",
+        "archived": null,
+        "current": 0.1
+      },
+      {
+        "key": "variants.B_slosh.w_du_a",
+        "archived": null,
+        "current": 0.1
+      },
+      {
+        "key": "variants.B_slosh.w_du_vs",
+        "archived": null,
+        "current": 0.1
+      },
+      {
+        "key": "variants.B_slosh.w_progress",
+        "archived": 0.2,
+        "current": 0.0
+      }
+    ],
+    "runner_sha256_matches": false,
+    "compatible": true
+  },
+  "full_configuration_changes": [
+    {
+      "key": "planning.reference.plan_file",
+      "archived": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+      "current": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json"
+    },
+    {
+      "key": "variants.B_slosh.w_progress",
+      "archived": 0.2,
+      "current": 0.0
+    }
+  ],
+  "unexpected_full_configuration_changes": [],
+  "liquid_caps_passed": true,
+  "final_position_error_m": 0.025168389325935358,
+  "final_yaw_error_rad": 0.048615857861931545,
+  "formal_repeat_ready": false,
+  "closeout": {
+    "gazebo_runs": 1,
+    "fp_as_runs": 0,
+    "real_robot_started": false,
+    "ports_occupied": {
+      "11892": false,
+      "11926": false
+    }
+  },
+  "comparison_scope": "One pretrial per method, matching runtime/model/physics, different geometry and method parameters. Model heights only. Arrival and completion are separate; motion-window statistics start at the first odometry speed/omega threshold crossing. No retuning based on outcome.",
+  "common_work_point_established": true,
+  "spatial_execution": {
+    "basis": "Closest segment of planned XY path during observed motion; diagnostic geometry/speed alignment, not a task-clock tracking requirement or along-track proof.",
+    "position_p95_m": 0.026703326103607827,
+    "position_max_m": 0.02791721049606889,
+    "yaw_error_p95_rad": 0.1809847377265153,
+    "speed_rmse_mps": 0.04386785236823586,
+    "nominal_motion_onset_sec": 0.4666666666666667,
+    "actual_motion_onset_sec": 4.337000000000003,
+    "clock_note": "Full intentionally uses progress mode: time-domain reference error is not a timing violation. Task clock regressions are zero."
+  },
+  "actuator_delivery": {
+    "command_to_drive_rmse": [
+      2.937934931638363e-07,
+      1.0213089039841867e-06
+    ],
+    "drive_to_odom_rmse": [
+      0.000215798203670331,
+      0.0005182021342226813
+    ],
+    "units": [
+      "m/s",
+      "rad/s"
+    ],
+    "basis": "Published commands replayed with original delay/tau/gain; bag receipt approximates adapter receipt; no fit, simulator only."
+  },
+  "window_notes": {
+    "completion_origin": "task path epoch",
+    "motion_start": "first observed |v| > 0.01 m/s OR |omega| > 0.02 rad/s",
+    "Full_moving_duration_sec": 36.684333333000005,
+    "FP_AS_moving_duration_sec": 39.35933333300001,
+    "historical_windows": "Unchanged [task epoch,stop) metrics retained under each stop_analysis; primary comparison excludes initial stationary prefix for both methods.",
+    "startup_difference": "Full crosses motion threshold at 4.337 s versus FP-AS 1.073 s; no inserted waiting command or terminal hold. Similar task completion is not equal active-motion duration.",
+    "separate_axis_stop": {
+      "Full_slow": {
+        "linear_quiet_sec": 34.977,
+        "angular_quiet_sec": 40.696999999999996,
+        "quiet_linear_to_complete_sec": 6.0443333330000115
+      },
+      "FP_AS_40s": {
+        "linear_quiet_sec": 39.172999999999995,
+        "angular_quiet_sec": 39.713,
+        "quiet_linear_to_complete_sec": 1.259333333000015
+      }
+    },
+    "tail_interpretation": "Full stops translation earlier and completes goal/yaw/command draining later, leaving more modal decay before the common vehicle-completion tail window. Tail difference is not isolated input-shaping or liquid-control benefit."
+  },
+  "implementation_commit": "a4177c962cc560eb290a83dfe50752fce74c3d99",
+  "validation_notes": [
+    "New offline plan passed strict liquid and physical qualification.",
+    "Production C++ loading and one RTI1 native trial passed; native peak differs from Gazebo and is not substituted for it.",
+    "Native helper rebuilt only; runtime ROS binaries and generated models unchanged.",
+    "Two invalid progress-weight CLI inputs rejected before simulation startup; valid zero confirmed in live parameters.",
+    "No new Full/B0 repeats, FP-AS trials, duration search, or physical robot runs."
+  ],
+  "artifact_sha256": {
+    "preflight_identity.json": "b168af39dbe5ede548f0ccd6924ee6ff1f23d5f04026429b64ddabb257aa01b3",
+    "archived_completion.json": "33cc0f082bbb6e8af338dc0e09246bbb6028e036f11e3593bdbabc37184650cf",
+    "task.json": "c2ef5800b23a6738f532d7918b286d69404b6ae6adf2f8334e5171ef0ae8ee91",
+    "protocol.json": "84851d53fc5b51299054d145ba8b03adc9d0f54ba533f044661a00bc0e30277d",
+    "solve.log": "8f4924511e8ac4c4b8452be861da445c37e0f4dc204bd2b65332023ade8ad016",
+    "solve_events.jsonl": "ca248777d152943ec37a997669e344de4fbf5c743c6f3dc5feb5046972763dfd",
+    "plan.json": "2203d67bac2c2e3682e3eef9a0937658d740a86f05f8a6340660e2c4216c5b90",
+    "solve_process.json": "38cdfbdf8faceb3a7953e2fc10b8b500c73208251e7b0d3d81ee040fb7b63878",
+    "analyze_one.py": "e27fe6b31a0cfa865c115c26d65ad27c4dd535e10dcb8abd93440e05ef3c8c86",
+    "cpp_validation.log": "a904a74ba262f974a0750d663fb8800860e79a9230ee8a92182204c80b0fa714",
+    "cpp_validation_process.json": "67e9e222217b0002f8dbf2ec0bfb54bb04b3b80fd2936dacaf4b1a658028e36e",
+    "native.log": "3c930bae4937c0fffca3beba30858d9d4b256028833e3829d00e0a498152f86e",
+    "native.csv": "1cb6f5a7d3fda1d4cf28c34b38672dd462ae1be930ae78e0cd6bce3d07038fc0",
+    "native_checkpoint.json": "f65b0bb0524f1ff266d1649a74362b3d0af64183b29ce90573fcd17a02bf4e3c",
+    "native.json": "a48f5c968960ec0562bbfabf0bcf99a4a29dd6f82b088b0dfbaa6c3c1e48ee42",
+    "native_process.json": "1b7dde5f854a655ff47f61da82385796cd6008efb3898a4bb836408ed8026ba7",
+    "cli_checks.json": "075f34d607ba8f7b7ae74ff1a23e7c49239d7c86ac76b4aac93da559129f9106",
+    "run_trajectory_gazebo_smoke.py": "ed5ec66f295ebc5725a1215ac600aad7c5f6fda56e668b9fac80ecec15ac6fa1",
+    "geometry_trial.cpp": "e1f06696f5b4ab6e9a583be30c0074f449372624bd0f71a266e1f5af37f6009c",
+    "compare.py": "28882ced5660dce53f0cac67b07ad394ad2ff74fac30237d1354d578130453e5",
+    "analysis.log": "51c371943168217f8270d7d7cb5c346df0432e4c2d2643d4073040adb477bc6d",
+    "analysis_process.json": "149894ea08192fdcba2042ce92198c600fc173807647f5e9a609a0f1d1ce740d",
+    "comparison.log": "ac691ea0d65251e44bdfe047bd3b39d0902f5d86c9b67665169233db71c0d974",
+    "comparison_process.json": "8c4aa1c9730a781e294baf2a02b7858125f6ee81c188f8c90ef452f41fcab27b",
+    "check_execution.py": "eb72658f6ec4d9840670efd6ed2dca12cad9612441c4ff204ec6cf8811f44334"
+  },
+  "physical_gap": "Matched nominal actuator/model; ~5 Hz real body vibration, low-speed braking variation, liquid damping/initial residual and independent liquid calibration/synchronization remain unverified."
+}
