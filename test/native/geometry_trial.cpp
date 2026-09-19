@@ -20,14 +20,15 @@ struct Options {
     std::string mode, prefix, plan_file;
     double actuator_scale=1., curvature_weight=.05, goal_weight=2.;
     double contour_weight=std::numeric_limits<double>::quiet_NaN();
+    double progress_weight=std::numeric_limits<double>::quiet_NaN();
     int rti_iterations=5;
 };
 struct TrialConfig { SolverParams params; VariantConfig variant; };
 
 Options parseOptions(int argc, char** argv) {
-    if (argc<4 || argc>9) throw std::invalid_argument(
+    if (argc<4 || argc>10) throw std::invalid_argument(
         "usage: geometry_trial raw|geometry|planned|planned_slosh|external_timed output-prefix plan.json "
-        "[actuator-scale] [curvature-weight] [contour-weight] [rti-iterations] [goal-weight]");
+        "[actuator-scale] [curvature-weight] [contour-weight] [rti-iterations] [goal-weight] [progress-weight]");
     Options out;
     out.mode=argv[1]; out.prefix=argv[2]; out.plan_file=argv[3];
     if (out.mode!="raw" && out.mode!="geometry" && out.mode!="planned" && out.mode!="planned_slosh" && out.mode!="external_timed")
@@ -37,11 +38,14 @@ Options parseOptions(int argc, char** argv) {
     if(argc>6) out.contour_weight=std::stod(argv[6]);
     if(argc>7) out.rti_iterations=std::stoi(argv[7]);
     if(argc>8) out.goal_weight=std::stod(argv[8]);
+    if(argc>9) out.progress_weight=std::stod(argv[9]);
     if (!std::isfinite(out.actuator_scale) || out.actuator_scale<=0 ||
         !std::isfinite(out.curvature_weight) || out.curvature_weight<0 ||
         !std::isfinite(out.goal_weight) || out.goal_weight<0 ||
         (argc>6 && (!std::isfinite(out.contour_weight) || out.contour_weight<0)))
         throw std::invalid_argument("invalid trial scale/weight");
+    if (argc>9 && (out.mode!="planned_slosh" || !std::isfinite(out.progress_weight) || out.progress_weight<0))
+        throw std::invalid_argument("progress-weight requires planned_slosh and a finite nonnegative value");
     return out;
 }
 
@@ -95,6 +99,13 @@ TrialConfig makeConfig(const Options& options, const TrajectoryPlan& plan) {
     if (mode=="planned" || mode=="planned_slosh") {
         params.planning.trajectory.mode=TrajectoryReferenceMode::Progress;
         params.planning.trajectory.plan_file=options.plan_file;
+    }
+    if (mode=="planned_slosh" && std::isfinite(options.progress_weight)) {
+        // Explicit work-point trial: match the current ROS planned_slosh
+        // profile while preserving defaults for historical native invocations.
+        params.qp_iteration_limit=20;
+        params.planning.geometry.curvature_rate_weight=.0001;
+        variant.w_progress=options.progress_weight;
     }
     if (mode=="external_timed") {
         params.qp_iteration_limit=20;

@@ -73,6 +73,8 @@ def main():
                         help='override this case only; preserve the profile default when omitted')
     parser.add_argument('--slosh-weight', type=float,
                         help='planned_slosh only: override liquid cost weight for same-plan ablation')
+    parser.add_argument('--progress-weight', type=float,
+                        help='planned_slosh only: override progress reward for a fixed speed work point')
     parser.add_argument('--identified-actuator', action='store_true',
                         help='replace this case\'s guard with the controller\'s actuator response')
     parser.add_argument('--ros-port', type=int, default=11892)
@@ -87,6 +89,9 @@ def main():
     if args.slosh_weight is not None and (args.profile != 'planned_slosh' or
             not math.isfinite(args.slosh_weight) or args.slosh_weight < 0):
         parser.error('--slosh-weight requires planned_slosh and a finite nonnegative value')
+    if args.progress_weight is not None and (args.profile != 'planned_slosh' or
+            not math.isfinite(args.progress_weight) or args.progress_weight < 0):
+        parser.error('--progress-weight requires planned_slosh and a finite nonnegative value')
     if args.ros_port == args.gazebo_port:
         parser.error('ROS and Gazebo need different ports')
     binary = args.setup.resolve().parent/'lib/spmpc_local_planner/spmpc_local_planner_node'
@@ -283,6 +288,9 @@ def main():
         if args.slosh_weight is not None:
             overlay['variants'] = dict(B_slosh=dict(w_slosh=args.slosh_weight))
             summary['slosh_weight_override'] = args.slosh_weight
+        if args.progress_weight is not None:
+            overlay.setdefault('variants', {}).setdefault('B_slosh', {})['w_progress'] = args.progress_weight
+            summary['progress_weight_override'] = args.progress_weight
         (out/'overlay.yaml').write_text(yaml.safe_dump(overlay))
         publisher = rospy.Publisher('/scout/global_path_fixed', RosPath, queue_size=1, latch=True)
         # Explicit subscriptions exist before the planner advertises diagnostics;
@@ -312,6 +320,9 @@ def main():
         if args.slosh_weight is not None and rospy.get_param(
                 '/spmpc_local_planner/variants/B_slosh/w_slosh') != args.slosh_weight:
             raise RuntimeError('requested liquid cost weight was not loaded')
+        if args.progress_weight is not None and rospy.get_param(
+                '/spmpc_local_planner/variants/B_slosh/w_progress') != args.progress_weight:
+            raise RuntimeError('requested progress reward was not loaded')
         if args.identified_actuator:
             configured = yaml.safe_load((out/'actuator_config.yaml').read_text())['execution_model']
             live_actuator = rospy.get_param('/spmpc_local_planner/execution_model')
