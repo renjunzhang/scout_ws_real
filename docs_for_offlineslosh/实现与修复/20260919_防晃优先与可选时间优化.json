@@ -1,0 +1,212 @@
+{
+  "formal": false,
+  "passed": true,
+  "optimize_time": false,
+  "transport_duration": 40.0,
+  "deadline": 45.0,
+  "final_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+  "baseline_directory": "/data/a/scout_sim_replacement/results/20260919_tf_epoch_pair3_040005",
+  "evidence": "Three new fixed-plan Gazebo Full trials versus three frozen B0 trials; exact controller/model/configuration identities checked; odom-driven liquid model, not measured physical liquid.",
+  "slosh_acceptance_upper_exclusive_mm": {
+    "transport_peak_mm": 0.934211687997709,
+    "transport_p95_mm": 0.46536172934884884,
+    "transport_rms_mm": 0.19770181782355017
+  },
+  "task_adjustments": {
+    "height_scale_m": 0.00019770181782355017,
+    "terminal_slowdown_distance_m": 1.8
+  },
+  "plan_sha256": "b7db3241388e78a87270029edd4e7c9f9fb17ae77a73d12547cc8a031324f7b3",
+  "task_sha256": "6f52f6b077deed906d89a131813b7c9b37bbd623ca2f691dc25bb66f80242e30",
+  "b0": [
+    {
+      "name": "b0_01",
+      "group": "b0",
+      "pair": 1,
+      "passed": true,
+      "goal_sec": 31.315999999999995,
+      "stop_candidate_sec": 31.28333333300001,
+      "transport_peak_mm": 1.0112101138096476,
+      "transport_p95_mm": 0.46536172934884884,
+      "transport_rms_mm": 0.19770181782355017,
+      "tail_peak_mm": 8.159708610087624e-07,
+      "transport_samples": 1564,
+      "position_error_cm": 0.941444537327403,
+      "yaw_error_deg": 1.8432986877980104,
+      "odom_solve_cycles": 928,
+      "dispatch_max_ms": 19.399186,
+      "rti_max_ms": 16.266844,
+      "first_live_cycle": {
+        "cycle_id": 39,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 1.700319376962689e-08,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.114536,
+        "remaining_budget_wall_ms": 28.839937
+      }
+    },
+    {
+      "name": "b0_02",
+      "group": "b0",
+      "pair": 2,
+      "passed": true,
+      "goal_sec": 31.576,
+      "stop_candidate_sec": 31.541333333000004,
+      "transport_peak_mm": 0.9870119974325678,
+      "transport_p95_mm": 0.4946185623769668,
+      "transport_rms_mm": 0.2087438228062911,
+      "tail_peak_mm": 7.572473272549951e-07,
+      "transport_samples": 1577,
+      "position_error_cm": 0.8987409211485929,
+      "yaw_error_deg": 1.7874295103723525,
+      "odom_solve_cycles": 936,
+      "dispatch_max_ms": 11.569095,
+      "rti_max_ms": 9.581721,
+      "first_live_cycle": {
+        "cycle_id": 40,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 3.2451104983732826e-07,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.963923,
+        "remaining_budget_wall_ms": 28.761872
+      }
+    },
+    {
+      "name": "b0_03",
+      "group": "b0",
+      "pair": 3,
+      "passed": true,
+      "goal_sec": 31.445,
+      "stop_candidate_sec": 31.40833333300001,
+      "transport_peak_mm": 0.934211687997709,
+      "transport_p95_mm": 0.4827880696094926,
+      "transport_rms_mm": 0.20224819607542377,
+      "tail_peak_mm": 2.2759137166427903e-06,
+      "transport_samples": 1571,
+      "position_error_cm": 1.0723348317291337,
+      "yaw_error_deg": 1.85705316065491,
+      "odom_solve_cycles": 932,
+      "dispatch_max_ms": 19.267879,
+      "rti_max_ms": 15.663166,
+      "first_live_cycle": {
+        "cycle_id": 38,
+        "warm_start_source": "PREPARED_REFERENCE_PATH",
+        "rti_iterations": 1,
+        "qp_iteration_limit": 20,
+        "configured_max_prediction_defect": 0.0001,
+        "dynamics_max_defect": 2.2115808145373173e-06,
+        "horizon_valid": true,
+        "solve_success": true,
+        "have_previous_solution": false,
+        "have_previous_control": false,
+        "status": "B0_ACADOS_OK",
+        "command_accepted": true,
+        "rti_wall_ms": 3.19809,
+        "remaining_budget_wall_ms": 28.887662
+      }
+    }
+  ],
+  "full": [
+    {
+      "name": "full_01",
+      "passed": true,
+      "goal_sec": 28.314999999999998,
+      "stop_sec": 28.280333333,
+      "transport_peak_mm": 0.5408323017290326,
+      "transport_p95_mm": 0.2271372257632544,
+      "transport_rms_mm": 0.11222955264848235,
+      "tail_peak_mm": 3.209236659501734e-08,
+      "odom_solve_cycles": 838,
+      "mismatched_odom_liquid_cycles": 0,
+      "abnormal_statuses": {},
+      "identity_passed": true
+    },
+    {
+      "name": "full_02",
+      "passed": true,
+      "goal_sec": 28.298000000000002,
+      "stop_sec": 28.26433333300001,
+      "transport_peak_mm": 0.47736531452827324,
+      "transport_p95_mm": 0.2230089628554845,
+      "transport_rms_mm": 0.11084501338916364,
+      "tail_peak_mm": 7.056650003810778e-06,
+      "odom_solve_cycles": 837,
+      "mismatched_odom_liquid_cycles": 0,
+      "abnormal_statuses": {},
+      "identity_passed": true
+    },
+    {
+      "name": "full_03",
+      "passed": true,
+      "goal_sec": 28.233999999999995,
+      "stop_sec": 28.233333333000004,
+      "transport_peak_mm": 0.49802594806715,
+      "transport_p95_mm": 0.2190799124159951,
+      "transport_rms_mm": 0.111553805258875,
+      "tail_peak_mm": 9.253121761576004e-06,
+      "odom_solve_cycles": 836,
+      "mismatched_odom_liquid_cycles": 0,
+      "abnormal_statuses": {},
+      "identity_passed": true
+    }
+  ],
+  "means": {
+    "b0": {
+      "transport_peak_mm": 0.9774779330799749,
+      "transport_p95_mm": 0.4809227871117694,
+      "transport_rms_mm": 0.2028979455684217,
+      "goal_sec": 31.445666666666664
+    },
+    "full": {
+      "transport_peak_mm": 0.5054078547748186,
+      "transport_p95_mm": 0.22307536701157799,
+      "transport_rms_mm": 0.11154279043217366,
+      "goal_sec": 28.28233333333333
+    }
+  },
+  "mean_reduction_percent": {
+    "transport_peak_mm": 48.29470439477763,
+    "transport_p95_mm": 53.61513885601477,
+    "transport_rms_mm": 45.025175035811806,
+    "goal_sec": 10.059679659094522
+  },
+  "previous_attempts": [
+    {
+      "directory": "20260919_slosh_priority_112015",
+      "outcome": "40 秒计划存在启动驻留；闭环超时并出现一次求解失败，保留失败评估。"
+    },
+    {
+      "directory": "20260919_slosh_continuous_seed_113807",
+      "outcome": "只改初值后仍收敛到同样的 7.1667 秒驻留段，在仿真前拒绝。"
+    },
+    {
+      "directory": "20260919_slosh_normalized_114842",
+      "outcome": "按 0.90 mm 归一化代价的求解在 600 秒超时，未导出可执行计划，未跑仿真。"
+    },
+    {
+      "directory": "20260919_slosh_rms_priority_115956",
+      "outcome": "按 RMS 归一化后，三指标相对 B0 及 45 秒要求通过（32.20 秒）；但 0.906743 mm 峰值超过保留的 0.901 mm 上限，因此未作为最终方案。"
+    }
+  ],
+  "code_tests": {
+    "passed": 22,
+    "scope": "window statistics, all-three qualification, explicit time switch, baseline reuse, failed/interrupted attempts, faster unqualified candidate rejection"
+  },
+  "time_switch_validation": "Unit tests passed; shorter candidates were deliberately not searched in this slosh-priority batch."
+}
