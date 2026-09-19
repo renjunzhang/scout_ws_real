@@ -86,7 +86,7 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
     } catch (const std::exception& e) { configuration_error_=e.what(); }
     liquid_state_required_ = variant.slosh_enable || solver_params_.task_stop.enable;
     liquid_limit_enabled_ = variant.slosh_enable && variant.slosh_constraint_enable;
-    const bool needs_stop_model = solver_params_.task_stop.enable || motion_region_ ||
+    const bool needs_stop_model = solver_params_.actual_jerk_max > 0 || solver_params_.task_stop.enable || motion_region_ ||
         (solver_params_.terminal.mpc_stop_handoff_enable && solver_params_.jerk_limit_enable);
     task_stop_configured_ = !needs_stop_model ||
         (solver_params_.terminal.enable && solver_params_.terminal.mpc_stop_handoff_enable &&
@@ -96,7 +96,7 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
              solver_params_.slosh,
              {solver_params_.actual_v_min, solver_params_.v_max, solver_params_.omega_max},
              solver_params_.a_max, solver_params_.alpha_max,
-             solver_params_.jerk_max, liquid_state_required_));
+             solver_params_.jerk_max, liquid_state_required_, solver_params_.actual_jerk_max));
     if (!task_stop_configured_ && configuration_error_.empty())
         configuration_error_="region/complete stopping requires terminal handoff, jerk and valid tail parameters";
     configured_v_ref_ = variant.v_ref;
@@ -366,7 +366,8 @@ bool SpmpcProblem::solveCycle(const SolverInput& observed_input, SolverOutput& o
     };
     // Apply the same tail/cap/timeout checks before both STOP and GOAL_REACHED,
     // including calls after the legacy terminal controller latched completion.
-    if ((motion_region_ || (complete_stop && terminal_plan.owns_command)) && !stop_failure.empty()) {
+    if ((motion_region_ || ((complete_stop || solver_params_.actual_jerk_max > 0) &&
+        (terminal_plan.owns_command || terminal_controller_.reached()))) && !stop_failure.empty()) {
         output = SolverOutput{};
         output.status = stop_failure;
         output.progress_s = len > 1e-6 ? proj.s / len : 0.0;

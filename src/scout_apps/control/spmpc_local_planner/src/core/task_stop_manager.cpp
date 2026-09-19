@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/core/task_stop_manager.h"
+#include "spmpc_local_planner/dynamics/actual_jerk.h"
 #include "spmpc_local_planner/dynamics/actual_motion_propagator.h"
 #include <algorithm>
 #include <cmath>
@@ -123,21 +124,32 @@ StopCommand makeJerkLimitedStopCommand(const ActuatorState& history, double dt,
 bool TaskStopManager::configure(const TaskStopParams& params, const ActuatorModelParams& actuator,
                                 const SloshModelParams& liquid, const StopMotionLimits& limits,
                                 double a_max, double alpha_max, double jerk_max,
-                                bool include_liquid) {
+                                bool include_liquid, double actual_jerk_max) {
     params_=params;actuator_=actuator;limits_=limits;
-    a_max_=a_max;alpha_max_=alpha_max;jerk_max_=jerk_max;
+    a_max_=a_max;alpha_max_=alpha_max;jerk_max_=command_jerk_max_=jerk_max;actual_jerk_max_=actual_jerk_max;
     include_liquid_=include_liquid;
     configured_=positive(params.residual_height_m) && positive(params.stable_hold_sec) &&
         positive(params.max_settle_sec) && positive(params.max_tail_prediction_sec) &&
         params.max_tail_prediction_sec<=60.0 &&
         positive(params.quiet_v) && positive(params.quiet_omega) &&
         positive(params.command_zero_tolerance) && positive(params.velocity_cost_weight) &&
+        std::isfinite(actual_jerk_max) && actual_jerk_max >= 0 &&
         positive(a_max) && positive(alpha_max) && positive(jerk_max) &&
         std::isfinite(limits.actual_v_min) && limits.actual_v_min <= 0.0 &&
         std::isfinite(limits.v_max) && limits.v_max > 0.0 &&
         limits.actual_v_min >= -limits.v_max &&
         std::isfinite(limits.omega_max) && limits.omega_max > 0.0 &&
         validateActuatorModelParams(actuator) && liquid_.configure(liquid);
+    if (configured_ && actual_jerk_max_ > 0) {
+        // For the ZOH actuator, j_actual[k+1] = r*j_actual[k]
+        // + gain*dt/tau*j_cmd[k-delay]. This conservative command bound
+        // preserves |j_actual| <= J once the fixed FIFO prefix is qualified.
+        // It applies to the fallback tail only; OCP command bounds stay intact.
+        const auto row=actualAccelerationDeltaRow(actuator_,actuator_.dt);
+        const double one_minus_decay=row[0]*actuator_.linear_tau_sec;
+        jerk_max_=std::min(jerk_max_, actual_jerk_max_*actuator_.linear_tau_sec*
+            one_minus_decay/(actuator_.linear_gain*actuator_.dt));
+    }
     reset();return configured_;
 }
 
@@ -331,7 +343,7 @@ StopTailPrediction TaskStopManager::predictTail(
         const auto command = (k == 0 && first_command != nullptr)
             ? *first_command
             : makeJerkLimitedStopCommand(actuator,input.dt,a_max_,alpha_max_,jerk_max_);
-        if (!stopCandidateConsistent(command, actuator, input.dt, a_max_, alpha_max_, jerk_max_, limits_)) {
+        if (!stopCandidateConsistent(command, actuator, input.dt, a_max_, alpha_max_, command_jerk_max_, limits_)) {
             out.status = (k == 0 && first_command != nullptr)
                 ? (commandWithinBounds(command.v, command.omega, limits_)
                     ? "STOP_CANDIDATE_INVALID" : "STOP_COMMAND_BOUND_VIOLATION")
@@ -351,6 +363,15 @@ StopTailPrediction TaskStopManager::predictTail(
             // covers the complete interval even when the integrator endpoint
             // happens to lie back inside the polygon.
             if (start_clearance < sweep_distance - 1e-9) region_unsafe = true;
+        }
+        if (actual_jerk_max_ > 0) {
+            const double delta = actualAccelerationDelta(robot.v, actuator.linear_delay_queue[0],
+                actuator.linear_delay_queue[1], actuator_, input.dt);
+            if (!std::isfinite(delta) || std::abs(delta)>actual_jerk_max_*input.dt+1e-6) {
+                out.status="STOP_ACTUAL_JERK_VIOLATION";
+                out.fifo_prefix_violation=static_cast<size_t>(k)+1<fifo_prefix_steps;
+                return out;
+            }
         }
         const double x=robot.x,y=robot.y;
         ActualMotionDiagnostics motion_diagnostics;

@@ -1,4 +1,5 @@
 #include "spmpc_local_planner/solvers/continuous_mpcc_solver_acados.h"
+#include "spmpc_local_planner/dynamics/actual_jerk.h"
 
 #ifdef SPMPC_WITH_ACADOS
 
@@ -42,7 +43,7 @@ static_assert(SPMPC_B0_NBX==20 && SPMPC_B0_NBXN==20 && SPMPC_B0_NH==16,
               "Regenerate B0 vehicle/terminal/region/task bounds");
 static_assert(SPMPC_B0_NX == kExplicitActuatorB0StateSize,
               "B0 状态布局与生成的 spmpc_b0 求解器不一致");
-static_assert(SPMPC_B0_NG == 1,
+static_assert(SPMPC_B0_NG == 2,
               "Regenerate B0 acados artifacts for the full-horizon jerk switch");
 #ifdef SPMPC_WITH_ACADOS_SLOSH
 static_assert(SPMPC_SLOSH_NBX==20 && SPMPC_SLOSH_NBXN==20 && SPMPC_SLOSH_NH==17,
@@ -54,7 +55,7 @@ static_assert(ETA_MAX_SQ + 1 == SPMPC_SLOSH_NP, "slosh 参数布局与生成的 
 static_assert(SPMPC_SLOSH_NX == kExplicitActuatorSloshStateSize,
               "slosh 状态布局与生成的 spmpc_slosh 求解器不一致");
 static_assert(SPMPC_SLOSH_NH > 0, "spmpc_slosh 求解器缺少 slosh hard constraint，请重新生成 acados artifacts");
-static_assert(SPMPC_SLOSH_NG == 1,
+static_assert(SPMPC_SLOSH_NG == 2,
               "Regenerate slosh acados artifacts for the full-horizon jerk switch");
 #endif
 
@@ -220,7 +221,8 @@ SolverBoundSummary makeGeneratedBounds() {
 }
 
 void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
-                        double* x0, double delta_a_max, const std::vector<OcpPlanningStage>& planning_stages,
+                        double* x0, double delta_a_max, double actual_delta_max,
+                        const ActuatorModelParams& actuator, double dt, const std::vector<OcpPlanningStage>& planning_stages,
                         const std::vector<double>& terminal_command_caps) {
     ocp_nlp_config* cfg = gen.config();
     ocp_nlp_dims* dims = gen.dims();
@@ -232,11 +234,17 @@ void applyRuntimeBounds(GenSolver& gen, const SolverBoundSummary& bounds,
 
     double lbu[3] = {bounds.a_min, bounds.alpha_min, bounds.v_s_min};
     double ubu[3] = {bounds.a_max, bounds.alpha_max, bounds.v_s_max};
-    double lg[1] = {-delta_a_max};
-    double ug[1] = {delta_a_max};
+    double lg[2] = {-delta_a_max, -actual_delta_max};
+    double ug[2] = {delta_a_max, actual_delta_max};
+    // acados accepts dense matrices in column-major layout (2 rows).
+    std::vector<double> C(2*gen.nx, 0.);
+    C[2*kExplicitActuatorAccelMemoryIndex] = -1.;
+    const auto row = actualAccelerationDeltaRow(actuator, dt);
+    C[2*3+1] = row[0]; C[2*8+1] = row[1]; C[2*9+1] = row[2];
     for (int stage = 0; stage < gen.n_horizon; ++stage) {
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lbu", lbu);
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ubu", ubu);
+        ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "C", C.data());
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "lg", lg);
         ocp_nlp_constraints_model_set(cfg, dims, nlp_in, nlp_out, stage, "ug", ug);
     }
@@ -742,6 +750,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.pre_solve_snapshot.qp_iteration_limit = params_.qp_iteration_limit;
     output.cycle_timing = input.cycle_timing;
     if ((params_.zero_liquid_initial_state && !use_slosh_model_) ||
+        !std::isfinite(params_.actual_jerk_max) || params_.actual_jerk_max < 0.0 ||
         !std::isfinite(params_.jerk_max) || params_.jerk_max <= 0.0 ||
         !std::isfinite(input.dt) || input.dt <= 0.0 ||
         !std::isfinite(params_.jerk_max * input.dt)) {
@@ -854,6 +863,7 @@ bool ContinuousMpccSolverAcados::solve(
     snapshot.zero_liquid_initial_state = params_.zero_liquid_initial_state;
     snapshot.jerk_limit_enable = params_.jerk_limit_enable;
     snapshot.jerk_max = params_.jerk_max;
+    snapshot.actual_jerk_max = params_.actual_jerk_max;
     snapshot.delta_a_max = params_.jerk_limit_enable
         ? params_.jerk_max * input.dt : 1e15;
     snapshot.observed_slosh = observed_input.slosh;
@@ -1119,7 +1129,25 @@ bool ContinuousMpccSolverAcados::solve(
         }
     }
     snapshot.terminal_command_caps = terminal_command_caps;
-    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max, planning_stages,
+    if (params_.actual_jerk_max > 0) {
+        // The first four acceleration transitions are fixed by measured v
+        // and commands already in the five-step FIFO. Never repair x0/history.
+        double velocity = input.robot.v;
+        const auto& queue = input.actuator.linear_delay_queue;
+        const auto row = actualAccelerationDeltaRow(params_.actuator, input.dt);
+        const double decay = 1-row[0]*params_.actuator.linear_tau_sec;
+        for (size_t k=0;k+1<queue.size();++k) {
+            const double delta = row[0]*velocity+row[1]*queue[k]+row[2]*queue[k+1];
+            if (!std::isfinite(delta) || std::abs(delta)>params_.actual_jerk_max*input.dt+1e-6) {
+                output.status=snapshot.solver_status="ACTUAL_JERK_PREFIX_INFEASIBLE";
+                return false;
+            }
+            velocity=decay*velocity+(1-decay)*params_.actuator.linear_gain*queue[k];
+        }
+    }
+    applyRuntimeBounds(*gen, output.runtime_bounds, x0, snapshot.delta_a_max,
+        params_.actual_jerk_max > 0 ? params_.actual_jerk_max*input.dt : 1e15,
+        params_.actuator, input.dt, planning_stages,
                        terminal_command_caps);
 
     ocp_nlp_config* cfg = gen->config();
@@ -1323,6 +1351,7 @@ bool ContinuousMpccSolverAcados::solve(
     output.predicted_horizon.zero_liquid_initial_state = params_.zero_liquid_initial_state;
     output.predicted_horizon.jerk_limit_enable = params_.jerk_limit_enable;
     output.predicted_horizon.jerk_max = params_.jerk_max;
+    output.predicted_horizon.actual_jerk_max = params_.actual_jerk_max;
     output.predicted_horizon.delta_a_max = snapshot.delta_a_max;
     output.predicted_horizon.control_semantics = "a_cmd_alpha_cmd";
     output.predicted_horizon.dt = input.dt;
@@ -1417,6 +1446,7 @@ bool ContinuousMpccSolverAcados::solve(
         if (k == 0) { u0[0] = uk[0]; u0[1] = uk[1]; u0[2] = uk[2]; }
     }
 
+    std::vector<double> actual_replay(x0, x0+gen->nx);
     for (int k=0;k<n;++k) {
         const auto& current=output.predicted_horizon.states[static_cast<size_t>(k)].model_state;
         const auto& next=output.predicted_horizon.states[static_cast<size_t>(k+1)].model_state;
@@ -1424,6 +1454,19 @@ bool ContinuousMpccSolverAcados::solve(
         std::vector<double> replay;
         if (!stepExplicitState(current,{{u.a,u.alpha,u.v_s}},params_.actuator,slosh_dyn_,input.dt,replay) || replay.size()!=next.size()) {
             output.status=snapshot.solver_status="PREDICTION_DYNAMICS_INVALID"; return false;
+        }
+        if (params_.actual_jerk_max > 0) {
+            std::vector<double> actual_next;
+            if (!stepExplicitState(actual_replay,{{u.a,u.alpha,u.v_s}},params_.actuator,slosh_dyn_,input.dt,actual_next)) {
+                output.status=snapshot.solver_status="PREDICTION_DYNAMICS_INVALID"; return false;
+            }
+            const double delta = actualAcceleration(actual_next[3],actual_next[8],params_.actuator)
+                               - actualAcceleration(actual_replay[3],actual_replay[8],params_.actuator);
+            if (!std::isfinite(delta) || std::abs(delta)>params_.actual_jerk_max*input.dt+1e-6) {
+                output.status=snapshot.solver_status=output.predicted_horizon.solver_status="ACTUAL_JERK_CONSTRAINT_VIOLATION";
+                return false;
+            }
+            actual_replay=std::move(actual_next);
         }
         for (size_t j=0;j<next.size();++j) {
             const double error=std::abs(next[j]-replay[j]);

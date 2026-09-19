@@ -135,6 +135,9 @@ def load_task(source):
         raise ValueError("incomplete motion limits")
     if any(not np.isfinite(limits[k]) or (limits[k] <= 0 if k != "actual_v_min" else limits[k] > 0) for k in LIMIT_NAMES):
         raise ValueError("invalid motion limits")
+    actual_jerk_max = limits.get("actual_jerk_max", 0.)
+    if not np.isfinite(actual_jerk_max) or actual_jerk_max < 0:
+        raise ValueError("invalid actual jerk limit")
     if any(not np.isfinite(v) or v < 0 for v in task["objective"].values()):
         raise ValueError("invalid objective weights/scales")
     for k in ("height_scale", "contour_scale", "lag_scale", "curvature_scale", "curvature_change_scale", "speed_floor"):

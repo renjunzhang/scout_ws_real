@@ -2,6 +2,7 @@
 import numpy as np
 from .task import load_task, halfspaces, PROGRESS_TOLERANCE
 from .optimizer import dynamics
+from actual_jerk import actual_acceleration
 from .metrics import dense_heights, stopping_metrics
 from .liquid_policy import height_limits, objective_end_index
 from .terminal_speed import speed_limits
@@ -64,6 +65,11 @@ def validate_plan(plan, tolerance=2e-6, *, enforce_liquid_policy=True):
         bound(U[:, i], -limits[limit], limits[limit], limit)
     bound(U[:, 2], 0, limits["v_max"], "progress_speed")
     bound(U[:-1, 0]-X[:-1, 23], -limits["jerk_max"]*dt, limits["jerk_max"]*dt, "jerk")
+    tau, _, gain, _ = task["actuator_parameters"]
+    actual_delta = np.diff(actual_acceleration(replay.T, tau, gain))
+    actual_limit = limits.get("actual_jerk_max", 0.)
+    if actual_limit > 0:
+        bound(actual_delta, -actual_limit*dt, actual_limit*dt, "actual_jerk")
     bound(np.diff(X[:, 4]), 0, limits["v_max"]*dt, "progress")
     if "progress_parameterization" in plan:
         coordinate=plan["progress_parameterization"]
@@ -126,6 +132,8 @@ def validate_plan(plan, tolerance=2e-6, *, enforce_liquid_policy=True):
     return dict(status="SOFTWARE_VERIFIED" if enforce_liquid_policy else "PUBLIC_FEASIBILITY_VERIFIED",
                 liquid_policy_qualification=dict(passed=not liquid_errors, failures=liquid_errors,
                                                  enforced=enforce_liquid_policy),
+                actual_jerk_max=actual_limit,
+                peak_actual_jerk_m_s3=float(np.max(np.abs(actual_delta))/dt),
                 dynamics_max_error=defect, minimum_region_clearance=clearance,
                 dense_peak_height_m=peak, residual_height_m=float(task["height_coeff"]*np.hypot(X[-1, 24], X[-1, 26])),
                 curvature_arc_energy=float(np.sum(curvature[:-1]**2*speed[:-1])*dt), actual_path_length=float(np.sum(np.abs(X[:-1, 3]))*dt),

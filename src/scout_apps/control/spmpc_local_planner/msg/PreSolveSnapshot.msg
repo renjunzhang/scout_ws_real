@@ -7,7 +7,7 @@
 
 std_msgs/Header header
 uint32 schema_version
-# Schema 8: planning identity and per-stage reference audit; 1 identifies the shared rotating-container RK4 model.
+# Schema 9 adds actuator-output jerk bound; schema 8: planning identity and per-stage reference audit; 1 identifies the shared rotating-container RK4 model.
 uint32 cost_model_version
 uint32 liquid_model_version
 uint64 cycle_id
@@ -127,7 +127,7 @@ float64 observed_eta_x_dot
 float64 observed_eta_y
 float64 observed_eta_y_dot
 
-# Schema 8: planning identity and per-stage reference audit.
+# Schema 9 adds actuator-output jerk bound; schema 8: planning identity and per-stage reference audit.
 string experiment_profile_id
 string plan_id
 string region_id
@@ -141,3 +141,6 @@ float64[] nominal_times
 string[] nominal_phases
 float64 minimum_region_clearance
 float64 v_cmd_min
+
+# Actuator-output longitudinal jerk on the control grid; zero disables.
+float64 actual_jerk_max

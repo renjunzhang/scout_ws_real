@@ -212,6 +212,7 @@ struct EffectiveConfigDebug {
     double zero_liquid_initial_state = 0.0;
     double jerk_limit_enable = 0.0;
     double jerk_max = 0.0;
+    double actual_jerk_max = 0.0;
     double terminal_mpc_stop_handoff_enable = 0.0;
 };
 
@@ -309,6 +310,7 @@ struct PredictedHorizonDebug {
     bool zero_liquid_initial_state = false;
     bool jerk_limit_enable = false;
     double jerk_max = 0.0;
+    double actual_jerk_max = 0.0;
     double delta_a_max = 0.0;
     std::string control_semantics = "alpha";
     double dt = 0.0;
@@ -331,6 +333,7 @@ struct PreSolveSnapshotDebug {
     bool zero_liquid_initial_state = false;
     bool jerk_limit_enable = false;
     double jerk_max = 0.0;
+    double actual_jerk_max = 0.0;
     double delta_a_max = 0.0;
     // Aligned/predicted liquid state before the NoState intervention. The
     // existing slosh field below is the actual OCP initial state.

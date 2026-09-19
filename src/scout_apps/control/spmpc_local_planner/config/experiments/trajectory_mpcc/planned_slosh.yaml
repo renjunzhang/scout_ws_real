@@ -1,3 +1,5 @@
+ablation:
+  actual_jerk_max: 1.0  # actuator-output longitudinal jerk at 30 Hz; plan must declare the same bound
 planning:
   experiment_profile_id: planned_slosh
   liquid_free_baseline: false

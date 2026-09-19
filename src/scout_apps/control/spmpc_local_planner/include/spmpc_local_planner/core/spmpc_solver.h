@@ -42,6 +42,7 @@ struct SolverParams {
     // only the solver's private liquid initial state, never the observer.
     bool zero_liquid_initial_state = false;
     bool jerk_limit_enable = false;
+    double actual_jerk_max = 0.0;  // m/s^3, actuator-output control-grid bound; 0 disables
     double jerk_max = 1.0;  // m/s^3; development candidate, inactive by default
     double anticreep_gain = 8.0;  // Runtime A/B parameter; 0 removes only the extra low-speed penalty.
     bool warm_start_flatness_enable = false;  // deprecated: use acados/warm_start/enable

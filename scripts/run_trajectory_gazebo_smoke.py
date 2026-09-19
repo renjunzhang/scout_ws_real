@@ -135,9 +135,17 @@ def main():
     runtime_dir = out/'runtime'
     runtime_dir.mkdir()
     summary['runtime'] = {}
-    for source in [binary, args.setup.resolve().parent/'lib/libspmpc_local_planner.so'] + [
-            PKG/'generated/acados'/model/('libacados_ocp_solver_'+model+'.so')
-            for model in ('spmpc_b0', 'spmpc_slosh')]:
+    # Archive libraries actually selected by the loader (isolated codegen roots
+    # are allowed); the repository default may belong to an older experiment.
+    generated_libraries = []
+    for model in ('spmpc_b0', 'spmpc_slosh'):
+        name = 'libacados_ocp_solver_'+model+'.so'
+        matches = [Path(line.split()[2]) for line in linked.splitlines()
+                   if len(line.split()) >= 3 and line.split()[:2] == [name, '=>']]
+        if len(matches) != 1 or not matches[0].is_file():
+            raise RuntimeError('cannot identify linked '+name)
+        generated_libraries.append(matches[0])
+    for source in [binary, expected_library] + generated_libraries:
         shutil.copy2(source, runtime_dir/source.name)
         summary['runtime'][source.name] = dict(
             source_path=str(source), sha256=hashlib.sha256(source.read_bytes()).hexdigest())
@@ -283,6 +291,9 @@ def main():
         (out/'task.yaml').write_text(yaml.safe_dump(dict(planning=dict(task_deadline_sec=task['deadline'], evaluation_window_sec=5.))))
         overlay = dict(frames=dict(reference_target='map', robot_base='base_footprint'),
                        delay_phase=dict(mode='off'))
+        actual_jerk_max = task['motion_limits'].get('actual_jerk_max', 0.)
+        overlay['ablation'] = dict(actual_jerk_max=actual_jerk_max)
+        summary['actual_jerk_max'] = actual_jerk_max
         if args.reference_mode:
             overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
         if args.slosh_weight is not None:
@@ -317,6 +328,8 @@ def main():
         planner = start('planner', command)
         time.sleep(2)
         (out/'live_params.yaml').write_text(yaml.safe_dump(rospy.get_param('/spmpc_local_planner', {})))
+        if rospy.get_param('/spmpc_local_planner/ablation/actual_jerk_max') != actual_jerk_max:
+            raise RuntimeError('actual jerk limit was not loaded')
         if args.slosh_weight is not None and rospy.get_param(
                 '/spmpc_local_planner/variants/B_slosh/w_slosh') != args.slosh_weight:
             raise RuntimeError('requested liquid cost weight was not loaded')

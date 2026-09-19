@@ -40,6 +40,7 @@ solver_backend: continuous_mpcc_acados
 ablation:
   zero_liquid_initial_state: false  # NoState: zero only the OCP liquid x0
   jerk_limit_enable: false         # |a_cmd[k] - a_cmd_memory[k]| <= jerk_max * dt
+  actual_jerk_max: 0.0             # actuator-output longitudinal grid jerk; opt in per task, no hardware claim
   jerk_max: 1.0                    # m/s^3, offline candidate, not a validated real limit
 
 # Mainline command/actual execution model.  The fixed FIFO lengths are part of

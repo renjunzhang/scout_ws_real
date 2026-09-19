@@ -1,10 +1,10 @@
-"""Extract an exact suffix initial state from a schema-8 horizon dictionary."""
+"""Extract an exact suffix initial state from a schema-8/9 horizon dictionary."""
 import math
 
 
 def from_horizon(record, stage=None):
-    if (record.get("schema_version"), record.get("cost_model_version"), record.get("liquid_model_version")) != (8, 3, 1):
-        raise ValueError("checkpoint requires horizon schema 8, cost 3, liquid model 1")
+    if (record.get("schema_version"), record.get("cost_model_version"), record.get("liquid_model_version")) not in ((8, 3, 1), (9, 3, 1)):
+        raise ValueError("checkpoint requires horizon schema 8/9, cost 3, liquid model 1")
     if record.get("valid") is not True or record.get("model_state_width") != 28:
         raise ValueError("checkpoint requires a valid complete 28-state liquid prediction; never invent missing liquid/FIFO state")
     count = record["horizon_steps"]

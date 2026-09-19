@@ -20,6 +20,7 @@ struct TrajectoryPlan {
     double dt = 0, transport_duration = 0, deadline = 0, stop_window = 0, height_coeff = 0;
     // tau_v, tau_omega, gain_v, gain_omega; 2*zeta*wn, wn^2, kx, ky.
     std::array<double, 4> actuator_parameters{}, liquid_parameters{};
+    double actual_jerk_max = 0.0; // Optional actuator-output control-grid contract (0: archived/off).
     // actual_v_min, v_max, omega_max, a_max, alpha_max, jerk_max.
     std::array<double, 6> motion_limits{};
     std::array<double, 3> goal_pose{};

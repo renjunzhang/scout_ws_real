@@ -1,7 +1,8 @@
 """ROS-independent ABI checks for PreSolveSnapshot parameter rows.
 
 Schema 7/cost v2 is historical (34/46 parameters); schema 8/cost v3 is the
-planning ABI (92/104).  This module deliberately never upgrades a record while
+planning ABI (92/104). Schema 9 adds the actual-jerk bound without changing
+parameter rows.  This module deliberately never upgrades a record while
 validating it.  ``upgrade_parameter_row`` is an explicit replay adapter and
 retains provenance in its return value.
 """
@@ -17,7 +18,7 @@ from generate_spmpc_acados import default_parameter_values, load_config  # noqa:
 from spmpc_acados_model import PARAM_NAMES, PARAM_NAMES_SLOSH  # noqa: E402
 
 OLD = {7: (34, 46, 24, 28, 2)}
-NEW = {8: (len(PARAM_NAMES), len(PARAM_NAMES_SLOSH), 24, 28, 3)}
+NEW = {version: (len(PARAM_NAMES), len(PARAM_NAMES_SLOSH), 24, 28, 3) for version in (8, 9)}
 
 
 def validate_snapshot(record: Mapping) -> dict:
@@ -43,7 +44,7 @@ def validate_snapshot(record: Mapping) -> dict:
     if nx not in (nx_b0, nx_sl) or width != (np_sl if slosh else np_b0):
         raise ValueError(f"invalid dimensions nx={nx}, parameter_width={width}")
     names = list(record.get("parameter_names", ()))
-    expected_names = (PARAM_NAMES_SLOSH if slosh else PARAM_NAMES) if schema == 8 else (
+    expected_names = (PARAM_NAMES_SLOSH if slosh else PARAM_NAMES) if schema in NEW else (
         PARAM_NAMES[:34] + (PARAM_NAMES_SLOSH[len(PARAM_NAMES):] if slosh else []))
     if names != expected_names:
         raise ValueError("parameter_names do not match the versioned ABI layout")
@@ -57,6 +58,8 @@ def validate_snapshot(record: Mapping) -> dict:
         raise ValueError("control_width must be 3")
     if "slosh_enabled" in record and bool(record["slosh_enabled"]) != slosh:
         raise ValueError("slosh_enabled does not match state_width")
+    if schema == 9 and ("actual_jerk_max" not in record or not math.isfinite(record["actual_jerk_max"]) or record["actual_jerk_max"] < 0):
+        raise ValueError("schema 9 requires a finite nonnegative actual_jerk_max")
     return {"schema_version": schema, "cost_model_version": cost,
             "state_width": nx, "parameter_width": width,
             "source_schema": schema, "source_cost_model": cost}

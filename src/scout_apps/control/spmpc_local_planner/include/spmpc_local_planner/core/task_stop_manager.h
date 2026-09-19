@@ -76,7 +76,7 @@ public:
     bool configure(const TaskStopParams& params, const ActuatorModelParams& actuator,
                    const SloshModelParams& liquid, const StopMotionLimits& limits,
                    double a_max, double alpha_max, double jerk_max,
-                   bool include_liquid = true);
+                   bool include_liquid = true, double actual_jerk_max = 0.0);
     void reset();
     StopTailPrediction predict(const SolverInput& input,
                                const MotionRegion* region = nullptr,
@@ -99,7 +99,7 @@ private:
     ActuatorModelParams actuator_;
     SloshDynamics liquid_;
     StopMotionLimits limits_;
-    double a_max_ = 0, alpha_max_ = 0, jerk_max_ = 0;
+    double a_max_ = 0, alpha_max_ = 0, jerk_max_ = 0, command_jerk_max_ = 0, actual_jerk_max_ = 0;
     bool include_liquid_ = true;
     bool configured_ = false;
     bool timed_out_ = false;

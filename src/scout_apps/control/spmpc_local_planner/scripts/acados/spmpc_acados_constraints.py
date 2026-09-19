@@ -71,11 +71,13 @@ def set_constraints(ocp, cfg, explicit_actuator=False):
         # stage 0: -delta_a_max <= a_cmd - a_cmd_memory <= delta_a_max.
         # Always generate the row so the runtime switch does not need codegen.
         # Bounds are disabled by default and replaced by jerk_max * dt in C++.
-        ocp.constraints.C = np.zeros((1, cfg["nx"]))
+        ocp.constraints.C = np.zeros((2, cfg["nx"]))
         ocp.constraints.C[0, ACCEL_MEMORY_INDEX] = -1.0
-        ocp.constraints.D = np.array([[1.0, 0.0, 0.0]])
-        ocp.constraints.lg = np.array([-1e15])
-        ocp.constraints.ug = np.array([1e15])
+        # Row 1: actuator-output delta acceleration, filled with runtime
+        # tau/gain/dt. Always generated; zero bound configuration disables it.
+        ocp.constraints.D = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+        ocp.constraints.lg = np.array([-1e15, -1e15])
+        ocp.constraints.ug = np.array([1e15, 1e15])
     else:
         ocp.constraints.idxbx = np.array([3, 5])
         ocp.constraints.lbx = np.array([0.0, -omega_max])

@@ -862,3 +862,26 @@ int main(int argc, char** argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+
+namespace spmpc_local_planner {
+TEST(ReplayDiagnostics, ActualJerkHardBoundBothModelsAndImmutablePrefix) {
+    for (bool slosh : {false,true}) {
+        auto params=makeParams();params.jerk_limit_enable=true;params.actual_jerk_max=.35;
+        params.rti_iterations=5;
+        auto variant=makeB0Variant();variant.slosh_enable=slosh;variant.slosh_constraint_enable=false;
+        variant.w_slosh=slosh?5.:0.;
+        auto input=makeInput();input.actuator.a_cmd_memory=0.;
+        ContinuousMpccSolverAcados solver;solver.configure(params,variant);
+        SolverOutput out;
+        ASSERT_TRUE(solver.solve(input,makeStraightReference(),out)) << out.status;
+        EXPECT_DOUBLE_EQ(out.pre_solve_snapshot.actual_jerk_max,.35);
+        const auto& states=out.predicted_horizon.states;
+        for (size_t k=1;k<states.size();++k)
+            EXPECT_LE(std::abs(states[k].a_actual-states[k-1].a_actual),.35*input.dt+1e-6);
+        input.actuator.linear_delay_queue[1]=.02;
+        ASSERT_FALSE(solver.solve(input,makeStraightReference(),out));
+        EXPECT_EQ(out.status,"ACTUAL_JERK_PREFIX_INFEASIBLE");
+        EXPECT_DOUBLE_EQ(input.actuator.linear_delay_queue[1],.02);
+    }
+}
+} // namespace spmpc_local_planner

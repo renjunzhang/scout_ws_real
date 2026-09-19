@@ -235,6 +235,8 @@ void DiagnosticsPublisher::publishEffectiveConfig(const EffectiveConfigDebug& co
     msg.data.push_back(static_cast<float>(config.jerk_max));
     msg.layout.dim[0].label += ",terminal_mpc_stop_handoff_enable";
     msg.data.push_back(static_cast<float>(config.terminal_mpc_stop_handoff_enable));
+    msg.layout.dim[0].label += ",actual_jerk_max";
+    msg.data.push_back(static_cast<float>(config.actual_jerk_max));
     msg.layout.dim[0].size = msg.data.size();
     msg.layout.dim[0].stride = msg.data.size();
     effective_config_pub_.publish(msg);
@@ -1187,7 +1189,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 8;
+    msg.schema_version = 9;
     msg.cost_model_version = 3;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
@@ -1200,6 +1202,7 @@ PredictedHorizon DiagnosticsPublisher::makePredictedHorizonMsg(
     msg.zero_liquid_initial_state = horizon.zero_liquid_initial_state;
     msg.jerk_limit_enable = horizon.jerk_limit_enable;
     msg.jerk_max = horizon.jerk_max;
+    msg.actual_jerk_max = horizon.actual_jerk_max;
     msg.rti_iterations = horizon.rti_iterations;
     msg.dynamics_max_defect = horizon.dynamics_max_defect;
     msg.delta_a_max = horizon.delta_a_max;
@@ -1292,7 +1295,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.header.stamp = rosTimeFromNanoseconds(
         output.cycle_timing.solver_input_epoch_ns);
     msg.header.frame_id = frame_id.empty() ? "map" : frame_id;
-    msg.schema_version = 8;
+    msg.schema_version = 9;
     msg.cost_model_version = 3;
     msg.liquid_model_version = SloshDynamics::modelVersion();
     fillCycleTiming(output.cycle_timing, msg);
@@ -1305,6 +1308,7 @@ PreSolveSnapshot DiagnosticsPublisher::makePreSolveSnapshotMsg(
     msg.zero_liquid_initial_state = snapshot.zero_liquid_initial_state;
     msg.jerk_limit_enable = snapshot.jerk_limit_enable;
     msg.jerk_max = snapshot.jerk_max;
+    msg.actual_jerk_max = snapshot.actual_jerk_max;
     msg.rti_iterations = snapshot.rti_iterations;
     msg.qp_iteration_limit = snapshot.qp_iteration_limit;
     msg.max_prediction_defect = snapshot.max_prediction_defect;

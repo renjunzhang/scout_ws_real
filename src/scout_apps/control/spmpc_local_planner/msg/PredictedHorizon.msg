@@ -3,7 +3,7 @@
 
 std_msgs/Header header
 uint32 schema_version
-# Schema 8: planning identity and per-stage reference audit; 1 identifies the shared rotating-container RK4 model.
+# Schema 9 adds actuator-output jerk bound; schema 8: planning identity and per-stage reference audit; 1 identifies the shared rotating-container RK4 model.
 uint32 cost_model_version
 uint32 liquid_model_version
 uint64 cycle_id
@@ -68,7 +68,7 @@ int32 rti_iterations
 float64 dynamics_max_defect
 float64 delta_a_max
 
-# Schema 8: planning identity and per-stage reference audit.
+# Schema 9 adds actuator-output jerk bound; schema 8: planning identity and per-stage reference audit.
 string experiment_profile_id
 string plan_id
 string region_id
@@ -87,3 +87,6 @@ float64 v_cmd_min
 # for explicit B0/slosh; 0 means this backend/early failure supplied no rows.
 uint32 model_state_width
 float64[] model_states
+
+# Actuator-output longitudinal jerk on the control grid; zero disables.
+float64 actual_jerk_max

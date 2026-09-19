@@ -42,8 +42,9 @@ generate_messages(
 if(NOT ACADOS_SOURCE_DIR)
   set(ACADOS_SOURCE_DIR "$ENV{ACADOS_SOURCE_DIR}")
 endif()
-set(SPMPC_GEN_B0_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0)
-set(SPMPC_GEN_SLOSH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh)
+set(SPMPC_GEN_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/generated/acados" CACHE PATH "Generated solver root")
+set(SPMPC_GEN_B0_DIR ${SPMPC_GEN_ROOT}/spmpc_b0)
+set(SPMPC_GEN_SLOSH_DIR ${SPMPC_GEN_ROOT}/spmpc_slosh)
 set(SPMPC_GEN_B0_DIRECT_OMEGA_LEGACY_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_b0_direct_omega_legacy)
 set(SPMPC_GEN_SLOSH_DIRECT_OMEGA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated/acados/spmpc_slosh_direct_omega)
 set(SPMPC_WITH_ACADOS FALSE)
@@ -118,6 +119,7 @@ add_library(${PROJECT_NAME}
   src/dynamics/slosh_dynamics.cpp
   src/dynamics/actual_motion_propagator.cpp
   src/dynamics/explicit_state_rollout.cpp
+  src/dynamics/actual_jerk.cpp
   src/dynamics/generated/slosh_kernel_generated.c
   src/estimation/processed_imu_pipeline.cpp
   src/estimation/liquid_state_nowcaster.cpp
@@ -211,7 +213,7 @@ target_link_libraries(spmpc_local_planner_node
 )
 
 if(CATKIN_ENABLE_TESTING)
-  foreach(_planning_test test_motion_region test_trajectory_reference test_solver_failure_stop)
+  foreach(_planning_test test_actual_jerk test_motion_region test_trajectory_reference test_solver_failure_stop)
     catkin_add_gtest(${_planning_test} test/${_planning_test}.cpp)
     if(TARGET ${_planning_test})
       target_link_libraries(${_planning_test} ${PROJECT_NAME} ${catkin_LIBRARIES} gtest_main)

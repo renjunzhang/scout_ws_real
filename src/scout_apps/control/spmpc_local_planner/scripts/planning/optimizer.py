@@ -11,6 +11,7 @@ import time
 import casadi as ca
 import numpy as np
 from .task import load_task, model_parameters, halfspaces
+from actual_jerk import constrain_actual_jerk
 from .warm_start import warm_start_values
 from .diagnostics import solver_summary
 from .liquid_policy import height_limits, objective_end_index
@@ -90,6 +91,7 @@ def solve_task(source, warm_plan=None, *, progress=None, solver_verbosity=0):
     opt.subject_to(opt.bounded(-limits["alpha_max"], U[1, :clear], limits["alpha_max"]))
     opt.subject_to(opt.bounded(0, U[2, frozen_progress_steps:moving], limits["v_max"]))
     opt.subject_to(opt.bounded(-limits["jerk_max"]*dt, U[0, :]-X[23, :-1], limits["jerk_max"]*dt))
+    constrain_actual_jerk(opt, X, task)
     opt.subject_to(X[4, moving] == length)
     # The exported geometric coordinate must advance with actual motion.
     # Independent virtual progress can otherwise stall while the vehicle turns,

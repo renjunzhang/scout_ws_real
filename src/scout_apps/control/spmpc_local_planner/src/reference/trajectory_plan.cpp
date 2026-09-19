@@ -47,6 +47,7 @@ TrajectoryPlan TrajectoryPlan::load(const std::string& path) {
         const char* limits[] = {"actual_v_min", "v_max", "omega_max", "a_max", "alpha_max", "jerk_max"};
         for (size_t i = 0; i < 6; ++i)
             p.motion_limits[i] = root.get<double>(std::string("motion_limits.") + limits[i]);
+        p.actual_jerk_max = root.get<double>("motion_limits.actual_jerk_max", 0.0);
         p.goal_pose = array<3>(root, "goal_pose");
         p.goal_position_tolerance = root.get<double>("goal_position_tolerance");
         p.goal_yaw_tolerance = root.get<double>("goal_yaw_tolerance");
@@ -107,6 +108,7 @@ void TrajectoryPlan::validate() const {
             liquid_parameters[2] > 0 && liquid_parameters[3] > 0, "invalid liquid parameters");
     for (size_t i = 0; i < motion_limits.size(); ++i)
         require(finite(motion_limits[i]) && (i ? motion_limits[i] > 0 : motion_limits[i] <= 0), "invalid motion limits");
+    require(finite(actual_jerk_max) && actual_jerk_max >= 0, "invalid actual jerk limit");
     for (double x : goal_pose) require(finite(x), "nonfinite goal");
     for (double x : {goal_position_tolerance, goal_yaw_tolerance, stop_speed_tolerance, stop_omega_tolerance})
         require(finite(x) && x > 0, "invalid goal/stop tolerance");
@@ -152,6 +154,10 @@ void TrajectoryPlan::validate() const {
             require(std::abs(u[0]-x[23]) <= motion_limits[5]*dt+1e-6, "command jerk bound");
             const auto& next = samples[k+1].state;
             require(next.size() == 28, "next state layout");
+            if (actual_jerk_max > 0) {
+                const double delta = (actuator_parameters[2]*(next[8]-x[8])-(next[3]-x[3]))/actuator_parameters[0];
+                require(std::abs(delta) <= actual_jerk_max*dt+1e-6, "actual jerk bound");
+            }
             require(next[4] >= x[4]-kProgressTolerance, "progress is not monotone");
             require(row.phase=="TAIL" || next[4]-x[4]>1e-9 ||
                 std::hypot(next[0]-x[0],next[1]-x[1])<1e-4,

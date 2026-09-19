@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Offline cold-start RTI diagnosis from schema-8 bags; never publishes ROS data.
+"""Offline cold-start RTI diagnosis from schema-8/9 bags; never publishes ROS data.
 
 Only the first solve in a fresh capsule is reproduced: snapshots contain primal
 guesses, not dual/internal history. Extra iterations and condensing choices are
@@ -36,8 +36,8 @@ def first_pair(bag_path):
         raise ValueError('no executed RTI in the bag')
     cycle = min(snapshots)
     snap = snapshots[cycle]
-    if snap.schema_version != 8 or snap.have_previous_solution or snap.have_previous_control:
-        raise ValueError('requires the first cold-start schema-8 snapshot')
+    if snap.schema_version not in (8, 9) or snap.have_previous_solution or snap.have_previous_control:
+        raise ValueError('requires the first cold-start schema-8/9 snapshot')
     return snap, horizons[cycle]
 
 
@@ -74,8 +74,18 @@ def apply_snapshot(solver, snap, prune_implied_bounds=False):
             solver.set(k, 'u', us[k])
             solver.constraints_set(k, 'lbu', np.array([snap.a_min, snap.alpha_or_omega_min, snap.v_s_min]))
             solver.constraints_set(k, 'ubu', np.array([snap.a_max, snap.alpha_or_omega_max, snap.v_s_max]))
-            solver.constraints_set(k, 'lg', np.array([-snap.delta_a_max]))
-            solver.constraints_set(k, 'ug', np.array([snap.delta_a_max]))
+            # Match current two-row codegen; schema-8 recordings leave the
+            # new row disabled, never silently invent an actual jerk contract.
+            from actual_jerk import acceleration_delta_row
+            names = list(snap.parameter_names)
+            row = acceleration_delta_row(params[k, names.index('actuator_tau_v')],
+                params[k, names.index('actuator_gain_v')], snap.dt, nx)
+            C = np.zeros((2, nx)); C[0, 23] = -1.; C[1] = row
+            limit = getattr(snap, 'actual_jerk_max', 0.)
+            bounds = np.array([snap.delta_a_max, limit*snap.dt if limit > 0 else 1e15])
+            solver.constraints_set(k, 'C', C)
+            solver.constraints_set(k, 'lg', -bounds)
+            solver.constraints_set(k, 'ug', bounds)
         if k == 0:
             lo, hi = x0, x0
         else:
@@ -104,12 +114,14 @@ def apply_snapshot(solver, snap, prune_implied_bounds=False):
     return params, xs, us
 
 
-def diagnose(bag_path, cond_n, iterations, seed_mode, qp_warm_start, prune_implied_bounds, reroll_between):
+def diagnose(bag_path, cond_n, iterations, seed_mode, qp_warm_start, prune_implied_bounds, reroll_between, generated_root=None):
     from acados_template import AcadosOcpSolver
     snap, horizon = first_pair(bag_path)
     sym = (export_spmpc_slosh_symbols if snap.slosh_enabled else export_spmpc_b0_symbols)()
     step = ca.Function('step', [sym['x'], sym['u'], sym['p']], [sym['disc_dyn']])
-    gen = PKG / 'generated/acados' / sym['name']
+    gen = (generated_root or PKG / 'generated/acados') / sym['name']
+    if json.loads((gen / ('acados_ocp_' + sym['name'] + '.json')).read_text())['dims']['ng'] != 2:
+        raise ValueError('regenerate the command/actual-jerk solver before replay')
     solver = AcadosOcpSolver(None, json_file=str(gen / ('acados_ocp_' + sym['name'] + '.json')),
                             generate=False, build=False, verbose=False)
     if cond_n:
@@ -172,6 +184,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('bag', type=Path)
     parser.add_argument('--output', required=True, type=Path)
+    parser.add_argument('--generated-root', type=Path, help='root used for isolated solver codegen')
     parser.add_argument('--iterations', type=int, default=8)
     parser.add_argument('--cond-n', type=int, nargs='+', default=[0])
     parser.add_argument('--seed-mode', choices=['recorded', 'bounded_rollout'], default='recorded')
@@ -181,7 +194,7 @@ def main():
     args = parser.parse_args()
     if args.iterations < 1 or any(n < 0 or n > 60 for n in args.cond_n):
         parser.error('iterations must be positive; cond-n must be 0 (generated) or 1..60')
-    results = [diagnose(args.bag.resolve(), n, args.iterations, args.seed_mode, args.qp_warm_start, args.prune_implied_bounds, args.reroll_between) for n in args.cond_n]
+    results = [diagnose(args.bag.resolve(), n, args.iterations, args.seed_mode, args.qp_warm_start, args.prune_implied_bounds, args.reroll_between, args.generated_root) for n in args.cond_n]
     report = dict(evidence='OFFLINE_COLD_START_DIAGNOSIS', online_budget=False,
                   bag_sha256=hashlib.sha256(args.bag.read_bytes()).hexdigest(),
                   script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),

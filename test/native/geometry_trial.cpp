@@ -1,6 +1,7 @@
 // Deterministic model-in-the-loop trial. It deliberately has no ROS/robot I/O.
 #include "spmpc_local_planner/core/spmpc_problem.h"
 #include "spmpc_local_planner/dynamics/explicit_state_rollout.h"
+#include "spmpc_local_planner/dynamics/actual_jerk.h"
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/property_tree/ptree.hpp>
 #include <chrono>
@@ -91,6 +92,7 @@ TrialConfig makeConfig(const Options& options, const TrajectoryPlan& plan) {
     params.terminal.goal_reached_max_omega=plan.stop_omega_tolerance;
     params.actual_v_min=plan.motion_limits[0]; params.v_max=plan.motion_limits[1];
     params.omega_max=plan.motion_limits[2]; params.a_max=plan.motion_limits[3];
+    params.actual_jerk_max=plan.actual_jerk_max;
     params.alpha_max=plan.motion_limits[4]; params.jerk_max=plan.motion_limits[5];
     params.actuator.linear_tau_sec=plan.actuator_parameters[0];
     params.actuator.angular_tau_sec=plan.actuator_parameters[1];
@@ -164,6 +166,7 @@ boost::property_tree::ptree parameterManifest(const SolverParams& p, const Varia
     result.put("rti_iterations",p.rti_iterations);
     result.put("prediction_defect_limit",p.max_prediction_defect);
     result.put("jerk_limit_enable",p.jerk_limit_enable);
+    result.put("actual_jerk_max",p.actual_jerk_max);
     result.put("terminal_goal_position_tolerance",p.terminal.goal_tolerance);
     result.put("terminal_goal_yaw_tolerance",p.terminal.goal_yaw_tolerance);
     result.put("terminal_stop_speed",p.terminal.goal_reached_max_speed);
@@ -220,7 +223,7 @@ int runTrial(const Options& options) {
     csv<<std::setprecision(17);
     csv<<"t,x,y,yaw,v,omega,v_cmd,omega_cmd,a_cmd,alpha_cmd,vs,height,status,projected_s,ref_x,ref_y,ref_yaw\n";
     double curvature_energy=0, distance=0, peak=0, minimum_clearance=1e100, completion_time=-1;
-    double max_jerk=0, max_solve_ms=0, max_defect=0;
+    double max_jerk=0, max_actual_jerk=0, max_solve_ms=0, max_defect=0;
     double min_v=std::numeric_limits<double>::infinity(), max_v=-min_v;
     double min_omega=std::numeric_limits<double>::infinity(), max_omega=-min_omega;
     std::vector<double> wall_ms, solver_ms;
@@ -297,6 +300,12 @@ int runTrial(const Options& options) {
         if(failures || k==last_k) break; // Preserve the failing row; do not hide it with continued zero commands.
         std::vector<double> next;
         if(!stepExplicitState(state,control,plant,liquid,plant.dt,next)) return 3;
+        const double actual_jerk = std::abs(actualAcceleration(next[3],next[8],plant)
+            -actualAcceleration(state[3],state[8],plant))/plant.dt;
+        max_actual_jerk=std::max(max_actual_jerk,actual_jerk);
+        if (params.actual_jerk_max>0 && actual_jerk>params.actual_jerk_max+1e-6/plant.dt) {
+            ++failures; failure_status="PLANT_ACTUAL_JERK_VIOLATION"; break;
+        }
         state=std::move(next);
     }
     boost::property_tree::ptree report;
@@ -308,6 +317,7 @@ int runTrial(const Options& options) {
     report.put("actual_omega_min",min_omega); report.put("actual_omega_max",max_omega);
     report.put("walltime_p95_ms",percentile(wall_ms,.95)); report.put("walltime_max_ms",wall_ms.empty()?0.:*std::max_element(wall_ms.begin(),wall_ms.end()));
     report.put("solver_time_p95_ms",percentile(solver_ms,.95)); report.put("solver_time_max_ms",solver_ms.empty()?0.:*std::max_element(solver_ms.begin(),solver_ms.end()));
+    report.put("max_actual_jerk",max_actual_jerk);report.put("actual_jerk_max",params.actual_jerk_max);
     report.put("max_jerk",max_jerk);report.put("max_solve_ms",max_solve_ms);report.put("evidence","MODEL_IN_THE_LOOP");report.put("actuator_scale",actuator_scale);
     const double lateness=completion_time<0 ? -1. : std::max(0.,completion_time-plan.deadline);
     const double deadline_tolerance=params.planning.trajectory.deadline_tolerance;

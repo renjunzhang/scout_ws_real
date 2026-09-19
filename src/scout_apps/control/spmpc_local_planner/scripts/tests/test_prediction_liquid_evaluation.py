@@ -159,3 +159,15 @@ def test_historical_horizon_is_not_silently_reinterpreted(field, value):
     case["horizon"][field] = value
     with pytest.raises(ValueError, match="schema8/cost3/liquid1"):
         evaluate(case)
+
+
+def test_schema9_records_actual_jerk_and_keeps_liquid_replay_unchanged():
+    case = make_case(24, np.zeros((4, 24)))
+    baseline = evaluate(case)
+    for name in ("snapshot", "horizon"):
+        case[name]["schema_version"] = 9
+        case[name]["actual_jerk_max"] = 1.
+    np.testing.assert_array_equal(evaluate(case)["liquid_states"], baseline["liquid_states"])
+    del case["snapshot"]["actual_jerk_max"]
+    with pytest.raises(ValueError, match="actual_jerk_max"):
+        evaluate(case)

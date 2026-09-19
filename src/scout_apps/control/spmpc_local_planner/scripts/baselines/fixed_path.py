@@ -16,6 +16,7 @@ from scipy.interpolate import CubicSpline
 from planning.task import load_task, halfspaces
 from planning.optimizer import dynamics, PlanValidationError
 from planning.validation import validate_plan
+from actual_jerk import constrain_actual_jerk
 from planning.warm_start import warm_start_values
 from planning.diagnostics import solver_summary
 from planning.liquid_policy import height_limits
@@ -178,6 +179,7 @@ def solve_fixed_path(source, warm_plan=None, *, progress=None, solver_verbosity=
     opt.subject_to(X[4, moving] == length)
     opt.subject_to(opt.bounded(-limits["a_max"], U[0, :clear], limits["a_max"]))
     opt.subject_to(opt.bounded(-limits["jerk_max"]*dt, U[0, :]-X[23, :-1], limits["jerk_max"]*dt))
+    constrain_actual_jerk(opt, X, task)
     opt.subject_to(X[6, clear] == 0)
     opt.subject_to(U[0, clear:] == 0)
     if geometry_info["straight"]:

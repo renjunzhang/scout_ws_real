@@ -767,12 +767,19 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
     pnh_.param("ablation/jerk_limit_enable", solver_params.jerk_limit_enable,
                solver_params.jerk_limit_enable);
     pnh_.param("ablation/jerk_max", solver_params.jerk_max, solver_params.jerk_max);
-    if (!std::isfinite(solver_params.jerk_max) || solver_params.jerk_max <= 0.0 ||
+    pnh_.param("ablation/actual_jerk_max", solver_params.actual_jerk_max, solver_params.actual_jerk_max);
+    if (!std::isfinite(solver_params.actual_jerk_max) || solver_params.actual_jerk_max < 0 ||
+        (solver_params.actual_jerk_max > 0 && (!solver_params.jerk_limit_enable ||
+         !solver_params.terminal.mpc_stop_handoff_enable || !solver_params.terminal.enable ||
+         !state_timing_params_.require_common_epoch || !command_contract_params_.fail_closed_on_post_limit_change)) ||
+        !std::isfinite(solver_params.jerk_max) || solver_params.jerk_max <= 0.0 ||
         (solver_params.zero_liquid_initial_state && !variant_.slosh_enable) ||
         ((solver_params.zero_liquid_initial_state || solver_params.jerk_limit_enable) &&
          solver_params.solver_backend != kSolverBackendContinuousMpccAcados)) {
         ROS_FATAL("[spmpc_local_planner] invalid ablation configuration: "
                   "NoState requires liquid prediction; jerk_max must be finite and positive; "
+                  "actual_jerk_max must be nonnegative and requires command jerk, terminal handoff, "
+                  "common epoch and fail-closed publication; "
                   "ablation switches require the explicit-actuator MPCC backend");
         return false;
     }
@@ -790,6 +797,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
              boolText(solver_params.zero_liquid_initial_state),
              boolText(solver_params.jerk_limit_enable), solver_params.jerk_max,
              solver_params.jerk_limit_enable ? solver_params.jerk_max * dt_ : 1e15);
+    ROS_INFO("[spmpc_local_planner] actuator-output grid actual_jerk_max=%.6f m/s^3 (0 disables)", solver_params.actual_jerk_max);
     if (!pnh_.hasParam("variants/" + variant_.name + "/w_contour")) {
         ROS_WARN("[spmpc_local_planner] 未找到 variants/%s/* 参数：config/planner/variants.yaml "
                  "可能未加载，变体权重回退到内置 B0 默认值。正式实验请用 launch 加载 variants.yaml",
@@ -1002,6 +1010,7 @@ bool SpmpcLocalPlannerROS::initialize(ros::NodeHandle& nh, ros::NodeHandle& pnh)
         solver_params.zero_liquid_initial_state ? 1.0 : 0.0;
     effective_config_.jerk_limit_enable = solver_params.jerk_limit_enable ? 1.0 : 0.0;
     effective_config_.jerk_max = solver_params.jerk_max;
+    effective_config_.actual_jerk_max = solver_params.actual_jerk_max;
     effective_config_.terminal_mpc_stop_handoff_enable = solver_params.terminal.mpc_stop_handoff_enable ? 1.0 : 0.0;
 
     if (planning_config.liquid_free_baseline &&

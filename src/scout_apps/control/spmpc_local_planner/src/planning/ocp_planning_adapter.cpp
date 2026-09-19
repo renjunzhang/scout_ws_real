@@ -57,6 +57,7 @@ OcpPlanningAdapter::OcpPlanningAdapter(const SolverParams& params)
             ProgressProjectionConfig{config_.projection_lookahead});
         const auto& plan=trajectory_->plan();
         requireClose(plan.dt, dt_, "dt");
+        requireClose(plan.actual_jerk_max, params.actual_jerk_max, "actual jerk limit");
         requireClose(plan.stop_window,config_.evaluation_window_sec,"evaluation window");
         requireClose(plan.goal_position_tolerance,terminal_.goal_tolerance,"goal position tolerance");
         requireClose(plan.goal_yaw_tolerance,terminal_.goal_yaw_tolerance,"goal yaw tolerance");

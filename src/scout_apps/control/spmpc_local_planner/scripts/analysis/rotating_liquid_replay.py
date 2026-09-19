@@ -132,7 +132,7 @@ def evaluate_prediction_liquid(
     if snapshot.get("valid") is not True or horizon.get("valid") is not True:
         raise ValueError("snapshot and horizon must have valid=true")
     checked = validate_snapshot(snapshot)
-    if checked["schema_version"] != 8 or horizon.get("schema_version") != 8 or \
+    if checked["schema_version"] not in (8, 9) or horizon.get("schema_version") != checked["schema_version"] or \
             horizon.get("cost_model_version") != 3 or horizon.get("liquid_model_version") != MODEL_VERSION:
         raise ValueError("prediction evaluation requires schema8/cost3/liquid1 records")
     stages = int(horizon.get("horizon_steps", -1))

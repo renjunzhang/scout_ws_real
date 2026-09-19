@@ -8,6 +8,7 @@ int main(int argc,char** argv) {
         const auto plan=spmpc_local_planner::TrajectoryPlan::load(argv[1]);
         spmpc_local_planner::SolverParams params;
         params.actual_v_min=plan.motion_limits[0];
+        params.actual_jerk_max=plan.actual_jerk_max;
         params.planning.region=plan.region;
         params.planning.evaluation_window_sec=plan.stop_window;
         params.terminal.goal_tolerance=plan.goal_position_tolerance;
