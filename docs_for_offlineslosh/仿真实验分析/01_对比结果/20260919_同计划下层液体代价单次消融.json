@@ -1,0 +1,217 @@
+{
+  "formal": false,
+  "scope": "Single same-plan lower-layer liquid-cost ablation; not raw_mpcc B0",
+  "raw_directory": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122",
+  "baseline_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+  "new_simulations": 1,
+  "additional_full_simulations": 0,
+  "retries": 0,
+  "primary_reference": "full_01",
+  "cost0": {
+    "name": "cost0_01",
+    "peak_mm": 0.5392387802703045,
+    "p95_mm": 0.2784535369096801,
+    "rms_mm": 0.12526562491360507,
+    "tail_peak_mm": 3.0360550485100246e-07,
+    "goal_sec": 27.955,
+    "stop_sec": 27.954333333000008
+  },
+  "full_runs": [
+    {
+      "name": "full_01",
+      "peak_mm": 0.5408323017290326,
+      "p95_mm": 0.2271372257632544,
+      "rms_mm": 0.11222955264848235,
+      "tail_peak_mm": 3.209236659501734e-08,
+      "goal_sec": 28.314999999999998,
+      "stop_sec": 28.280333333
+    },
+    {
+      "name": "full_02",
+      "peak_mm": 0.47736531452827324,
+      "p95_mm": 0.2230089628554845,
+      "rms_mm": 0.11084501338916364,
+      "tail_peak_mm": 7.056650003810778e-06,
+      "goal_sec": 28.298000000000002,
+      "stop_sec": 28.26433333300001
+    },
+    {
+      "name": "full_03",
+      "peak_mm": 0.49802594806715,
+      "p95_mm": 0.2190799124159951,
+      "rms_mm": 0.111553805258875,
+      "tail_peak_mm": 9.253121761576004e-06,
+      "goal_sec": 28.233999999999995,
+      "stop_sec": 28.233333333000004
+    }
+  ],
+  "full_mean": {
+    "peak_mm": 0.5054078547748186,
+    "p95_mm": 0.22307536701157799,
+    "rms_mm": 0.11154279043217366,
+    "tail_peak_mm": 5.447288043993933e-06,
+    "goal_sec": 28.28233333333333,
+    "stop_sec": 28.259333333000004
+  },
+  "full01_vs_cost0_change_percent": {
+    "peak_mm": 0.29551314130809025,
+    "p95_mm": -18.429039083483,
+    "rms_mm": -10.40674348937598,
+    "goal_sec": 1.2877839384725531,
+    "stop_sec": 1.1661877109233387
+  },
+  "full_mean_vs_cost0_change_percent": {
+    "peak_mm": -6.273830209045316,
+    "p95_mm": -19.88775955683577,
+    "rms_mm": -10.954988242701036,
+    "goal_sec": 1.1709294699815187,
+    "stop_sec": 1.0910651896675505
+  },
+  "all_full_runs_improve_all_three": false,
+  "execution_valid": true,
+  "cost0_liquid_caps_passed": true,
+  "live_parameter_differences": [
+    {
+      "key": "variants.B_slosh.w_slosh",
+      "full": 5.0,
+      "cost0": 0.0
+    }
+  ],
+  "identity_passed": true,
+  "frozen_unchanged": true,
+  "effective_slosh_weights": [
+    0.0
+  ],
+  "cycles": {
+    "odom_solve_cycles": 828,
+    "mismatched_odom_liquid_cycles": 0,
+    "command_contract_violations": 0,
+    "qp_iteration_limits": [
+      20
+    ],
+    "first_live_cycle": {
+      "cycle_id": 23,
+      "warm_start_source": "PREPARED_TRAJECTORY_PLAN"
+    }
+  },
+  "abnormal_statuses": {},
+  "windows": {
+    "case": "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/cost0_01/case",
+    "formal": false,
+    "frame_contract_matches": true,
+    "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+    "first_sustained_pose_sec": 26.052000000000007,
+    "first_sustained_low_speed_sec": 27.611000000000004,
+    "first_sustained_zero_publication_sec": 27.62100000000001,
+    "inferred_fifo_delay_sec": 0.333333333,
+    "t_stop_candidate_sec": 27.954333333000008,
+    "fifo_clearance_measured": false,
+    "command_epsilon": 1e-06,
+    "maximum_allowed_sample_gap_sec": 0.1,
+    "invalid_observer_after_task_start": 0,
+    "windows": {
+      "transport_peak_m": 0.0005392387802703045,
+      "transport_p95_m": 0.0002784535369096801,
+      "transport_rms_m": 0.00012526562491360508,
+      "transport_samples": 1398,
+      "tail_peak_m": 3.0360550485100247e-10,
+      "transport_covered": true,
+      "tail_covered": true,
+      "covered": true,
+      "t_stop": 27.954333333000008,
+      "window_sec": 5.0
+    },
+    "stop_evidence_covers_tail": true,
+    "height_coverage_after_stop_sec": 23.136666667,
+    "stop_within_deadline": true,
+    "archived_anomalies": {
+      "alignment_rejected": 0,
+      "budget_exhausted": 0,
+      "fault_zero_cycles": 0,
+      "goal_sec": 27.955
+    }
+  },
+  "process": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/a/scout_ws/scripts/run_trajectory_gazebo_smoke.py",
+      "--output",
+      "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/cost0_01/case",
+      "--setup",
+      "/tmp/scout_tf_epoch_overlay_20260919/setup.bash",
+      "--profile",
+      "planned_slosh",
+      "--identified-actuator",
+      "--task",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/task.json",
+      "--plan",
+      "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+      "--slosh-weight",
+      "0"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 129.35804113500035,
+    "timeout": 480
+  },
+  "initial_poses": {
+    "cost0": [
+      0.01567521597633174,
+      -0.0032563656426838616,
+      0.0004898917626511621
+    ],
+    "full": {
+      "full_01": [
+        0.01578631857072829,
+        -0.003745986201182909,
+        0.0005504439979977091
+      ],
+      "full_02": [
+        0.01567521597633174,
+        -0.0032563656426838616,
+        0.0004898917626511621
+      ],
+      "full_03": [
+        0.018557907671212282,
+        -0.009275063543130298,
+        0.0015107577776686122
+      ]
+    }
+  },
+  "identities": {
+    "task_sha256": "6f52f6b077deed906d89a131813b7c9b37bbd623ca2f691dc25bb66f80242e30",
+    "plan_sha256": "b7db3241388e78a87270029edd4e7c9f9fb17ae77a73d12547cc8a031324f7b3",
+    "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+    "runtime": {
+      "spmpc_local_planner_node": {
+        "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+        "sha256": "f8c9c74897f450c0015cb8bc9b89a38072146087850a00c84da1ecc066f8679c"
+      },
+      "libspmpc_local_planner.so": {
+        "source_path": "/tmp/scout_tf_epoch_overlay_20260919/lib/libspmpc_local_planner.so",
+        "sha256": "608b2b7ec0cc85f1aadca1d44bd130784538c4b3a26c2188354d92bcee1f0b08"
+      },
+      "libacados_ocp_solver_spmpc_b0.so": {
+        "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+        "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+      },
+      "libacados_ocp_solver_spmpc_slosh.so": {
+        "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+        "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+      }
+    }
+  },
+  "limitations": [
+    "One new cost0 run; Full uses all three archived runs, not newly paired repetitions.",
+    "Same blue geometry and progress-based speed reference; actual executed speeds and paths may differ.",
+    "Upper-layer anti-slosh plan remains in both groups; does not measure upper-layer or whole-method contribution on raw S path.",
+    "Liquid heights are odom-driven model outputs, not measured liquid surfaces.",
+    "Natural localization/start and execution jitter remain; no statistical significance claim."
+  ],
+  "artifact_sha256": {
+    "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/protocol.json": "6ac70fd47ee41b0f40ae35e466567a141e071ed358a3432232a7f4cfa5b99cb0",
+    "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/run_once.py": "91cbf2aa8cbdbc014218b8e1a0bae4d6a7ae27cee19ce4bc4f3915d5acd07edc",
+    "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/compare.py": "ba1d85c12e07ddd07386d15e3d5964b3bc6475becf8954a7777b175d0f7dc8ba",
+    "/data/a/scout_sim_replacement/results/20260919_same_plan_cost0_144122/cost0_01/assessment.json": "cafd117433cace0b2a4505d5d20ea7b3c35c3aebe970a4b7a84ebf580a8ff24f"
+  }
+}
