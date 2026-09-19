@@ -79,9 +79,27 @@ def main():
                         help='replace this case\'s guard with the controller\'s actuator response')
     parser.add_argument('--fixed-rti-iterations', type=int, choices=range(1, 21),
                         help='require exactly this many RTIs; retain the live deadline and publication gate')
+    parser.add_argument('--rti-iterations', type=int, choices=range(1, 21),
+                        help='RTI upper bound for this case; override after the shared task configuration')
+    parser.add_argument('--rti-min-iterations', type=int, choices=range(1, 21),
+                        help='minimum RTI count with --rti-iterations (default 1 permits quality exit)')
     parser.add_argument('--ros-port', type=int, default=11892)
     parser.add_argument('--gazebo-port', type=int, default=11926)
     args = parser.parse_args()
+    if args.fixed_rti_iterations is not None and (
+            args.rti_iterations is not None or args.rti_min_iterations is not None):
+        parser.error('choose fixed RTI count or RTI min/max, not both')
+    if args.rti_min_iterations is not None and args.rti_iterations is None:
+        parser.error('--rti-min-iterations requires --rti-iterations')
+    rti_override = None
+    if args.fixed_rti_iterations is not None:
+        rti_override = dict(rti_iterations=args.fixed_rti_iterations,
+                            rti_min_iterations=args.fixed_rti_iterations)
+    elif args.rti_iterations is not None:
+        minimum = args.rti_min_iterations or 1
+        if minimum > args.rti_iterations:
+            parser.error('minimum RTI count exceeds the upper bound')
+        rti_override = dict(rti_iterations=args.rti_iterations, rti_min_iterations=minimum)
     if not args.setup.is_file() or not MAP.is_file():
         parser.error('missing compiled ROS1 overlay or explicit map')
     if args.profile in ('planned_slosh', 'external_timed') and not (args.plan and args.task):
@@ -296,10 +314,9 @@ def main():
         actual_jerk_max = task['motion_limits'].get('actual_jerk_max', 0.)
         overlay['ablation'] = dict(actual_jerk_max=actual_jerk_max)
         summary['actual_jerk_max'] = actual_jerk_max
-        if args.fixed_rti_iterations is not None:
-            overlay['acados'] = dict(rti_iterations=args.fixed_rti_iterations,
-                                     rti_min_iterations=args.fixed_rti_iterations)
-            summary['fixed_rti_iterations'] = args.fixed_rti_iterations
+        if rti_override is not None:
+            overlay['acados'] = rti_override
+            summary['rti_override'] = rti_override
         if args.reference_mode:
             overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
         if args.slosh_weight is not None:
@@ -334,10 +351,10 @@ def main():
         planner = start('planner', command)
         time.sleep(2)
         (out/'live_params.yaml').write_text(yaml.safe_dump(rospy.get_param('/spmpc_local_planner', {})))
-        if args.fixed_rti_iterations is not None and any(
-                rospy.get_param('/spmpc_local_planner/acados/'+key) != args.fixed_rti_iterations
-                for key in ('rti_iterations', 'rti_min_iterations')):
-            raise RuntimeError('requested fixed RTI count was not loaded')
+        if rti_override is not None and any(
+                rospy.get_param('/spmpc_local_planner/acados/'+key) != value
+                for key, value in rti_override.items()):
+            raise RuntimeError('requested RTI min/max were not loaded')
         if rospy.get_param('/spmpc_local_planner/ablation/actual_jerk_max') != actual_jerk_max:
             raise RuntimeError('actual jerk limit was not loaded')
         if args.slosh_weight is not None and rospy.get_param(
