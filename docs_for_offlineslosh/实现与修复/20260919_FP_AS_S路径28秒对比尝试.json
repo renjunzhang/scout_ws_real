@@ -1,0 +1,544 @@
+{
+  "date": "2026-09-19",
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_28s_195318",
+  "stage": "stopped_after_offline_timeout",
+  "formal": false,
+  "protocol": {
+    "transport_duration_sec": 28.0,
+    "deadline_sec": 45.0,
+    "stop_window_sec": 5.0,
+    "offline_timeout_sec": 600.0,
+    "candidates": 1,
+    "gazebo_trials_max": 1,
+    "old_fp_as_root": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514",
+    "full_root": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+    "changed_task_fields": [
+      "task_id",
+      "transport_duration"
+    ],
+    "initialization": "Existing final v8 cold seed; no time compression of an executable plan or duration search.",
+    "geometry": "Unchanged frozen clamped cubic from original route",
+    "stop_condition": "Stop on solver timeout/failure or failed validation/execution gate. Retry only for evidenced implementation/config error.",
+    "git_head": "0a9b2b12dbb3933b9d1310918c04171e1d3d58fe",
+    "sha256": {
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/baselines/fixed_path.py": "ec9fc8977dae98c3821a8904258fc90c9fa472c126994f20cc5ed09a7f5bf37c",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/baselines/path_transcription.py": "b63c1e9cc5664b7bed1c5a0015f3166c8292f655cb2c7b6f38ed744a7fa2194f",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py": "5868bfd35b11883a9de0b58eddbde787a8e8eeb36f1e62676fb486ae247ae271",
+      "/tmp/scout_external_native_20260919/validate_plan": "596530da3cead284b349bd53b4a3de580d4949e031e2e97e60e955318c3c640c",
+      "/tmp/scout_external_native_20260919/geometry_trial": "f849f3ed1105e91ceaa290e3b7eb633b9082b87100d9cf5f11f9ed2430bfee64"
+    }
+  },
+  "task_changes": {
+    "task_id": [
+      "raw_s_fp_as_20260919",
+      "raw_s_fp_as_28s_20260919"
+    ],
+    "transport_duration": [
+      40.0,
+      28.0
+    ]
+  },
+  "frozen_geometry_identical_to_40s": true,
+  "geometry": {
+    "method": "clamped_cubic_original_route",
+    "knots": [
+      0.0,
+      0.4841108737204978,
+      0.9682217474409957,
+      1.4523326211614935,
+      1.9364434948819913,
+      2.420554368602489,
+      2.904665242322987,
+      3.3887761160434846,
+      3.8728869897639826,
+      4.35699786348448,
+      4.841108737204978,
+      5.325219610925476,
+      5.809330484645974
+    ],
+    "points": [
+      [
+        0.020268121297657215,
+        -0.008730177324257944
+      ],
+      [
+        0.48856265904844465,
+        0.06311180514293467
+      ],
+      [
+        0.8457544857595581,
+        0.3870122790239554
+      ],
+      [
+        1.2324088104531055,
+        0.657699936740394
+      ],
+      [
+        1.6970478315076347,
+        0.5611276836092104
+      ],
+      [
+        2.0978467035964163,
+        0.29045742548753134
+      ],
+      [
+        2.4912482829308598,
+        0.008325301418978595
+      ],
+      [
+        2.8846505937533506,
+        -0.2738058026688348
+      ],
+      [
+        3.2837409603866754,
+        -0.5469240640713647
+      ],
+      [
+        3.744890890241693,
+        -0.6748421115280794
+      ],
+      [
+        4.208111278040586,
+        -0.5557726088022877
+      ],
+      [
+        4.607662922174206,
+        -0.283610570003202
+      ],
+      [
+        5.0,
+        0.0
+      ]
+    ],
+    "polynomial_coefficients": [
+      [
+        [
+          -0.3569582518486136,
+          0.5362354503068262
+        ],
+        [
+          0.37042785816430024,
+          -0.640339092994324
+        ],
+        [
+          0.11416700825944869,
+          -0.6654935535131247
+        ],
+        [
+          -0.3994286781885752,
+          0.534350390563086
+        ],
+        [
+          0.23352527427101133,
+          0.23059139769367
+        ],
+        [
+          -0.03719374280300651,
+          -0.02326600082709062
+        ],
+        [
+          -0.019545252272451543,
+          -0.03649527627086328
+        ],
+        [
+          0.1655019560160489,
+          0.24867592877955325
+        ],
+        [
+          -0.14561275308213967,
+          0.2421261597675891
+        ],
+        [
+          -0.11178571504282207,
+          -0.32004260083518626
+        ],
+        [
+          0.01334037492103577,
+          0.21046799307695252
+        ],
+        [
+          0.5560026742956148,
+          -1.770257901645235
+        ]
+      ],
+      [
+        [
+          0.10532343994520685,
+          0.043755566900918086
+        ],
+        [
+          -0.4130986736073149,
+          0.8225478040047445
+        ],
+        [
+          0.12488578859168147,
+          -0.10743754935587507
+        ],
+        [
+          0.29069425894729234,
+          -1.0739555462956678
+        ],
+        [
+          -0.28940904021339053,
+          -0.2979010429505135
+        ],
+        [
+          0.049747333476085134,
+          0.03699436607922714
+        ],
+        [
+          -0.004270352499810625,
+          0.003204394114072674
+        ],
+        [
+          -0.03265655996392254,
+          -0.04979888613240367
+        ],
+        [
+          0.20770732962422206,
+          0.31136127733177377
+        ],
+        [
+          -0.0037708217341012387,
+          0.6630089975988026
+        ],
+        [
+          -0.16612086227065487,
+          0.19820068824449452
+        ],
+        [
+          -0.14674620059431015,
+          0.5038702203005456
+        ]
+      ],
+      [
+        [
+          0.9999988089928523,
+          0.0015433771012949332
+        ],
+        [
+          0.8510014717151589,
+          0.42093025889744784
+        ],
+        [
+          0.7114744801327352,
+          0.7671229090819994
+        ],
+        [
+          0.9126613000476339,
+          0.1951976653387672
+        ],
+        [
+          0.9132834884118246,
+          -0.46893302670042364
+        ],
+        [
+          0.7972606501658814,
+          -0.595240786000094
+        ],
+        [
+          0.8192765511604757,
+          -0.5757801290804345
+        ],
+        [
+          0.8013998313038573,
+          -0.5983370293219911
+        ],
+        [
+          0.8861438123495496,
+          -0.47171183158604124
+        ],
+        [
+          0.9848716933677424,
+          -8.586462118433084e-06
+        ],
+        [
+          0.9026252817863532,
+          0.41691238700803585
+        ],
+        [
+          0.751162934624429,
+          0.7567925479575184
+        ]
+      ],
+      [
+        [
+          0.020268121297657215,
+          -0.008730177324257944
+        ],
+        [
+          0.48856265904844465,
+          0.06311180514293467
+        ],
+        [
+          0.8457544857595581,
+          0.3870122790239554
+        ],
+        [
+          1.2324088104531055,
+          0.657699936740394
+        ],
+        [
+          1.6970478315076347,
+          0.5611276836092104
+        ],
+        [
+          2.0978467035964163,
+          0.29045742548753134
+        ],
+        [
+          2.4912482829308598,
+          0.008325301418978595
+        ],
+        [
+          2.8846505937533506,
+          -0.2738058026688348
+        ],
+        [
+          3.2837409603866754,
+          -0.5469240640713647
+        ],
+        [
+          3.744890890241693,
+          -0.6748421115280794
+        ],
+        [
+          4.208111278040586,
+          -0.5557726088022877
+        ],
+        [
+          4.607662922174206,
+          -0.283610570003202
+        ]
+      ]
+    ],
+    "maximum_route_edit_m": 0.05138984090184672,
+    "frozen_path_length_m": 5.812509389191952,
+    "straight": false,
+    "original_route_sha256": "93fcf912d268080b8b8ca90747ec6e6902a4004b160fef0fe1ec3f3939aff726"
+  },
+  "solve_process": {
+    "command": [
+      "/usr/bin/python3",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_28s_195318/fp_as_s_task.json",
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_28s_195318/fp_as_s_plan.json",
+      "--method",
+      "fp-as",
+      "--diagnostics",
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_28s_195318/solve_events.jsonl",
+      "--rejected-plan",
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_28s_195318/rejected_plan.json",
+      "--solver-verbosity",
+      "5"
+    ],
+    "returncode": -15,
+    "status": "timeout",
+    "wall_seconds": 600.0326198770017,
+    "timeout": 600
+  },
+  "last_flushed_event": {
+    "stage": "iteration",
+    "wall_seconds": 578.4449525689997,
+    "iteration": 550,
+    "objective": 2.353158403330652,
+    "largest_constraint_multipliers": [
+      {
+        "row": 56241,
+        "multiplier": 690052749682.3298,
+        "description": "Opti constraint of shape 2x829, called from /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/baselines/path_transcription.py:79 in constrain_fixed_path\n  opt.subject_to(displacement.map(count)(states[:, first:end], controls[:, first:end],\nAt nonzero 1057, part 0."
+      },
+      {
+        "row": 56239,
+        "multiplier": -615256089958.6661,
+        "description": "Opti constraint of shape 2x829, called from /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/baselines/path_transcription.py:79 in constrain_fixed_path\n  opt.subject_to(displacement.map(count)(states[:, first:end], controls[:, first:end],\nAt nonzero 1055, part 0."
+      },
+      {
+        "row": 56243,
+        "multiplier": -472411888306.2452,
+        "description": "Opti constraint of shape 2x829, called from /home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/baselines/path_transcription.py:79 in constrain_fixed_path\n  opt.subject_to(displacement.map(count)(states[:, first:end], controls[:, first:end],\nAt nonzero 1059, part 0."
+      }
+    ]
+  },
+  "last_stdout_iteration": {
+    "iteration": 535,
+    "objective": 2.3413104,
+    "primal_infeasibility": 1.87e-05,
+    "dual_infeasibility": 60700000000.0,
+    "note": "Buffered stdout, not final optimizer residuals; latest flushed event is separate."
+  },
+  "preflight_identity": {
+    "files": {
+      "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node": {
+        "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3",
+        "matches_prior": true
+      },
+      "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so": {
+        "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b",
+        "matches_prior": true
+      },
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so": {
+        "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c",
+        "matches_prior": true
+      },
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so": {
+        "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7",
+        "matches_prior": true
+      },
+      "/home/a/scout_ws/scripts/gazebo_identified_actuator.py": {
+        "sha256": "87445f0eae51f9965484495eb8a1a7163a163365bf290bbe83f1f1d14043fe91",
+        "matches_prior": true
+      },
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/config/planner/common.yaml": {
+        "sha256": "5fc14464d79ba194bb078f888326502b7ee116af12b78716765fb6d55ce41658",
+        "matches_prior": true
+      },
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/config/containers/tube_default.yaml": {
+        "sha256": "99dd8e767c97b74aafe412e96aa59737dc0693776cbf98fe79ac8fbc12cdc7a3",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/task.json": {
+        "sha256": "e976a16598a60515b5529310f353a1d47ca0e50b4e8ef87ff2e5d56510e57e13",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json": {
+        "sha256": "ffc07cfdfed7a2ae7475ca1d089c02bbba305dd68f6aafbac8a34db147d5345d",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json": {
+        "sha256": "2617a21b773015e747446732b6399136124d58fe7c03365de4d00a83c571995b",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json": {
+        "sha256": "aabda4c075eb8ac20aa3d3af45b40b3771568190e8726e5450b5f5ccf27a8719",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json": {
+        "sha256": "f109ec99cee735eae80c86a18c41aa53b94ff1a2ba2adae219f74a91983af7e9",
+        "matches_prior": true
+      },
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_geometry_frozen.json": {
+        "sha256": "2b4c57e21a7c79e9fb7fe5a40964c03228d45c0eeb007496d018c843dcb3259e",
+        "matches_prior": true
+      }
+    },
+    "ports_occupied": {
+      "11892": false,
+      "11926": false
+    }
+  },
+  "comparison": {
+    "B0": {
+      "n": 3,
+      "source": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/comparison.json",
+      "metrics": {
+        "goal_sec": {
+          "mean": 31.445666666666664,
+          "minimum": 31.315999999999995,
+          "maximum": 31.576
+        },
+        "transport_peak_mm": {
+          "mean": 0.9774779330799749,
+          "minimum": 0.934211687997709,
+          "maximum": 1.0112101138096476
+        },
+        "transport_p95_mm": {
+          "mean": 0.4809227871117694,
+          "minimum": 0.46536172934884884,
+          "maximum": 0.4946185623769668
+        },
+        "transport_rms_mm": {
+          "mean": 0.2028979455684217,
+          "minimum": 0.19770181782355017,
+          "maximum": 0.2087438228062911
+        },
+        "tail_peak_mm": {
+          "mean": 1.2830439683021827e-06,
+          "minimum": 7.572473272549951e-07,
+          "maximum": 2.2759137166427903e-06
+        }
+      }
+    },
+    "Full": {
+      "n": 3,
+      "source": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/comparison.json",
+      "metrics": {
+        "goal_sec": {
+          "mean": 28.28233333333333,
+          "minimum": 28.233999999999995,
+          "maximum": 28.314999999999998
+        },
+        "transport_peak_mm": {
+          "mean": 0.5054078547748186,
+          "minimum": 0.47736531452827324,
+          "maximum": 0.5408323017290326
+        },
+        "transport_p95_mm": {
+          "mean": 0.22307536701157799,
+          "minimum": 0.2190799124159951,
+          "maximum": 0.2271372257632544
+        },
+        "transport_rms_mm": {
+          "mean": 0.11154279043217366,
+          "minimum": 0.11084501338916364,
+          "maximum": 0.11222955264848235
+        },
+        "tail_peak_mm": {
+          "mean": 5.447288043993933e-06,
+          "minimum": 3.209236659501734e-08,
+          "maximum": 9.253121761576004e-06
+        }
+      }
+    },
+    "FP-AS_40s": {
+      "n": 1,
+      "source": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/assessment.json",
+      "metrics": {
+        "transport_peak_mm": 0.26934398599341053,
+        "transport_p95_mm": 0.14810399592970355,
+        "transport_rms_mm": 0.0775755677074857,
+        "tail_peak_mm": 0.01502927349294497,
+        "goal_sec": 40.39900000000001
+      }
+    },
+    "FP-AS_28s": {
+      "n": 0,
+      "nominal_transport_sec": 28.0,
+      "metrics": null,
+      "status": "offline_timeout_no_executable_plan"
+    }
+  },
+  "closeout": {
+    "gazebo_trials": 0,
+    "native_trials": 0,
+    "real_robot_started": false,
+    "ports_occupied": {
+      "11892": false,
+      "11926": false
+    },
+    "executable_plan_exists": false,
+    "rejected_candidate_exists": false,
+    "timeout_process_group_terminated": true,
+    "prepared_analysis_scripts_executed": false
+  },
+  "conclusion": "The one 28 s candidate did not produce an executable plan within 600 s; no close-time Gazebo comparison can be claimed. This does not establish physical infeasibility or inferior slosh performance.",
+  "gaps": [
+    "Solver did not converge; a specific implementation/configuration fault was not established, so no automatic retry.",
+    "SIGTERM wall timeout did not return through the optimizer exception handler; no complete rejected iterate was serialized. Latest flushed iteration is not the termination iteration.",
+    "Full and FP-AS use different geometry; archived Full uses a different controller runtime and n=3 versus FP-AS 40 s n=1.",
+    "All reported liquid metrics are odometry-driven model output, not independently measured physical liquid."
+  ],
+  "source_changes": "No planning/controller/configuration code changes; task and documentation only.",
+  "artifact_sha256": {
+    "fp_as_s_task.json": "870c1e1e8b3d20fb8e46ecbd79a3163942af59ff37a91d59fadac016acd87571",
+    "protocol.json": "d9168eb719a5c1a5b78012a2959768c10c425c2a35e0fc0fba87f6605dbc3f16",
+    "analyze_one.py": "e27fe6b31a0cfa865c115c26d65ad27c4dd535e10dcb8abd93440e05ef3c8c86",
+    "solve.log": "8260731d638aa1d55fd530031385ef241d13ca5466119172a984f051fa678493",
+    "solve_events.jsonl": "e46ebcecc758f63e3cefa34b1c0a59894221d40d754cacc44ccadba33c6b4d1e",
+    "preflight_identity.json": "e1b88b09d9f08c6aa2a20f8063bfeda9288a845ba2e4cdfde9663ee029dcfedb",
+    "finalize_s.py": "20145aa56cecf62231b646d0fc143624916bd70b5ae2e2423b636a618cc2a2b0",
+    "fp_as_s_geometry_frozen.json": "2b4c57e21a7c79e9fb7fe5a40964c03228d45c0eeb007496d018c843dcb3259e",
+    "solve_process.json": "4955962f53fd79001be51508330df36a4271353d71c7be9cfc003f6d0d5a6650",
+    "closeout.json": "6ff30b5845739c0ebbf90b16e10cd041bb365aa2bfbc1c1bf9976d4e6191fc2e"
+  }
+}
