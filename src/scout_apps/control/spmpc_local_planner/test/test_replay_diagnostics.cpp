@@ -100,6 +100,9 @@ TEST(ReplayDiagnostics, ExpiredComputeBudgetDoesNotStartRti) {
     EXPECT_TRUE(output.recoverable_solver_failure);
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,0);
     EXPECT_FALSE(output.predicted_horizon.valid);
+    ASSERT_EQ(output.wall_timing.iteration_details.size(),1u);
+    EXPECT_LT(output.wall_timing.iteration_details[0].remaining_ms,0.);
+    EXPECT_DOUBLE_EQ(output.wall_timing.iteration_details[0].wall_ms,-1.);
     input.solve_budget.remeasure_first_iteration = true;
     EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
     EXPECT_EQ(output.status,"SOLVE_BUDGET_EXHAUSTED");
@@ -172,6 +175,15 @@ TEST(ReplayDiagnostics, RequiredRtiCountKeepsLiveAndOfflineSolvesAligned) {
     input.solve_budget.deadline=SolveBudget::Clock::now()+std::chrono::seconds(10);
     ASSERT_TRUE(solver.solve(input,makeStraightReference(),live))<<live.status;
     EXPECT_EQ(live.pre_solve_snapshot.rti_iterations,3);
+    ASSERT_EQ(live.wall_timing.iteration_details.size(),3u);
+    for (size_t i=0;i<live.wall_timing.iteration_details.size();++i) {
+        const auto& detail=live.wall_timing.iteration_details[i];
+        EXPECT_GT(detail.remaining_ms,detail.estimate_ms);
+        EXPECT_GE(detail.wall_ms,0.);
+        EXPECT_GE(detail.acados_ms,0.);
+        if (i>0) EXPECT_DOUBLE_EQ(detail.estimate_ms,
+                                 live.wall_timing.iteration_details[i-1].wall_ms);
+    }
     solver.configure(params,makeB0Variant());
     input.solve_budget={};
     ASSERT_TRUE(solver.solve(input,makeStraightReference(),offline))<<offline.status;

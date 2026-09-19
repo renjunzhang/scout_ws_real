@@ -1289,8 +1289,18 @@ bool ContinuousMpccSolverAcados::solve(
     if (input.solve_budget.deadline != SolveBudget::Clock::time_point{})
         output.wall_timing.remaining_budget_ms = std::chrono::duration<double, std::milli>(
             input.solve_budget.deadline - rti_start).count();
+    output.wall_timing.iteration_details.reserve(params_.rti_iterations);
     for (int iteration=0;iteration<params_.rti_iterations;++iteration) {
-        if (!input.solve_budget.permits(iteration_estimate)) break;
+        const auto budget_check_time = SolveBudget::Clock::now();
+        RtiIterationTimingDebug timing;
+        timing.estimate_ms = iteration_estimate * 1000.;
+        if (input.solve_budget.deadline != SolveBudget::Clock::time_point{})
+            timing.remaining_ms = std::chrono::duration<double, std::milli>(
+                input.solve_budget.deadline - budget_check_time).count();
+        if (!input.solve_budget.permits(iteration_estimate, budget_check_time)) {
+            output.wall_timing.iteration_details.push_back(timing);
+            break;
+        }
         const auto iteration_start = SolveBudget::Clock::now();
         status=gen->solve();
         ++iterations_executed;
@@ -1318,7 +1328,13 @@ bool ContinuousMpccSolverAcados::solve(
         }
         previous_iteration_wall_sec_ = std::chrono::duration<double>(
             SolveBudget::Clock::now() - iteration_start).count();
-        iteration_estimate = std::max(iteration_estimate, previous_iteration_wall_sec_);
+        // Re-estimate from the latest completed RTI. An earlier slow call must
+        // not remain the cost estimate after a newer, cheaper call. This is
+        // only admission prediction: the hard publication deadline still wins.
+        iteration_estimate = previous_iteration_wall_sec_;
+        timing.wall_ms = previous_iteration_wall_sec_ * 1000.;
+        timing.acados_ms = iteration_time * 1000.;
+        output.wall_timing.iteration_details.push_back(timing);
         if (status!=0 || feasible_iterate) break;
     }
     output.wall_timing.rti_ms = std::chrono::duration<double, std::milli>(

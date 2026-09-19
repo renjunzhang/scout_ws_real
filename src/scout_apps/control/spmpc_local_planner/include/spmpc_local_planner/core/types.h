@@ -529,6 +529,13 @@ struct VRefDebugSummary {
     std::string status = "VARIANT_FALLBACK";
 };
 
+struct RtiIterationTimingDebug {
+    double estimate_ms = 0.0;
+    double remaining_ms = -1.0;  // -1 when no live deadline is set.
+    double wall_ms = -1.0;  // -1 when the budget refused to start this RTI.
+    double acados_ms = -1.0;
+};
+
 struct SolverWallTimingDebug {
     bool valid = false;
     double setup_ms = 0.0;
@@ -537,6 +544,7 @@ struct SolverWallTimingDebug {
     double iteration_estimate_ms = 0.0;
     double remaining_budget_ms = 0.0;
     int iterations = 0;
+    std::vector<RtiIterationTimingDebug> iteration_details;
 };
 
 struct SolverOutput {

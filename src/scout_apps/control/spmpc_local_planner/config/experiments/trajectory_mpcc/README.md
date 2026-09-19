@@ -19,6 +19,8 @@
 
 性能验证需显式用 `-DCMAKE_BUILD_TYPE=Release` 构建 native 和 ROS（不启用 fast-math）。native `geometry_trial` 在原有参数后可追加 `[solve-budget-ms] [rti-min-iterations]`，例如本次 `30.3333333333333 3`；它记录每拍实际迭代次数及分段耗时，但不包含 ROS 状态处理与发布，仍需独立核对 Gazebo 发布时序。
 
+RTI入场预算按最近一次已完成迭代的墙钟耗时估计，避免较早的一次尖峰一直占据本轮估计；该估计不保证下一次一定及时完成，最终超时发布拒绝仍有效。native 的 `_iterations.csv` 保存逐次估计、剩余预算、实际墙钟和acados耗时；实际耗时为`-1`表示预算拒绝启动该次迭代。此明细仅为native诊断，现有ROS消息接口保持兼容。
+
 | 文件 / 参数 | 用途 |
 | --- | --- |
 | [trajectory_common.yaml](trajectory_common.yaml) | 四组共同目标/停车容差、jerk=1、RTI最多5次、actual_v_min=-0.002；关闭重复shared limiter并启用改写拒绝；deadline默认0，必须覆盖 |

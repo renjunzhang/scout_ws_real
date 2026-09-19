@@ -241,6 +241,9 @@ int runTrial(const Options& options) {
     std::ofstream timing(prefix+"_timing.csv");
     if (!timing) throw std::runtime_error("cannot open timing CSV");
     timing<<std::setprecision(17)<<"t,iterations,cycle_ms,solve_ms,setup_ms,rti_ms,residual_ms,status\n";
+    std::ofstream iterations(prefix+"_iterations.csv");
+    if (!iterations) throw std::runtime_error("cannot open RTI timing CSV");
+    iterations<<std::setprecision(17)<<"t,iteration,estimate_ms,remaining_ms,wall_ms,acados_ms,status\n";
     int spins=0,failures=0;std::string failure_status;
     MotionRegion region(params.planning.region);
     PreSolveSnapshotDebug first_snapshot;
@@ -265,6 +268,11 @@ int runTrial(const Options& options) {
         timing<<t<<','<<out.wall_timing.iterations<<','<<cycle_ms.back()<<','<<wall_ms.back()<<','
               <<out.wall_timing.setup_ms<<','<<out.wall_timing.rti_ms<<','<<out.wall_timing.residual_ms
               <<','<<out.status<<'\n';
+        for (size_t i=0;i<out.wall_timing.iteration_details.size();++i) {
+            const auto& detail=out.wall_timing.iteration_details[i];
+            iterations<<t<<','<<i+1<<','<<detail.estimate_ms<<','<<detail.remaining_ms<<','
+                      <<detail.wall_ms<<','<<detail.acados_ms<<','<<out.status<<'\n';
+        }
         if (options.solve_budget_ms>0. && cycle_ms.back()>options.solve_budget_ms) {
             ++failures; failure_status="NATIVE_SOLVE_DEADLINE_MISSED";
         }
