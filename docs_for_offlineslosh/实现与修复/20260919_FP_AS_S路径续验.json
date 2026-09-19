@@ -1,13 +1,27 @@
 {
-  "stage": "offline_and_native_passed_pending_single_gazebo",
+  "date": "2026-09-19",
+  "formal": false,
   "results_directory": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514",
-  "optimization": {
+  "stage": "single_gazebo_complete",
+  "method": "FP-AS fixed-duration Scout adaptation; not time-optimal Ferrari reproduction",
+  "source_doi": "10.1109/LRA.2025.3643281",
+  "protocol": {
+    "previous_results": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619",
+    "reason": "用户追加：做S路径试一下",
+    "task_unchanged": true,
+    "frozen_geometry_unchanged": true,
+    "transport_sec": 40,
+    "solve_timeout_sec": 600,
+    "no_parameter_sweep": true,
+    "gazebo_runs_if_qualified": 1
+  },
+  "plan_optimization": {
     "status": "Solve_Succeeded",
     "solve_seconds": 286.1519837260021,
     "iterations": 250,
     "objective": 0.23554411670234157
   },
-  "validation": {
+  "plan_validation": {
     "status": "SOFTWARE_VERIFIED",
     "liquid_policy_qualification": {
       "passed": true,
@@ -46,15 +60,1465 @@
     },
     "hardware_verified": false
   },
-  "geometry": {
-    "maximum_node_path_error_m": 8.11537772743617e-14,
-    "maximum_substep_path_error_m": 1.5248844387327183e-05,
-    "substeps_per_interval": 4,
-    "node_tolerance_m": 2e-06,
-    "substep_tolerance_m": 0.001
+  "baseline": {
+    "method": "FP-AS",
+    "source_doi": "10.1109/LRA.2025.3643281",
+    "fixed_duration": true,
+    "time_optimal_reproduction": false,
+    "fixed_geometry": {
+      "method": "clamped_cubic_original_route",
+      "knots": [
+        0.0,
+        0.4841108737204978,
+        0.9682217474409957,
+        1.4523326211614935,
+        1.9364434948819913,
+        2.420554368602489,
+        2.904665242322987,
+        3.3887761160434846,
+        3.8728869897639826,
+        4.35699786348448,
+        4.841108737204978,
+        5.325219610925476,
+        5.809330484645974
+      ],
+      "points": [
+        [
+          0.020268121297657215,
+          -0.008730177324257944
+        ],
+        [
+          0.48856265904844465,
+          0.06311180514293467
+        ],
+        [
+          0.8457544857595581,
+          0.3870122790239554
+        ],
+        [
+          1.2324088104531055,
+          0.657699936740394
+        ],
+        [
+          1.6970478315076347,
+          0.5611276836092104
+        ],
+        [
+          2.0978467035964163,
+          0.29045742548753134
+        ],
+        [
+          2.4912482829308598,
+          0.008325301418978595
+        ],
+        [
+          2.8846505937533506,
+          -0.2738058026688348
+        ],
+        [
+          3.2837409603866754,
+          -0.5469240640713647
+        ],
+        [
+          3.744890890241693,
+          -0.6748421115280794
+        ],
+        [
+          4.208111278040586,
+          -0.5557726088022877
+        ],
+        [
+          4.607662922174206,
+          -0.283610570003202
+        ],
+        [
+          5.0,
+          0.0
+        ]
+      ],
+      "polynomial_coefficients": [
+        [
+          [
+            -0.3569582518486136,
+            0.5362354503068262
+          ],
+          [
+            0.37042785816430024,
+            -0.640339092994324
+          ],
+          [
+            0.11416700825944869,
+            -0.6654935535131247
+          ],
+          [
+            -0.3994286781885752,
+            0.534350390563086
+          ],
+          [
+            0.23352527427101133,
+            0.23059139769367
+          ],
+          [
+            -0.03719374280300651,
+            -0.02326600082709062
+          ],
+          [
+            -0.019545252272451543,
+            -0.03649527627086328
+          ],
+          [
+            0.1655019560160489,
+            0.24867592877955325
+          ],
+          [
+            -0.14561275308213967,
+            0.2421261597675891
+          ],
+          [
+            -0.11178571504282207,
+            -0.32004260083518626
+          ],
+          [
+            0.01334037492103577,
+            0.21046799307695252
+          ],
+          [
+            0.5560026742956148,
+            -1.770257901645235
+          ]
+        ],
+        [
+          [
+            0.10532343994520685,
+            0.043755566900918086
+          ],
+          [
+            -0.4130986736073149,
+            0.8225478040047445
+          ],
+          [
+            0.12488578859168147,
+            -0.10743754935587507
+          ],
+          [
+            0.29069425894729234,
+            -1.0739555462956678
+          ],
+          [
+            -0.28940904021339053,
+            -0.2979010429505135
+          ],
+          [
+            0.049747333476085134,
+            0.03699436607922714
+          ],
+          [
+            -0.004270352499810625,
+            0.003204394114072674
+          ],
+          [
+            -0.03265655996392254,
+            -0.04979888613240367
+          ],
+          [
+            0.20770732962422206,
+            0.31136127733177377
+          ],
+          [
+            -0.0037708217341012387,
+            0.6630089975988026
+          ],
+          [
+            -0.16612086227065487,
+            0.19820068824449452
+          ],
+          [
+            -0.14674620059431015,
+            0.5038702203005456
+          ]
+        ],
+        [
+          [
+            0.9999988089928523,
+            0.0015433771012949332
+          ],
+          [
+            0.8510014717151589,
+            0.42093025889744784
+          ],
+          [
+            0.7114744801327352,
+            0.7671229090819994
+          ],
+          [
+            0.9126613000476339,
+            0.1951976653387672
+          ],
+          [
+            0.9132834884118246,
+            -0.46893302670042364
+          ],
+          [
+            0.7972606501658814,
+            -0.595240786000094
+          ],
+          [
+            0.8192765511604757,
+            -0.5757801290804345
+          ],
+          [
+            0.8013998313038573,
+            -0.5983370293219911
+          ],
+          [
+            0.8861438123495496,
+            -0.47171183158604124
+          ],
+          [
+            0.9848716933677424,
+            -8.586462118433084e-06
+          ],
+          [
+            0.9026252817863532,
+            0.41691238700803585
+          ],
+          [
+            0.751162934624429,
+            0.7567925479575184
+          ]
+        ],
+        [
+          [
+            0.020268121297657215,
+            -0.008730177324257944
+          ],
+          [
+            0.48856265904844465,
+            0.06311180514293467
+          ],
+          [
+            0.8457544857595581,
+            0.3870122790239554
+          ],
+          [
+            1.2324088104531055,
+            0.657699936740394
+          ],
+          [
+            1.6970478315076347,
+            0.5611276836092104
+          ],
+          [
+            2.0978467035964163,
+            0.29045742548753134
+          ],
+          [
+            2.4912482829308598,
+            0.008325301418978595
+          ],
+          [
+            2.8846505937533506,
+            -0.2738058026688348
+          ],
+          [
+            3.2837409603866754,
+            -0.5469240640713647
+          ],
+          [
+            3.744890890241693,
+            -0.6748421115280794
+          ],
+          [
+            4.208111278040586,
+            -0.5557726088022877
+          ],
+          [
+            4.607662922174206,
+            -0.283610570003202
+          ]
+        ]
+      ],
+      "maximum_route_edit_m": 0.05138984090184672,
+      "frozen_path_length_m": 5.812509389191952,
+      "straight": false,
+      "original_route_sha256": "93fcf912d268080b8b8ca90747ec6e6902a4004b160fef0fe1ec3f3939aff726"
+    },
+    "geometry_validation": {
+      "maximum_node_path_error_m": 8.11537772743617e-14,
+      "maximum_substep_path_error_m": 1.5248844387327183e-05,
+      "substeps_per_interval": 4,
+      "node_tolerance_m": 2e-06,
+      "substep_tolerance_m": 0.001
+    },
+    "tail_guard_sec": 2.0,
+    "numerical_formulation": "normalized_production_displacement_lifted_jerk_v8",
+    "stationary_prefix_steps": 11,
+    "initial_linear_command_hold_steps": 6,
+    "linear_command_clear_step": 1196,
+    "angular_command_clear_step": 1191,
+    "fifo_empty_step": 1200,
+    "objective": "integral squared discrete progress jerk; curved paths add 0.01 angular command jerk regularization",
+    "progress_jerk_max": 1.0,
+    "online_liquid_optimization": false
   },
-  "tests": 21,
-  "task_unchanged": true,
-  "geometry_unchanged": true,
-  "real_robot_started": false
+  "attempts": [
+    {
+      "version": 2,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v2_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v2.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "failed",
+        "wall_seconds": 243.52346218300045,
+        "timeout": 600
+      },
+      "stop_reason": {
+        "reason": "FIFO synchronization and lifted jerk do not remove low-speed steering degeneracy; retain failed attempt and stop before ceiling. Derived exact normalized displacement correction before retry.",
+        "owned_child_pid": 194396,
+        "signal": "SIGTERM"
+      },
+      "solver_events": []
+    },
+    {
+      "version": 3,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v3_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v3.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "failed",
+        "wall_seconds": 96.76175351300117,
+        "timeout": 600
+      },
+      "stop_reason": {
+        "reason": "New normalized formulation exposed a cold-seed bug: quintic s stops at command-clear index while actual FOPDT v remains positive. Dividing actual v by zero seeded progress gives huge normalized variables. Repair seed using integrated production motion before further solve.",
+        "owned_child_pid": 198466
+      },
+      "solver_events": []
+    },
+    {
+      "version": 4,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v4_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v4.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "failed",
+        "wall_seconds": 95.30959376199826,
+        "timeout": 600
+      },
+      "stop_reason": {
+        "reason": "Synchronized prefix fixes command states X[6,1:6] exactly at zero, but old nonnegative command inequalities still include these fixed states. Their barrier has no strict interior and diverging multipliers. Omit only implied stationary command bounds.",
+        "owned_child_pid": 201066
+      },
+      "solver_events": []
+    },
+    {
+      "version": 5,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v5_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v5.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "failed",
+        "wall_seconds": 336.2150882420028,
+        "timeout": 600
+      },
+      "stop_reason": {
+        "reason": "Numeric structural-rank audit locates weak pivots in normalized initial zero speed and final zero delayed linear commands. Replace products speed*normalized=0 by implied normalized=0 on these immutable zeros.",
+        "evidence": "initial_jacobian_diagnosis.json",
+        "owned_child_pid": 202462
+      },
+      "solver_events": []
+    },
+    {
+      "version": 6,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v6_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v6.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "failed",
+        "wall_seconds": 244.27326596299827,
+        "timeout": 600
+      },
+      "stop_reason": {
+        "reason": "Iteration 125 multipliers localize ill-conditioning to final three normalized chords (up to 1.70e18). Common early command-clear removes steering before arrival despite different FIFO lengths and response constants. Synchronize each channel FIFO drain at arrival instead of forcing curved final chords during uncontrolled decay.",
+        "owned_child_pid": 207390
+      },
+      "solver_events": []
+    },
+    {
+      "version": 7,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v7_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v7.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 2,
+        "status": "failed",
+        "wall_seconds": 90.29950023299898,
+        "timeout": 600
+      },
+      "stop_reason": null,
+      "solver_events": [
+        {
+          "stage": "solve_failed",
+          "wall_seconds": 90.10783829999855,
+          "return_status": "Error_In_Step_Computation",
+          "success": false,
+          "iter_count": 76,
+          "last_inf_pr": 2.044419478338668e-11,
+          "last_inf_du": 160.96227076057403,
+          "last_mu": 0.002828427124746191,
+          "last_obj": 0.4785374403053324
+        },
+        {
+          "stage": "attempt_failed",
+          "wall_seconds": 90.10792078099985,
+          "error": "Error in Opti::solve [OptiNode] at .../casadi/core/optistack.cpp:217:\n.../casadi/core/optistack_internal.cpp:1338: Assertion \"return_success(accept_limit)\" failed:\nSolver failed. You may use opti.debug.value to investigate the latest values of variables. return_status is 'Error_In_Step_Computation'"
+        }
+      ]
+    },
+    {
+      "version": 8,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "-u",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/solve_v8_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/rejected_v8.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 287.2606403910031,
+        "timeout": 600
+      },
+      "stop_reason": null,
+      "solver_events": [
+        {
+          "stage": "solve_finished",
+          "wall_seconds": 286.11294608200114,
+          "return_status": "Solve_Succeeded",
+          "success": true,
+          "iter_count": 250,
+          "last_inf_pr": 2.684484579074109e-14,
+          "last_inf_du": 1.5576569540860957e-10,
+          "last_mu": 9.09090909090909e-09,
+          "last_obj": 0.23554411670234157
+        }
+      ]
+    }
+  ],
+  "tests": {
+    "command": [
+      "/usr/bin/python3",
+      "-m",
+      "pytest",
+      "-q",
+      "src/scout_apps/control/spmpc_local_planner/scripts/tests/test_fixed_path_baseline.py",
+      "src/scout_apps/control/spmpc_local_planner/scripts/tests/test_zvd_baseline.py",
+      "src/scout_apps/control/spmpc_local_planner/scripts/tests/test_transport_tail_validation.py",
+      "src/scout_apps/control/spmpc_local_planner/scripts/tests/test_trajectory_planning_validation.py"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 6.727626128002157,
+    "timeout": 120
+  },
+  "native": {
+    "mode": "external_timed",
+    "scenario_plan_id": "raw_s_fp_as_20260919-fp-as-eaa40f7dc6ba",
+    "deadline": "45",
+    "evaluation_window": "5",
+    "curvature_weight": "0",
+    "contour_weight": "1",
+    "rti_iterations": "1",
+    "max_prediction_defect": "1.2703373086786485e-07",
+    "actual_v_min": "0",
+    "actual_v_max": "0.31346438064120485",
+    "actual_omega_min": "-0.34071806561276508",
+    "actual_omega_max": "0.25390753159664581",
+    "walltime_p95_ms": "4.0140029999999998",
+    "walltime_max_ms": "9.93004",
+    "solver_time_p95_ms": "3.3930000000000002",
+    "solver_time_max_ms": "7.6459999999999999",
+    "max_jerk": "0.18319353614760781",
+    "max_solve_ms": "7.6459999999999999",
+    "evidence": "MODEL_IN_THE_LOOP",
+    "actuator_scale": "1",
+    "deadline_lateness_sec": "0",
+    "deadline_tolerance_sec": "0",
+    "complete": "true",
+    "completion_time": "40.333333333333336",
+    "final_goal_position_error": "0.0018313640404115082",
+    "final_goal_yaw_error": "0.0015071762354927399",
+    "evaluation_end_time": "50",
+    "evaluation_last_sample_time": "50",
+    "height_sampling": "30 Hz model nodes; not continuous peak certification",
+    "effective_parameter_manifest": {
+      "planning": {
+        "schema_version": "1",
+        "experiment_profile_id": "external_timed",
+        "liquid_free_baseline": "false",
+        "task_deadline_sec": "45",
+        "evaluation_window_sec": "5",
+        "projection": {
+          "lookahead": "2"
+        },
+        "geometry": {
+          "enabled": "true",
+          "curvature_weight": "0",
+          "curvature_rate_weight": "0",
+          "curvature_scale": "1",
+          "curvature_rate_scale": "1",
+          "speed_regularization": "0.050000000000000003",
+          "goal_weight": "2",
+          "goal_position_scale": "0.29999999999999999",
+          "goal_yaw_scale": "1",
+          "reference_curvature_speed_limit": "false"
+        },
+        "reference": {
+          "mode": "time_tracking",
+          "plan_file": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+          "progress_window": "0.29999999999999999",
+          "max_speed_error": "0.02",
+          "route_tolerance": "1.0000000000000001e-05",
+          "deadline_tolerance": "0"
+        },
+        "region": {
+          "enabled": "true",
+          "id": "proxy_open_room",
+          "frame_id": "map",
+          "footprint_radius": "0.45000000000000001",
+          "margin": "0.02",
+          "cells": [
+            {
+              "id": "room",
+              "s_begin": "0",
+              "s_end": "5.8093304846459741",
+              "vertices": [
+                {
+                  "x": "-1.7738649019045563",
+                  "y": "-3.8115037302794277"
+                },
+                {
+                  "x": "9.8261212824125312",
+                  "y": "-3.7936005559044066"
+                },
+                {
+                  "x": "9.8143916164426894",
+                  "y": "3.806390392441271"
+                },
+                {
+                  "x": "-1.7855945678743976",
+                  "y": "3.7884872180662499"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "source": "native explicit configuration; not a ROS launch validation",
+      "variant": "B0",
+      "rti_iterations": "1",
+      "prediction_defect_limit": "0.0001",
+      "jerk_limit_enable": "true",
+      "terminal_goal_position_tolerance": "0.050000000000000003",
+      "terminal_goal_yaw_tolerance": "0.10000000000000001",
+      "terminal_stop_speed": "0.01",
+      "terminal_stop_omega": "0.02",
+      "liquid_constraint_enable": "false",
+      "liquid_complete_stop": "false",
+      "terminal_goal_pose_weight": "2",
+      "use_previous_solution": "true",
+      "height_coeff": "1.8179308248624537",
+      "motion_limits": {
+        "actual_v_min": "-0.002",
+        "v_max": "0.80000000000000004",
+        "omega_max": "1.2",
+        "a_max": "0.59999999999999998",
+        "alpha_max": "1.2",
+        "jerk_max": "1"
+      },
+      "first_ocp_stage": {
+        "rx0": "0.020268121297657166",
+        "rx1": "0.29999959781138308",
+        "rx2": "0.0094794010739258239",
+        "rx3": "-0.0096383620806277052",
+        "ry0": "-0.0087301773242579456",
+        "ry1": "0.0004641049474653583",
+        "ry2": "0.0039351198683121556",
+        "ry3": "0.014480738828784832",
+        "w_contour": "1",
+        "w_lag": "0.20000000000000001",
+        "w_progress": "0",
+        "w_a": "0.10000000000000001",
+        "w_omega": "0.10000000000000001",
+        "w_v": "10",
+        "w_vs": "0.29999999999999999",
+        "w_alpha": "0.10000000000000001",
+        "w_du_a": "0.10000000000000001",
+        "w_du_vs": "0",
+        "a_prev": "0",
+        "vs_prev": "0",
+        "e_c_ref": "0.14999999999999999",
+        "e_l_ref": "0.10000000000000001",
+        "v_ref": "0.25",
+        "actuator_dt": "0.033333333333333333",
+        "actuator_tau_v": "0.112",
+        "actuator_tau_omega": "0.11899999999999999",
+        "actuator_gain_v": "1.018",
+        "actuator_gain_omega": "1.0960000000000001",
+        "anticreep_gain": "8",
+        "stop_active": "0",
+        "stop_goal_s": "0",
+        "stop_brake_accel": "0.59999999999999998",
+        "stop_delay_margin": "0.87866666666666671",
+        "stop_velocity_weight": "1",
+        "w_curvature": "0",
+        "w_curvature_rate": "0",
+        "curvature_speed_floor": "0.050000000000000003",
+        "curvature_ref": "1",
+        "curvature_rate_ref": "1",
+        "reference_curvature_speed_enable": "0",
+        "reference_mode": "2",
+        "reference_s0": "0",
+        "reference_s1": "0.099999999999999992",
+        "reference_s2": "0.19999999999999998",
+        "reference_s3": "0.29999999999999999",
+        "reference_v0": "0",
+        "reference_v1": "0",
+        "reference_v2": "0",
+        "reference_v3": "0",
+        "reference_vs0": "-1.1896095609857901e-31",
+        "reference_vs1": "-1.1896095609857901e-31",
+        "reference_vs2": "-1.1896095609857901e-31",
+        "reference_vs3": "-1.1896095609857901e-31",
+        "region_active": "1",
+        "region_s_begin": "0",
+        "region_s_end": "5.8093304846459741",
+        "region_nx0": "0.0015433771012949217",
+        "region_ny0": "-0.99999880899285243",
+        "region_offset0": "3.312094781614185",
+        "region_nx1": "0.99999880899285232",
+        "region_ny1": "0.0015433771012949762",
+        "region_offset1": "9.3235879565357411",
+        "region_nx2": "-0.0015433771012949217",
+        "region_ny2": "0.99999880899285243",
+        "region_offset2": "3.2945718850524819",
+        "region_nx3": "-0.99999880899285232",
+        "region_ny3": "-0.0015433771012949176",
+        "region_offset3": "1.2830787101309258",
+        "region_nx4": "0",
+        "region_ny4": "0",
+        "region_offset4": "1",
+        "region_nx5": "0",
+        "region_ny5": "0",
+        "region_offset5": "1",
+        "region_nx6": "0",
+        "region_ny6": "0",
+        "region_offset6": "1",
+        "region_nx7": "0",
+        "region_ny7": "0",
+        "region_offset7": "1",
+        "task_goal_active": "0",
+        "task_goal_x": "0.020268121297657215",
+        "task_goal_y": "-0.0087301773242579438",
+        "task_goal_yaw": "0.0015433777140196115",
+        "task_goal_position_tolerance": "0.050000000000000003",
+        "task_goal_yaw_tolerance": "0.10000000000000001",
+        "task_goal_speed_tolerance": "0.01",
+        "task_goal_omega_tolerance": "0.02",
+        "task_goal_require_yaw": "1",
+        "w_task_goal": "2",
+        "task_goal_position_scale": "0.29999999999999999",
+        "task_goal_yaw_scale": "1"
+      }
+    },
+    "failures": "0",
+    "failure_status": "",
+    "curvature_arc_energy": "6.029781207315386",
+    "path_length": "5.8130873615994236",
+    "low_speed_spin_samples": "9",
+    "peak_modal_height_m": "0.00025798023367852103",
+    "minimum_region_clearance": "1.3300000000000001"
+  },
+  "cpp_validation": {
+    "command": [
+      "/tmp/scout_external_native_20260919/validate_plan",
+      "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 0.164796645000024,
+    "timeout": 60
+  },
+  "gazebo": {
+    "name": "fp_as_01",
+    "process": {
+      "command": [
+        "/usr/bin/python3",
+        "scripts/run_trajectory_gazebo_smoke.py",
+        "--setup",
+        "/tmp/scout_external_overlay_20260919/setup.bash",
+        "--output",
+        "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case",
+        "--profile",
+        "external_timed",
+        "--identified-actuator",
+        "--task",
+        "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_task.json",
+        "--plan",
+        "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json"
+      ],
+      "returncode": 0,
+      "status": "completed",
+      "wall_seconds": 127.89850779799963,
+      "timeout": 480
+    },
+    "summary": {
+      "formal": false,
+      "evidence": "CURRENT_MAINLINE_GAZEBO_INTEGRATION",
+      "profile": "external_timed",
+      "actuator_plant_matches_controller": false,
+      "plant": "Identified FOPDT adapter -> existing planar drive (120 Hz)",
+      "controller": "Production fixed 5/10-step FIFO + identified actuator response",
+      "map_file": "/data/a/scout_sim_replacement/maps/proxy_world_manual_saved_20260611_154348.pbstream",
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "runner_sha256": "57cfd4ae24b01e6e4d4e119343c47f81a841587bb86dfdef88e4fcf34f4308a7",
+      "binary_file": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "binary_sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3",
+      "git_sha": "6134e52ac47f962872469bafe4c444df13e11d91",
+      "goal_reached": true,
+      "children": [
+        {
+          "name": "environment_launcher",
+          "pid": 220531,
+          "command": [
+            "/data/a/scout_sim_replacement/scripts/launch_proxy_sim_localization_env.sh"
+          ]
+        },
+        {
+          "name": "actuator_plant",
+          "pid": 221099,
+          "command": [
+            "python3",
+            "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/gazebo_identified_actuator.py",
+            "--config",
+            "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/actuator_config.yaml"
+          ]
+        },
+        {
+          "name": "recorder",
+          "pid": 221919,
+          "command": [
+            "rosbag",
+            "record",
+            "-O",
+            "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/run.bag",
+            "__name:=current_mainline_recorder",
+            "/clock",
+            "/map",
+            "/tf",
+            "/tf_static",
+            "/odom",
+            "/imu/data",
+            "/scan_front",
+            "/scout/global_path_fixed",
+            "/cmd_vel",
+            "/cmd_vel_drive",
+            "/spmpc/status",
+            "/spmpc/local_trajectory",
+            "/spmpc/solver_time_ms",
+            "/spmpc/cost_breakdown",
+            "/spmpc/slosh_height",
+            "/spmpc/slosh_horizon_summary",
+            "/spmpc/terminal/debug",
+            "/spmpc/terminal/mode",
+            "/spmpc/debug/effective_config",
+            "/spmpc/debug/planning_config",
+            "/spmpc/debug/pre_solve_snapshot",
+            "/spmpc/debug/predicted_horizon",
+            "/spmpc/debug/control_cycle_audit",
+            "/spmpc/debug/command_intervention",
+            "/spmpc/debug/control_cycle_wall_timing",
+            "/spmpc/debug/raw_state",
+            "/spmpc/debug/predicted_state",
+            "/spmpc/debug/solver_input_state",
+            "/spmpc/debug/slosh_state",
+            "/spmpc/debug/slosh_observer_selection",
+            "/spmpc/debug/slosh_observer_odom",
+            "/spmpc/debug/slosh_observer_imu",
+            "/spmpc/debug/slosh_cost_monitor"
+          ]
+        },
+        {
+          "name": "planner",
+          "pid": 221989,
+          "command": [
+            "roslaunch",
+            "spmpc_local_planner",
+            "trajectory_mpcc.launch",
+            "profile:=external_timed",
+            "region_config:=/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/region.yaml",
+            "task_overlay_file:=/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/task.yaml",
+            "planner_overlay_file:=/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/overlay.yaml",
+            "plan_file:=/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json"
+          ]
+        }
+      ],
+      "observation_module_sha256": "783647a60a82053305db0d0cacf3c23f9986be1c2bda0ee65d5cde601ec88a45",
+      "actuator_adapter_sha256": "87445f0eae51f9965484495eb8a1a7163a163365bf290bbe83f1f1d14043fe91",
+      "actuator_model_parameters_match": true,
+      "actuator_match_limit": "ROS receipt timing and 120 Hz output require bag verification",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "pre_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "initial_pose": [
+        0.01767632085669503,
+        -0.005287847029173621,
+        0.0009751437056839213
+      ],
+      "odom_child_frame": "base_footprint",
+      "task_sha256": "f109ec99cee735eae80c86a18c41aa53b94ff1a2ba2adae219f74a91983af7e9",
+      "plan_file": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+      "plan_sha256": "d93fc1e52a50321fd53988000235403530a02d985fee5a5e69591e1a95363f68",
+      "observation_target_sim_sec": 51.0,
+      "goal_time_sec": 40.39900000000001,
+      "observation_sim_window_complete": true,
+      "observation_sim_sec": 51.031,
+      "observation_wall_sec": 51.26765997399707,
+      "final_pose": [
+        4.995507671937081,
+        -0.0015298652469361625,
+        0.0005986297968825876
+      ],
+      "status_counts": {
+        "WAITING_FOR_ODOM": 5,
+        "WAITING_FOR_REFERENCE_PATH": 29,
+        "B0_ACADOS_OK": 1201,
+        "TERMINAL_DRAINING": 10,
+        "GOAL_REACHED": 319
+      },
+      "post_ports": {
+        "11892": false,
+        "11926": false
+      },
+      "valid_fresh_lifecycle": true,
+      "closed_bag": true,
+      "passed": true
+    },
+    "windows": {
+      "case": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case",
+      "formal": false,
+      "frame_contract_matches": true,
+      "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+      "first_sustained_pose_sec": 38.397,
+      "first_sustained_low_speed_sec": 39.713,
+      "first_sustained_zero_publication_sec": 40.09900000000001,
+      "inferred_fifo_delay_sec": 0.333333333,
+      "t_stop_candidate_sec": 40.43233333300001,
+      "fifo_clearance_measured": false,
+      "command_epsilon": 1e-06,
+      "maximum_allowed_sample_gap_sec": 0.1,
+      "invalid_observer_after_task_start": 0,
+      "windows": {
+        "transport_peak_m": 0.0002693439859934105,
+        "transport_p95_m": 0.00014810399592970355,
+        "transport_rms_m": 7.757556770748569e-05,
+        "transport_samples": 2021,
+        "tail_peak_m": 1.502927349294497e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 40.43233333300001,
+        "window_sec": 5.0
+      },
+      "stop_evidence_covers_tail": true,
+      "height_coverage_after_stop_sec": 10.600666666999999,
+      "stop_within_deadline": true,
+      "archived_anomalies": {
+        "alignment_rejected": 0,
+        "budget_exhausted": 0,
+        "fault_zero_cycles": null,
+        "goal_sec": 40.39900000000001
+      }
+    },
+    "abnormal_statuses": {},
+    "abnormal_audit_statuses": {},
+    "cycles": {
+      "odom_solve_cycles": 1201,
+      "mismatched_odom_liquid": 0,
+      "command_contract_violations": 0,
+      "qp_limits": [
+        20
+      ],
+      "snapshot_identities": [
+        [
+          24,
+          40,
+          "time_tracking",
+          false
+        ]
+      ],
+      "identity_matches": true,
+      "online_liquid_weight_max": 0.0
+    },
+    "actual_path_length_odom_m": 5.839257011167448,
+    "online_wall": {
+      "state_alignment_wall_ms": {
+        "count": 1201,
+        "min": 0.005728,
+        "p50": 0.016836,
+        "p95": 0.081035,
+        "max": 0.127422
+      },
+      "pre_solve_wall_ms": {
+        "count": 1201,
+        "min": 1.029839,
+        "p50": 3.044571,
+        "p95": 3.722335,
+        "max": 4.58519
+      },
+      "problem_solve_wall_ms": {
+        "count": 1201,
+        "min": 2.955085,
+        "p50": 6.524195,
+        "p95": 10.327787,
+        "max": 18.728436
+      },
+      "dispatch_wall_ms": {
+        "count": 1201,
+        "min": 4.324323,
+        "p50": 9.481457,
+        "p95": 13.539097,
+        "max": 22.501955
+      },
+      "solver_setup_wall_ms": {
+        "count": 1201,
+        "min": 0.326937,
+        "p50": 1.01867,
+        "p95": 1.291473,
+        "max": 1.639494
+      },
+      "rti_wall_ms": {
+        "count": 1201,
+        "min": 2.190252,
+        "p50": 5.01229,
+        "p95": 8.318068,
+        "max": 16.595981
+      },
+      "residual_wall_ms": {
+        "count": 1201,
+        "min": 0.202448,
+        "p50": 0.290822,
+        "p95": 0.74908,
+        "max": 1.087267
+      },
+      "iteration_estimate_wall_ms": {
+        "count": 1201,
+        "min": 0.0,
+        "p50": 5.005446,
+        "p95": 8.312829,
+        "max": 16.589763
+      },
+      "remaining_budget_wall_ms": {
+        "count": 1201,
+        "min": 24.150633,
+        "p50": 26.013833,
+        "p95": 28.554062,
+        "max": 28.793884
+      }
+    },
+    "full_qualification": null,
+    "implementation_passed": true,
+    "reference_execution": {
+      "speed_rmse_mps": 0.0023433278339354715,
+      "position_error_p95_m": 0.018021707438308315,
+      "timing": {
+        "nominal_actual_onset_sec": 1.1333333333333333,
+        "actual_onset_sec": 1.0730000000000004,
+        "nominal_stop_sec": 40.0,
+        "actual_stop_sec": 40.43233333300001,
+        "nominal_transport_sec": 40.0
+      },
+      "clock_reference_error_sec": 0.0,
+      "yaw_rate_rmse_radps": 0.017823985275596945,
+      "yaw_error_p95_rad": 0.04483995860654555,
+      "position_error_max_m": 0.024478889523626757,
+      "clock_regressions": 0,
+      "timing_note": "S path has varying speed and steering; no single 95% cruise braking onset is defined.",
+      "scalar_screen_passed": true
+    }
+  },
+  "actuator_delivery": {
+    "command_to_drive_rmse": [
+      8.789133096516845e-07,
+      2.3421147533848816e-06
+    ],
+    "command_to_drive_error_max": [
+      2.3743003643661442e-05,
+      4.925080833603768e-05
+    ],
+    "drive_to_odom_rmse": [
+      0.00017134775384731907,
+      0.0003920860869867468
+    ],
+    "units": [
+      "m/s",
+      "rad/s"
+    ],
+    "time_basis": "bag receipt approximates subscriber receipt; frozen delay/tau/gain, no fit",
+    "scope": "simulation only"
+  },
+  "quarter_tracking": [
+    {
+      "window_sec": [
+        0,
+        10
+      ],
+      "velocity_rmse": [
+        0.004015616753088346,
+        0.014027176798525167
+      ],
+      "position_p95_m": 0.022041555873761012
+    },
+    {
+      "window_sec": [
+        10,
+        20
+      ],
+      "velocity_rmse": [
+        0.0012129718589260782,
+        0.027716265312512672
+      ],
+      "position_p95_m": 0.01820315630003731
+    },
+    {
+      "window_sec": [
+        20,
+        30
+      ],
+      "velocity_rmse": [
+        0.001672232004708331,
+        0.01543106708954203
+      ],
+      "position_p95_m": 0.01827692778891377
+    },
+    {
+      "window_sec": [
+        30,
+        40
+      ],
+      "velocity_rmse": [
+        0.001253755491866582,
+        0.008228421542809018
+      ],
+      "position_p95_m": 0.010324090501091083
+    }
+  ],
+  "final_position_error_m": 0.004745682153144325,
+  "final_yaw_error_rad": 0.0005986297968825875,
+  "model_caps_passed": true,
+  "archived_comparison_identity": {
+    "B0": {
+      "source": "/data/a/scout_sim_replacement/results/20260919_tf_epoch_pair3_040005/b0_01",
+      "task_fields_match": {
+        "frame_id": true,
+        "route": true,
+        "start_state": true,
+        "goal_pose": true,
+        "deadline": true,
+        "stop_window": true,
+        "actuator_parameters": true,
+        "liquid_parameters": true,
+        "height_coeff": true,
+        "motion_limits": true,
+        "region": true
+      },
+      "physical_parameter_groups_match": {
+        "execution_model": true,
+        "state_timing": true,
+        "terminal": true,
+        "platform": true,
+        "frames": true,
+        "slosh_observer": true,
+        "liquid_nowcast": true
+      },
+      "map_matches": true,
+      "adapter_matches": true,
+      "runtime_hash_matches": {
+        "spmpc_local_planner_node": false,
+        "libspmpc_local_planner.so": false,
+        "libacados_ocp_solver_spmpc_b0.so": true,
+        "libacados_ocp_solver_spmpc_slosh.so": true
+      },
+      "parameter_differences": [
+        {
+          "key": "planning.experiment_profile_id",
+          "archived": "raw_mpcc",
+          "current": "external_timed"
+        },
+        {
+          "key": "planning.geometry.enabled",
+          "archived": false,
+          "current": true
+        },
+        {
+          "key": "planning.geometry.goal_weight",
+          "archived": 0.0,
+          "current": 2.0
+        },
+        {
+          "key": "planning.geometry.reference_curvature_speed_limit",
+          "archived": true,
+          "current": false
+        },
+        {
+          "key": "planning.geometry.speed_regularization",
+          "archived": null,
+          "current": 0.05
+        },
+        {
+          "key": "planning.liquid_free_baseline",
+          "archived": true,
+          "current": false
+        },
+        {
+          "key": "planning.reference.mode",
+          "archived": "cruise",
+          "current": "time_tracking"
+        },
+        {
+          "key": "planning.reference.plan_file",
+          "archived": "",
+          "current": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json"
+        },
+        {
+          "key": "variants.B0.w_progress",
+          "archived": 0.2,
+          "current": 0.0
+        },
+        {
+          "key": "variants.B0.w_v",
+          "archived": 1.0,
+          "current": 10.0
+        }
+      ]
+    },
+    "Full": {
+      "source": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/full_01",
+      "task_fields_match": {
+        "frame_id": true,
+        "route": true,
+        "start_state": true,
+        "goal_pose": true,
+        "deadline": true,
+        "stop_window": true,
+        "actuator_parameters": true,
+        "liquid_parameters": true,
+        "height_coeff": true,
+        "motion_limits": true,
+        "region": true
+      },
+      "physical_parameter_groups_match": {
+        "execution_model": true,
+        "state_timing": true,
+        "terminal": true,
+        "platform": true,
+        "frames": true,
+        "slosh_observer": true,
+        "liquid_nowcast": true
+      },
+      "map_matches": true,
+      "adapter_matches": true,
+      "runtime_hash_matches": {
+        "spmpc_local_planner_node": false,
+        "libspmpc_local_planner.so": false,
+        "libacados_ocp_solver_spmpc_b0.so": true,
+        "libacados_ocp_solver_spmpc_slosh.so": true
+      },
+      "parameter_differences": [
+        {
+          "key": "planner_variant",
+          "archived": "B_slosh",
+          "current": "B0"
+        },
+        {
+          "key": "planning.experiment_profile_id",
+          "archived": "planned_slosh",
+          "current": "external_timed"
+        },
+        {
+          "key": "planning.geometry.curvature_rate_weight",
+          "archived": 0.0001,
+          "current": 0.0
+        },
+        {
+          "key": "planning.geometry.curvature_weight",
+          "archived": 0.05,
+          "current": 0.0
+        },
+        {
+          "key": "planning.geometry.goal_weight",
+          "archived": 0.0,
+          "current": 2.0
+        },
+        {
+          "key": "planning.reference.mode",
+          "archived": "progress",
+          "current": "time_tracking"
+        },
+        {
+          "key": "planning.reference.plan_file",
+          "archived": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/plan.json",
+          "current": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json"
+        },
+        {
+          "key": "variants.B0.w_alpha",
+          "archived": null,
+          "current": 0.1
+        },
+        {
+          "key": "variants.B0.w_du_a",
+          "archived": null,
+          "current": 0.1
+        },
+        {
+          "key": "variants.B0.w_du_vs",
+          "archived": null,
+          "current": 0.1
+        },
+        {
+          "key": "variants.B0.w_progress",
+          "archived": 0.2,
+          "current": 0.0
+        },
+        {
+          "key": "variants.B0.w_v",
+          "archived": 1.0,
+          "current": 10.0
+        },
+        {
+          "key": "variants.B_slosh.w_alpha",
+          "archived": 0.1,
+          "current": null
+        },
+        {
+          "key": "variants.B_slosh.w_du_a",
+          "archived": 0.1,
+          "current": null
+        },
+        {
+          "key": "variants.B_slosh.w_du_vs",
+          "archived": 0.1,
+          "current": null
+        }
+      ]
+    }
+  },
+  "archived_physical_conditions_match": true,
+  "archived_metrics": {
+    "B0": {
+      "n": 3,
+      "metrics": {
+        "goal_sec": {
+          "mean": 31.445666666666664,
+          "minimum": 31.315999999999995,
+          "maximum": 31.576
+        },
+        "transport_peak_mm": {
+          "mean": 0.9774779330799749,
+          "minimum": 0.934211687997709,
+          "maximum": 1.0112101138096476
+        },
+        "transport_p95_mm": {
+          "mean": 0.4809227871117694,
+          "minimum": 0.46536172934884884,
+          "maximum": 0.4946185623769668
+        },
+        "transport_rms_mm": {
+          "mean": 0.20289794556842167,
+          "minimum": 0.19770181782355017,
+          "maximum": 0.2087438228062911
+        },
+        "tail_peak_mm": {
+          "mean": 1.2830439683021827e-06,
+          "minimum": 7.572473272549951e-07,
+          "maximum": 2.2759137166427903e-06
+        }
+      }
+    },
+    "Full": {
+      "n": 3,
+      "metrics": {
+        "goal_sec": {
+          "mean": 28.28233333333333,
+          "minimum": 28.233999999999995,
+          "maximum": 28.314999999999998
+        },
+        "transport_peak_mm": {
+          "mean": 0.5054078547748186,
+          "minimum": 0.47736531452827324,
+          "maximum": 0.5408323017290326
+        },
+        "transport_p95_mm": {
+          "mean": 0.223075367011578,
+          "minimum": 0.2190799124159951,
+          "maximum": 0.2271372257632544
+        },
+        "transport_rms_mm": {
+          "mean": 0.11154279043217365,
+          "minimum": 0.11084501338916364,
+          "maximum": 0.11222955264848235
+        },
+        "tail_peak_mm": {
+          "mean": 5.447288043993933e-06,
+          "minimum": 3.209236659501734e-08,
+          "maximum": 9.253121761576004e-06
+        }
+      }
+    }
+  },
+  "comparison_scope": "Nominal-model method context only: n=1 versus archived n=3, distinct geometry/time laws and different controller runtime hashes; not equal-time or identical-path comparison.",
+  "real_robot_started": false,
+  "closeout": {
+    "runtime_and_inputs_unchanged": true,
+    "post_ports": {
+      "11892": false,
+      "11926": false
+    },
+    "runner_children": [
+      {
+        "pid": 220531,
+        "name": "environment_launcher",
+        "exists": false
+      },
+      {
+        "pid": 221099,
+        "name": "actuator_plant",
+        "exists": false
+      },
+      {
+        "pid": 221919,
+        "name": "recorder",
+        "exists": false
+      },
+      {
+        "pid": 221989,
+        "name": "planner",
+        "exists": false
+      }
+    ],
+    "implementation_passed": true,
+    "reference_execution_passed": true,
+    "model_caps_passed": true,
+    "actual_gazebo_runs": 1,
+    "no_real_robot": true,
+    "no_push": true,
+    "testing_untouched": true,
+    "isolated_environment_sources_untouched": true,
+    "code_commit": "6134e52ac47f962872469bafe4c444df13e11d91"
+  }
 }
