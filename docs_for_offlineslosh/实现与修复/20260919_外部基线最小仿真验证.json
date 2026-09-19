@@ -1,0 +1,862 @@
+{
+  "date": "2026-09-19",
+  "formal": false,
+  "result_directory": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619",
+  "evidence": "single closed-loop straight comparison; odometry-driven liquid model, not independently measured surface",
+  "protocol": {
+    "start_utc": "2026-09-19T09:06:19.747163+00:00",
+    "git_start": "c520a17fcc1015a7e9b096635f844d995b2ecea4",
+    "source_task": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624/task.json",
+    "route": "5 m straight from archived stationary pose, same heading",
+    "nominal_durations_sec": {
+      "zvd_base": 24.0,
+      "zvd_total": 25.2,
+      "full": 40.0,
+      "fp_as": 40.0
+    },
+    "zvd_ramp_sec": 2.0,
+    "deadline_sec": 45.0,
+    "stop_window_sec": 5.0,
+    "offline_budget_sec": 600.0,
+    "fp_as_budget_sec": 5400.0,
+    "planned_cases": [
+      "B0",
+      "ZVD",
+      "Full"
+    ],
+    "extra_case": "FP-AS S only if principle and execution pass",
+    "liquid_limits": {
+      "move_m": 0.0009,
+      "tail_m": 8e-05,
+      "tolerance_m": 1e-06,
+      "scope": "new straight development reporting bounds; not legacy S three-metric qualification"
+    },
+    "execution_screen": {
+      "speed_rmse_mps": 0.02,
+      "position_error_p95_m": 0.05,
+      "nominal_vs_actual_stop_difference_sec": 1.0,
+      "clock_error_sec": 1e-06,
+      "note": "Screen also inspects start/brake timing and spectral distortion; scalar errors alone do not certify shaping fidelity"
+    },
+    "real_world_limits": [
+      "matched actuator calibration",
+      "same-source planning/evaluation liquid",
+      "odom estimator",
+      "initial residual nominally zero",
+      "independent liquid measurement absent"
+    ]
+  },
+  "trials": [
+    {
+      "method": "B0",
+      "case": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/b0_01/case",
+      "implementation_passed": true,
+      "goal_sec": 22.360999999999997,
+      "stop_sec": 22.328333333000003,
+      "metrics_m": {
+        "transport_peak_m": 0.0010578837705381731,
+        "transport_p95_m": 0.0005564734759086577,
+        "transport_rms_m": 0.00021333702949315967,
+        "transport_samples": 1117,
+        "tail_peak_m": 1.2280842452586976e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 22.328333333000003,
+        "window_sec": 5.0
+      },
+      "actual_path_length_odom_m": 5.048179136703425,
+      "final_position_error_m": 0.010119143350910274,
+      "final_yaw_error_rad": -0.001268153827458428,
+      "model_liquid_report_caps_passed": false,
+      "cycles": {
+        "odom_solve_cycles": 659,
+        "mismatched_odom_liquid": 0,
+        "command_contract_violations": 0,
+        "qp_limits": [
+          20
+        ],
+        "snapshot_identities": [
+          [
+            24,
+            40,
+            "cruise",
+            false
+          ]
+        ],
+        "identity_matches": true,
+        "online_liquid_weight_max": 0.0
+      },
+      "abnormal_statuses": {},
+      "abnormal_audit_statuses": {},
+      "reference_execution": null,
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/b0_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "raw_mpcc",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/task.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.89223802200104,
+        "timeout": 480
+      },
+      "online_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 659,
+          "min": 0.005657,
+          "p50": 0.017251,
+          "p95": 0.08492910000000001,
+          "max": 0.163712
+        },
+        "pre_solve_wall_ms": {
+          "count": 659,
+          "min": 1.118747,
+          "p50": 2.974829,
+          "p95": 3.5840156999999997,
+          "max": 4.030929
+        },
+        "problem_solve_wall_ms": {
+          "count": 659,
+          "min": 2.519033,
+          "p50": 5.868643,
+          "p95": 10.9948769,
+          "max": 14.42366
+        },
+        "dispatch_wall_ms": {
+          "count": 659,
+          "min": 3.976382,
+          "p50": 8.546637,
+          "p95": 13.8324382,
+          "max": 17.697976
+        },
+        "solver_setup_wall_ms": {
+          "count": 659,
+          "min": 0.117336,
+          "p50": 0.271061,
+          "p95": 0.45367330000000006,
+          "max": 0.533392
+        },
+        "rti_wall_ms": {
+          "count": 659,
+          "min": 2.209628,
+          "p50": 5.328266,
+          "p95": 10.3433736,
+          "max": 13.660623
+        },
+        "residual_wall_ms": {
+          "count": 659,
+          "min": 0.211346,
+          "p50": 0.277557,
+          "p95": 0.6443942000000001,
+          "max": 0.879605
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 659,
+          "min": 0.0,
+          "p50": 5.311154,
+          "p95": 10.3381286,
+          "max": 13.655245
+        },
+        "remaining_budget_wall_ms": {
+          "count": 659,
+          "min": 25.736325,
+          "p50": 26.926175,
+          "p95": 28.8404426,
+          "max": 28.998839
+        }
+      },
+      "full_offline_qualification": null,
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "actuator_model_parameters_match": true
+    },
+    {
+      "method": "ZVD",
+      "case": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_01/case",
+      "implementation_passed": true,
+      "goal_sec": 25.558999999999997,
+      "stop_sec": 25.556333332999998,
+      "metrics_m": {
+        "transport_peak_m": 0.00034754103397512765,
+        "transport_p95_m": 0.00025784630161995254,
+        "transport_rms_m": 8.518698839406751e-05,
+        "transport_samples": 1278,
+        "tail_peak_m": 1.9460318583138747e-06,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 25.556333332999998,
+        "window_sec": 5.0
+      },
+      "actual_path_length_odom_m": 5.059154610844171,
+      "final_position_error_m": 0.004340244205919605,
+      "final_yaw_error_rad": 0.0001447368628573146,
+      "model_liquid_report_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 756,
+        "mismatched_odom_liquid": 0,
+        "command_contract_violations": 0,
+        "qp_limits": [
+          20
+        ],
+        "snapshot_identities": [
+          [
+            24,
+            40,
+            "time_tracking",
+            false
+          ]
+        ],
+        "identity_matches": true,
+        "online_liquid_weight_max": 0.0
+      },
+      "abnormal_statuses": {},
+      "abnormal_audit_statuses": {},
+      "reference_execution": {
+        "speed_rmse_mps": 0.003678820081098965,
+        "position_error_p95_m": 0.021810285747563583,
+        "timing": {
+          "nominal_actual_onset_sec": 0.6,
+          "actual_onset_sec": 0.570999999999998,
+          "nominal_brake_95pct_sec": 22.633333333333333,
+          "actual_brake_95pct_sec": 22.631,
+          "nominal_stop_sec": 24.333333333333332,
+          "actual_stop_sec": 25.556333332999998,
+          "nominal_transport_sec": 25.2
+        },
+        "clock_reference_error_sec": 0.0,
+        "scalar_screen_passed": true
+      },
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "external_timed",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/task.json",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.79052884900011,
+        "timeout": 480
+      },
+      "online_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 756,
+          "min": 0.005657,
+          "p50": 0.015609500000000002,
+          "p95": 0.08066825,
+          "max": 0.13808
+        },
+        "pre_solve_wall_ms": {
+          "count": 756,
+          "min": 1.097581,
+          "p50": 1.52673,
+          "p95": 3.428675,
+          "max": 3.906732
+        },
+        "problem_solve_wall_ms": {
+          "count": 756,
+          "min": 2.843235,
+          "p50": 4.0952725,
+          "p95": 8.626873,
+          "max": 12.174945
+        },
+        "dispatch_wall_ms": {
+          "count": 756,
+          "min": 4.115353,
+          "p50": 6.074027,
+          "p95": 11.470699250000001,
+          "max": 14.801592
+        },
+        "solver_setup_wall_ms": {
+          "count": 756,
+          "min": 0.268755,
+          "p50": 0.3899675,
+          "p95": 1.07385175,
+          "max": 1.450288
+        },
+        "rti_wall_ms": {
+          "count": 756,
+          "min": 2.220654,
+          "p50": 3.168807,
+          "p95": 7.11058375,
+          "max": 11.59462
+        },
+        "residual_wall_ms": {
+          "count": 756,
+          "min": 0.207015,
+          "p50": 0.2771365,
+          "p95": 0.6083665,
+          "max": 0.900135
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 756,
+          "min": 0.0,
+          "p50": 3.157632,
+          "p95": 7.10607925,
+          "max": 11.589872
+        },
+        "remaining_budget_wall_ms": {
+          "count": 756,
+          "min": 24.900883,
+          "p50": 28.285819,
+          "p95": 28.674948,
+          "max": 28.842536
+        }
+      },
+      "full_offline_qualification": null,
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "actuator_model_parameters_match": true
+    },
+    {
+      "method": "Full",
+      "case": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_01/case",
+      "implementation_passed": true,
+      "goal_sec": 23.192,
+      "stop_sec": 23.159333333000006,
+      "metrics_m": {
+        "transport_peak_m": 0.000703716577955448,
+        "transport_p95_m": 0.00028409299927135577,
+        "transport_rms_m": 0.00014072603624008874,
+        "transport_samples": 1158,
+        "tail_peak_m": 2.8072883705846504e-05,
+        "transport_covered": true,
+        "tail_covered": true,
+        "covered": true,
+        "t_stop": 23.159333333000006,
+        "window_sec": 5.0
+      },
+      "actual_path_length_odom_m": 5.035483477125935,
+      "final_position_error_m": 0.02158894359042112,
+      "final_yaw_error_rad": 0.010791058536392466,
+      "model_liquid_report_caps_passed": true,
+      "cycles": {
+        "odom_solve_cycles": 684,
+        "mismatched_odom_liquid": 0,
+        "command_contract_violations": 0,
+        "qp_limits": [
+          20
+        ],
+        "snapshot_identities": [
+          [
+            28,
+            40,
+            "progress",
+            true
+          ]
+        ],
+        "identity_matches": true,
+        "online_liquid_weight_max": 5.0
+      },
+      "abnormal_statuses": {},
+      "abnormal_audit_statuses": {},
+      "reference_execution": {
+        "speed_rmse_mps": 0.04490276284775534,
+        "position_error_p95_m": 0.6946074087224454,
+        "timing": {
+          "nominal_actual_onset_sec": 0.36666666666666664,
+          "actual_onset_sec": 0.40500000000000114,
+          "nominal_brake_95pct_sec": 20.0,
+          "actual_brake_95pct_sec": 20.005000000000003,
+          "nominal_stop_sec": 39.766666666666666,
+          "actual_stop_sec": 23.159333333000006,
+          "nominal_transport_sec": 40.0
+        },
+        "clock_reference_error_sec": 17.868
+      },
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "planned_slosh",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.79665278900029,
+        "timeout": 480
+      },
+      "online_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 684,
+          "min": 0.006077,
+          "p50": 0.011244,
+          "p95": 0.04385065,
+          "max": 0.217839
+        },
+        "pre_solve_wall_ms": {
+          "count": 684,
+          "min": 1.085636,
+          "p50": 1.5119905,
+          "p95": 3.5012992,
+          "max": 3.924462
+        },
+        "problem_solve_wall_ms": {
+          "count": 684,
+          "min": 4.330039,
+          "p50": 8.0029275,
+          "p95": 13.00909185,
+          "max": 17.250939
+        },
+        "dispatch_wall_ms": {
+          "count": 684,
+          "min": 5.705522,
+          "p50": 9.984399,
+          "p95": 15.709989100000003,
+          "max": 20.401404
+        },
+        "solver_setup_wall_ms": {
+          "count": 684,
+          "min": 0.358851,
+          "p50": 1.1047375,
+          "p95": 2.65610755,
+          "max": 4.008832
+        },
+        "rti_wall_ms": {
+          "count": 684,
+          "min": 3.595224,
+          "p50": 6.1903685,
+          "p95": 10.472306150000001,
+          "max": 13.797776
+        },
+        "residual_wall_ms": {
+          "count": 684,
+          "min": 0.269454,
+          "p50": 0.387557,
+          "p95": 0.9264321,
+          "max": 1.470119
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 684,
+          "min": 0.0,
+          "p50": 6.184083,
+          "p95": 10.46657985,
+          "max": 13.793376
+        },
+        "remaining_budget_wall_ms": {
+          "count": 684,
+          "min": 22.505712,
+          "p50": 27.425117999999998,
+          "p95": 28.3799016,
+          "max": 28.701528
+        }
+      },
+      "full_offline_qualification": {
+        "passed": false,
+        "reason": "plan violates: dense_transport_tail_liquid_cap(t=39.7666667, height=0.000152902164, cap=8e-05, stop=39.766666666666666)",
+        "source": "full_rejected.json",
+        "note": "Full liquid qualification failed; retained transparently for public-feasible single comparison. No task, objective, time, sample or constraint was changed."
+      },
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/spmpc_local_planner/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "source_path": "/tmp/scout_external_overlay_20260919/lib/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "source_path": "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/generated/acados/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "actuator_model_parameters_match": true
+    }
+  ],
+  "identity": {
+    "preflight_sha256_unchanged": true,
+    "common_runtime": true,
+    "common_map": true,
+    "common_physics_and_safety": true,
+    "full_vs_b0_parameter_differences": [
+      {
+        "key": "planner_variant",
+        "left": "B0",
+        "right": "B_slosh"
+      },
+      {
+        "key": "planning.experiment_profile_id",
+        "left": "raw_mpcc",
+        "right": "planned_slosh"
+      },
+      {
+        "key": "planning.geometry.curvature_rate_weight",
+        "left": 0.0,
+        "right": 0.0001
+      },
+      {
+        "key": "planning.geometry.curvature_weight",
+        "left": 0.0,
+        "right": 0.05
+      },
+      {
+        "key": "planning.geometry.enabled",
+        "left": false,
+        "right": true
+      },
+      {
+        "key": "planning.geometry.reference_curvature_speed_limit",
+        "left": true,
+        "right": false
+      },
+      {
+        "key": "planning.geometry.speed_regularization",
+        "left": null,
+        "right": 0.05
+      },
+      {
+        "key": "planning.liquid_free_baseline",
+        "left": true,
+        "right": false
+      },
+      {
+        "key": "planning.reference.mode",
+        "left": "cruise",
+        "right": "progress"
+      },
+      {
+        "key": "planning.reference.plan_file",
+        "left": "",
+        "right": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json"
+      },
+      {
+        "key": "variants.B0.w_alpha",
+        "left": 0.1,
+        "right": null
+      },
+      {
+        "key": "variants.B0.w_du_a",
+        "left": 0.1,
+        "right": null
+      },
+      {
+        "key": "variants.B0.w_du_vs",
+        "left": 0.1,
+        "right": null
+      },
+      {
+        "key": "variants.B_slosh.w_alpha",
+        "left": null,
+        "right": 0.1
+      },
+      {
+        "key": "variants.B_slosh.w_du_a",
+        "left": null,
+        "right": 0.1
+      },
+      {
+        "key": "variants.B_slosh.w_du_vs",
+        "left": null,
+        "right": 0.1
+      }
+    ],
+    "zvd_vs_b0_parameter_differences": [
+      {
+        "key": "planning.experiment_profile_id",
+        "left": "raw_mpcc",
+        "right": "external_timed"
+      },
+      {
+        "key": "planning.geometry.enabled",
+        "left": false,
+        "right": true
+      },
+      {
+        "key": "planning.geometry.goal_weight",
+        "left": 0.0,
+        "right": 2.0
+      },
+      {
+        "key": "planning.geometry.reference_curvature_speed_limit",
+        "left": true,
+        "right": false
+      },
+      {
+        "key": "planning.geometry.speed_regularization",
+        "left": null,
+        "right": 0.05
+      },
+      {
+        "key": "planning.liquid_free_baseline",
+        "left": true,
+        "right": false
+      },
+      {
+        "key": "planning.reference.mode",
+        "left": "cruise",
+        "right": "time_tracking"
+      },
+      {
+        "key": "planning.reference.plan_file",
+        "left": "",
+        "right": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json"
+      },
+      {
+        "key": "variants.B0.w_progress",
+        "left": 0.2,
+        "right": 0.0
+      },
+      {
+        "key": "variants.B0.w_v",
+        "left": 1.0,
+        "right": 10.0
+      }
+    ],
+    "common_task_fields": {
+      "frame_id": true,
+      "route": true,
+      "start_state": true,
+      "goal_pose": true,
+      "deadline": true,
+      "stop_window": true,
+      "actuator_parameters": true,
+      "liquid_parameters": true,
+      "height_coeff": true,
+      "motion_limits": true,
+      "region": true
+    }
+  },
+  "actuator_delivery": {
+    "b0_01": {
+      "command_to_drive_rmse": [
+        1.1491087721929899e-06,
+        8.449682232317039e-07
+      ],
+      "command_to_drive_error_max": [
+        5.49864519149984e-05,
+        1.0973210883994354e-05
+      ],
+      "drive_to_odom_rmse": [
+        0.0006562247325013202,
+        0.00012759711082808336
+      ],
+      "units": [
+        "m/s",
+        "rad/s"
+      ],
+      "time_basis": "bag receipt is an approximation to subscriber receipt; fixed frozen parameters, no fitted delay",
+      "scope": "simulation adapter delivery; not real actuator robustness"
+    },
+    "zvd_01": {
+      "command_to_drive_rmse": [
+        2.1854660733491073e-06,
+        5.194417655483063e-07
+      ],
+      "command_to_drive_error_max": [
+        4.4976589559014846e-05,
+        6.217272152909351e-06
+      ],
+      "drive_to_odom_rmse": [
+        0.00024794382110956243,
+        9.641838735459824e-05
+      ],
+      "units": [
+        "m/s",
+        "rad/s"
+      ],
+      "time_basis": "bag receipt is an approximation to subscriber receipt; fixed frozen parameters, no fitted delay",
+      "scope": "simulation adapter delivery; not real actuator robustness"
+    },
+    "full_01": {
+      "command_to_drive_rmse": [
+        2.7117429450157417e-06,
+        5.988956918789749e-07
+      ],
+      "command_to_drive_error_max": [
+        3.50814203451677e-05,
+        9.537535198377153e-06
+      ],
+      "drive_to_odom_rmse": [
+        0.0004591230166784123,
+        8.76545147092638e-05
+      ],
+      "units": [
+        "m/s",
+        "rad/s"
+      ],
+      "time_basis": "bag receipt is an approximation to subscriber receipt; fixed frozen parameters, no fitted delay",
+      "scope": "simulation adapter delivery; not real actuator robustness"
+    }
+  },
+  "zvd_timing_detail": {
+    "clock_backward_steps": 0,
+    "clock_epoch_offset_min_sec": 0.025999999999992696,
+    "clock_epoch_offset_max_sec": 0.04199999999999804,
+    "post_shaping_command_abs_max_mps": 2.337496109329679e-05,
+    "post_shaping_actual_speed_abs_max_mps": 0.005776382082578556,
+    "note": "Clock offset includes snapshot bag receipt delay; command t is bag receipt. Small feedback tail is measured, not silently replaced by nominal zeros."
+  },
+  "planning": {
+    "zvd": {
+      "method": "ZVD",
+      "source_doi": "10.1115/1.4054224",
+      "base_duration_sec": 24.0,
+      "ramp_duration_sec": 2.0,
+      "analytic_impulse_times_sec": [
+        0.0,
+        0.09720940434767199,
+        0.19441880869534398
+      ],
+      "analytic_weights": [
+        0.29077787787234777,
+        0.496920721277122,
+        0.21230140085053006
+      ],
+      "discrete_kernel": [
+        0.29077787787234777,
+        0.0,
+        0.041601144130429,
+        0.455319577146693,
+        0.0,
+        0.03554684197179806,
+        0.176754558878732
+      ],
+      "shaping_delay_sec": 0.2,
+      "fractional_delay_method": "adjacent_grid_weight_split",
+      "time_compression": false,
+      "base_distance_m": 4.999999999999999,
+      "shaped_distance_m": 4.999999999999999,
+      "ideal_base_residual_m": 1.3294109448403645e-05,
+      "ideal_shaped_residual_m": 2.421741018759174e-08,
+      "ideal_residual_ratio": 0.0018216647216259955,
+      "nominal_actual_stop_sec": 25.2,
+      "online_liquid_optimization": false,
+      "generation_seconds": 0.14006108000103268
+    },
+    "full_initial": {
+      "command": [
+        "/usr/bin/python3",
+        "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json",
+        "--warm-plan",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+        "--diagnostics",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_solve_events.jsonl"
+      ],
+      "returncode": 2,
+      "status": "failed",
+      "wall_seconds": 39.1484721199995,
+      "timeout": 600
+    },
+    "full_diagnostic_retry": {
+      "command": [
+        "/usr/bin/python3",
+        "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json",
+        "--warm-plan",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+        "--diagnostics",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_diagnostic_events.jsonl",
+        "--rejected-plan",
+        "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_rejected.json"
+      ],
+      "returncode": 2,
+      "status": "failed",
+      "wall_seconds": 39.94597694799995,
+      "timeout": 600
+    },
+    "full_final_qualification": {
+      "passed": false,
+      "reason": "plan violates: dense_transport_tail_liquid_cap(t=39.7666667, height=0.000152902164, cap=8e-05, stop=39.766666666666666)",
+      "source": "full_rejected.json",
+      "note": "Full liquid qualification failed; retained transparently for public-feasible single comparison. No task, objective, time, sample or constraint was changed."
+    }
+  },
+  "fp_as": {
+    "status": "in_progress",
+    "protocol": {
+      "start_utc": "2026-09-19T09:34:22.724520+00:00",
+      "budget_seconds": 5400,
+      "per_solve_seconds": 600,
+      "nominal_duration_sec": 40.0,
+      "simple_case": "same straight 5 m, offline only",
+      "s_case": "archived raw S route; never Full geometry",
+      "geometry": "13 arc-index knots, cubic spline with measured start/goal heading; fixed before optimization",
+      "jerk": "finite difference of progress speed on 30 Hz grid; limit 1 m/s^3",
+      "liquid_caps_m": {
+        "move": 0.0009,
+        "tail": 8e-05,
+        "tolerance": 1e-06
+      },
+      "tail_guard_sec": 2.0,
+      "stop": "failure or timeout stops case without retry or timing sweep"
+    }
+  },
+  "limitations": [
+    "n=1, unequal duration",
+    "Full offline liquid qualification failed at early stop, public feasibility passed",
+    "matched nominal actuator and same-source liquid; no real robot run",
+    "real 5 Hz body resonance absent; damping, low-speed response, initial residual and independent surface remain unverified"
+  ],
+  "generated_utc": "2026-09-19T09:44:53.254138+00:00"
+}
