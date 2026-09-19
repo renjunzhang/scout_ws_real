@@ -1,0 +1,266 @@
+{
+  "date": "2026-09-19",
+  "formal": false,
+  "evidence": "SINGLE_MODEL_IN_THE_LOOP_TRIAL_WITH_LIVE_BUDGET",
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_release",
+  "protocol": {
+    "evidence": "SINGLE_RELEASE_NATIVE_THEN_CONDITIONAL_GAZEBO",
+    "formal": false,
+    "source_head": "b22dc54ca6f9c5816c63b328c0a3871f852bb5c3",
+    "build_type": "Release",
+    "fast_math": false,
+    "plan": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+    "plan_sha256": "5a48e38b9528f52595183a531e71a12950ffda1e6035963a2bd5d007af44ce8d",
+    "task": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+    "rti_iterations": 3,
+    "rti_min_iterations": 3,
+    "control_period_ms": 33.333333333333336,
+    "publish_reserve_ms": 3,
+    "native_solve_budget_ms": 30.333333333333336,
+    "actual_jerk_max": 1,
+    "jerk_semantics": "30 Hz actuator-model acceleration difference, including FIFO head transitions",
+    "online_liquid_hard_constraint": false,
+    "online_liquid_weight": 5,
+    "progress_weight": 0,
+    "max_native_trials": 1,
+    "max_gazebo_trials": 1,
+    "max_retries": 0,
+    "native_timeout_sec": 180,
+    "gazebo_timeout_sec": 480,
+    "native_gate": [
+      "complete by deadline and full observation window",
+      "no abnormal status",
+      "actual jerk <= 1 + 3e-5",
+      "all active solves execute 3 RTIs",
+      "cycle through solve max <=30.333333 ms"
+    ],
+    "gazebo_gate": [
+      "task complete, full observation window, clean lifecycle",
+      "inspect all statuses, timing/publication, actual actuator/odom mismatch"
+    ],
+    "comparison": "reuse first preselected B0 and FP-AS; unequal-version development comparison, model liquid only",
+    "hardware": false,
+    "protected_paths": [
+      "Testing/",
+      "isolated simulation environment files"
+    ],
+    "runtime_head": "edfe8c38d74f0c254d996d5558ef2d3bbcd35457"
+  },
+  "process": {
+    "command": [
+      "/tmp/scout_jerk_release_native/geometry_trial",
+      "planned_slosh",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_release/native",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+      "1",
+      ".05",
+      "1",
+      "3",
+      "0",
+      "0",
+      "30.333333333333336",
+      "3"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 15.646944631000224,
+    "timeout": 180
+  },
+  "runtime": {
+    "geometry_trial": {
+      "source": "/tmp/scout_jerk_release_native/geometry_trial",
+      "sha256": "a94877407eb21a469097168ee1de77fb7175b6146d4126d97678bdce8ffd0271"
+    },
+    "libspmpc_local_planner.so": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+      "sha256": "e9e2bc9ee1293308c58a9ca6509a545d7e5d101e438d64dda8ef6823cfaa56a7"
+    },
+    "spmpc_local_planner_node": {
+      "source": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+      "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+    },
+    "libacados_ocp_solver_spmpc_b0.so": {
+      "source": "/tmp/scout_jerk_release_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+      "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+    },
+    "libacados_ocp_solver_spmpc_slosh.so": {
+      "source": "/tmp/scout_jerk_release_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+      "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+    }
+  },
+  "native": {
+    "complete": "true",
+    "completion_time": "42.43333333333333",
+    "failures": "0",
+    "failure_status": "",
+    "evaluation_last_sample_time": "50",
+    "max_actual_jerk": "0.99999999999735112",
+    "max_jerk": "1.0000000000000564",
+    "max_prediction_defect": "8.5041720332412751e-09",
+    "walltime_p95_ms": "18.008586999999999",
+    "walltime_max_ms": "27.975809999999999",
+    "cycle_p95_ms": "18.010052999999999",
+    "cycle_max_ms": "27.977765000000002",
+    "solver_time_p95_ms": "16.850000000000001",
+    "solver_time_max_ms": "27.414000000000001",
+    "path_length": "5.1375364337039375",
+    "final_goal_position_error": "0.028545195432173556",
+    "final_goal_yaw_error": "0.050725199426798873",
+    "peak_modal_height_m": "0.00062654785092795817"
+  },
+  "gate": {
+    "complete": true,
+    "no_abnormal_status": false,
+    "actual_jerk": true,
+    "full_rti": true,
+    "cycle_timing": true,
+    "status_counts": {
+      "B_slosh_ACADOS_OK": 1214,
+      "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 3,
+      "SOLVE_BUDGET_STOPPING": 46,
+      "TERMINAL_DRAINING": 10,
+      "GOAL_REACHED": 228
+    },
+    "active_rti_counts": {
+      "3": 1214
+    },
+    "abnormal_statuses": {
+      "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED": 3,
+      "SOLVE_BUDGET_STOPPING": 46
+    },
+    "passed": false
+  },
+  "status_transitions": [
+    {
+      "t": 0.0,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 2.533333333333333,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 2.5666666666666664,
+      "status": "SOLVE_BUDGET_STOPPING"
+    },
+    {
+      "t": 2.8,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 29.099999999999998,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 29.133333333333333,
+      "status": "SOLVE_BUDGET_STOPPING"
+    },
+    {
+      "t": 29.933333333333334,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 34.266666666666666,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 34.3,
+      "status": "SOLVE_BUDGET_STOPPING"
+    },
+    {
+      "t": 34.8,
+      "status": "B_slosh_ACADOS_OK"
+    },
+    {
+      "t": 42.1,
+      "status": "TERMINAL_DRAINING"
+    },
+    {
+      "t": 42.43333333333333,
+      "status": "GOAL_REACHED"
+    }
+  ],
+  "budget_rejections": [
+    {
+      "t": 2.533333333333333,
+      "iterations": 2,
+      "cycle_ms": 20.84229,
+      "solve_ms": 20.840894,
+      "setup_ms": 0.641205,
+      "rti_ms": 20.124819,
+      "residual_ms": 0.0,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 29.099999999999998,
+      "iterations": 2,
+      "cycle_ms": 23.569148,
+      "solve_ms": 23.566774,
+      "setup_ms": 0.912536,
+      "rti_ms": 22.527896,
+      "residual_ms": 0.0,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    },
+    {
+      "t": 34.266666666666666,
+      "iterations": 2,
+      "cycle_ms": 20.793827,
+      "solve_ms": 20.791941,
+      "setup_ms": 0.712094,
+      "rti_ms": 20.013778,
+      "residual_ms": 0.0,
+      "status": "SOLVER_FAILURE_STOPPING: SOLVE_BUDGET_EXHAUSTED"
+    }
+  ],
+  "active_solve_timing_ms": {
+    "solve_ms": {
+      "p95": 19.157115,
+      "maximum": 27.97581
+    },
+    "setup_ms": {
+      "p95": 1.275288,
+      "maximum": 2.848376
+    },
+    "rti_ms": {
+      "p95": 17.958511,
+      "maximum": 27.442228
+    }
+  },
+  "checks": {
+    "native_release_build": true,
+    "ros_release_build": true,
+    "generated_solver_optimization": "-O2 (generator default)",
+    "cpp_optimization": "-O3 -DNDEBUG (CMake Release)",
+    "fast_math": false,
+    "test_suites_passed": 4,
+    "test_cases_passed": 75,
+    "python_runner_syntax": true,
+    "git_diff_check": true
+  },
+  "diagnosis": {
+    "observed": "Three solves executed only two RTIs; the pre-iteration budget estimate refused the third. Verified temporary stop and resume completed the task.",
+    "not_observed": "No QP failure, actual-jerk violation or completed-call deadline overrun in this run.",
+    "limit": "Cannot know the duration of a third RTI that was never started. Per-iteration durations, final estimate and scheduler trace were not persisted; QP cost versus OS jitter is unresolved.",
+    "dominant_cost": "RTI dominates after Release; rejected-cycle solver setup is below 1 ms. Do not attribute remaining failure to duplicated model replay without evidence."
+  },
+  "remaining_gaps": [
+    "No abnormal-free native run with the live three-RTI requirement",
+    "No ROS/Gazebo timing and publication validation for this version",
+    "No new B0/FP-AS/Full accepted comparison plot",
+    "30 Hz model-grid jerk is not continuous physical jerk; actuator mismatch and independent liquid measurements remain unverified"
+  ],
+  "closeout": {
+    "native_runs": 1,
+    "gazebo_runs": 0,
+    "retries": 0,
+    "parameter_sweeps": 0,
+    "new_plans": 0,
+    "hardware_runs": 0,
+    "comparison_plot": "NOT_GENERATED_NATIVE_GATE_FAILED",
+    "protected_paths_untouched": [
+      "Testing/",
+      "isolated simulation environment files"
+    ]
+  },
+  "conclusion": "Release reduces wrapper overhead and this run completes, but three live-budget rejections fail the predeclared no-abnormal-status gate; stop without Gazebo or additional trials."
+}
