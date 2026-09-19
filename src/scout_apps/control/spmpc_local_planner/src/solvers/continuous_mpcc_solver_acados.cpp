@@ -703,6 +703,7 @@ void ContinuousMpccSolverAcados::configure(const SolverParams& params, const Var
     planning_adapter_.reset();
     try {
         if (params_.rti_iterations<1 || params_.rti_iterations>20 ||
+            params_.rti_min_iterations<1 || params_.rti_min_iterations>params_.rti_iterations ||
             !std::isfinite(params_.max_prediction_defect) || params_.max_prediction_defect<0)
             throw std::invalid_argument("invalid RTI iteration/defect configuration");
         // Generated capsules allocate QP statistics/workspace for 50 steps.
@@ -1298,6 +1299,8 @@ bool ContinuousMpccSolverAcados::solve(
         time_tot+=iteration_time;
         bool feasible_iterate = false;
         if (status == 0 && input.solve_budget.deadline != SolveBudget::Clock::time_point{} &&
+            iterations_executed >= params_.rti_min_iterations &&
+            iterations_executed < params_.rti_iterations &&
             params_.max_prediction_defect > 0.) {
             // With a live deadline, stop spending RTI calls once nonlinear
             // dynamics AND all generated inequalities are feasible. The common
@@ -1340,6 +1343,12 @@ bool ContinuousMpccSolverAcados::solve(
         output.status = "ACADOS_SOLVE_FAILED_" + std::to_string(status);
         output.cmd_v = 0.0;
         output.cmd_omega = 0.0;
+        return false;
+    }
+
+    if (iterations_executed < params_.rti_min_iterations) {
+        output.recoverable_solver_failure = true;
+        output.status = snapshot.solver_status = "SOLVE_BUDGET_EXHAUSTED";
         return false;
     }
 

@@ -161,6 +161,29 @@ TEST(ReplayDiagnostics, OnlineBudgetStopsAtFeasibleIterateButOfflineCountStaysFi
     EXPECT_EQ(output.pre_solve_snapshot.rti_iterations,params.rti_iterations);
 }
 
+TEST(ReplayDiagnostics, RequiredRtiCountKeepsLiveAndOfflineSolvesAligned) {
+    auto params=makeParams();
+    params.rti_iterations=3; params.rti_min_iterations=3;
+    params.max_prediction_defect=1e-4;
+    ContinuousMpccSolverAcados solver;
+    auto input=makeInput();
+    SolverOutput live, offline;
+    solver.configure(params,makeB0Variant());
+    input.solve_budget.deadline=SolveBudget::Clock::now()+std::chrono::seconds(10);
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),live))<<live.status;
+    EXPECT_EQ(live.pre_solve_snapshot.rti_iterations,3);
+    solver.configure(params,makeB0Variant());
+    input.solve_budget={};
+    ASSERT_TRUE(solver.solve(input,makeStraightReference(),offline))<<offline.status;
+    EXPECT_EQ(offline.pre_solve_snapshot.rti_iterations,3);
+    EXPECT_NEAR(live.cmd_v,offline.cmd_v,1e-12);
+    EXPECT_NEAR(live.cmd_omega,offline.cmd_omega,1e-12);
+    input.solve_budget.deadline=SolveBudget::Clock::now()-std::chrono::milliseconds(1);
+    EXPECT_FALSE(solver.solve(input,makeStraightReference(),live));
+    EXPECT_EQ(live.status,"SOLVE_BUDGET_EXHAUSTED");
+    EXPECT_FALSE(live.predicted_horizon.valid);
+}
+
 TEST(ReplayDiagnostics, TimedRawReferencePreparesOnceAndRepeatedPathKeepsLiveHistory) {
     auto params = makeParams();
     params.rti_iterations = 5;

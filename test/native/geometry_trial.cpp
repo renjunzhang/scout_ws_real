@@ -23,13 +23,16 @@ struct Options {
     double contour_weight=std::numeric_limits<double>::quiet_NaN();
     double progress_weight=std::numeric_limits<double>::quiet_NaN();
     int rti_iterations=5;
+    int rti_min_iterations=1;
+    double solve_budget_ms=0.;
 };
 struct TrialConfig { SolverParams params; VariantConfig variant; };
 
 Options parseOptions(int argc, char** argv) {
-    if (argc<4 || argc>10) throw std::invalid_argument(
+    if (argc<4 || argc>12) throw std::invalid_argument(
         "usage: geometry_trial raw|geometry|planned|planned_slosh|external_timed output-prefix plan.json "
-        "[actuator-scale] [curvature-weight] [contour-weight] [rti-iterations] [goal-weight] [progress-weight]");
+        "[actuator-scale] [curvature-weight] [contour-weight] [rti-iterations] [goal-weight] [progress-weight] "
+        "[solve-budget-ms] [rti-min-iterations]");
     Options out;
     out.mode=argv[1]; out.prefix=argv[2]; out.plan_file=argv[3];
     if (out.mode!="raw" && out.mode!="geometry" && out.mode!="planned" && out.mode!="planned_slosh" && out.mode!="external_timed")
@@ -40,6 +43,11 @@ Options parseOptions(int argc, char** argv) {
     if(argc>7) out.rti_iterations=std::stoi(argv[7]);
     if(argc>8) out.goal_weight=std::stod(argv[8]);
     if(argc>9) out.progress_weight=std::stod(argv[9]);
+    if(argc>10) out.solve_budget_ms=std::stod(argv[10]);
+    if(argc>11) out.rti_min_iterations=std::stoi(argv[11]);
+    if (!std::isfinite(out.solve_budget_ms) || out.solve_budget_ms<0. ||
+        out.rti_min_iterations<1 || out.rti_min_iterations>out.rti_iterations)
+        throw std::invalid_argument("invalid solve budget/minimum RTI count");
     if (!std::isfinite(out.actuator_scale) || out.actuator_scale<=0 ||
         !std::isfinite(out.curvature_weight) || out.curvature_weight<0 ||
         !std::isfinite(out.goal_weight) || out.goal_weight<0 ||
@@ -55,6 +63,7 @@ TrialConfig makeConfig(const Options& options, const TrajectoryPlan& plan) {
     TrialConfig config;
     auto& params=config.params;
     params.rti_iterations=options.rti_iterations;
+    params.rti_min_iterations=options.rti_min_iterations;
     params.max_prediction_defect=1e-4;
     params.actual_v_min=-.002; params.jerk_limit_enable=true;
     params.warm_start.enable=true; params.warm_start.type="diff_drive_flatness";
@@ -164,6 +173,7 @@ boost::property_tree::ptree parameterManifest(const SolverParams& p, const Varia
     result.put("source","native explicit configuration; not a ROS launch validation");
     result.put("variant",v.name);
     result.put("rti_iterations",p.rti_iterations);
+    result.put("rti_min_iterations",p.rti_min_iterations);
     result.put("prediction_defect_limit",p.max_prediction_defect);
     result.put("jerk_limit_enable",p.jerk_limit_enable);
     result.put("actual_jerk_max",p.actual_jerk_max);
@@ -227,6 +237,10 @@ int runTrial(const Options& options) {
     double min_v=std::numeric_limits<double>::infinity(), max_v=-min_v;
     double min_omega=std::numeric_limits<double>::infinity(), max_omega=-min_omega;
     std::vector<double> wall_ms, solver_ms;
+    std::vector<double> cycle_ms;
+    std::ofstream timing(prefix+"_timing.csv");
+    if (!timing) throw std::runtime_error("cannot open timing CSV");
+    timing<<std::setprecision(17)<<"t,iterations,cycle_ms,solve_ms,setup_ms,rti_ms,residual_ms,status\n";
     int spins=0,failures=0;std::string failure_status;
     MotionRegion region(params.planning.region);
     PreSolveSnapshotDebug first_snapshot;
@@ -234,7 +248,11 @@ int runTrial(const Options& options) {
     const int last_k=static_cast<int>(std::floor(end_time/plant.dt+1e-9));
     for(int k=0;k<=last_k;++k) {
         const double t=k*plant.dt;
-        const auto input=makeInput(state,t);
+        const auto cycle_begin=SolveBudget::Clock::now();
+        auto input=makeInput(state,t);
+        if (options.solve_budget_ms>0.)
+            input.solve_budget.deadline=cycle_begin+std::chrono::duration_cast<SolveBudget::Clock::duration>(
+                std::chrono::duration<double,std::milli>(options.solve_budget_ms));
         last_time=t;
         SolverOutput out;
         const auto solve_begin=std::chrono::steady_clock::now();
@@ -243,6 +261,13 @@ int runTrial(const Options& options) {
             first_snapshot=out.pre_solve_snapshot;
         const auto solve_end=std::chrono::steady_clock::now();
         wall_ms.push_back(std::chrono::duration<double,std::milli>(solve_end-solve_begin).count());
+        cycle_ms.push_back(std::chrono::duration<double,std::milli>(solve_end-cycle_begin).count());
+        timing<<t<<','<<out.wall_timing.iterations<<','<<cycle_ms.back()<<','<<wall_ms.back()<<','
+              <<out.wall_timing.setup_ms<<','<<out.wall_timing.rti_ms<<','<<out.wall_timing.residual_ms
+              <<','<<out.status<<'\n';
+        if (options.solve_budget_ms>0. && cycle_ms.back()>options.solve_budget_ms) {
+            ++failures; failure_status="NATIVE_SOLVE_DEADLINE_MISSED";
+        }
         solver_ms.push_back(out.solver_time_ms);
         max_solve_ms=std::max(max_solve_ms,out.solver_time_ms);
         max_defect=std::max(max_defect,out.predicted_horizon.dynamics_max_defect);
@@ -313,6 +338,10 @@ int runTrial(const Options& options) {
     report.put("deadline",plan.deadline);report.put("evaluation_window",plan.stop_window);
     report.put("curvature_weight",params.planning.geometry.curvature_weight);report.put("contour_weight",variant.w_contour);
     report.put("rti_iterations",params.rti_iterations);report.put("max_prediction_defect",max_defect);
+    report.put("rti_min_iterations",params.rti_min_iterations);
+    report.put("solve_budget_ms",options.solve_budget_ms);
+    report.put("cycle_p95_ms",percentile(cycle_ms,.95));
+    report.put("cycle_max_ms",cycle_ms.empty()?0.:*std::max_element(cycle_ms.begin(),cycle_ms.end()));
     report.put("actual_v_min",min_v); report.put("actual_v_max",max_v);
     report.put("actual_omega_min",min_omega); report.put("actual_omega_max",max_omega);
     report.put("walltime_p95_ms",percentile(wall_ms,.95)); report.put("walltime_max_ms",wall_ms.empty()?0.:*std::max_element(wall_ms.begin(),wall_ms.end()));

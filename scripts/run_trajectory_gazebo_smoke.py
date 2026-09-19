@@ -77,6 +77,8 @@ def main():
                         help='planned_slosh only: override progress reward for a fixed speed work point')
     parser.add_argument('--identified-actuator', action='store_true',
                         help='replace this case\'s guard with the controller\'s actuator response')
+    parser.add_argument('--fixed-rti-iterations', type=int, choices=range(1, 21),
+                        help='require exactly this many RTIs; retain the live deadline and publication gate')
     parser.add_argument('--ros-port', type=int, default=11892)
     parser.add_argument('--gazebo-port', type=int, default=11926)
     args = parser.parse_args()
@@ -294,6 +296,10 @@ def main():
         actual_jerk_max = task['motion_limits'].get('actual_jerk_max', 0.)
         overlay['ablation'] = dict(actual_jerk_max=actual_jerk_max)
         summary['actual_jerk_max'] = actual_jerk_max
+        if args.fixed_rti_iterations is not None:
+            overlay['acados'] = dict(rti_iterations=args.fixed_rti_iterations,
+                                     rti_min_iterations=args.fixed_rti_iterations)
+            summary['fixed_rti_iterations'] = args.fixed_rti_iterations
         if args.reference_mode:
             overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
         if args.slosh_weight is not None:
@@ -328,6 +334,10 @@ def main():
         planner = start('planner', command)
         time.sleep(2)
         (out/'live_params.yaml').write_text(yaml.safe_dump(rospy.get_param('/spmpc_local_planner', {})))
+        if args.fixed_rti_iterations is not None and any(
+                rospy.get_param('/spmpc_local_planner/acados/'+key) != args.fixed_rti_iterations
+                for key in ('rti_iterations', 'rti_min_iterations')):
+            raise RuntimeError('requested fixed RTI count was not loaded')
         if rospy.get_param('/spmpc_local_planner/ablation/actual_jerk_max') != actual_jerk_max:
             raise RuntimeError('actual jerk limit was not loaded')
         if args.slosh_weight is not None and rospy.get_param(

@@ -53,6 +53,7 @@ struct SolverParams {
     TaskStopParams task_stop;
     PlanningConfig planning;
     int rti_iterations = 1;  // Repeated SQP_RTI steps on the same measured x0.
+    int rti_min_iterations = 1;  // Live solves below this count are rejected, never published.
     int qp_iteration_limit = 0;  // 0: generated default; positive: bounded work within each RTI.
     double max_prediction_defect = 0.0;  // 0 keeps legacy diagnostics; experiments enable the gate.
 };

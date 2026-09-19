@@ -69,6 +69,9 @@ void SpmpcProblem::configure(const SolverParams& solver_params, const VariantCon
             throw std::invalid_argument("timed tasks require terminal handoff and the common jerk bound");
         if (solver_params_.rti_iterations < 1 || solver_params_.rti_iterations > 20)
             throw std::invalid_argument("acados/rti_iterations must be in [1,20]");
+        if (solver_params_.rti_min_iterations < 1 ||
+            solver_params_.rti_min_iterations > solver_params_.rti_iterations)
+            throw std::invalid_argument("acados/rti_min_iterations must be in [1,rti_iterations]");
         if (!std::isfinite(solver_params_.terminal.goal_yaw_tolerance) ||
             solver_params_.terminal.goal_yaw_tolerance <= 0 || solver_params_.terminal.goal_yaw_tolerance > M_PI)
             throw std::invalid_argument("invalid terminal yaw tolerance");
