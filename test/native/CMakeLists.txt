@@ -110,7 +110,9 @@ if(SPMPC_NATIVE_WITH_ACADOS)
   add_test(NAME test_replay_diagnostics COMMAND test_replay_diagnostics)
   add_executable(geometry_trial geometry_trial.cpp)
   target_link_libraries(geometry_trial PRIVATE spmpc_native_core)
-  set_property(TARGET spmpc_native_core test_replay_diagnostics geometry_trial
+  add_executable(replay_geometry_state replay_geometry_state.cpp)
+  target_link_libraries(replay_geometry_state PRIVATE spmpc_native_core)
+  set_property(TARGET spmpc_native_core test_replay_diagnostics geometry_trial replay_geometry_state
     PROPERTY BUILD_RPATH "${ACADOS_SOURCE_DIR}/lib")
   set_property(TEST ${NATIVE_TESTS} test_replay_diagnostics PROPERTY ENVIRONMENT
     "LD_LIBRARY_PATH=${ACADOS_SOURCE_DIR}/lib:$ENV{LD_LIBRARY_PATH}")

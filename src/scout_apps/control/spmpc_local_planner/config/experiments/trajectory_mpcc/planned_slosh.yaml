@@ -1,3 +1,6 @@
+acados:
+  rti_iterations: 3
+  rti_min_iterations: 1  # feasible residuals may exit early; full acceptance checks still follow
 ablation:
   actual_jerk_max: 1.0  # actuator-output longitudinal jerk at 30 Hz; plan must declare the same bound
 planning:

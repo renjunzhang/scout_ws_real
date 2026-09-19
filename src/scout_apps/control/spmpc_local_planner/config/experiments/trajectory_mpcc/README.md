@@ -15,6 +15,8 @@
 
 ## 文件和参数归属
 
+当前 `planned_slosh` 实验 profile 为 `rti_iterations=3`、`rti_min_iterations=1`：有实时预算时，动力学残差和生成约束合格即可提前结束RTI，再执行完整轨迹、实际jerk、区域、代价和发布时限校验。native 使用同样的预算和次数参数；通用实物配置不变。
+
 `acados/rti_min_iterations` 默认 1，范围为 `[1,rti_iterations]`。实时预算不足以完成该次数时拒绝结果并走已有故障停车；不会绕过截止时间。最小次数与上限同为 3 时，模型测试与 ROS 都要求三次，关闭“可行即提前退出”。单次仿真脚本可用 `--fixed-rti-iterations 3` 覆盖并核对 live 参数；通用实物配置不变。
 
 性能验证需显式用 `-DCMAKE_BUILD_TYPE=Release` 构建 native 和 ROS（不启用 fast-math）。native `geometry_trial` 在原有参数后可追加 `[solve-budget-ms] [rti-min-iterations]`，例如本次 `30.3333333333333 3`；它记录每拍实际迭代次数及分段耗时，但不包含 ROS 状态处理与发布，仍需独立核对 Gazebo 发布时序。

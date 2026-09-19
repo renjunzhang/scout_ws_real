@@ -197,6 +197,34 @@ TEST(ReplayDiagnostics, RequiredRtiCountKeepsLiveAndOfflineSolvesAligned) {
     EXPECT_FALSE(live.predicted_horizon.valid);
 }
 
+TEST(ReplayDiagnostics, QualityExitKeepsActualJerkAndFullValidationForBothModels) {
+    for (bool slosh : {false, true}) {
+        auto params=makeParams();
+        params.rti_iterations=3; params.rti_min_iterations=1;
+        params.max_prediction_defect=1e-4;
+        params.jerk_limit_enable=true; params.actual_jerk_max=1.;
+        auto variant=makeB0Variant();
+        variant.name=slosh ? "B_slosh" : "B0";
+        variant.slosh_enable=slosh; variant.w_slosh=slosh ? 5. : 0.;
+        auto input=makeInput(); input.actuator.a_cmd_memory=0.;
+        ContinuousMpccSolverAcados solver; solver.configure(params,variant);
+        input.solve_budget.deadline=SolveBudget::Clock::now()+std::chrono::seconds(1);
+        SolverOutput output;
+        ASSERT_TRUE(solver.solve(input,makeStraightReference(),output))<<output.status;
+        EXPECT_GE(output.pre_solve_snapshot.rti_iterations,1);
+        EXPECT_LT(output.pre_solve_snapshot.rti_iterations,3);
+        EXPECT_TRUE(output.predicted_horizon.valid);
+        EXPECT_TRUE(output.cost.reconstruction_valid);
+        EXPECT_LE(output.predicted_horizon.dynamics_max_defect,1e-4);
+        EXPECT_DOUBLE_EQ(output.predicted_horizon.actual_jerk_max,1.);
+        // A frozen FIFO violation must still reject before accepting any iterate.
+        input.actuator.linear_delay_queue[1]=.5;
+        EXPECT_FALSE(solver.solve(input,makeStraightReference(),output));
+        EXPECT_EQ(output.status,"ACTUAL_JERK_PREFIX_INFEASIBLE");
+        EXPECT_FALSE(output.success);
+    }
+}
+
 TEST(ReplayDiagnostics, TimedRawReferencePreparesOnceAndRepeatedPathKeepsLiveHistory) {
     auto params = makeParams();
     params.rti_iterations = 5;
