@@ -6,7 +6,7 @@
   "deadline": 45.0,
   "final_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
   "baseline_directory": "/data/a/scout_sim_replacement/results/20260919_tf_epoch_pair3_040005",
-  "evidence": "Three new fixed-plan Gazebo Full trials versus three frozen B0 trials; exact controller/model/configuration identities checked; odom-driven liquid model, not measured physical liquid.",
+  "evidence": "Three new fixed-plan Gazebo Full trials versus three frozen B0 trials. Controller binaries, physical models and each profile across batches were checked; the two profiles use different geometric paths, speed references and geometry/liquid costs. Aggregate method comparison, not matched-path slosh attribution.",
   "slosh_acceptance_upper_exclusive_mm": {
     "transport_peak_mm": 0.934211687997709,
     "transport_p95_mm": 0.46536172934884884,
@@ -208,5 +208,25 @@
     "passed": 22,
     "scope": "window statistics, all-three qualification, explicit time switch, baseline reuse, failed/interrupted attempts, faster unqualified candidate rejection"
   },
-  "time_switch_validation": "Unit tests passed; shorter candidates were deliberately not searched in this slosh-priority batch."
+  "time_switch_validation": "Unit tests passed; shorter candidates were deliberately not searched in this slosh-priority batch.",
+  "comparison_scope": {
+    "kind": "different_path_whole_method_comparison",
+    "same_geometric_reference": false,
+    "same_speed_reference": false,
+    "same_non_liquid_objective": false,
+    "matched_path_control_ablation_completed": false,
+    "metric_and_execution_checks_passed": true,
+    "interpretation": "Reported reductions include changed path and speed; the contribution of anti-slosh control alone has not been isolated.",
+    "next_step": "Define a matched-path comparison before attributing gains; no new comparison was run in this documentation update."
+  },
+  "video": {
+    "file": "/data/a/scout_sim_replacement/results/20260919_slosh_priority_video_01/full_slosh_priority.mp4",
+    "duration_sec": 35.4,
+    "included_in_three_trial_statistics": false,
+    "legend": {
+      "green": "original reference used by B0",
+      "blue": "upper optimized geometry used by Full",
+      "orange": "localized actual trajectory"
+    }
+  }
 }
