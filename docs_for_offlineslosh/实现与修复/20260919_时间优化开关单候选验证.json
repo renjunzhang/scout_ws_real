@@ -1,0 +1,55 @@
+{
+  "formal": false,
+  "experiment_directory": "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512",
+  "baseline_full_directory": "/data/a/scout_sim_replacement/results/20260919_slosh_early_brake_120624",
+  "optimize_time": true,
+  "candidate_times_sec": [
+    40.0,
+    36.0
+  ],
+  "new_numerical_solves": 1,
+  "new_closed_loop_trials": 0,
+  "process_wall_limit_sec": 600.0,
+  "total_wall_limit_sec": 720.0,
+  "baseline_reused": true,
+  "shorter_candidate_status": "failed",
+  "shorter_candidate_failure_kind": "process_timeout",
+  "shorter_candidate_process": {
+    "command": [
+      "/usr/bin/python3",
+      "-u",
+      "/home/a/scout_ws/src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512/search/T_1080/task.json",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512/search/T_1080/plan.json",
+      "--warm-plan",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512/search/T_1200/plan.json",
+      "--diagnostics",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512/search/T_1080/events.jsonl",
+      "--solver-verbosity",
+      "5"
+    ],
+    "returncode": -15,
+    "status": "timeout",
+    "wall_seconds": 600.0655943590001,
+    "timeout": 600.0
+  },
+  "selected_transport_duration": 40.0,
+  "selected_plan_matches_baseline": true,
+  "selected_plan_sha256": "b7db3241388e78a87270029edd4e7c9f9fb17ae77a73d12547cc8a031324f7b3",
+  "fallback_cpp_validation": {
+    "command": [
+      "/tmp/scout_terminal_envelope_native_20260918/validate_plan",
+      "/data/a/scout_sim_replacement/results/20260919_time_switch_single_140512/search/T_1200/plan.json"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 0.2161748210000951,
+    "timeout": 60.0
+  },
+  "switch_and_fallback_verified": true,
+  "shorter_plan_verified": false,
+  "new_time_benefit_verified": false,
+  "conclusion": "The time switch executed one shorter candidate. Its numerical solve timed out; the already qualified 40 s baseline was retained unchanged. This does not prove 36 s infeasible. No repeated baseline simulation, candidate retry or broader scan was run.",
+  "comparison_limit": "No matched-path B0/Full comparison was conducted; the existing fairness limitation remains.",
+  "setup_note": "Temporary overlay/validator disappeared after the initial precheck. Initial CLI rejected before numerical search; exact archived controller binaries were restored and only the small C++ validator client was rebuilt."
+}
