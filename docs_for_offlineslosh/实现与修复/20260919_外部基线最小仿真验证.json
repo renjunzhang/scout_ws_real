@@ -833,7 +833,7 @@
     }
   },
   "fp_as": {
-    "status": "in_progress",
+    "status": "STRAIGHT_PRINCIPLE_VERIFIED_S_TIMEOUT_NOT_RELEASED",
     "protocol": {
       "start_utc": "2026-09-19T09:34:22.724520+00:00",
       "budget_seconds": 5400,
@@ -850,6 +850,643 @@
       },
       "tail_guard_sec": 2.0,
       "stop": "failure or timeout stops case without retry or timing sweep"
+    },
+    "elapsed_to_closeout_seconds": 1274.079504,
+    "simple": {
+      "construction_failure": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_plan.json",
+          "--method",
+          "fp-as",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 2,
+        "status": "failed",
+        "wall_seconds": 0.6156475939988013,
+        "timeout": 600
+      },
+      "repair_reason": {
+        "reason": "Pre-solve construction error: CasADi interpreted 4xN region inequalities as a matrix cone. Vectorize these elementwise halfspaces. Initial attempt never reached IPOPT; no task or nominal duration change."
+      },
+      "solve": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_plan.json",
+          "--method",
+          "fp-as",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_fixed_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 21.860632825999346,
+        "timeout": 600
+      },
+      "optimization": {
+        "status": "Solve_Succeeded",
+        "solve_seconds": 20.59230148399911,
+        "iterations": 32,
+        "objective": 0.00018302900260205437
+      },
+      "validation": {
+        "status": "SOFTWARE_VERIFIED",
+        "liquid_policy_qualification": {
+          "passed": true,
+          "failures": [],
+          "enforced": true
+        },
+        "dynamics_max_error": 5.011621759948293e-12,
+        "minimum_region_clearance": 1.3033333333333332,
+        "dense_peak_height_m": 3.1510971791714904e-05,
+        "residual_height_m": 1.8194014798689604e-15,
+        "curvature_arc_energy": 1.6065791456762622e-24,
+        "actual_path_length": 5.000000702429918,
+        "stopping_evaluation": {
+          "t_stop_sec": 39.7,
+          "clear_tolerance": 2e-06,
+          "basis": "predicted full-state sustained stop; four motion substeps per model interval",
+          "windows": {
+            "transport_peak_m": 3.1510971791714904e-05,
+            "transport_p95_m": 3.1295516882059754e-05,
+            "transport_rms_m": 2.258348191369962e-05,
+            "transport_samples": 4764,
+            "tail_peak_m": 1.3691526835940216e-06,
+            "transport_covered": true,
+            "tail_covered": true,
+            "covered": true,
+            "t_stop": 39.7,
+            "window_sec": 5.0
+          },
+          "liquid_policy": {
+            "mode": "transport_tail_v1",
+            "move_height_m": 0.0009,
+            "tail_height_m": 8e-05,
+            "height_tolerance_m": 1e-06
+          },
+          "liquid_objective_end_sec": 45.0
+        },
+        "hardware_verified": false
+      },
+      "geometry": {
+        "maximum_node_path_error_m": 5.011636121077101e-12,
+        "maximum_substep_path_error_m": 2.5090093992519825e-06,
+        "substeps_per_interval": 4,
+        "node_tolerance_m": 2e-06,
+        "substep_tolerance_m": 0.001
+      },
+      "native": {
+        "mode": "external_timed",
+        "scenario_plan_id": "straight_5m_fp_as_principle_20260919-fp-as-aa8fdefa15da",
+        "deadline": "45",
+        "evaluation_window": "5",
+        "curvature_weight": "0",
+        "contour_weight": "1",
+        "rti_iterations": "5",
+        "max_prediction_defect": "4.1168070688546443e-11",
+        "actual_v_min": "0",
+        "actual_v_max": "0.2342267757116831",
+        "actual_omega_min": "-8.2238155778647677e-14",
+        "actual_omega_max": "2.3726562978166652e-13",
+        "walltime_p95_ms": "19.711572",
+        "walltime_max_ms": "34.893512000000001",
+        "solver_time_p95_ms": "19.002000000000002",
+        "solver_time_max_ms": "34.256",
+        "max_jerk": "0.075533610319159714",
+        "max_solve_ms": "34.256",
+        "evidence": "MODEL_IN_THE_LOOP",
+        "actuator_scale": "1",
+        "deadline_lateness_sec": "0",
+        "deadline_tolerance_sec": "0",
+        "complete": "true",
+        "completion_time": "40.166666666666664",
+        "final_goal_position_error": "2.8501973452258458e-05",
+        "final_goal_yaw_error": "2.0589164054229947e-12",
+        "evaluation_end_time": "50",
+        "evaluation_last_sample_time": "50",
+        "height_sampling": "30 Hz model nodes; not continuous peak certification",
+        "effective_parameter_manifest": {
+          "planning": {
+            "schema_version": "1",
+            "experiment_profile_id": "external_timed",
+            "liquid_free_baseline": "false",
+            "task_deadline_sec": "45",
+            "evaluation_window_sec": "5",
+            "projection": {
+              "lookahead": "2"
+            },
+            "geometry": {
+              "enabled": "true",
+              "curvature_weight": "0",
+              "curvature_rate_weight": "0",
+              "curvature_scale": "1",
+              "curvature_rate_scale": "1",
+              "speed_regularization": "0.050000000000000003",
+              "goal_weight": "2",
+              "goal_position_scale": "0.29999999999999999",
+              "goal_yaw_scale": "1",
+              "reference_curvature_speed_limit": "false"
+            },
+            "reference": {
+              "mode": "time_tracking",
+              "plan_file": "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_plan.json",
+              "progress_window": "0.29999999999999999",
+              "max_speed_error": "0.02",
+              "route_tolerance": "1.0000000000000001e-05",
+              "deadline_tolerance": "0"
+            },
+            "region": {
+              "enabled": "true",
+              "id": "proxy_open_room",
+              "frame_id": "map",
+              "footprint_radius": "0.45000000000000001",
+              "margin": "0.02",
+              "cells": [
+                {
+                  "id": "room",
+                  "s_begin": "0",
+                  "s_end": "5",
+                  "vertices": [
+                    {
+                      "x": "-1.7738649019045563",
+                      "y": "-3.8115037302794277"
+                    },
+                    {
+                      "x": "9.8261212824125312",
+                      "y": "-3.7936005559044066"
+                    },
+                    {
+                      "x": "9.8143916164426894",
+                      "y": "3.806390392441271"
+                    },
+                    {
+                      "x": "-1.7855945678743976",
+                      "y": "3.7884872180662499"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "source": "native explicit configuration; not a ROS launch validation",
+          "variant": "B0",
+          "rti_iterations": "5",
+          "prediction_defect_limit": "0.0001",
+          "jerk_limit_enable": "true",
+          "terminal_goal_position_tolerance": "0.050000000000000003",
+          "terminal_goal_yaw_tolerance": "0.10000000000000001",
+          "terminal_stop_speed": "0.01",
+          "terminal_stop_omega": "0.02",
+          "liquid_constraint_enable": "false",
+          "liquid_complete_stop": "false",
+          "terminal_goal_pose_weight": "2",
+          "use_previous_solution": "true",
+          "height_coeff": "1.8179308248624537",
+          "motion_limits": {
+            "actual_v_min": "-0.002",
+            "v_max": "0.80000000000000004",
+            "omega_max": "1.2",
+            "a_max": "0.59999999999999998",
+            "alpha_max": "1.2",
+            "jerk_max": "1"
+          },
+          "first_ocp_stage": {
+            "rx0": "0.020268121297657218",
+            "rx1": "0.29999964269785551",
+            "rx2": "6.3533522035163481e-16",
+            "rx3": "-6.2221084826402397e-16",
+            "ry0": "-0.0087301773242579421",
+            "ry1": "0.0004630131303987045",
+            "ry2": "1.4347656155847153e-13",
+            "ry3": "-7.8510640449856233e-14",
+            "w_contour": "1",
+            "w_lag": "0.20000000000000001",
+            "w_progress": "0",
+            "w_a": "0.10000000000000001",
+            "w_omega": "0.10000000000000001",
+            "w_v": "10",
+            "w_vs": "0.29999999999999999",
+            "w_alpha": "0.10000000000000001",
+            "w_du_a": "0.10000000000000001",
+            "w_du_vs": "0",
+            "a_prev": "0",
+            "vs_prev": "0",
+            "e_c_ref": "0.14999999999999999",
+            "e_l_ref": "0.10000000000000001",
+            "v_ref": "0.25",
+            "actuator_dt": "0.033333333333333333",
+            "actuator_tau_v": "0.112",
+            "actuator_tau_omega": "0.11899999999999999",
+            "actuator_gain_v": "1.018",
+            "actuator_gain_omega": "1.0960000000000001",
+            "anticreep_gain": "8",
+            "stop_active": "0",
+            "stop_goal_s": "0",
+            "stop_brake_accel": "0.59999999999999998",
+            "stop_delay_margin": "0.87866666666666671",
+            "stop_velocity_weight": "1",
+            "w_curvature": "0",
+            "w_curvature_rate": "0",
+            "curvature_speed_floor": "0.050000000000000003",
+            "curvature_ref": "1",
+            "curvature_rate_ref": "1",
+            "reference_curvature_speed_enable": "0",
+            "reference_mode": "2",
+            "reference_s0": "0",
+            "reference_s1": "0.099999999999999992",
+            "reference_s2": "0.19999999999999998",
+            "reference_s3": "0.29999999999999999",
+            "reference_v0": "0",
+            "reference_v1": "0",
+            "reference_v2": "0",
+            "reference_v3": "0",
+            "reference_vs0": "-3.0145323409799352e-28",
+            "reference_vs1": "-3.0145323409799352e-28",
+            "reference_vs2": "-3.0145323409799352e-28",
+            "reference_vs3": "-3.0145323409799352e-28",
+            "region_active": "1",
+            "region_s_begin": "0",
+            "region_s_end": "5",
+            "region_nx0": "0.0015433771012949217",
+            "region_ny0": "-0.99999880899285243",
+            "region_offset0": "3.312094781614185",
+            "region_nx1": "0.99999880899285232",
+            "region_ny1": "0.0015433771012949762",
+            "region_offset1": "9.3235879565357411",
+            "region_nx2": "-0.0015433771012949217",
+            "region_ny2": "0.99999880899285243",
+            "region_offset2": "3.2945718850524819",
+            "region_nx3": "-0.99999880899285232",
+            "region_ny3": "-0.0015433771012949176",
+            "region_offset3": "1.2830787101309258",
+            "region_nx4": "0",
+            "region_ny4": "0",
+            "region_offset4": "1",
+            "region_nx5": "0",
+            "region_ny5": "0",
+            "region_offset5": "1",
+            "region_nx6": "0",
+            "region_ny6": "0",
+            "region_offset6": "1",
+            "region_nx7": "0",
+            "region_ny7": "0",
+            "region_offset7": "1",
+            "task_goal_active": "0",
+            "task_goal_x": "0.020268121297657215",
+            "task_goal_y": "-0.0087301773242579438",
+            "task_goal_yaw": "0.0015433777140196115",
+            "task_goal_position_tolerance": "0.050000000000000003",
+            "task_goal_yaw_tolerance": "0.10000000000000001",
+            "task_goal_speed_tolerance": "0.01",
+            "task_goal_omega_tolerance": "0.02",
+            "task_goal_require_yaw": "1",
+            "w_task_goal": "2",
+            "task_goal_position_scale": "0.29999999999999999",
+            "task_goal_yaw_scale": "1"
+          }
+        },
+        "failures": "0",
+        "failure_status": "",
+        "curvature_arc_energy": "3.9989165466122316e-24",
+        "path_length": "4.99997149802652",
+        "low_speed_spin_samples": "0",
+        "peak_modal_height_m": "3.1416497827170646e-05",
+        "minimum_region_clearance": "1.3300000000000001"
+      }
+    },
+    "s": {
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "timeout",
+        "wall_seconds": 600.0647770059986,
+        "timeout": 600
+      },
+      "geometry": {
+        "method": "clamped_cubic_original_route",
+        "knots": [
+          0.0,
+          0.4841108737204978,
+          0.9682217474409957,
+          1.4523326211614935,
+          1.9364434948819913,
+          2.420554368602489,
+          2.904665242322987,
+          3.3887761160434846,
+          3.8728869897639826,
+          4.35699786348448,
+          4.841108737204978,
+          5.325219610925476,
+          5.809330484645974
+        ],
+        "points": [
+          [
+            0.020268121297657215,
+            -0.008730177324257944
+          ],
+          [
+            0.48856265904844465,
+            0.06311180514293467
+          ],
+          [
+            0.8457544857595581,
+            0.3870122790239554
+          ],
+          [
+            1.2324088104531055,
+            0.657699936740394
+          ],
+          [
+            1.6970478315076347,
+            0.5611276836092104
+          ],
+          [
+            2.0978467035964163,
+            0.29045742548753134
+          ],
+          [
+            2.4912482829308598,
+            0.008325301418978595
+          ],
+          [
+            2.8846505937533506,
+            -0.2738058026688348
+          ],
+          [
+            3.2837409603866754,
+            -0.5469240640713647
+          ],
+          [
+            3.744890890241693,
+            -0.6748421115280794
+          ],
+          [
+            4.208111278040586,
+            -0.5557726088022877
+          ],
+          [
+            4.607662922174206,
+            -0.283610570003202
+          ],
+          [
+            5.0,
+            0.0
+          ]
+        ],
+        "polynomial_coefficients": [
+          [
+            [
+              -0.3569582518486136,
+              0.5362354503068262
+            ],
+            [
+              0.37042785816430024,
+              -0.640339092994324
+            ],
+            [
+              0.11416700825944869,
+              -0.6654935535131247
+            ],
+            [
+              -0.3994286781885752,
+              0.534350390563086
+            ],
+            [
+              0.23352527427101133,
+              0.23059139769367
+            ],
+            [
+              -0.03719374280300651,
+              -0.02326600082709062
+            ],
+            [
+              -0.019545252272451543,
+              -0.03649527627086328
+            ],
+            [
+              0.1655019560160489,
+              0.24867592877955325
+            ],
+            [
+              -0.14561275308213967,
+              0.2421261597675891
+            ],
+            [
+              -0.11178571504282207,
+              -0.32004260083518626
+            ],
+            [
+              0.01334037492103577,
+              0.21046799307695252
+            ],
+            [
+              0.5560026742956148,
+              -1.770257901645235
+            ]
+          ],
+          [
+            [
+              0.10532343994520685,
+              0.043755566900918086
+            ],
+            [
+              -0.4130986736073149,
+              0.8225478040047445
+            ],
+            [
+              0.12488578859168147,
+              -0.10743754935587507
+            ],
+            [
+              0.29069425894729234,
+              -1.0739555462956678
+            ],
+            [
+              -0.28940904021339053,
+              -0.2979010429505135
+            ],
+            [
+              0.049747333476085134,
+              0.03699436607922714
+            ],
+            [
+              -0.004270352499810625,
+              0.003204394114072674
+            ],
+            [
+              -0.03265655996392254,
+              -0.04979888613240367
+            ],
+            [
+              0.20770732962422206,
+              0.31136127733177377
+            ],
+            [
+              -0.0037708217341012387,
+              0.6630089975988026
+            ],
+            [
+              -0.16612086227065487,
+              0.19820068824449452
+            ],
+            [
+              -0.14674620059431015,
+              0.5038702203005456
+            ]
+          ],
+          [
+            [
+              0.9999988089928523,
+              0.0015433771012949332
+            ],
+            [
+              0.8510014717151589,
+              0.42093025889744784
+            ],
+            [
+              0.7114744801327352,
+              0.7671229090819994
+            ],
+            [
+              0.9126613000476339,
+              0.1951976653387672
+            ],
+            [
+              0.9132834884118246,
+              -0.46893302670042364
+            ],
+            [
+              0.7972606501658814,
+              -0.595240786000094
+            ],
+            [
+              0.8192765511604757,
+              -0.5757801290804345
+            ],
+            [
+              0.8013998313038573,
+              -0.5983370293219911
+            ],
+            [
+              0.8861438123495496,
+              -0.47171183158604124
+            ],
+            [
+              0.9848716933677424,
+              -8.586462118433084e-06
+            ],
+            [
+              0.9026252817863532,
+              0.41691238700803585
+            ],
+            [
+              0.751162934624429,
+              0.7567925479575184
+            ]
+          ],
+          [
+            [
+              0.020268121297657215,
+              -0.008730177324257944
+            ],
+            [
+              0.48856265904844465,
+              0.06311180514293467
+            ],
+            [
+              0.8457544857595581,
+              0.3870122790239554
+            ],
+            [
+              1.2324088104531055,
+              0.657699936740394
+            ],
+            [
+              1.6970478315076347,
+              0.5611276836092104
+            ],
+            [
+              2.0978467035964163,
+              0.29045742548753134
+            ],
+            [
+              2.4912482829308598,
+              0.008325301418978595
+            ],
+            [
+              2.8846505937533506,
+              -0.2738058026688348
+            ],
+            [
+              3.2837409603866754,
+              -0.5469240640713647
+            ],
+            [
+              3.744890890241693,
+              -0.6748421115280794
+            ],
+            [
+              4.208111278040586,
+              -0.5557726088022877
+            ],
+            [
+              4.607662922174206,
+              -0.283610570003202
+            ]
+          ]
+        ],
+        "maximum_route_edit_m": 0.05138984090184672,
+        "frozen_path_length_m": 5.812509389191952,
+        "straight": false,
+        "original_route_sha256": "93fcf912d268080b8b8ca90747ec6e6902a4004b160fef0fe1ec3f3939aff726"
+      },
+      "last_flushed_iteration": " 255  4.3905619e-01 4.50e-07 5.57e+04  -1.7 7.41e+00    -  6.24e-02 7.06e-05f 11",
+      "executable_plan_exists": false,
+      "gazebo_runs": 0,
+      "stop_reason": "600 s process budget reached; no converged and validated candidate; no retry or additional duration",
+      "unresolved": "curved fixed-path time-law NLP convergence/stationarity and subsequent node/substep/execution checks",
+      "numerical_feasibility_claim": false
+    },
+    "adaptation": {
+      "source": "Ferrari 2026 III-A (19)",
+      "time_optimal": false,
+      "geometry": "13 fixed original-route cubic knots with clamped Scout endpoint headings",
+      "decision": "path progress time law and physically compatible delayed vehicle commands",
+      "objective": "squared discrete progress jerk; 0.01 angular command jerk regularization on curves",
+      "angular_law": "nonholonomic Scout dynamics; not the paper linear yaw(s)",
+      "liquid": "shared single-mode rotating-container model",
+      "scope": "stationary command/history, one convex region; nominal liquid initial state preserved",
+      "numerical_geometry": "node equality; dense held-command substeps checked at 1 mm tolerance"
     }
   },
   "limitations": [
@@ -858,5 +1495,261 @@
     "matched nominal actuator and same-source liquid; no real robot run",
     "real 5 Hz body resonance absent; damping, low-speed response, initial residual and independent surface remain unverified"
   ],
-  "generated_utc": "2026-09-19T09:44:53.254138+00:00"
+  "generated_utc": "2026-09-19T09:44:53.254138+00:00",
+  "supporting_runtime_identity": {
+    "observed_utc": "2026-09-19T09:53:15.802821+00:00",
+    "supporting_libraries": {
+      "/home/a/scout_ws/devel/lib/libslosh_models.so": {
+        "resolved": "/home/a/scout_ws/devel/lib/libslosh_models.so",
+        "sha256": "e71be7b5750c546bd9f766cdf6ac2222c3db4f07435f79bb9cac31ca8aa7c769"
+      },
+      "/home/a/acados/lib/libacados.so": {
+        "resolved": "/home/a/acados/lib/libacados.so",
+        "sha256": "830e8332483e5943b6ef619f525f44ab558d641557de63565580364c232ddf56"
+      },
+      "/home/a/acados/lib/libhpipm.so": {
+        "resolved": "/home/a/acados/lib/libhpipm.so",
+        "sha256": "49b0cd29670f042649447fba9b50029c1b46dbbb40367a9f8fff7dda19cadd71"
+      },
+      "/home/a/acados/lib/libblasfeo.so": {
+        "resolved": "/home/a/acados/lib/libblasfeo.so.0.1.4.2",
+        "sha256": "eac90d057d8c0ef42f662dd1afd1b190f663ba3c6c12aacacfea9dd2ab268212"
+      }
+    },
+    "note": "Supplementary dependency identity at closeout; run-specific controller and generated model identities are in every case/runtime and were frozen before runs."
+  },
+  "checks": {
+    "python_tests": 14,
+    "native_reference_tests": 17,
+    "native_replay_solver_stop_tests": 32,
+    "model_closed_loops": [
+      "ZVD straight",
+      "FP-AS straight"
+    ],
+    "gazebo_runs": 3,
+    "gazebo_retries": 0,
+    "post_ports_occupied": {
+      "11892": false,
+      "11926": false
+    },
+    "testing_directory_touched": false,
+    "isolated_environment_sources_modified": false,
+    "real_robot_started": false,
+    "pushed": false
+  },
+  "all_attempts": [
+    {
+      "case": "ZVD straight generation and ideal/Scout checks",
+      "status": "passed",
+      "gazebo": false
+    },
+    {
+      "case": "Full 40 s initial solve",
+      "status": "liquid qualification rejected",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_solve_events.jsonl"
+        ],
+        "returncode": 2,
+        "status": "failed",
+        "wall_seconds": 39.1484721199995,
+        "timeout": 600
+      }
+    },
+    {
+      "case": "Full identical 40 s diagnostic retry",
+      "status": "same rejection; candidate retained without sample/task changes",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_trajectory_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_diagnostic_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_rejected.json"
+        ],
+        "returncode": 2,
+        "status": "failed",
+        "wall_seconds": 39.94597694799995,
+        "timeout": 600
+      }
+    },
+    {
+      "case": "b0_01",
+      "status": "passed",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/b0_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "raw_mpcc",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/task.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.89223802200104,
+        "timeout": 480
+      }
+    },
+    {
+      "case": "zvd_01",
+      "status": "passed",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "external_timed",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/task.json",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.79052884900011,
+        "timeout": 480
+      }
+    },
+    {
+      "case": "full_01",
+      "status": "passed",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "scripts/run_trajectory_gazebo_smoke.py",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_01/case",
+          "--setup",
+          "/tmp/scout_external_overlay_20260919/setup.bash",
+          "--profile",
+          "planned_slosh",
+          "--identified-actuator",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_task.json",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/full_plan.json"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 127.79665278900029,
+        "timeout": 480
+      }
+    },
+    {
+      "case": "FP-AS straight first construction",
+      "status": "failed before solver",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_plan.json",
+          "--method",
+          "fp-as",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 2,
+        "status": "failed",
+        "wall_seconds": 0.6156475939988013,
+        "timeout": 600
+      }
+    },
+    {
+      "case": "FP-AS straight repaired construction",
+      "status": "strict validation and native execution passed",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_plan.json",
+          "--method",
+          "fp-as",
+          "--warm-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/zvd_plan.json",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_fixed_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_simple_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": 0,
+        "status": "completed",
+        "wall_seconds": 21.860632825999346,
+        "timeout": 600
+      }
+    },
+    {
+      "case": "FP-AS S single 40 s",
+      "status": "timeout; no Gazebo",
+      "process": {
+        "command": [
+          "/usr/bin/python3",
+          "src/scout_apps/control/spmpc_local_planner/scripts/trajectory/generate_baseline_plan.py",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_task.json",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_plan.json",
+          "--method",
+          "fp-as",
+          "--diagnostics",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_events.jsonl",
+          "--rejected-plan",
+          "/data/a/scout_sim_replacement/results/20260919_external_baselines_170619/fp_as_s_rejected.json",
+          "--solver-verbosity",
+          "5"
+        ],
+        "returncode": -15,
+        "status": "timeout",
+        "wall_seconds": 600.0647770059986,
+        "timeout": 600
+      }
+    }
+  ],
+  "next_steps": [
+    "Do not repeat today's nominal matrix or search durations.",
+    "Diagnose curved fixed-path NLP scaling, low-speed constraints and stationarity using saved formulation/logs before another bounded candidate.",
+    "Make Full early-stop liquid constraints consistent with its acceptance window before promoting a new straight plan.",
+    "Before real comparison, align plan-command-motion-independent liquid measurement; verify 5 Hz body excitation, delay/braking, damping and initial residual from measurements.",
+    "Three-repeat statistics and S external comparison remain future work."
+  ],
+  "conclusion": {
+    "minimum_straight_objective_met": true,
+    "external_method_verified": "ZVD",
+    "full_default_plan_replaced": false,
+    "full_straight_offline_liquid_qualification": false,
+    "full_straight_closed_loop_liquid_report_caps": true,
+    "fp_as_s_complete": false,
+    "real_liquid_benefit_demonstrated": false
+  },
+  "updated_utc": "2026-09-19T09:55:36.804024+00:00"
 }
