@@ -1,0 +1,765 @@
+{
+  "date": "2026-09-19",
+  "formal": false,
+  "results_directory": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit",
+  "protocol": {
+    "date": "2026-09-19",
+    "source_head": "2361f2f0bac2c5106330560aea3a66c0a8fadd3b",
+    "timebox_hours": 24,
+    "formal": false,
+    "build_type": "Release",
+    "rti_iterations": 3,
+    "rti_min_iterations": 1,
+    "solver_budget_ms": 30.333333333333336,
+    "publish_reserve_ms": 3,
+    "actual_jerk_max": 1,
+    "liquid_hard_constraint": false,
+    "liquid_weight": 5,
+    "progress_weight": 0,
+    "plan": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+    "plan_sha256": "5a48e38b9528f52595183a531e71a12950ffda1e6035963a2bd5d007af44ce8d",
+    "task": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+    "separate_checks": [
+      "quality exit unit checks with full validation and actual jerk",
+      "one reconstructed-feedback cold-start screen at archived t=27.8; missing exact solver snapshot recorded"
+    ],
+    "recovery_reset_integration_gate": "Do not integrate solely on cold-screen success: missing old solver/virtual-control/terminal history prevents exact failure reproduction.",
+    "max_full_model_trials": 1,
+    "max_gazebo_trials": 1,
+    "native_gate": [
+      "complete by45s and observe through50s",
+      "no abnormal status",
+      "actual jerk <=1+3e-5",
+      "accepted solves execute1..3 RTIs and all postchecks",
+      "cycle <=30.333333ms"
+    ],
+    "fallback": "User clarified actual-jerk1 is an experimental comparison constraint, not mandatory physical limit. On failure defer it, retain existing command jerk/actuator/safety adaptation, restore stable baseline work point and organize common-condition comparison.",
+    "hardware": false,
+    "protected_paths": [
+      "Testing/",
+      "isolated simulator files"
+    ],
+    "runtime_head": "82d00fb610e2febd54f2ab462afaf3a8c580984d",
+    "recovery_reset_integrated": false,
+    "cold_replay_result": "MINSTEP persists after physical-state reconstruction and fresh capsule/guess"
+  },
+  "quality_exit": {
+    "test_suites_passed": 1,
+    "test_cases_passed": 35,
+    "native": {
+      "mode": "planned_slosh",
+      "scenario_plan_id": "full_s_slow_single_20260919__actual_jerk_1-ecb23f376965",
+      "deadline": "45",
+      "evaluation_window": "5",
+      "curvature_weight": "0.050000000000000003",
+      "contour_weight": "1",
+      "rti_iterations": "3",
+      "max_prediction_defect": "3.3949310948596295e-05",
+      "rti_min_iterations": "1",
+      "solve_budget_ms": "30.333333333333336",
+      "cycle_p95_ms": "6.4134549999999999",
+      "cycle_max_ms": "11.116167000000001",
+      "actual_v_min": "0",
+      "actual_v_max": "0.25153855307854783",
+      "actual_omega_min": "-0.14084256506011811",
+      "actual_omega_max": "0.36281529733529794",
+      "walltime_p95_ms": "6.4110800000000001",
+      "walltime_max_ms": "11.114281",
+      "solver_time_p95_ms": "4.9489999999999998",
+      "solver_time_max_ms": "10.314",
+      "max_actual_jerk": "0.99999999999736611",
+      "actual_jerk_max": "1",
+      "max_jerk": "1.0000000000000315",
+      "max_solve_ms": "10.314",
+      "evidence": "MODEL_IN_THE_LOOP",
+      "actuator_scale": "1",
+      "deadline_lateness_sec": "0",
+      "deadline_tolerance_sec": "0",
+      "complete": "true",
+      "completion_time": "40.266666666666666",
+      "final_goal_position_error": "0.028505228527828025",
+      "final_goal_yaw_error": "0.050835531624051356",
+      "evaluation_end_time": "50",
+      "evaluation_last_sample_time": "50",
+      "height_sampling": "30 Hz model nodes; not continuous peak certification",
+      "failures": "0",
+      "failure_status": "",
+      "curvature_arc_energy": "1.5533858591361025",
+      "path_length": "5.1378507600164189",
+      "low_speed_spin_samples": "0",
+      "peak_modal_height_m": "0.0004635355657634013",
+      "minimum_region_clearance": "1.3300000000000001"
+    },
+    "gate": {
+      "complete": true,
+      "no_abnormal_status": true,
+      "actual_jerk": true,
+      "quality_rti": true,
+      "cycle_timing": true,
+      "full_window": true,
+      "process_ok": true,
+      "status_counts": {
+        "B_slosh_ACADOS_OK": 1198,
+        "TERMINAL_DRAINING": 10,
+        "GOAL_REACHED": 293
+      },
+      "active_rti_counts": {
+        "1": 1197,
+        "2": 1
+      },
+      "abnormal_statuses": {},
+      "passed": true
+    },
+    "process": {
+      "command": [
+        "/tmp/scout_jerk_release_native/geometry_trial",
+        "planned_slosh",
+        "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/native",
+        "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+        "1",
+        ".05",
+        "1",
+        "3",
+        "0",
+        "0",
+        "30.333333333333336",
+        "1"
+      ],
+      "returncode": 0,
+      "status": "completed",
+      "wall_seconds": 6.329313443000501,
+      "timeout": 180
+    },
+    "runtime": {
+      "geometry_trial": {
+        "source": "/tmp/scout_jerk_release_native/geometry_trial",
+        "sha256": "253b96ca7acebaa3b3e2071d8d320e23d11cefad2ea4473b9119ceb47919db5c"
+      },
+      "replay_geometry_state": {
+        "source": "/tmp/scout_jerk_release_native/replay_geometry_state",
+        "sha256": "c5fbbf600a055c2d27023b3816d66ca35d53540c6326f6fcbbd6232da574392c"
+      },
+      "libspmpc_local_planner.so": {
+        "source": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+        "sha256": "495ea5048a88ccf579c71e435ac1a5612395bff2f68ed0e5b724018f889b4780"
+      },
+      "spmpc_local_planner_node": {
+        "source": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+        "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+      },
+      "libacados_ocp_solver_spmpc_b0.so": {
+        "source": "/tmp/scout_jerk_release_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+        "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+      },
+      "libacados_ocp_solver_spmpc_slosh.so": {
+        "source": "/tmp/scout_jerk_release_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+        "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+      }
+    }
+  },
+  "cold_replay": {
+    "process": {
+      "command": [
+        "/tmp/scout_jerk_release_native/replay_geometry_state",
+        "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+        "/data/a/scout_sim_replacement/results/20260919_rti_recent_budget/native.csv",
+        "27.8",
+        "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/cold_replay.json"
+      ],
+      "returncode": 1,
+      "status": "failed",
+      "wall_seconds": 0.36529270299979544,
+      "timeout": 120
+    },
+    "result": {
+      "evidence": "RECONSTRUCTED_FEEDBACK_COLD_START_SCREEN_NOT_EXACT_SOLVER_REPLAY",
+      "original_status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4",
+      "time": "27.800000000000001",
+      "replayed_control_steps": "834",
+      "feedback_max_error": "0",
+      "height_max_error": "0",
+      "reconstructed_state": [
+        "4.0590050481170934",
+        "-0.328394057081901",
+        "0.25175431096098266",
+        "0.017054526431296246",
+        "4.6099431953695253",
+        "0.0041559825261199496",
+        "0.083326175760085025",
+        "0.051366241284347469",
+        "0.039596428424267492",
+        "0.049144015540713001",
+        "0.059635629037778484",
+        "0.071071268915489566",
+        "0.083326175760085025",
+        "0.013048662823589541",
+        "0.016154905978558474",
+        "0.019837635760481351",
+        "0.024180410730655411",
+        "0.029068174893126218",
+        "0.034182836955050512",
+        "0.039193450219734353",
+        "0.043835038662285712",
+        "0.047927630265120431",
+        "0.051366241284347469",
+        "0.36764720533786377",
+        "-0.0001456450680030202",
+        "-0.00084351484944659354",
+        "-1.2950445221287446e-07",
+        "2.4567104621110699e-06"
+      ],
+      "recorded_progress": "4.7271518262619736",
+      "cold_solve_progress": "4.7271518262619736",
+      "fresh_guess_source": "TRAJECTORY_PLAN",
+      "physical_state_and_fifo_anchored": "true",
+      "initial_guess_anchor_error": "0",
+      "status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4",
+      "solver_status": "ACADOS_SOLVE_FAILED_4",
+      "rti_iterations": "1",
+      "wall_ms": "7.345853",
+      "complete_validation_passed": "false",
+      "prediction_defect": "0",
+      "actual_jerk_max": "0",
+      "cost_reconstruction_valid": "false",
+      "limitations": "Old primal/dual/QP memory, terminal internal state and virtual-control cost history were not archived. Physical feedback/FIFO is reconstructed and checked; no root-cause or reset-at-recovery claim."
+    },
+    "configured_actual_jerk_max": 1,
+    "invalid_horizon_zero_fields_are_not_configuration": true,
+    "qp_status": "ACADOS_MINSTEP",
+    "qp_iterations": 13,
+    "integrated_at_recovery": false
+  },
+  "configuration_repair": {
+    "reason": "ROS launch loads shared task config after profile, overwriting RTI max3 with5. Explicit final-overlay min/max and pre-motion live checks added.",
+    "invalid_case": "full_01",
+    "original_actual_min": 1,
+    "original_actual_max": 5,
+    "original_observed_max_iterations": 3,
+    "corrected_case": "full_corrected_01",
+    "corrected_min": 1,
+    "corrected_max": 3,
+    "additional_gazebo_configuration_repair_runs_max": 1,
+    "additional_native_runs": 0,
+    "parameter_tuning": false
+  },
+  "gazebo": {
+    "full_01": {
+      "process": {
+        "command": [
+          "python3",
+          "/home/a/scout_ws/scripts/run_trajectory_gazebo_smoke.py",
+          "--setup",
+          "/tmp/scout_jerk_release_overlay/setup.bash",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_01/case",
+          "--profile",
+          "planned_slosh",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+          "--identified-actuator",
+          "--progress-weight",
+          "0"
+        ],
+        "returncode": 1,
+        "status": "failed",
+        "wall_seconds": 128.24337207999997,
+        "timeout": 480
+      },
+      "summary": {
+        "profile": "planned_slosh",
+        "git_sha": "82d00fb610e2febd54f2ab462afaf3a8c580984d",
+        "goal_reached": false,
+        "actuator_model_parameters_match": true,
+        "runtime": {
+          "spmpc_local_planner_node": {
+            "source_path": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+            "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+          },
+          "libspmpc_local_planner.so": {
+            "source_path": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+            "sha256": "495ea5048a88ccf579c71e435ac1a5612395bff2f68ed0e5b724018f889b4780"
+          },
+          "libacados_ocp_solver_spmpc_b0.so": {
+            "source_path": "/tmp/scout_jerk_release_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+            "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+          },
+          "libacados_ocp_solver_spmpc_slosh.so": {
+            "source_path": "/tmp/scout_jerk_release_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+            "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+          }
+        },
+        "observation_sim_window_complete": true,
+        "observation_sim_sec": 51.038000000000004,
+        "final_pose": [
+          3.996470622121961,
+          -0.33708397321054095,
+          0.29301896186679166
+        ],
+        "status_counts": {
+          "WAITING_FOR_ODOM": 4,
+          "WAITING_FOR_REFERENCE_PATH": 27,
+          "B_slosh_ACADOS_OK": 1089,
+          "STOP_ACTUAL_JERK_VIOLATION": 185,
+          "STOP_JERK_HISTORY_INFEASIBLE": 36,
+          "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1,
+          "TERMINAL_DRAINING": 39,
+          "TASK_DEADLINE_MISSED": 181
+        },
+        "valid_fresh_lifecycle": true,
+        "closed_bag": true,
+        "passed": false
+      },
+      "audit": {
+        "live_rti_iterations": 5,
+        "live_rti_min_iterations": 1,
+        "matches_native_strategy": false,
+        "actual_jerk_max": 1.0,
+        "liquid_hard_constraint": false,
+        "liquid_weight": 5.0,
+        "accepted_horizon_rti_counts": {
+          "1": 1087,
+          "2": 1,
+          "3": 1
+        },
+        "first_abnormal_statuses": {
+          "STOP_ACTUAL_JERK_VIOLATION": {
+            "t": 25.844,
+            "cycle_id": 808,
+            "solver_status": "STOP_ACTUAL_JERK_VIOLATION",
+            "solve_attempted": false
+          },
+          "STOP_JERK_HISTORY_INFEASIBLE": {
+            "t": 25.877000000000002,
+            "cycle_id": 809,
+            "solver_status": "STOP_JERK_HISTORY_INFEASIBLE",
+            "solve_attempted": false
+          },
+          "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": {
+            "t": 43.677,
+            "cycle_id": 1343,
+            "solver_status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4",
+            "solve_attempted": true
+          },
+          "TASK_DEADLINE_MISSED": {
+            "t": 45.01,
+            "cycle_id": 1383,
+            "solver_status": "TASK_DEADLINE_MISSED",
+            "solve_attempted": false
+          }
+        },
+        "attempted_dispatch_wall_over_period": 0,
+        "attempted_dispatch_wall_max_ms": 24.555349,
+        "input_epoch_mismatch_count": 0,
+        "command_contract_violations": 0,
+        "predicted_horizon_grid_jerk_max": 1.000000000000013,
+        "measured_input_model_prefix_jerk_max": 0.9157802714334776,
+        "jerk_scope": "Model-grid diagnostics only. A solved horizon may include numerical residuals; production additionally replays from exact x0. No continuous physical jerk claim.",
+        "model_mismatch_note": "Controller:30Hz fixed FIFO/RK4. Plant:ROS command receipt plus identified delay/exponential response and120Hz drive. Matching parameters do not guarantee matching execution time or measured state."
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 1090,
+          "min": 0.006146,
+          "p50": 0.015854,
+          "p95": 0.078291,
+          "max": 0.119148
+        },
+        "pre_solve_wall_ms": {
+          "count": 1090,
+          "min": 1.009759,
+          "p50": 2.253834,
+          "p95": 3.5278399499999997,
+          "max": 4.208679
+        },
+        "problem_solve_wall_ms": {
+          "count": 1090,
+          "min": 4.072838,
+          "p50": 8.9027505,
+          "p95": 14.597324499999997,
+          "max": 22.864781
+        },
+        "dispatch_wall_ms": {
+          "count": 1090,
+          "min": 5.33996,
+          "p50": 11.3280085,
+          "p95": 17.5530383,
+          "max": 24.555349
+        },
+        "solver_setup_wall_ms": {
+          "count": 1090,
+          "min": 0.530372,
+          "p50": 1.1061745,
+          "p95": 2.5570735499999997,
+          "max": 3.754786
+        },
+        "rti_wall_ms": {
+          "count": 1090,
+          "min": 3.217218,
+          "p50": 6.71607,
+          "p95": 12.078487149999997,
+          "max": 21.450434
+        },
+        "residual_wall_ms": {
+          "count": 1090,
+          "min": 0.0,
+          "p50": 0.3553155,
+          "p95": 0.69872245,
+          "max": 1.805385
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 1090,
+          "min": 0.0,
+          "p50": 6.691973,
+          "p95": 12.009436549999998,
+          "max": 18.966041
+        },
+        "remaining_budget_wall_ms": {
+          "count": 1090,
+          "min": 22.746449,
+          "p50": 26.79806,
+          "p95": 28.322453799999998,
+          "max": 28.652963
+        }
+      },
+      "rti_counts": {
+        "1": 1088,
+        "2": 1,
+        "3": 1
+      },
+      "solve_status_counts": {
+        "B_slosh_ACADOS_OK": 1089,
+        "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1
+      },
+      "implementation_passed": false,
+      "reference_execution": {
+        "speed_rmse_mps": 0.058609603821924754,
+        "position_error_p95_m": 0.9820584684064819,
+        "timing": {
+          "nominal_actual_onset_sec": 0.4666666666666667,
+          "actual_onset_sec": 3.945999999999998,
+          "nominal_stop_sec": 44.0,
+          "actual_stop_sec": null,
+          "nominal_transport_sec": 44.0
+        },
+        "clock_reference_error_sec": 20.395562469859158,
+        "yaw_rate_rmse_radps": 0.07596645538407416,
+        "yaw_error_p95_rad": 0.34839145671604355,
+        "position_error_max_m": 1.0091943826981944,
+        "clock_regressions": 0,
+        "timing_note": "S path has varying speed and steering; no single 95% cruise braking onset is defined."
+      },
+      "model_liquid_windows": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": null,
+        "first_sustained_low_speed_sec": 43.70600000000001,
+        "first_sustained_zero_publication_sec": 43.48000000000001,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": null,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "stop_within_deadline": false,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": null,
+          "goal_sec": null
+        }
+      },
+      "actual_path_length_odom_m": 4.138827945202339,
+      "comparison_eligible": false,
+      "detailed_case": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_01/case"
+    },
+    "full_corrected_01": {
+      "process": {
+        "command": [
+          "python3",
+          "/home/a/scout_ws/scripts/run_trajectory_gazebo_smoke.py",
+          "--setup",
+          "/tmp/scout_jerk_release_overlay/setup.bash",
+          "--output",
+          "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_corrected_01/case",
+          "--profile",
+          "planned_slosh",
+          "--plan",
+          "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+          "--task",
+          "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/task.json",
+          "--identified-actuator",
+          "--progress-weight",
+          "0",
+          "--rti-iterations",
+          "3",
+          "--rti-min-iterations",
+          "1"
+        ],
+        "returncode": 1,
+        "status": "failed",
+        "wall_seconds": 127.35164228899976,
+        "timeout": 480
+      },
+      "summary": {
+        "profile": "planned_slosh",
+        "git_sha": "b8382182ab5bf70f61cd535bacb6770d0d2c77f3",
+        "goal_reached": false,
+        "actuator_model_parameters_match": true,
+        "runtime": {
+          "spmpc_local_planner_node": {
+            "source_path": "/tmp/scout_jerk_release_overlay/lib/spmpc_local_planner/spmpc_local_planner_node",
+            "sha256": "c84d39d45b321614a53af28afc5f0142d5c58f063b17ebcc08a03564d3d1c5e6"
+          },
+          "libspmpc_local_planner.so": {
+            "source_path": "/tmp/scout_jerk_release_overlay/lib/libspmpc_local_planner.so",
+            "sha256": "495ea5048a88ccf579c71e435ac1a5612395bff2f68ed0e5b724018f889b4780"
+          },
+          "libacados_ocp_solver_spmpc_b0.so": {
+            "source_path": "/tmp/scout_jerk_release_codegen/spmpc_b0/libacados_ocp_solver_spmpc_b0.so",
+            "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+          },
+          "libacados_ocp_solver_spmpc_slosh.so": {
+            "source_path": "/tmp/scout_jerk_release_codegen/spmpc_slosh/libacados_ocp_solver_spmpc_slosh.so",
+            "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+          }
+        },
+        "rti_override": {
+          "rti_iterations": 3,
+          "rti_min_iterations": 1
+        },
+        "observation_sim_window_complete": true,
+        "observation_sim_sec": 51.113,
+        "final_pose": [
+          4.0070779518540505,
+          -0.33782029469000985,
+          0.2982118718920905
+        ],
+        "status_counts": {
+          "WAITING_FOR_ODOM": 4,
+          "WAITING_FOR_REFERENCE_PATH": 29,
+          "B_slosh_ACADOS_OK": 1104,
+          "STOP_ACTUAL_JERK_VIOLATION": 173,
+          "STOP_JERK_HISTORY_INFEASIBLE": 34,
+          "ACTUAL_JERK_CONSTRAINT_VIOLATION": 18,
+          "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1,
+          "TERMINAL_DRAINING": 21,
+          "TASK_DEADLINE_MISSED": 183
+        },
+        "valid_fresh_lifecycle": true,
+        "closed_bag": true,
+        "passed": false
+      },
+      "audit": {
+        "live_rti_iterations": 3,
+        "live_rti_min_iterations": 1,
+        "matches_native_strategy": true,
+        "actual_jerk_max": 1.0,
+        "liquid_hard_constraint": false,
+        "liquid_weight": 5.0,
+        "accepted_horizon_rti_counts": {
+          "1": 1101,
+          "2": 2,
+          "3": 1
+        },
+        "first_abnormal_statuses": {
+          "STOP_ACTUAL_JERK_VIOLATION": {
+            "t": 26.605999999999995,
+            "cycle_id": 833,
+            "solver_status": "STOP_ACTUAL_JERK_VIOLATION",
+            "solve_attempted": false
+          },
+          "STOP_JERK_HISTORY_INFEASIBLE": {
+            "t": 26.638999999999996,
+            "cycle_id": 834,
+            "solver_status": "STOP_JERK_HISTORY_INFEASIBLE",
+            "solve_attempted": false
+          },
+          "ACTUAL_JERK_CONSTRAINT_VIOLATION": {
+            "t": 43.673,
+            "cycle_id": 1345,
+            "solver_status": "ACTUAL_JERK_CONSTRAINT_VIOLATION",
+            "solve_attempted": true
+          },
+          "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": {
+            "t": 44.306,
+            "cycle_id": 1364,
+            "solver_status": "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4",
+            "solve_attempted": true
+          },
+          "TASK_DEADLINE_MISSED": {
+            "t": 45.039,
+            "cycle_id": 1386,
+            "solver_status": "TASK_DEADLINE_MISSED",
+            "solve_attempted": false
+          }
+        },
+        "attempted_dispatch_wall_over_period": 0,
+        "attempted_dispatch_wall_max_ms": 31.1865,
+        "input_epoch_mismatch_count": 0,
+        "command_contract_violations": 0,
+        "predicted_horizon_grid_jerk_max": 1.0000000000000349,
+        "measured_input_model_prefix_jerk_max": 0.9992335079058964,
+        "jerk_scope": "Model-grid diagnostics only. A solved horizon may include numerical residuals; production additionally replays from exact x0. No continuous physical jerk claim.",
+        "model_mismatch_note": "Controller:30Hz fixed FIFO/RK4. Plant:ROS command receipt plus identified delay/exponential response and120Hz drive. Matching parameters do not guarantee matching execution time or measured state."
+      },
+      "attempted_wall_ms": {
+        "state_alignment_wall_ms": {
+          "count": 1123,
+          "min": 0.005796,
+          "p50": 0.009498,
+          "p95": 0.04131809999999996,
+          "max": 0.103505
+        },
+        "pre_solve_wall_ms": {
+          "count": 1123,
+          "min": 1.031697,
+          "p50": 1.263291,
+          "p95": 1.5234711999999992,
+          "max": 3.405537
+        },
+        "problem_solve_wall_ms": {
+          "count": 1123,
+          "min": 4.183849,
+          "p50": 6.336501,
+          "p95": 10.661656499999994,
+          "max": 29.94465
+        },
+        "dispatch_wall_ms": {
+          "count": 1123,
+          "min": 5.463553,
+          "p50": 7.796605,
+          "p95": 11.989486199999998,
+          "max": 31.1865
+        },
+        "solver_setup_wall_ms": {
+          "count": 1123,
+          "min": 0.545462,
+          "p50": 0.788929,
+          "p95": 1.0495832999999999,
+          "max": 2.534126
+        },
+        "rti_wall_ms": {
+          "count": 1123,
+          "min": 3.301753,
+          "p50": 5.016288,
+          "p95": 9.0551427,
+          "max": 28.531828
+        },
+        "residual_wall_ms": {
+          "count": 1123,
+          "min": 0.267213,
+          "p50": 0.374978,
+          "p95": 0.5459221999999992,
+          "max": 1.41338
+        },
+        "iteration_estimate_wall_ms": {
+          "count": 1123,
+          "min": 0.0,
+          "p50": 5.001971,
+          "p95": 8.802366,
+          "max": 15.516669
+        },
+        "remaining_budget_wall_ms": {
+          "count": 1123,
+          "min": 24.083714,
+          "p50": 28.121036,
+          "p95": 28.328166200000002,
+          "max": 28.53338
+        }
+      },
+      "rti_counts": {
+        "1": 1102,
+        "2": 13,
+        "3": 8
+      },
+      "solve_status_counts": {
+        "B_slosh_ACADOS_OK": 1104,
+        "ACTUAL_JERK_CONSTRAINT_VIOLATION": 18,
+        "SOLVER_FAILURE_STOPPING: ACADOS_SOLVE_FAILED_4": 1
+      },
+      "implementation_passed": false,
+      "reference_execution": {
+        "speed_rmse_mps": 0.06691942711663365,
+        "position_error_p95_m": 1.1651142766605302,
+        "timing": {
+          "nominal_actual_onset_sec": 0.4666666666666667,
+          "actual_onset_sec": 4.250999999999998,
+          "nominal_stop_sec": 44.0,
+          "actual_stop_sec": null,
+          "nominal_transport_sec": 44.0
+        },
+        "clock_reference_error_sec": 20.923261617268796,
+        "yaw_rate_rmse_radps": 0.08250290727026846,
+        "yaw_error_p95_rad": 0.4267764880691116,
+        "position_error_max_m": 1.1904089178062232,
+        "clock_regressions": 0,
+        "timing_note": "S path has varying speed and steering; no single 95% cruise braking onset is defined."
+      },
+      "model_liquid_windows": {
+        "case": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_corrected_01/case",
+        "formal": false,
+        "frame_contract_matches": true,
+        "pose_time_basis": "raw_state bag receipt; reference-frame provenance checked in producer",
+        "first_sustained_pose_sec": null,
+        "first_sustained_low_speed_sec": 43.65100000000001,
+        "first_sustained_zero_publication_sec": 43.70400000000001,
+        "inferred_fifo_delay_sec": 0.333333333,
+        "t_stop_candidate_sec": null,
+        "fifo_clearance_measured": false,
+        "command_epsilon": 1e-06,
+        "maximum_allowed_sample_gap_sec": 0.1,
+        "invalid_observer_after_task_start": 0,
+        "stop_within_deadline": false,
+        "archived_anomalies": {
+          "alignment_rejected": 0,
+          "budget_exhausted": 0,
+          "fault_zero_cycles": null,
+          "goal_sec": null
+        }
+      },
+      "actual_path_length_odom_m": 4.145397987873803,
+      "comparison_eligible": false,
+      "detailed_case": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/full_corrected_01/case"
+    }
+  },
+  "disposition": {
+    "actual_jerk_constraint_required_physical": false,
+    "user_basis": "Added to improve FP-AS comparison; user permits deferral if this validation still fails.",
+    "default_profile_actual_jerk_max": 0,
+    "command_jerk_max": 1,
+    "online_liquid_hard_constraint": false,
+    "quality_exit_capability_retained": true,
+    "recovery_memory_reset_integrated": false,
+    "stable_baseline_manifest": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/stable_comparison_manifest.json",
+    "current_source_not_claimed_equal_to_stable_archive": true
+  },
+  "remaining_gaps": [
+    "Stop-tail actual-jerk feasibility and execution-model mismatch in Gazebo",
+    "QP failure still appears after command interruptions; exact27.8 solver snapshot missing",
+    "Same-runtime B0 S baseline missing; archived B0 S remains separate historical context",
+    "No independent real liquid measurement; no new completed Full Gazebo performance comparison"
+  ],
+  "closeout": {
+    "cold_screens": 1,
+    "full_native_runs": 1,
+    "gazebo_runs": 2,
+    "gazebo_configuration_repair_runs": 1,
+    "parameter_sweeps": 0,
+    "new_plans": 0,
+    "hardware_runs": 0,
+    "comparison_plot": "NO_NEW_FAILED_TRIAL_PERFORMANCE_PLOT; reuse archived stable Full/FP-AS plot",
+    "protected_paths_untouched": [
+      "Testing/",
+      "isolated simulator files"
+    ]
+  },
+  "raw_report": {
+    "path": "/data/a/scout_sim_replacement/results/20260919_rti_quality_exit/final_report.json",
+    "sha256": "395ec24deedad101c5e6c639b46682c3e7a6519a6f751415cd11d9b0cc4ce588"
+  },
+  "stable_baseline_manifest": "20260919_旧稳定Full_FP_AS统一条件基线.json"
+}

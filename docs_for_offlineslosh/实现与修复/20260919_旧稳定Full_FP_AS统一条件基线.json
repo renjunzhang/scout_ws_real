@@ -1,0 +1,131 @@
+{
+  "purpose": "FROZEN_ARCHIVED_STABLE_COMPARISON_BASELINE",
+  "new_trials": 0,
+  "actual_jerk_constraint": false,
+  "command_jerk_max": 1,
+  "online_liquid_hard_constraint": false,
+  "cases": {
+    "Full": {
+      "case": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case",
+      "plan": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/plan.json",
+      "task": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/task.json",
+      "live_params": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/live_params.yaml",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/runtime/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/runtime/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/runtime/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_full_s_slow_202821/full_01/case/runtime/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "goal_sec": 41.055,
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "adapter_sha256": "87445f0eae51f9965484495eb8a1a7163a163365bf290bbe83f1f1d14043fe91"
+    },
+    "FP-AS": {
+      "case": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case",
+      "plan": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_s_plan.json",
+      "task": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/task.json",
+      "live_params": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/live_params.yaml",
+      "runtime": {
+        "spmpc_local_planner_node": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/runtime/spmpc_local_planner_node",
+          "sha256": "e0cafaa21ba8fb120c6078e55a3dfd2ea5db13ab504fe397fa4dd3fc836e8da3"
+        },
+        "libspmpc_local_planner.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/runtime/libspmpc_local_planner.so",
+          "sha256": "5efa7355de61ffa53f11df0c56d67588de53ebc6bceab86e8c7cd1e671dead1b"
+        },
+        "libacados_ocp_solver_spmpc_b0.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/runtime/libacados_ocp_solver_spmpc_b0.so",
+          "sha256": "772d0470873c34e5a5888773da4c67d946c27b5290312cf4a7f4cae73161311c"
+        },
+        "libacados_ocp_solver_spmpc_slosh.so": {
+          "path": "/data/a/scout_sim_replacement/results/20260919_fp_as_s_followup_181514/fp_as_01/case/runtime/libacados_ocp_solver_spmpc_slosh.so",
+          "sha256": "cc27ac170d74dc12b5d739b8e21c695c07ccd63d70e4d6ee10b62f1da12ed5c7"
+        }
+      },
+      "goal_sec": 40.39900000000001,
+      "map_sha256": "fd065fcc95b1ed2c25dd355b8c312b0d2f84d96e379d137b67997bd225f8ead0",
+      "adapter_sha256": "87445f0eae51f9965484495eb8a1a7163a163365bf290bbe83f1f1d14043fe91"
+    }
+  },
+  "identity": {
+    "task_fields": {
+      "frame_id": true,
+      "route": true,
+      "start_state": true,
+      "goal_pose": true,
+      "deadline": true,
+      "stop_window": true,
+      "actuator_parameters": true,
+      "liquid_parameters": true,
+      "height_coeff": true,
+      "motion_limits": true,
+      "region": true,
+      "liquid_policy": true,
+      "goal_position_tolerance": true,
+      "goal_yaw_tolerance": true,
+      "stop_speed_tolerance": true,
+      "stop_omega_tolerance": true
+    },
+    "physical_and_solver_groups": {
+      "execution_model": true,
+      "state_timing": true,
+      "terminal": true,
+      "platform": true,
+      "frames": true,
+      "slosh_observer": true,
+      "liquid_nowcast": true,
+      "acados": true
+    },
+    "runtime": {
+      "spmpc_local_planner_node": true,
+      "libspmpc_local_planner.so": true,
+      "libacados_ocp_solver_spmpc_b0.so": true,
+      "libacados_ocp_solver_spmpc_slosh.so": true
+    },
+    "map": true,
+    "adapter": true
+  },
+  "metrics": {
+    "Full_slow": {
+      "goal_sec": 41.055,
+      "completion_sec": 41.02133333300001,
+      "motion_onset_sec": 4.337000000000003,
+      "transport_peak_mm": 0.48696280523666435,
+      "transport_p95_mm": 0.19353945333658676,
+      "transport_rms_mm": 0.0831744013196156,
+      "tail_peak_mm": 5.0080049197015366e-05
+    },
+    "FP_AS_40s": {
+      "goal_sec": 40.39900000000001,
+      "completion_sec": 40.43233333300001,
+      "motion_onset_sec": 1.0730000000000004,
+      "transport_peak_mm": 0.26934398599341053,
+      "transport_p95_mm": 0.1497332115628442,
+      "transport_rms_mm": 0.07854225057767449,
+      "tail_peak_mm": 0.01502927349294497
+    }
+  },
+  "completion_relative_difference": 0.014358382630292807,
+  "common_work_point_established": true,
+  "evidence": "Each one archived Gazebo trial; model liquid only; not independent physical surface measurements.",
+  "B0": {
+    "case": "/data/a/scout_sim_replacement/results/20260919_tf_epoch_pair3_040005/b0_01/case",
+    "eligible_for_same_runtime_comparison": false,
+    "reason": "Generated model libraries match, planner library/node differ. The matching planner runtime only has a straight B0 trial, not the same S task.",
+    "next_minimal_step": "One S trial with these pinned stable runtime and physical conditions; no automatic extra run today."
+  },
+  "source_policy": "Disable actual jerk in the default planned_slosh profile but keep the implementation and diagnostics. Current source/build is not claimed identical to archived stable runtime."
+}

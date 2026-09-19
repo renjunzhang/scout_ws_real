@@ -15,6 +15,8 @@
 
 ## 文件和参数归属
 
+新增实际jerk硬约束已按用户确认暂缓，`planned_slosh` 默认 `actual_jerk_max=0`；保留命令jerk、完整轨迹校验、执行器适配与发布时限。对比基线使用归档的旧稳定运行物及匹配task／plan，不能把当前代码关闭开关等同于旧二进制验证。本轮3/1质量退出模型通过、Gazebo失败；恢复入口不增加未经验证的数值重置。
+
 本轮质量退出实验使用 `rti_iterations=3`、`rti_min_iterations=1`：有实时预算时，动力学残差和生成约束合格即可提前结束RTI，再执行完整轨迹、实际jerk、区域、代价和发布时限校验。单次脚本必须显式传 `--rti-iterations 3 --rti-min-iterations 1`，在最后加载的overlay覆盖，并在发布任务路径前核对live参数。仅写入profile会被后加载的公共task配置覆盖；native使用同样的预算和次数参数，通用实物配置不变。
 
 `acados/rti_min_iterations` 默认 1，范围为 `[1,rti_iterations]`。实时预算不足以完成该次数时拒绝结果并走已有故障停车；不会绕过截止时间。最小次数与上限同为 3 时，模型测试与 ROS 都要求三次，关闭“可行即提前退出”。单次仿真脚本可用 `--fixed-rti-iterations 3` 覆盖并核对 live 参数；通用实物配置不变。

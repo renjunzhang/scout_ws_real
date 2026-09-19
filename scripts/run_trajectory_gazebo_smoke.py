@@ -317,6 +317,8 @@ def main():
         if rti_override is not None:
             overlay['acados'] = rti_override
             summary['rti_override'] = rti_override
+            if args.fixed_rti_iterations is not None:
+                summary['fixed_rti_iterations'] = args.fixed_rti_iterations
         if args.reference_mode:
             overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
         if args.slosh_weight is not None:
