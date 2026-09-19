@@ -71,6 +71,8 @@ def main():
     parser.add_argument('--task', type=Path)
     parser.add_argument('--reference-mode', choices=['progress', 'fixed_time'],
                         help='override this case only; preserve the profile default when omitted')
+    parser.add_argument('--slosh-weight', type=float,
+                        help='planned_slosh only: override liquid cost weight for same-plan ablation')
     parser.add_argument('--identified-actuator', action='store_true',
                         help='replace this case\'s guard with the controller\'s actuator response')
     parser.add_argument('--ros-port', type=int, default=11892)
@@ -82,6 +84,9 @@ def main():
         parser.error('planned_slosh requires a validated --plan and matching --task')
     if args.reference_mode and not args.plan:
         parser.error('--reference-mode requires a --plan')
+    if args.slosh_weight is not None and (args.profile != 'planned_slosh' or
+            not math.isfinite(args.slosh_weight) or args.slosh_weight < 0):
+        parser.error('--slosh-weight requires planned_slosh and a finite nonnegative value')
     if args.ros_port == args.gazebo_port:
         parser.error('ROS and Gazebo need different ports')
     binary = args.setup.resolve().parent/'lib/spmpc_local_planner/spmpc_local_planner_node'
@@ -275,6 +280,9 @@ def main():
                        delay_phase=dict(mode='off'))
         if args.reference_mode:
             overlay['planning'] = dict(reference=dict(mode=args.reference_mode))
+        if args.slosh_weight is not None:
+            overlay['variants'] = dict(B_slosh=dict(w_slosh=args.slosh_weight))
+            summary['slosh_weight_override'] = args.slosh_weight
         (out/'overlay.yaml').write_text(yaml.safe_dump(overlay))
         publisher = rospy.Publisher('/scout/global_path_fixed', RosPath, queue_size=1, latch=True)
         # Explicit subscriptions exist before the planner advertises diagnostics;
@@ -301,6 +309,9 @@ def main():
         planner = start('planner', command)
         time.sleep(2)
         (out/'live_params.yaml').write_text(yaml.safe_dump(rospy.get_param('/spmpc_local_planner', {})))
+        if args.slosh_weight is not None and rospy.get_param(
+                '/spmpc_local_planner/variants/B_slosh/w_slosh') != args.slosh_weight:
+            raise RuntimeError('requested liquid cost weight was not loaded')
         if args.identified_actuator:
             configured = yaml.safe_load((out/'actuator_config.yaml').read_text())['execution_model']
             live_actuator = rospy.get_param('/spmpc_local_planner/execution_model')
