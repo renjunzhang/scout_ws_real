@@ -1,0 +1,137 @@
+{
+  "evidence": "SINGLE_MODEL_IN_THE_LOOP_TRIAL",
+  "formal": false,
+  "protocol": {
+    "command": [
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/runtime/geometry_trial",
+      "planned_slosh",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_rti3/native",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+      "1",
+      ".05",
+      "1",
+      "3",
+      "0",
+      "0"
+    ],
+    "only_parameter_change": {
+      "rti_iterations": [
+        1,
+        3
+      ]
+    },
+    "plan_sha256": "5a48e38b9528f52595183a531e71a12950ffda1e6035963a2bd5d007af44ce8d",
+    "runtime": {
+      "geometry_trial": {
+        "path": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/runtime/geometry_trial",
+        "sha256": "a4022aac4e38833cf7a720fc2fd30cf9ebea788f95fd5184ae3a231467e9e08a"
+      },
+      "libacados_ocp_solver_spmpc_b0.so": {
+        "path": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/runtime/libacados_ocp_solver_spmpc_b0.so",
+        "sha256": "90cb7c411af6d05aab8e8d7b0a1f4f8f5a494c7d6778b026edc6d89971821e77"
+      },
+      "libacados_ocp_solver_spmpc_slosh.so": {
+        "path": "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/runtime/libacados_ocp_solver_spmpc_slosh.so",
+        "sha256": "9f032e05fd64c5b032a0b20e4f947c0137d4bd1a7dcb898e26b5047a26e4ebca"
+      }
+    },
+    "control_period_ms": 33.333333333333336,
+    "publish_reserve_ms": 3,
+    "max_trials": 1,
+    "timeout_sec": 180,
+    "live_deadline_enforced": false,
+    "timing_assessment": "native problem.solve walltime against 33.333 ms period; excludes ROS sensing/publishing overhead",
+    "gazebo": false,
+    "hardware": false,
+    "git_head": "9d9c3aa4668b99bc5533101ea8aed3527d79833a"
+  },
+  "process": {
+    "command": [
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/runtime/geometry_trial",
+      "planned_slosh",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_rti3/native",
+      "/data/a/scout_sim_replacement/results/20260919_actual_jerk_minimal/plan.json",
+      "1",
+      ".05",
+      "1",
+      "3",
+      "0",
+      "0"
+    ],
+    "returncode": 0,
+    "status": "completed",
+    "wall_seconds": 25.86371230200001,
+    "timeout": 180
+  },
+  "comparison": {
+    "complete": {
+      "rti1": "false",
+      "rti3": "true"
+    },
+    "completion_time": {
+      "rti1": "-1",
+      "rti3": "40.166666666666664"
+    },
+    "failures": {
+      "rti1": "1",
+      "rti3": "0"
+    },
+    "failure_status": {
+      "rti1": "TASK_DEADLINE_MISSED",
+      "rti3": ""
+    },
+    "max_actual_jerk": {
+      "rti1": "0.99999999999832279",
+      "rti3": "0.99999999999735856"
+    },
+    "max_jerk": {
+      "rti1": "0.99999999999999878",
+      "rti3": "1.0000000000000815"
+    },
+    "max_prediction_defect": {
+      "rti1": "0.0012143212193240496",
+      "rti3": "8.4747027173648348e-09"
+    },
+    "walltime_p95_ms": {
+      "rti1": "14.529855",
+      "rti3": "27.538011999999998"
+    },
+    "walltime_max_ms": {
+      "rti1": "26.471996000000001",
+      "rti3": "34.169758999999999"
+    },
+    "solver_time_p95_ms": {
+      "rti1": "5.5009999999999994",
+      "rti3": "15.263"
+    },
+    "solver_time_max_ms": {
+      "rti1": "9.0279999999999987",
+      "rti3": "22.103000000000002"
+    }
+  },
+  "effective_parameters_identical_except_rti_iterations": true,
+  "status_counts": {
+    "B_slosh_ACADOS_OK": 1195,
+    "TERMINAL_DRAINING": 10,
+    "GOAL_REACHED": 296
+  },
+  "model_execution_passed": true,
+  "timing": {
+    "measurement": "walltime of SpmpcProblem.solve; no ROS sensing/state alignment/publication overhead or live deadline",
+    "control_period_ms": 33.333333333333336,
+    "publish_reserve_ms": 3,
+    "solve_budget_upper_bound_ms": 30.333333333333336,
+    "p95_ms": 27.538012,
+    "max_ms": 34.169759,
+    "period_margin_at_max_ms": -0.8364256666666634,
+    "all_cycles_within_30hz_period": false,
+    "real_time_qualified": false
+  },
+  "peak_modal_height_m": 0.0004633832514818738,
+  "final_goal_position_error_m": 0.028516187552231308,
+  "final_goal_yaw_error_rad": 0.050740066936227096,
+  "evaluation_last_sample_sec": 50.0,
+  "gazebo_runs": 0,
+  "hardware_runs": 0,
+  "conclusion": "Changing only RTI from 1 to 3 completed this model trial with actual jerk bound respected; maximum solve walltime exceeded the 30 Hz period. No further trials or default parameter changes."
+}
